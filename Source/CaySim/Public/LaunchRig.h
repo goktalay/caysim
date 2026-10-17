@@ -68,6 +68,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Kalkış") ECaySimLaunchPhase GetPhase() const { return Phase; }
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Kalkış") FCaySimLaunchConfig GetConfig() const { return Config; }
+	/** `released` çerçevesindeki yer hızı (km/h; rampa: kızak çıkışı, araç: bırakma, tekerlekli: yerden kesilme); 0 = yok */
+	UFUNCTION(BlueprintPure, Category = "CAYSIM|Kalkış") float GetLastReleaseSpeedKmh() const { return LastReleaseSpeedKmh; }
+	/** `armed` çerçevesindeki hedef kalkış irtifası (m); <0 = yok */
+	UFUNCTION(BlueprintPure, Category = "CAYSIM|Kalkış") float GetTargetTakeoffAltM() const { return TargetTakeoffAltM; }
 
 	/** Rampa açısı değiştir (sihirbaz canlı önizleme). */
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kalkış") void SetRampAngle(float Deg);
@@ -119,6 +123,8 @@ private:
 	float VehicleDistM = 0.f;
 	float WheelSpin = 0.f;
 	bool bArmedSeen = false;
+	float LastReleaseSpeedKmh = 0.f;
+	float TargetTakeoffAltM = -1.f;
 
 	void SetPhase(ECaySimLaunchPhase P);
 	void ShowFor(ECaySimLaunchMethod M);

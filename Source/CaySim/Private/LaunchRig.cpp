@@ -54,6 +54,8 @@ void ACaySimLaunchRig::Setup(const FCaySimLaunchConfig& InConfig, ACaySimWorldSe
 	VehicleSpeedNow = 0.f;
 	VehicleDistM = 0.f;
 	bArmedSeen = false;
+	LastReleaseSpeedKmh = 0.f;
+	TargetTakeoffAltM = -1.f;
 
 	RampBase->SetStaticMesh(RampBaseMesh);
 	RampRail->SetStaticMesh(RampRailMesh);
@@ -136,8 +138,10 @@ void ACaySimLaunchRig::OnLaunchEvent(const FCaySimLaunchEvent& E)
 		ShowFor(E.Method);
 	}
 	if (E.AngleDeg > 0.f) SetRampAngle(E.AngleDeg);
-	if (E.ReleaseKmh > 0.f) SetVehicleSpeed(E.ReleaseKmh / 3.6f); // araç: bırakma hızı
-	if (E.SpeedKmh > 0.f) SetVehicleSpeed(E.SpeedKmh / 3.6f);
+	if (E.ReleaseKmh > 0.f) SetVehicleSpeed(E.ReleaseKmh / 3.6f); // araç: bırakma hızı (`launch` evresi)
+	// `speed_kmh` (released; üç yöntemde de o anki SITL yer hızı) ve `alt` (armed; hedef kalkış irtifası) yalnız bilgi/HUD içindir
+	if (E.SpeedKmh > 0.f) LastReleaseSpeedKmh = E.SpeedKmh;
+	if (E.AltM >= 0.f) TargetTakeoffAltM = E.AltM;
 	// HEPGO §13 evreleri: armed → launch (itiş/araç hareketi) → released (dron ayrıldı)
 	if (E.Phase == TEXT("armed")) SetPhase(ECaySimLaunchPhase::Armed);
 	else if (E.Phase == TEXT("launch")) SetPhase(ECaySimLaunchPhase::Rolling);

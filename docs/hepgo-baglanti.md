@@ -41,6 +41,8 @@ güncelledikçe buraya da kopyalanır). Bu sayfa, sözleşmenin CAYSIM kodunda n
   `res {name, rid, ok, error?}`; `pong`; `replay {action:'reset'}`; `error {error}`;
   `launch {method: wheels|ramp|vehicle, phase: armed|launch|released, ts, angle_deg?, release_kmh?, speed_kmh?, alt?}` (yalnız sabit kanat;
   `armed` = TAKEOFF + ARM, `launch` = kızak fırlatıldı / araç hızlanıyor, `released` = uçak ayrıldı) → `OnLaunch` → `ACaySimLaunchRig::OnLaunchEvent`;
+  alanlar: rampa `launch` → `angle_deg`; araç `launch` → `release_kmh` (araç hızı buradan); `armed` → `alt` (hedef kalkış irtifası);
+  `released` → `speed_kmh` üç yöntemde de (o anki yer hızı; yalnız bilgi/HUD, animasyon kendi strok süresini kullanır);
   olay gelmezse evreler telemetriden türetilir. Yanıttaki `session.launch` (aynı alanlar + `phase`) sahne kurulurken rig'e verilir.
   **Demirleme:** SITL uçağı disarm hâlde bile ~4 m/s kayar; `Idle/Armed/Rolling` evrelerinde rampa taşıyıcısı / araç kasası dronun konumuna
   oturtulur (`bAnchorToDrone`), `released` sonrası düzenek yerinde kalır / araç frenler.
