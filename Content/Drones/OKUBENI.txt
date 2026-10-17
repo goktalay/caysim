@@ -1,0 +1,1 @@
+Bu dizine Unreal Editor'da üretilen .uasset/.umap dosyaları gelir (Git LFS).

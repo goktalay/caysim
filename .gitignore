@@ -1,0 +1,27 @@
+# Unreal Engine
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+.vs/
+.vscode/
+.idea/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+*.xcodeproj
+*.xcworkspace
+*.code-workspace
+*.generated.h
+*.generated.cpp
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+# Paketleme çıktıları
+Paketler/
+*.pak
+# Yerel sırlar
+Config/UserSecrets.ini

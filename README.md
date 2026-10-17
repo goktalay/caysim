@@ -1,2 +1,80 @@
-# caysim
-CAYSIM — HEPGO Uçuş Simülatörü için Unreal Engine yüksek gerçekçilik istemcisi
+# CAYSIM
+
+**CAYSIM**, HEPGO ERP'nin *Uçuş Simülatörü* modülü için Unreal Engine 5 tabanlı, ayrı çalışan (Windows .exe) **yüksek gerçekçilik
+görselleştirme ve kumanda istemcisidir**. Tarayıcı sürümü (three.js) HEPGO içinde çalışmaya devam eder; CAYSIM aynı sunucu
+altyapısına bağlanan "yüksek gerçekçilik" kardeşidir.
+
+SKYREX HAVACILIK / GÖKKUBBE Teknoloji — özel lisans.
+
+## Ne yapar, ne yapmaz
+
+- **Yapar:** Cesium for Unreal ile gerçek dünya (Cesium World Terrain + uydu ya da Google Photorealistic 3D Tiles), Lumen/Nanite, Sky
+  Atmosphere, hacimsel bulut, gece/gündüz; dron modeli (HEPGO model kütüphanesinden GLB), pervane/kontrol yüzeyi animasyonu; FPV kamera +
+  askeri HUD; takip/serbest/yer kameraları; kalkış donanımı (pist koşusu, pnömatik rampa, araç üstünden bırakma); kayıttan oynatma.
+- **Yapmaz:** Fizik ve uçuş dinamiği. ArduPilot SITL, Mission Planner UDP köprüsü, komut yürütme ve 50 Hz telemetri **HEPGO sunucusunda**
+  çalışır. CAYSIM telemetriyi WebSocket'ten alır, komut ve RC'yi WebSocket'e yazar.
+
+## Mimari (özet)
+
+```
+HEPGO sunucusu                                   CAYSIM (Windows)
+ArduPilot SITL ⇄ MAVLink köprüsü ──WSS 50 Hz──►  HepgoClient → TelemetryBuffer (80 ms, slerp) → DroneActor → Cesium dünyası
+Mission Planner ⇄ UDP                 ◄──REST──  SessionWizard (istemci kodu → şirket → merkez → tip → model → dünya → kalkış → başlat)
+merkezler · tipler · GLB · loglar                HudWidget · CameraPawn · LaunchRig · ReplayPlayer
+```
+
+Ayrıntı: [docs/mimari.md](docs/mimari.md). API sözleşmesi (HEPGO ile birebir): [docs/caysim-api.md](docs/caysim-api.md);
+CAYSIM tarafı eşlemesi: [docs/hepgo-baglanti.md](docs/hepgo-baglanti.md).
+
+## Depo düzeni
+
+```
+CAYSIM.uproject            UE 5.4 projesi (CesiumForUnreal etkin; glTFRuntime isteğe bağlı)
+Source/CaySim/             C++ modülü (Build.cs, Public/*.h, Private/*.cpp)
+Config/                    DefaultEngine.ini (Lumen/Nanite/DX12), DefaultGame.ini, DefaultInput.ini, UserSecrets.ini.ornek
+Content/                   Editor'da üretilen varlıklar (Git LFS): Maps, Drones, Launch, UI, Input
+Plugins/                   CesiumForUnreal / glTFRuntime (motora kurulmadıysa buraya)
+docs/                      mimari.md · caysim-api.md · hepgo-baglanti.md · derleme-windows.md
+```
+
+## Kurulum ve derleme
+
+Windows 10/11, Unreal Engine **5.4**, Visual Studio 2022 (C++ oyun geliştirme), Cesium for Unreal eklentisi, Git LFS.
+Adım adım: [docs/derleme-windows.md](docs/derleme-windows.md).
+
+Kısa yol:
+```powershell
+git lfs install && git clone https://github.com/goktalay/caysim.git && cd caysim
+copy Config\UserSecrets.ini.ornek Config\UserSecrets.ini     # Cesium ion belirteci
+# CAYSIM.uproject › sağ tık › Generate Visual Studio project files › CAYSIM.sln › Development Editor › Build
+```
+
+## HEPGO'ya bağlanma — istemci kodu
+
+1. HEPGO'da **Dron Yönetimi › Uçuş Simülatörü › CAYSIM istemcileri › İstemci ekle** (ad: ör. "Simülatör PC-1").
+2. **Bir kez** gösterilen kodu kopyalayın: `<alan adı>/<anahtar>` (ör. `caymaz.app/hV3k…`, anahtar 43 karakter).
+3. CAYSIM'i açın, açılış ekranına kodu yapıştırın → **Bağlan**. Şirket adı ve logosu görünür; kod bu bilgisayarda saklanır
+   (makineye bağlı karartma; günlüğe yazılmaz). Yanlış/yenilenmiş kodda 401 → kod adımına dönülür.
+4. Sihirbaz: **Kip** (canlı SITL / kayıttan oynatma) → **Merkez** (kalkış koordinatı) → **Dron tipi** → **Model** (kütüphaneden küçük
+   resimli) → **Dünya** (Cesium / Google 3B, saat, sis, rüzgâr, pist) → **Kalkış yöntemi** (sabit kanatta pist / rampa açısı / araç hızı) →
+   **Başlat**. SITL sunucuda açılır (10–45 sn), telemetri gelir.
+5. Mission Planner'ı HEPGO'nun bildirdiği `host:udp_port` adresine bağlayın (özet ekranında yazar); USB kumandayı Mission Planner joystick
+   ile kullanın. İsteğe bağlı: gamepad'i doğrudan CAYSIM'den RC olarak gönderme (`BP_CameraPawn › Gamepad Rc`).
+
+Tuşlar: **C** kamera döngüsü (takip → dron kamerası/HUD → serbest → yer), **H** HUD aç/kapa, fare FPV'de gimbal, WASD+E/Q serbest kamera,
+tekerlek yakınlaştırma.
+
+## Durum
+
+İskelet aşaması: tüm C++ sınıfları ve belgeler yazıldı; **henüz derlenmedi** (bu ortamda Unreal yok). İlk Windows derlemesinde UE/Cesium
+API ayrıntılarında küçük düzeltmeler beklenir. Varlıklar (`Content/`) Editor'da üretilecek.
+
+## Sonraki adımlar
+
+1. Windows'ta ilk derleme ve derleme hatalarının giderilmesi.
+2. Editor'da `CaySimMain` haritası, `BP_GameMode`, `BP_Drone` (yer tutucu gövdeler), `BP_WorldSetup`, `WBP_Wizard`, `WBP_Hud`, Enhanced Input.
+3. HEPGO DEV sunucusuna canlı bağlantı testi (hello → centers → session → tele) ve koordinat işaretlerinin sahada doğrulanması.
+4. Kararlar (kullanıcı onayı): Cesium ion hesabı/belirteci; glTFRuntime (ücretli Marketplace ya da MIT kaynak); CAYMAZ GLB'nin derleme
+   öncesi Content'e alınması.
+5. Kalkış donanımı görsel varlıkları; `launch` olayı HEPGO tarafında eklenince `OnLaunch` zaten bağlı.
+6. HEPGO arazi vekili (`/terrain`, `/tile`, `/osm`) ile Cesium'suz gerçek arazi kipi.
