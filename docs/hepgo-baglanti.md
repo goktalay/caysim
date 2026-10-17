@@ -17,7 +17,7 @@ güncelledikçe buraya da kopyalanır). Bu sayfa, sözleşmenin CAYSIM kodunda n
 | Sözleşme | CAYSIM |
 |---|---|
 | `GET /hello` (+ `X-Caysim-Host/-Ver/-Platform`) | `UHepgoClient::Hello` → `FCaySimHello` (şirket adı/ünvan/logo/tema rengi, caps, limits, host, google3d, sitl, ws_url); `v ≠ 1` uyarısı |
-| `GET /brand/logo` | `UCaySimSessionWizard::LoadImage` (Bearer ile `FetchBytes` → `FImageUtils::ImportBufferAsTexture2D`; SVG desteklenmez → PNG/JPEG/WebP beklenir) |
+| `GET /brand/logo?format=png&size=640` | `UCaySimSessionWizard::HandleHello` → `LoadImage` (Bearer ile `FetchBytes` → `FImageUtils::ImportBufferAsTexture2D`); sunucu her zaman PNG döner (SVG çevrilir) |
 | `GET /centers` `{centers}` | `FetchCenters` → `OnCenters` (`alt` null → `bHasAlt=false`) |
 | `GET /types` `{types}` | `FetchTypes`; `key` → `ECaySimDroneType` (`multirotor, hexarotor, helikopter, sabit_kanat, vtol`) |
 | `GET /models?type=` `{models, defaults}` | `FetchModels` → `OnModels` + `GetDefaultModelFor(type)`; `ready=false` → dahili gövde |
@@ -34,10 +34,18 @@ güncelledikçe buraya da kopyalanır). Bu sayfa, sözleşmenin CAYSIM kodunda n
 
 ## WebSocket
 
-- URL `wss://<domain>/ws/caysim/v1/sessions/<id>?key=<key>`; bağlanınca ayrıca `{"t":"auth","key"}` çerçevesi (sunucu ikisini de kabul eder).
+- URL `wss://<domain>/ws/caysim/v1/sessions/<id>?key=<key>`; bağlanınca ayrıca `{"t":"auth","key"}` çerçevesi (sunucu ikisini de kabul eder);
+  `Authorization: Bearer` başlığı da gönderilir (sunucu yok sayar, vekiller için zararsız).
 - Sunucu → istemci: `hello {session, can_command, v, server_time}` → `OnWsHello`; `tele` → `OnTelemetryNative` (C++) + `OnTelemetry` (Blueprint);
   `event {text, severity, ts}`; `state {state, replay?}`; `end {reason}` (kapatildi/sure_doldu/bosta/sunucu_kapaniyor/hata) → yeniden denenmez;
-  `res {name, rid, ok, error?}`; `pong`; `replay {action:'reset'}`; `error {error}`. `launch` v1'de gelmez (ayrılmış; `LaunchRig` telemetriden türetir).
+  `res {name, rid, ok, error?}`; `pong`; `replay {action:'reset'}`; `error {error}`;
+  `launch {method: wheels|ramp|vehicle, phase: armed|launch|released, ts, angle_deg?, release_kmh?, speed_kmh?, alt?}` (yalnız sabit kanat;
+  `armed` = TAKEOFF + ARM, `launch` = kızak fırlatıldı / araç hızlanıyor, `released` = uçak ayrıldı) → `OnLaunch` → `ACaySimLaunchRig::OnLaunchEvent`;
+  olay gelmezse evreler telemetriden türetilir. Yanıttaki `session.launch` (aynı alanlar + `phase`) sahne kurulurken rig'e verilir.
+  **Demirleme:** SITL uçağı disarm hâlde bile ~4 m/s kayar; `Idle/Armed/Rolling` evrelerinde rampa taşıyıcısı / araç kasası dronun konumuna
+  oturtulur (`bAnchorToDrone`), `released` sonrası düzenek yerinde kalır / araç frenler.
+- `POST /sessions` gövdesinde `world.launch {method, angle_deg 10–30, release_kmh 40–110}` yalnız `sabit_kanat` için gönderilir
+  (`FCaySimWorld::bHasLaunch`; sihirbaz Kalkış adımı doldurur).
 - İstemci → sunucu: `cmd {name, params, rid}` (`SendCommand`, `CmdArm/CmdMode/CmdTakeoff/CmdRtl/CmdReset/CmdSetHome/CmdCrash`),
   `rc {ch:[8]}` (`SendRc`; `limits.rc_hz` × 0,625 ≈ 25 Hz'e kısılır; `[0]*8` serbest bırakma sınırlanmaz), `ping` 15 sn'de bir.
 - Kapanış kodları: `4400` → yeniden dene; `4403` (anahtar/pasif/rekey) ve `4404` → kalıcı `Failed`; `4429` → 60 sn bekle; `1000` → `end` sonrası.

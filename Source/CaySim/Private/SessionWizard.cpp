@@ -99,15 +99,8 @@ void UCaySimSessionWizard::HandleHello(bool bOk, const FCaySimHello& InHello)
 	}
 	Hello = InHello;
 	Status(FString::Printf(TEXT("%s · %s"), *Hello.Company.Name, *Hello.ClientName));
-	// Logo (Bearer gerektirebilir → FetchBytes)
-	if (!Hello.Company.LogoUrl.IsEmpty())
-	{
-		LoadImage(Hello.Company.LogoUrl, [this](UTexture2D* Tex) { Logo = Tex; OnLogoReady.Broadcast(Tex); });
-	}
-	else
-	{
-		LoadImage(TEXT("/brand/logo"), [this](UTexture2D* Tex) { Logo = Tex; OnLogoReady.Broadcast(Tex); });
-	}
+	// Logo: her zaman PNG (SVG sunucuda çevrilir) — `/brand/logo?format=png&size=640` (§2)
+	LoadImage(TEXT("/brand/logo?format=png&size=640"), [this](UTexture2D* Tex) { Logo = Tex; OnLogoReady.Broadcast(Tex); });
 	AfterHello();
 	SetStep(ECaySimWizardStep::Welcome);
 }
@@ -304,6 +297,12 @@ void UCaySimSessionWizard::SetLaunch(const FCaySimLaunchConfig& InLaunch)
 {
 	Launch = InLaunch;
 	if (World.bRunway && Launch.Method == ECaySimLaunchMethod::Runway) Launch.HeadingDeg = World.RunwayHeading;
+	// Sunucuya `world.launch` (yalnız sabit kanat; dikey kalkışta gönderilmez) — HEPGO §13
+	const bool bFixedWing = CaySimTypes::DroneTypeFromKey(TypeKey) == ECaySimDroneType::FixedWing;
+	World.bHasLaunch = bFixedWing && Launch.Method != ECaySimLaunchMethod::Vertical;
+	World.LaunchMethod = CaySimTypes::LaunchMethodToString(Launch.Method);
+	World.LaunchAngleDeg = Launch.RampAngleDeg;
+	World.LaunchReleaseKmh = Launch.VehicleSpeedMs * 3.6f; // araç bırakma hızı (km/h)
 	SetStep(ECaySimWizardStep::Summary);
 }
 

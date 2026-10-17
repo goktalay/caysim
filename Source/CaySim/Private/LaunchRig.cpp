@@ -136,11 +136,12 @@ void ACaySimLaunchRig::OnLaunchEvent(const FCaySimLaunchEvent& E)
 		ShowFor(E.Method);
 	}
 	if (E.AngleDeg > 0.f) SetRampAngle(E.AngleDeg);
-	if (E.SpeedMs > 0.f) SetVehicleSpeed(E.SpeedMs);
+	if (E.ReleaseKmh > 0.f) SetVehicleSpeed(E.ReleaseKmh / 3.6f); // araç: bırakma hızı
+	if (E.SpeedKmh > 0.f) SetVehicleSpeed(E.SpeedKmh / 3.6f);
+	// HEPGO §13 evreleri: armed → launch (itiş/araç hareketi) → released (dron ayrıldı)
 	if (E.Phase == TEXT("armed")) SetPhase(ECaySimLaunchPhase::Armed);
-	else if (E.Phase == TEXT("rolling") || E.Phase == TEXT("start")) SetPhase(ECaySimLaunchPhase::Rolling);
-	else if (E.Phase == TEXT("release")) SetPhase(ECaySimLaunchPhase::Released);
-	else if (E.Phase == TEXT("airborne")) SetPhase(ECaySimLaunchPhase::Airborne);
+	else if (E.Phase == TEXT("launch")) SetPhase(ECaySimLaunchPhase::Rolling);
+	else if (E.Phase == TEXT("released")) SetPhase(ECaySimLaunchPhase::Released);
 }
 
 void ACaySimLaunchRig::OnTelemetry(const FCaySimTelemetry& T)
@@ -203,10 +204,29 @@ void ACaySimLaunchRig::UpdateVehicle(float Dt)
 	}
 }
 
+void ACaySimLaunchRig::AnchorToDrone()
+{
+	// Düzeneğin bağlama noktası (rampa taşıyıcısı / araç kasası) dronun konumuna oturtulur; yön korunur.
+	ACaySimDroneActor* D = DroneActor.Get();
+	if (!D) return;
+	USceneComponent* Attach = (Config.Method == ECaySimLaunchMethod::Ramp) ? (USceneComponent*)RampCarriage : (USceneComponent*)Vehicle;
+	if (!Attach) return;
+	const FVector BedOffset = (Config.Method == ECaySimLaunchMethod::Vehicle) ? FVector(0, 0, 150.f) : FVector(0, 0, 20.f); // kasa/kızak üstü
+	const FVector AttachWorld = Attach->GetComponentTransform().TransformPosition(BedOffset);
+	const FVector Delta = D->GetActorLocation() - AttachWorld;
+	// Yalnız yatay kayma (SITL yer kayması); dikey yer hizası PlaceAtGround'dan kalır
+	SetActorLocation(GetActorLocation() + FVector(Delta.X, Delta.Y, 0.f));
+}
+
 void ACaySimLaunchRig::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	PhaseT += DeltaSeconds;
+	if (bAnchorToDrone && (Phase == ECaySimLaunchPhase::Idle || Phase == ECaySimLaunchPhase::Armed || Phase == ECaySimLaunchPhase::Rolling)
+		&& (Config.Method == ECaySimLaunchMethod::Ramp || Config.Method == ECaySimLaunchMethod::Vehicle))
+	{
+		AnchorToDrone();
+	}
 	switch (Config.Method)
 	{
 	case ECaySimLaunchMethod::Ramp:    UpdateRamp(DeltaSeconds); break;

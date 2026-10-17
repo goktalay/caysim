@@ -69,6 +69,13 @@ struct CAYSIM_API FCaySimWorld
 	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") float WindDir = 270.f;
 	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") float Fog = 0.2f;
 
+	/** `world.launch {method, angle_deg, release_kmh}` — yalnız sabit_kanat (HEPGO §13); bHasLaunch false ise gönderilmez */
+	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") bool bHasLaunch = false;
+	/** wheels | ramp | vehicle */
+	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") FString LaunchMethod = TEXT("wheels");
+	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") float LaunchAngleDeg = 15.f;
+	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") float LaunchReleaseKmh = 70.f;
+
 	TSharedRef<FJsonObject> ToJson() const;
 	static FCaySimWorld FromJson(const TSharedPtr<FJsonObject>& Obj);
 };
@@ -229,6 +236,32 @@ struct CAYSIM_API FCaySimReplayInfo
 	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") FString Vehicle;
 };
 
+/**
+ * Kalkış olayı — WS `{t:'launch', phase:'armed'|'launch'|'released', method:'wheels'|'ramp'|'vehicle', angle_deg?, release_kmh?, speed_kmh?, alt?}`
+ * (HEPGO §13; CAYSIM WS'ine sözleşme ekiyle geçirilecek). Olay gelmezse LaunchRig telemetriden türetir.
+ */
+USTRUCT(BlueprintType)
+struct CAYSIM_API FCaySimLaunchEvent
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") ECaySimLaunchMethod Method = ECaySimLaunchMethod::Runway;
+	/** armed | launch | released */
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") FString Phase;
+	/** rampa açısı (derece, 10–30); 0 = verilmedi */
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") float AngleDeg = 0.f;
+	/** rampa bırakma hızı (km/h, 40–110); 0 = verilmedi */
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") float ReleaseKmh = 0.f;
+	/** araç hızı (km/h); 0 = verilmedi */
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") float SpeedKmh = 0.f;
+	/** bırakma anındaki göreli irtifa (m); verilmediyse -1 */
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") float AltM = -1.f;
+	/** sunucu zamanı (Unix sn) */
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") double Ts = 0.0;
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") bool bValid = false;
+
+	static FCaySimLaunchEvent FromJson(const TSharedPtr<FJsonObject>& Obj);
+};
+
 /** Oturum (`session`). */
 USTRUCT(BlueprintType)
 struct CAYSIM_API FCaySimSession
@@ -251,6 +284,8 @@ struct CAYSIM_API FCaySimSession
 	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") FCaySimGcsState Gcs;
 	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") FString SitlError;
 	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") FCaySimReplayInfo Replay;
+	/** `session.launch` (sabit kanat; `world.launch` alanları + `phase`) */
+	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") FCaySimLaunchEvent Launch;
 	/** `hello.can_command` — bu istemci komut verebilir mi */
 	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") bool bCanCommand = false;
 
@@ -313,6 +348,7 @@ struct CAYSIM_API FCaySimEvent
 	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") double T = 0.0;
 };
 
+
 /** Ham MAVLink UDP bilgisi (`GET /sessions/{id}/mavlink`, §8). */
 USTRUCT(BlueprintType)
 struct CAYSIM_API FCaySimMavlinkInfo
@@ -325,20 +361,6 @@ struct CAYSIM_API FCaySimMavlinkInfo
 	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") FString Note;
 };
 
-/** Kalkış olayı (`launch`): v1'de sunucu göndermez (ayrılmış ad); CAYSIM telemetriden türetir. */
-USTRUCT(BlueprintType)
-struct CAYSIM_API FCaySimLaunchEvent
-{
-	GENERATED_BODY()
-	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") ECaySimLaunchMethod Method = ECaySimLaunchMethod::Runway;
-	/** armed | release | airborne */
-	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") FString Phase;
-	/** rampa açısı (derece) */
-	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") float AngleDeg = 15.f;
-	/** araç hızı ya da rampa çıkış hızı (m/s) */
-	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") float SpeedMs = 0.f;
-	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM") float HeadingDeg = 0.f;
-};
 
 /** Yardımcılar: dizge ↔ enum dönüşümleri. */
 namespace CaySimTypes

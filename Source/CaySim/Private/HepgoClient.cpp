@@ -670,6 +670,7 @@ void UHepgoClient::OpenWs()
 	const FString Url = FString::Printf(TEXT("%s/sessions/%s?key=%s"), *Code.WsBase(), *WsSessionId, *FGenericPlatformHttp::UrlEncode(Code.Key));
 	TMap<FString, FString> Headers;
 	Headers.Add(TEXT("User-Agent"), FString::Printf(TEXT("CAYSIM/%s (Unreal Engine)"), ClientVersion()));
+	Headers.Add(TEXT("Authorization"), TEXT("Bearer ") + Code.Key); // sunucu yok sayar; vekiller için zararsız
 	Ws = Mod.CreateWebSocket(Url, TEXT(""), Headers);
 	if (!Ws.IsValid())
 	{
@@ -956,16 +957,8 @@ void UHepgoClient::HandleWsMessage(const FString& Msg)
 	}
 	else if (T == TEXT("launch"))
 	{
-		// v1'de gönderilmez; ayrılmış ad (ileride rampa/araç tetiği)
-		FCaySimLaunchEvent L;
-		FString M;
-		if (O->TryGetStringField(TEXT("method"), M)) L.Method = CaySimTypes::LaunchMethodFromString(M);
-		O->TryGetStringField(TEXT("phase"), L.Phase);
-		double N;
-		if (O->TryGetNumberField(TEXT("angle"), N)) L.AngleDeg = (float)N;
-		if (O->TryGetNumberField(TEXT("speed"), N)) L.SpeedMs = (float)N;
-		if (O->TryGetNumberField(TEXT("heading"), N)) L.HeadingDeg = (float)N;
-		OnLaunch.Broadcast(L);
+		// HEPGO §3.1/§13: {method: wheels|ramp|vehicle, phase: armed|launch|released, ts, angle_deg?, release_kmh?, speed_kmh?, alt?}
+		OnLaunch.Broadcast(FCaySimLaunchEvent::FromJson(O));
 	}
 	else if (T == TEXT("end"))
 	{

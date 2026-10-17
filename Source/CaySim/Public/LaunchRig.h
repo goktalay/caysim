@@ -21,7 +21,7 @@ struct CAYSIM_API FCaySimLaunchConfig
 	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") float RampAngleDeg = 15.f;
 	/** Rampa yan açısı (derece; 2 eksenli rampa). */
 	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") float RampAzimuthDeg = 0.f;
-	/** Araç hızı (m/s, 5–25). */
+	/** Araç bırakma hızı (m/s; sunucuya `world.launch.release_kmh` = ×3,6, 40–110 km/h). */
 	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") float VehicleSpeedMs = 12.f;
 	/** Pist başı yönü (derece); pist varsa world.runway_heading. */
 	UPROPERTY(BlueprintReadWrite, Category = "CAYSIM") float HeadingDeg = 0.f;
@@ -92,6 +92,8 @@ public:
 	/** Telemetri yedeği eşikleri. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Kalkış") float ReleaseSpeedMs = 4.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Kalkış") float AirborneAltM = 3.f;
+	/** Uçak kızakta/araç kasasındayken düzenek uçakla birlikte ilerler (SITL uçağı disarm hâlde bile ~4 m/s kayar — HEPGO tuzağı). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Kalkış") bool bAnchorToDrone = true;
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "CAYSIM|Kalkış") TObjectPtr<USceneComponent> Root;
@@ -123,4 +125,5 @@ private:
 	void UpdateRamp(float Dt);
 	void UpdateVehicle(float Dt);
 	void PlaceAtGround();
+	void AnchorToDrone();
 };

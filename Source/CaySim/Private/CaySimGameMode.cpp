@@ -111,6 +111,7 @@ void ACaySimGameMode::StartScene()
 		const double Ground = S.Center.bHasAlt ? S.Center.Alt : 0.0;
 		LaunchRig->Setup(Wizard->GetLaunch(), WorldSetup, Drone, S.Center.Lat, S.Center.Lon, Ground);
 		LaunchRig->SetActorHiddenInGame(Wizard->GetLaunch().Method == ECaySimLaunchMethod::Vertical);
+		if (S.Launch.bValid) LaunchRig->OnLaunchEvent(S.Launch); // yanıttaki `session.launch` (yöntem/açı/hız/evre)
 	}
 	else if (Replay.IsValid())
 	{

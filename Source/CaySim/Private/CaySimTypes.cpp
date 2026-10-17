@@ -68,6 +68,7 @@ ECaySimLaunchMethod CaySimTypes::LaunchMethodFromString(const FString& S)
 {
 	const FString K = S.ToLower();
 	if (K == TEXT("ramp") || K == TEXT("rampa") || K == TEXT("catapult")) return ECaySimLaunchMethod::Ramp;
+	// "wheels" (HEPGO §13) → pist koşusu
 	if (K == TEXT("vehicle") || K == TEXT("arac") || K == TEXT("pickup"))  return ECaySimLaunchMethod::Vehicle;
 	if (K == TEXT("vertical") || K == TEXT("vtol") || K == TEXT("dikey"))  return ECaySimLaunchMethod::Vertical;
 	return ECaySimLaunchMethod::Runway;
@@ -80,7 +81,7 @@ FString CaySimTypes::LaunchMethodToString(ECaySimLaunchMethod M)
 	case ECaySimLaunchMethod::Ramp:     return TEXT("ramp");
 	case ECaySimLaunchMethod::Vehicle:  return TEXT("vehicle");
 	case ECaySimLaunchMethod::Vertical: return TEXT("vertical");
-	default:                            return TEXT("runway");
+	default:                            return TEXT("wheels"); // HEPGO §13 adı
 	}
 }
 
@@ -103,6 +104,14 @@ TSharedRef<FJsonObject> FCaySimWorld::ToJson() const
 	O->SetNumberField(TEXT("wind_ms"), WindMs);
 	O->SetNumberField(TEXT("wind_dir"), WindDir);
 	O->SetNumberField(TEXT("fog"), Fog);
+	if (bHasLaunch)
+	{
+		TSharedRef<FJsonObject> L = MakeShared<FJsonObject>();
+		L->SetStringField(TEXT("method"), LaunchMethod);
+		if (LaunchMethod == TEXT("ramp")) L->SetNumberField(TEXT("angle_deg"), FMath::Clamp(LaunchAngleDeg, 10.f, 30.f));
+		if (LaunchMethod == TEXT("vehicle")) L->SetNumberField(TEXT("release_kmh"), FMath::Clamp(LaunchReleaseKmh, 40.f, 110.f));
+		O->SetObjectField(TEXT("launch"), L);
+	}
 	return O;
 }
 
@@ -124,6 +133,14 @@ FCaySimWorld FCaySimWorld::FromJson(const TSharedPtr<FJsonObject>& O)
 	W.WindMs = (float)NumOr(O, TEXT("wind_ms"), W.WindMs);
 	W.WindDir = (float)NumOr(O, TEXT("wind_dir"), W.WindDir);
 	W.Fog = (float)NumOr(O, TEXT("fog"), W.Fog);
+	const TSharedPtr<FJsonObject> L = ObjOr(O, TEXT("launch"));
+	if (L.IsValid())
+	{
+		W.bHasLaunch = true;
+		W.LaunchMethod = StrOr(L, TEXT("method"), W.LaunchMethod);
+		W.LaunchAngleDeg = (float)NumOr(L, TEXT("angle_deg"), W.LaunchAngleDeg);
+		W.LaunchReleaseKmh = (float)NumOr(L, TEXT("release_kmh"), W.LaunchReleaseKmh);
+	}
 	return W;
 }
 
@@ -175,6 +192,23 @@ FCaySimModelOrient FCaySimModelOrient::FromJson(const TSharedPtr<FJsonObject>& O
 		}
 	}
 	return R;
+}
+
+// ---- FCaySimLaunchEvent -------------------------------------------------
+
+FCaySimLaunchEvent FCaySimLaunchEvent::FromJson(const TSharedPtr<FJsonObject>& O)
+{
+	FCaySimLaunchEvent L;
+	if (!O.IsValid()) return L;
+	L.Method = CaySimTypes::LaunchMethodFromString(StrOr(O, TEXT("method"), TEXT("wheels")));
+	L.Phase = StrOr(O, TEXT("phase"));
+	L.AngleDeg = (float)NumOr(O, TEXT("angle_deg"), 0.0);
+	L.ReleaseKmh = (float)NumOr(O, TEXT("release_kmh"), 0.0);
+	L.SpeedKmh = (float)NumOr(O, TEXT("speed_kmh"), 0.0);
+	L.AltM = (float)NumOr(O, TEXT("alt"), -1.0);
+	L.Ts = NumOr(O, TEXT("ts"), 0.0);
+	L.bValid = true;
+	return L;
 }
 
 // ---- FCaySimSession -----------------------------------------------------
@@ -237,6 +271,7 @@ FCaySimSession FCaySimSession::FromJson(const TSharedPtr<FJsonObject>& O)
 	S.Gcs.bConnected = BoolOr(G, TEXT("connected"), false);
 	S.Gcs.Addr = StrOr(G, TEXT("addr"));
 	S.SitlError = StrOr(ObjOr(O, TEXT("sitl")), TEXT("error"));
+	S.Launch = FCaySimLaunchEvent::FromJson(ObjOr(O, TEXT("launch")));
 	const TSharedPtr<FJsonObject> R = ObjOr(O, TEXT("replay"));
 	if (R.IsValid())
 	{
