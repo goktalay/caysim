@@ -1,4 +1,26 @@
-# CAYSIM
+# Simumav (Steam) · CAYSIM
+
+Bu depo iki ürünü tek Unreal Engine 5.8 projesinde (`Simumav.uproject`) taşır:
+
+- **Simumav** — Steam'de yayımlanacak dron uçuş simülatörü; simumav.com'un eşi. Fizik **gerçek ArduPilot SITL**: misafir kipte (varsayılan,
+  giriş gerekmez) oyunla dağıtılan SITL bu bilgisayarda çalışır, simumav.com hesabıyla isteğe bağlı "Bulutta uç", çevrim içi karşılaşma, TOP 10 ve
+  bulut eşitleme açılır. Modül: `Source/Simumav`.
+- **CAYSIM** — HEPGO ERP'nin kurumsal yüksek gerçekçilik istemcisi (aşağıdaki bölümler). Modül: `Source/CaySim` (Simumav'ın da ortak çekirdeği).
+
+| Belge | İçerik |
+|---|---|
+| [docs/mimari.md](docs/mimari.md) | Simumav + CAYSIM mimarisi, yerel SITL yaşam döngüsü |
+| [docs/ozellik-esligi.md](docs/ozellik-esligi.md) | SIMUMAV web ↔ Simumav UE özellik eşliği matrisi |
+| [docs/simumav-api-esleme.md](docs/simumav-api-esleme.md) | simumav.com API / WS ↔ C++ eşlemesi, yerel karşılıklar |
+| [docs/derleme-windows.md](docs/derleme-windows.md) | Şirket bilgisayarı kurulumu, self-hosted runner, derleme, paketleme |
+| [docs/steam-yayin.md](docs/steam-yayin.md) | Steamworks, App ID, depot, mağaza varlıkları, yaş derecelendirme, yükleme |
+
+Sınamalar (Unreal'sız, bu sunucuda): `tests/cpp/test_mavlink.py` (pymavlink), `tests/cpp/test_kdf.py` (hashlib), `tests/cpp/test_core.py`
+(sunucu Python modülleri + flightsim_gpws.js), `tests/ue_denetim.py` (UHT/include/modül), `tests/test_sozlesme_simumav.py` (yerel SIMUMAV ile canlı sözleşme).
+
+---
+
+# CAYSIM (HEPGO kurumsal)
 
 **CAYSIM**, HEPGO ERP'nin *Uçuş Simülatörü* modülü için Unreal Engine 5 tabanlı, ayrı çalışan (Windows .exe) **yüksek gerçekçilik
 görselleştirme ve kumanda istemcisidir**. Tarayıcı sürümü (three.js) HEPGO içinde çalışmaya devam eder; CAYSIM aynı sunucu
@@ -29,7 +51,7 @@ CAYSIM tarafı eşlemesi: [docs/hepgo-baglanti.md](docs/hepgo-baglanti.md).
 ## Depo düzeni
 
 ```
-CAYSIM.uproject            UE 5.4 projesi (CesiumForUnreal etkin; glTFRuntime isteğe bağlı)
+Simumav.uproject           UE 5.8 projesi (Simumav + CaySim modülleri; Cesium/glTFRuntime isteğe bağlı)
 Source/CaySim/             C++ modülü (Build.cs, Public/*.h, Private/*.cpp)
 Config/                    DefaultEngine.ini (Lumen/Nanite/DX12), DefaultGame.ini, DefaultInput.ini, UserSecrets.ini.ornek
 Content/                   Editor'da üretilen varlıklar (Git LFS): Maps, Drones, Launch, UI, Input
@@ -39,14 +61,14 @@ docs/                      mimari.md · caysim-api.md · hepgo-baglanti.md · de
 
 ## Kurulum ve derleme
 
-Windows 10/11, Unreal Engine **5.4**, Visual Studio 2022 (C++ oyun geliştirme), Cesium for Unreal eklentisi, Git LFS.
+Windows 10/11, Unreal Engine **5.8**, Visual Studio 2022 (C++ oyun geliştirme), Cesium for Unreal eklentisi, Git LFS.
 Adım adım: [docs/derleme-windows.md](docs/derleme-windows.md).
 
 Kısa yol:
 ```powershell
 git lfs install && git clone https://github.com/goktalay/caysim.git && cd caysim
 copy Config\UserSecrets.ini.ornek Config\UserSecrets.ini     # Cesium ion belirteci
-# CAYSIM.uproject › sağ tık › Generate Visual Studio project files › CAYSIM.sln › Development Editor › Build
+# Simumav.uproject › sağ tık › Generate Visual Studio project files › Simumav.sln › Development Editor › Build
 ```
 
 ## HEPGO'ya bağlanma — istemci kodu

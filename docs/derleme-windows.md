@@ -1,92 +1,132 @@
-# Windows'ta derleme ve paketleme
+# Şirket bilgisayarı kurulumu, Windows'ta derleme ve paketleme
 
-CAYSIM yalnız Windows 10/11 x64 hedefler. Bu ortamda Unreal Engine yoktur; derleme kullanıcının Windows makinesinde yapılır.
+Simumav (Steam) ve CAYSIM (HEPGO kurumsal) aynı Unreal projesidir: `Simumav.uproject` (UE **5.8**). Geliştirme sunucusunda Unreal/GPU yoktur;
+derleme, varlık üretimi ve paketleme **şirket bilgisayarında** (Windows, güçlü NVIDIA) yapılır. Bu makine GitHub'a **self-hosted runner** olarak
+bağlanır ve `.github/workflows/build-windows.yml` her `main` itmesinde paketi üretir.
 
-## 1. Gereksinimler
+> Sürüm seçimi: UE 5.8 (5.x serisinin son kararlı sürümü; 5.8.3 düzeltmesi yayımlandı). Cesium for Unreal **2.30** UE 5.6 / 5.7 / 5.8'i destekler.
+> Başka sürüme geçiş: `Simumav.uproject` › `EngineAssociation`, CI `vars.UE_ROOT`, Cesium eklentisinin o sürüm paketi. Hedef dosyaları
+> `BuildSettingsVersion.Latest` / `EngineIncludeOrderVersion.Latest` kullanır (sürüm numarası yazmaz).
 
-| Bileşen | Sürüm | Not |
-|---|---|---|
-| Unreal Engine | **5.4** (5.5 de uyumlu; `CAYSIM.uproject` › `EngineAssociation` değiştirilir) | Epic Games Launcher › Unreal Engine › Library › **+** |
-| Visual Studio 2022 | 17.8+ | İş yükü: **Game development with C++**; bileşenler: MSVC v143, Windows 10/11 SDK, .NET Framework 4.8 SDK, **Unreal Engine installer** seçeneği |
-| Cesium for Unreal | 2.x (UE 5.4 için) | Fab/Marketplace'ten motora kur **ya da** `Plugins/CesiumForUnreal` altına kaynaktan |
-| glTFRuntime (isteğe bağlı) | güncel | HEPGO GLB modellerini çalışma zamanında yüklemek için; `Plugins/glTFRuntime` |
-| Git + Git LFS | güncel | `git lfs install` (ikili varlıklar) |
-| Disk | ~60 GB | motor + DerivedDataCache |
+## 1. Adım adım kurulum (bir kez)
 
-Donanım: DX12 destekli GPU (RTX 2060 / RX 6600 ve üstü önerilir; Lumen + Nanite), 16 GB RAM, SSD.
+### 1.1 Windows ve sürücü
+1. **Windows 11** (23H2+) x64; Windows Update tamamlanmış. Güç planı: *Yüksek performans* (derleme sırasında uyku kapalı).
+2. **NVIDIA sürücüsü**: en güncel *Studio Driver* (ya da Game Ready). `nvidia-smi` ile doğrula. DX12 + donanım ışın izleme (Lumen HWRT) için RTX 20xx+.
+3. Disk: motor ~60 GB + proje/DDC 50–100 GB → **NVMe SSD**, en az 250 GB boş.
+4. **Uzun yol desteği** (UE yolları uzun) — yönetici PowerShell:
+   ```powershell
+   New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force
+   git config --system core.longpaths true
+   ```
 
-## 2. Depoyu alma
+### 1.2 Epic Games Launcher + Unreal Engine 5.8
+1. https://store.epicgames.com/download → Epic Games Launcher → Epic hesabıyla giriş.
+2. *Unreal Engine › Library › Engine Versions › +* → **5.8** → *Options*: Starter Content kapalı, *Target Platforms*: **Windows** (Linux isteğe
+   bağlı), *Editor symbols for debugging* (isteğe bağlı, ~60 GB). Varsayılan yol: `C:\Program Files\Epic Games\UE_5.8`.
+3. Kurulumdan sonra Editor'u bir kez açıp kapat.
 
+### 1.3 Visual Studio 2022
+1. https://visualstudio.microsoft.com → **Visual Studio 2022** (17.10+).
+2. İş yükü **Game development with C++**; bileşenler: MSVC v143 x64/x86 (en güncel), **Windows 11 SDK** (10.0.22621+), *Unreal Engine installer*,
+   **.NET Framework 4.8.1 SDK** ve **.NET 8 Runtime** (UnrealBuildTool / AutomationTool).
+
+### 1.4 Git + Git LFS + PowerShell 7
 ```powershell
-git lfs install
+winget install --id Git.Git -e
+winget install --id GitHub.GitLFS -e
+winget install --id Microsoft.PowerShell -e
+git lfs install --system
+```
+
+### 1.5 Cesium for Unreal (gerçek arazi)
+1. Epic Games Launcher › **Fab** › "Cesium for Unreal" (ücretsiz) › *Add to My Library* › **Install to Engine 5.8**
+   (alternatif: https://github.com/CesiumGS/cesium-unreal/releases → UE 5.8 paketini `Plugins/CesiumForUnreal/` altına).
+2. https://ion.cesium.com → *Access Tokens* → yeni belirteç (Cesium World Terrain `1`, Bing Maps Aerial `2`). Pakete gömülecek belirteci **yalnız bu
+   uygulamaya kısıtlı** oluşturun → CI sırrı `CESIUM_ION_TOKEN`. Oyuncu kendi belirtecini Ayarlar'dan da girebilir. Belirteç yoksa oyun
+   **prosedürel dünyaya** düşer.
+3. Eklenti yoksa proje yine derlenir (`.uproject`'te *Optional*; `CaySim.Build.cs` → `CAYSIM_WITH_CESIUM=0`).
+
+### 1.6 glTFRuntime (isteğe bağlı — gerçekçi dron GLB'leri)
+https://github.com/rdeioris/glTFRuntime (MIT) → `Plugins/glTFRuntime/`. Varsa SIMUMAV GLB modelleri (simumav.com statiklerinden indirilip
+`Saved/Simumav/ModelCache`'e alınır) çalışma anında yüklenir; yoksa prosedürel gövde çizilir.
+
+### 1.7 Depo
+```powershell
+mkdir C:\src; cd C:\src
 git clone https://github.com/goktalay/caysim.git
 cd caysim
-copy Config\UserSecrets.ini.ornek Config\UserSecrets.ini   # Cesium ion belirteci buraya (gitignore'da)
+pwsh -File Tools/sitl/sitl-indir.ps1        # yerel ArduPilot SITL 4.7.2 (sha256 doğrulamalı) → ThirdParty/ArduPilotSITL/Win64
 ```
 
-## 3. Eklentiler
-
-### Cesium for Unreal
-- **Yol A (önerilen):** Epic Games Launcher › Fab › "Cesium for Unreal" › Install to Engine (5.4). Motor eklentisi olduğu için proje
-  `Plugins/` dizini boş kalır; `CaySim.Build.cs` motor eklenti dizinini de tarar ve `CAYSIM_WITH_CESIUM=1` tanımlar.
-- **Yol B:** https://github.com/CesiumGS/cesium-unreal sürüm paketini `Plugins/CesiumForUnreal/` altına açın.
-- **Cesium ion belirteci:** https://ion.cesium.com › Access Tokens › yeni belirteç (varlıklar: Cesium World Terrain `1`, Bing Maps Aerial `2`).
-  `Config/UserSecrets.ini` içine `[/Script/CaySim.CaySimWorldSetup] CesiumIonToken=…` yazın; ya da Editor'da `BP_WorldSetup › Cesium Ion Token`.
-  Belirteç yoksa Google 3D Tiles (HEPGO `/g3d-key`) ya da düz zemin kullanılır.
-
-### glTFRuntime (isteğe bağlı)
-- Fab'den satın alıp motora kurun **ya da** https://github.com/rdeioris/glTFRuntime (MIT) kaynağını `Plugins/glTFRuntime/` altına koyun.
-- `CaySim.Build.cs` `Plugins/glTFRuntime` varsa `CAYSIM_WITH_GLTFRUNTIME=1` tanımlar; motor eklentisi olarak kurduysanız Build.cs'teki
-  dizin denetimini motor yoluyla genişletin (Cesium satırındaki gibi).
-- Yoksa dron, `BP_Drone › Builtin Meshes` içindeki yer tutucu gövdelerle çizilir.
-
-## 4. Proje dosyalarını üretme ve derleme
-
-1. `CAYSIM.uproject` › sağ tık › **Generate Visual Studio project files** (ya da
-   `"C:\Program Files\Epic Games\UE_5.4\Engine\Build\BatchFiles\Build.bat" -projectfiles -project="%CD%\CAYSIM.uproject" -game -engine`).
-2. `CAYSIM.sln` › Visual Studio › yapılandırma **Development Editor** / **Win64** › **Build**.
-   - İlk derleme 10–30 dk (shader'lar ayrıca Editor açılışında).
-3. `CAYSIM.uproject` çift tık → Editor açılır.
-
-Komut satırından:
+### 1.8 Paylaşımlı DDC (Derived Data Cache)
 ```powershell
-$UE="C:\Program Files\Epic Games\UE_5.4"
-& "$UE\Engine\Build\BatchFiles\Build.bat" CAYSIMEditor Win64 Development -project="$PWD\CAYSIM.uproject" -waitmutex
+New-Item -ItemType Directory D:\UE-DDC -Force
+[Environment]::SetEnvironmentVariable("UE-SharedDataCachePath", "D:\UE-DDC", "Machine")
 ```
+Runner hizmet hesabı da bu klasöre yazabilmeli. Ağdaki başka makinelerle paylaşım: `\\sunucu\UE-DDC`.
 
-## 5. Editor'da ilk kurulum (bir kez; varlıklar Git LFS'e commit edilir)
+## 2. GitHub self-hosted runner
 
-1. **Harita:** `Content/Maps/CaySimMain` boş seviye; ekle: `CesiumGeoreference`, `CesiumSunSky` (Cesium panelinden), `ExponentialHeightFog`,
-   `VolumetricCloud`. World Settings › GameMode Override: `BP_GameMode` (ACaySimGameMode alt sınıfı).
-2. **BP_GameMode:** `Drone Class = BP_Drone`, `World Setup Class = BP_WorldSetup`, `Launch Rig Class = BP_LaunchRig`, `Hud Class = WBP_Hud`,
-   `Wizard Widget Class = WBP_Wizard`, `Default Pawn Class = ACaySimCameraPawn` (ya da BP alt sınıfı; Enhanced Input varlıkları burada atanır).
-3. **BP_Drone:** `Builtin Meshes` (quad/hexa/heli/sabit kanat gövdeleri + pervane). Basit başlangıç: Editor'un Shapes/Cube-Cylinder'ları;
-   CAYMAZ V3 GLB'si HEPGO'dan indirilip `Content/Drones/` altına içe aktarılabilir (glTF importer motorla gelir).
-4. **BP_LaunchRig:** rampa tabanı/ray/taşıyıcı, pickup gövde/tekerlek, pist şeridi mesh'leri (1×1 m düzlem; `Setup` ölçekler).
-5. **WBP_Wizard:** `UCaySimGameInstance::Get › GetWizard` üzerinden `OnStepChanged`, `OnError`, `OnStatus`, `OnLogoReady`, `OnDataChanged`
-   olaylarına bağlanan ekranlar (`ECaySimWizardStep` başına bir Widget Switcher sayfası). Düğmeler `SubmitClientCode`, `ChooseMode`,
-   `ChooseCenter`, `ChooseLog`, `ChooseType`, `ChooseModel`, `SetWorld`, `SetLaunch`, `Start`, `Back`'i çağırır.
-6. **WBP_Hud:** `UCaySimHudWidget` alt sınıfı (çizim C++'ta; yalnız yazı tipi/kalınlık).
-7. **Input:** `IMC_CaySim` + `IA_Look` (Mouse XY), `IA_Move` (WASD 2D), `IA_Ascend` (E/Q), `IA_Zoom` (tekerlek), `IA_CycleCamera` (C),
-   `IA_ToggleHud` (H), `IA_RcRollPitch` / `IA_RcThrottleYaw` (gamepad sol/sağ çubuk).
+### 2.1 Kayıt
+1. GitHub › `goktalay/caysim` › *Settings › Actions › Runners › New self-hosted runner* › **Windows x64**:
+   ```powershell
+   mkdir C:\r; cd C:\r          # KISA YOL: iş dizini C:\r\_work\caysim\caysim (UE/MSBuild uzun yol sınırı)
+   Invoke-WebRequest -Uri <sayfadaki actions-runner-win-x64-*.zip> -OutFile runner.zip
+   Expand-Archive runner.zip -DestinationPath .
+   .\config.cmd --url https://github.com/goktalay/caysim --token <SAYFADAKİ_TOKEN> --labels self-hosted,windows,unreal --name sirket-rtx --work _work --runasservice
+   ```
+2. `--runasservice` → **Windows hizmeti** (oturum kapalıyken de çalışır). Hizmet hesabı: yönetici olmayan ayrı hesap (ör. `ue-runner`); UE dizinine
+   okuma, `C:\r` ve `D:\UE-DDC`'ye yazma izni.
+3. Etiketler: **self-hosted, windows, unreal**.
 
-## 6. Paketleme (.exe)
+### 2.2 Güvenlik
+- Runner **yalnız bu özel depoya** kaydedilir (kuruluş düzeyinde değil).
+- *Settings › Actions › General*: **Require approval for all outside collaborators**; fork PR iş akışları kapalı. İş akışı `pull_request`'te
+  çalışmaz ve `github.repository_owner == 'goktalay'` ister.
+- Runner makinesinde sır dosyası tutulmaz; Steam/Cesium sırları yalnız GitHub *Secrets*'ta.
+- İnternet çıkışı: github.com, objects.githubusercontent.com, firmware.ardupilot.org, steamcdn-a.akamaihd.net + Steam partner uçları (yükleme).
 
-Editor › **Platforms › Windows › Package Project** (Shipping; `DefaultGame.ini` içinde `StagingDirectory=Paketler`). Komut satırı:
+### 2.3 Değişkenler ve sırlar (*Settings › Secrets and variables › Actions*)
+| Ad | Tür | Not |
+|---|---|---|
+| `UE_ROOT` | Variable | `C:\Program Files\Epic Games\UE_5.8` |
+| `STEAM_APP_ID` | Variable | gerçek App ID (yoksa 480 = Spacewar) |
+| `STEAM_DEPOT_ID` | Variable | Windows depot |
+| `STEAM_USERNAME` | Secret | yalnız yükleme yetkili hesap |
+| `STEAM_CONFIG_VDF` | Secret | base64 `config.vdf` (docs/steam-yayin.md §6) |
+| `CESIUM_ION_TOKEN` | Secret | isteğe bağlı |
+
+## 3. Yerel derleme (geliştirici)
 ```powershell
-& "$UE\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\CAYSIM.uproject" -platform=Win64 -clientconfig=Shipping `
-  -cook -build -stage -pak -iostore -archive -archivedirectory="$PWD\Paketler" -noP4 -utf8output
+$UE = "C:\Program Files\Epic Games\UE_5.8"
+& "$UE\Engine\Build\BatchFiles\Build.bat" -projectfiles -project="$PWD\Simumav.uproject" -game -engine
+& "$UE\Engine\Build\BatchFiles\Build.bat" SimumavEditor Win64 Development -Project="$PWD\Simumav.uproject" -WaitMutex
+# içerik (harita + malzemeler) KODDAN — bir kez ya da betik değişince:
+& "$UE\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "$PWD\Simumav.uproject" -ExecutePythonScript="$PWD\Scripts\Python\simumav_varliklar.py" -unattended -nop4 -nosplash -NullRHI -stdout
 ```
-Çıktı: `Paketler\Windows\CAYSIM.exe` (+ `CAYSIM\Content\Paks`). Dağıtımda **Cesium ion belirteci paket içine gömülür** (UserSecrets.ini
-cook edilir) — kurumsal dağıtımda belirteci alan adı/uygulama kısıtlı oluşturun.
+Ardından `Simumav.uproject` → Editor → *Play (Standalone Game)*. Steam istemcisi açıksa 480 (Spacewar) kimliğiyle başarımlar denenebilir.
 
-## 7. Sık sorunlar
+## 4. Paketleme
+```powershell
+& "$UE\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Shipping `
+  -build -cook -stage -pak -iostore -prereqs -archive -archivedirectory="$PWD\Paketler\Shipping" -utf8output -unattended -nodebuginfo
+```
+Çıktı: `Paketler\Shipping\Windows\Simumav.exe` + `Simumav\` (pak'ler, `ThirdParty\ArduPilotSITL\Win64` NonUFS, `Content\Simumav\Lang`).
 
+## 5. CAYSIM (HEPGO kurumsal) ile ilişki
+`Source/CaySim` (HEPGO sözleşmesi v1 istemcisi, Cesium dünya kurulumu, dron aktörü, askerî HUD) Simumav'ın ortak çekirdeğidir. Kurumsal istemci:
+`Simumav.exe /Game/Maps/SimumavMain?game=/Script/CaySim.CaySimGameMode` (CAYSIM sihirbaz arayüzü UMG varlıkları ister — docs/mimari.md).
+
+## 6. Sık sorunlar
 | Belirti | Çözüm |
 |---|---|
-| `CesiumRuntime` modülü bulunamadı | Eklenti kurulu değil → Build.cs `CAYSIM_WITH_CESIUM=0` ile düz zemin; kurduktan sonra proje dosyalarını yeniden üret |
-| `glTFRuntime.h` bulunamadı | `Plugins/glTFRuntime` yok ama `CAYSIM_WITH_GLTFRUNTIME=1` → dizin adını denetle |
-| WebSocket bağlanmıyor, REST çalışıyor | Ters vekil (nginx) `Upgrade` başlıklarını iletmiyor; `?key=` sorgusunun düşürülmediğini denetle |
-| Dron yerin altında/üstünde | `BP_WorldSetup › Geoid Offset M` (TR ≈ 30–40 m); `bAutoGroundOffset` açıkken 3D Tiles yüklenince kendiliğinden ölçülür |
-| Dron ters yönde uçuyor | `BP_Drone › Eksen › bInvertRoll / bInvertPitch`; heading 90° → +X olmalı |
-| 401 `auth` | İstemci kodu yanlış ya da HEPGO'da **Kodu yenile** yapıldı → yeni kodu girin |
+| `Unable to find plugin 'CesiumForUnreal'` | Eklenti *Optional*; motor eklenti dizini bulunamıyorsa `Plugins/CesiumForUnreal` altına koyun |
+| `C4456/C4458` gölgeleme hatası | Yerel değişken adı üye/üst kapsamla çakışıyor → yeniden adlandırın (UE bunu hata sayar) |
+| `MakeLines` aşırı yük hatası | `TArray<FVector2D>` → `TArray<FVector2f>` (CAYSIM `HudWidget.cpp`'deki eski kullanımlar) |
+| "SITL dosyaları yok" | `pwsh -File Tools/sitl/sitl-indir.ps1`; pakette `Simumav\ThirdParty\ArduPilotSITL\Win64\ArduCopter.exe` olmalı |
+| SITL başlıyor ama bağlanmıyor | Güvenlik duvarı 127.0.0.1:15670–17660 TCP; `Saved\Simumav\SitlRun\<port>\sitl.log` |
+| CI'da "SHA256 UYUŞMAZ" | firmware.ardupilot.org klasörü güncellenmiş → `Tools/sitl/sitl-manifest.json`'u bilinçli güncelleyin ya da ayna (`-BaseUrl`) |
+| Harita üretilemedi (CI) | PythonScriptPlugin + EditorScriptingUtilities açık mı; `Saved\Logs` |
+| Mission Planner veri görmüyor | Ayarlar → Mission Planner UDP çıkışı; MP'de UDP 14550; uçuş başladıktan sonra bağlanın |
+| Gerçek arazi yerine prosedürel | Cesium belirteci yok/yanlış (Ayarlar → Cesium ion belirteci) |

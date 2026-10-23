@@ -1,4 +1,78 @@
-# CAYSIM mimarisi
+# Mimari — Simumav (Steam) ve CAYSIM (HEPGO kurumsal)
+
+Bu depo iki ürünü tek Unreal projesinde (`Simumav.uproject`, UE 5.8) taşır:
+
+- **Simumav** — Steam'de satılan, simumav.com'un eşi olan dron uçuş simülatörü (modül `Source/Simumav`, birincil oyun modülü).
+- **CAYSIM** — HEPGO ERP'ye bağlanan kurumsal görselleştirme istemcisi (modül `Source/CaySim`; aşağıdaki §A sonrası bölümler). Simumav, CAYSIM'in
+  dünya kurulumunu (Cesium), dron aktörünü, telemetri tamponunu ve askerî HUD'unu ortak çekirdek olarak kullanır.
+
+## A. Simumav
+
+### A.1 Temel karar: fizik her zaman ArduPilot SITL — iki yerde çalışabilir
+
+```
+                      ┌──────────────────────── Simumav (Windows, Steam) ────────────────────────┐
+ MİSAFİR (varsayılan) │ USmvLocalFlightLink ──TCP 127.0.0.1:15670── ArduCopter/Plane/Rover.exe   │
+ giriş yok            │   (MAVLink: SmvMav)        (alt süreç, temiz eeprom, varsayilan.parm)     │
+                      │   oturum mantığı: SmvCore (güç, GPWS, hedefler, servo tetik, yarış, bot)  │
+                      │   Mission Planner ⇄ UDP 14550 (ham köprü, GCS kilidi)                     │
+                      │                                                                           │
+ HESAPLA (isteğe bağlı)│ USmvCloudFlightLink ──WSS /ws/fly/{sim_id} (Cookie smsid)──► simumav.com │
+ "Bulutta uç"         │ USmvMatchClient ─────WSS /ws/match/{id} + REST /api/match                 │
+                      │ USmvDataService ─────REST /api/hangar|crew|tracks|missions|settings      │
+                      │                                                                           │
+ ortak                │ USmvFlightLink (soyut) → OnTele/OnMessage → ASmvGameMode → dron/HUD/ses   │
+                      └───────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Giriş zorunlu değildir.** Oyun misafir kipte açılır; profil Steam kimliğiyle yereldedir (`Saved/Simumav/Profiles/<steam_id>/`).
+- İki bağlantı da **sunucu WS sözleşmesindeki ileti şekillerini** üretir (`tele`, `event`, `state`, `launch`, `crash`, `warn`, `target`, `engage`,
+  `servo_trigger`, `res`, `end`); oyun katmanı fiziğin nerede olduğunu bilmez.
+- Sunucu oturum mantığının istemci karşılığı **saf C++ çekirdektedir** (`Private/Core`, `Private/Mavlink`, `Private/Crypto`; Unreal'a bağımlı
+  değil) ve `tests/cpp` altında sunucunun Python modüllerine / JS değerlendiricisine / pymavlink'e karşı **birebir** sınanır.
+
+### A.2 Sınıflar
+
+| Sınıf | Görev |
+|---|---|
+| `USmvGameInstance` (UCaySimGameInstance'tan) | uygulama ömrü: `USimumavClient`, `USmvDataService`, `USmvFlow` |
+| `USmvSteamSubsystem` | Steam kimliği/adı, başarımlar (yerel kuyruk + yeniden deneme), Steam katmanında URL |
+| `USimumavClient` | simumav.com REST/WS: mastertool PBKDF2 girişi, `smsid` çerezi, CSRF Origin, hata ayrıştırma |
+| `FSmvSecrets` | belirteç/çerez: Windows Kimlik Bilgisi Yöneticisi; yedek AES dosyası |
+| `FSmvSocket` | yeniden bağlanan WebSocket (geri çekilme, ping, ölü bağlantı bekçisi, 4403/4404 kalıcı) |
+| `USmvDataService` | hangar/mürettebat/parkur/görev/ayar/kayıt — yerel JSON ya da REST; katalog; GLB önbelleği; misafir → hesap aktarımı |
+| `USmvFlow` | ekran durum makinesi, sihirbaz taslağı, uçuş başlat/bitir, özet + başarım değerlendirmesi, liderlik, karşılaşma |
+| `USmvFlightLink` / `USmvLocalFlightLink` / `USmvCloudFlightLink` | fizik bağlantısı (yerel SITL / sunucu) |
+| `USmvMatchClient` | çevrim içi salon, YZ karşılaşması, `pos` → rakip aktörleri |
+| `ASmvGameMode` | sahne: CAYSIM `ACaySimWorldSetup` (Cesium/düz) + `ASmvProcTerrain`, `ASmvDroneActor`, kapılar, hedefler, yerel botlar, GPWS, ses, çarpışma |
+| `ASmvPilotPawn` | 7 kamera kipi, PiP, görüntü tipi, Enhanced Input (kodla) → RC kanalları, eylemler |
+| `USmvHudOverlay` + CAYSIM `UCaySimHudWidget` | HUD (NativePaint; UMG varlığı yok) |
+| `SSmvShell` | tüm menüler (Slate, kodla) |
+| `USmvMotorSynth`, `USmvToneSynth` | prosedürel motor sesi ve uyarı tonları (USynthComponent) |
+| `FSmvI18n` | 7 dil (`Content/Simumav/Lang/*.json`) |
+
+### A.3 İçerik varlıkları
+İkili `.uasset` elle üretilmez: harita (`/Game/Maps/SimumavMain`, boş) ve malzemeler (`M_SmvTerrain`, `M_SmvGlow`) `Scripts/Python/simumav_varliklar.py`
+ile CI'da headless üretilir; geri kalan her şey (ışık, gök, bulut, sis, arazi, dron gövdesi, kapılar, arayüz, girdi) çalışma anında C++'tan kurulur.
+Malzeme bulunamazsa motorun `BasicShapeMaterial`'ına düşülür.
+
+### A.4 Yerel SITL yaşam döngüsü
+1. Boş 10'luk port bloğu (15670 + 10·k), `Saved/Simumav/SitlRun/<port>/` çalışma dizini, temiz başlangıçta `eeprom.bin` + script dizinleri silinir.
+2. `varsayilan.parm` (FRAME_CLASS, FS_GCS_ENABLE 0, MAV_SYSID, ARMING_SKIPCHK 16, LOG_*, tip seti, kayıtlı parametreler, düzen seti) yazılır;
+   `<İkili>.exe --model … --home lat,lon,alt,yön --base-port P --defaults … --sysid 1`.
+3. 1 sn aralıkla TCP bağlanma (≤ 40 sn); ilk araç HEARTBEAT'inde akış istekleri (SET_MESSAGE_INTERVAL; ArduPlane reddederse akış tabanlı),
+   HOME, SERVOn_FUNCTION, ilk kalp atışı parametre seti (sunucuyla aynı sıra), `state HAZIR`.
+4. 1 Hz GCS kalp atışı, 3 sn'de bir akış yenileme, esinti 1 Hz, 0,25 sn tele bekçisi.
+5. Sıfırla: süreç durur, aynı port/sysid ile eeprom korunarak yeniden açılır; oturumda yazılan parametreler (MP dahil) yeniden yazılır.
+6. Bitir: süreç kapanır, `.BIN` logları `Saved/Simumav/Logs`'a taşınır, özet üretilir.
+
+### A.5 Bilinçli farklar (yerel ↔ sunucu)
+Yerel resmi 4.7.2 ikilisi HEPGO yamalarını (`SIM_SRV_REV`, `SIM_PLN_THR_MUL`) tanımaz; arazi verisi (TERRAIN_DATA) sunulmaz; yerel botlar kinematiktir.
+Ayrıntı: docs/ozellik-esligi.md.
+
+---
+
+# B. CAYSIM mimarisi (HEPGO kurumsal)
 
 CAYSIM, HEPGO ERP'nin **Uçuş Simülatörü** modülünün Unreal Engine 5 tabanlı, ayrı çalışan (Windows .exe) yüksek gerçekçilik
 görselleştirme ve kumanda istemcisidir. Tarayıcı sürümü (three.js) HEPGO içinde çalışmaya devam eder; CAYSIM onun "yüksek gerçekçilik"
