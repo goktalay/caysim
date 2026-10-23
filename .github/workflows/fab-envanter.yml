@@ -87,6 +87,17 @@ jobs:
             $s2 = if (Test-Path $st) { 'stage [' + (Size $st) + ']' } else { 'stage yok' }
             W ("  " + $_.Name + ": " + $d + ", " + $s2)
           }
+          W "=== DDC / Zen (BaseEngine.ini bolumleri, zenserver surecleri) ==="
+          $bi = "$ue\Engine\Config\BaseEngine.ini"
+          if (Test-Path $bi) {
+            $sec = ''
+            foreach ($ln in (Get-Content $bi)) {
+              if ($ln -match '^\[(.+)\]') { $sec = $Matches[1]; if ($sec -match 'DerivedData|Zen|DDC|Fallback|Cache') { W ("  [" + $sec + "]") }; continue }
+              if ($sec -match '^Zen' -and $ln -match '^\s*[^;].*=') { W ("    " + $ln) }
+            }
+          }
+          Get-CimInstance Win32_Process -Filter "Name='zenserver.exe'" -ErrorAction SilentlyContinue | ForEach-Object { $o = try { (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User } catch { '?' }; W ("  zenserver pid " + $_.ProcessId + " sahip " + $o + " : " + $_.CommandLine) }
+          Get-CimInstance Win32_Process -Filter "Name='UnrealEditor.exe'" -ErrorAction SilentlyContinue | ForEach-Object { W ("  UnrealEditor pid " + $_.ProcessId) }
           W "=== Disk bos alan ==="
           Get-PSDrive -PSProvider FileSystem | ForEach-Object { W ("  " + $_.Name + ": bos " + ('{0:N0} GB' -f ($_.Free / 1GB))) }
       - name: Artefakt
