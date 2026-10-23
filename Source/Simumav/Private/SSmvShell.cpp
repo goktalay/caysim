@@ -210,6 +210,19 @@ void SSmvShell::Construct(const FArguments& InArgs)
 					return (Built == ESmvScreen::Menu || Built == ESmvScreen::Welcome) ? 0.30f : 0.80f;
 				})
 				.Tint(SeasonColor(Season))
+				.Scene_Lambda([this]()
+				{
+					// bölüme özel arka plan (web bölüm arka planları): canlı 3B sahne varken menüde gizli kalır
+					switch (Built)
+					{
+					case ESmvScreen::Hangar: case ESmvScreen::Crew: return 1;
+					case ESmvScreen::Missions: case ESmvScreen::Wizard: case ESmvScreen::Tracks: case ESmvScreen::Loading: return 2;
+					case ESmvScreen::Lobby: case ESmvScreen::Leaderboard: case ESmvScreen::Account: return 3;
+					case ESmvScreen::Logbook: case ESmvScreen::Summary: case ESmvScreen::Replay: return 4;
+					case ESmvScreen::FlyMode: case ESmvScreen::FpvGallery: case ESmvScreen::Settings: case ESmvScreen::Support: return 5;
+					default: return 0;
+					}
+				})
 			]
 		]
 		+ SOverlay::Slot()
@@ -2908,6 +2921,8 @@ TSharedRef<SWidget> SSmvShell::SetGeneral()
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.analog_fpv")), Toggle(&S.bAnalogFpv))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.leader_hidden")), Toggle(&S.bLeaderboardHidden))];
 	V->AddSlot().AutoHeight().Padding(0, 14, 0, 8)[Section(Tx(TEXT("set.interface")), Accent2())];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.theme")), Chips(&S.Theme, { TEXT("dark"), TEXT("light"), TEXT("auto") },
+		{ Tx(TEXT("set.theme_dark")), Tx(TEXT("set.theme_light")), Tx(TEXT("set.theme_auto")) }, {}, [Self]() { ApplyTheme(Self->EditSettings.Theme); Self->Refresh(); }))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.reduced_motion")), Toggle(&S.bReducedMotion, [Self]() { ReducedMotion() = Self->EditSettings.bReducedMotion; }), Tx(TEXT("set.reduced_motion_hint")))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.menu_scene")), Toggle(&P.bMenuScene, SaveP), Tx(TEXT("set.menu_scene_hint")))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.preview3d")), Toggle(&P.bPreview3d, SaveP))];

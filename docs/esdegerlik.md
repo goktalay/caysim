@@ -13,14 +13,14 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 |---|---|---|---|---|
 | Görsel dil: koyu cam kartlar, neon mavi vurgu, yumuşak animasyon | `theme.css`, `fx.css` | `SmvUiKit` (renk/yazı tipi/fırça, `SSmvButton` parıltı + büyüme + basma, giriş solması) | ✓ | — |
 | Sahne geçişleri (FLIP, ışık süpürmesi) | `ui/transition.js` | Kart giriş animasyonu + açılma sesi; tam FLIP yok | ◐ | P2 |
-| Bölüme özel hareketli arka planlar | `ui/backdrop.js` | `SSmvBackdrop` (degrade, ışık lekeleri, perspektif ızgara, parçacık, süzülen dron siluetleri, tarama çizgisi) — tüm bölümlerde ortak | ◐ (bölüme özel sahne yok) | P2 |
+| Bölüme özel hareketli arka planlar | `ui/backdrop.js` | `SSmvBackdrop` ortak katman + bölüme özel sahne: hangar içi (projektör, pist ışıkları), brifing radarı (Görevler/Sihirbaz/Parkurlar/Yükleme), tel kafes küre (Lobi/TOP10/Hesap), ilaçlama tarlası (Seyir defteri/Özet), gökyüzü paralaksı (Uç/FPV/Ayarlar/Destek) | ✓ | P2 |
 | Menü canlı uçuş sahnesi (3B, sinematik kamera) | `menu/flight.js`, `flightcore.js` | `ASmvMenuScene`: prosedürel arazi (TR TEST Kalecik), sekizli tur atan sabit kanat, kamera döngüsü takip → yan → yörünge → yerden; Ayarlar'dan kapatılır | ✓ | — |
 | Klavye / gamepad tam gezinme, odak halkası | `menu/index.js` | Slate odak gezinmesi; odak halkası yalnız klavye/gamepad'de; A/Enter seç, B/Esc geri, LB/RB-Q/E sekme, Y/F1 yardım | ✓ | — |
 | Arayüz sesleri (hover, tık, geri, hata, süpürme) | `ui/sfx.js` | `FSmvUiSound` → `USmvToneSynth` (ayrı kazanç; ses dosyası yok) | ✓ | — |
 | Bildirimler (toast; boş metin bastırılır) | `ui/components.js` | Sağ üst yığın (en çok 4), önem rengi + simge, kayarak girer, 5 sn | ✓ | — |
 | Onay / soru diyalogları | `modal`, `confirmDlg` | Tehlikeli işlemler kırmızı düğme; ayrı diyalog bileşeni yok (Sıfırla çift basma, DISARM çift basma) | ◐ | P2 |
-| Tema koyu / açık / otomatik | `sm:theme` | Yalnız koyu | ✗ | P2 |
-| 7 dil, Arapça sağdan sola | `app/i18n` | `Content/Simumav/Lang/*.json` (668 anahtar, eksiksiz); RTL yerleşimi gözden geçirilmedi | ◐ | P1 |
+| Tema koyu / açık / otomatik | `sm:theme` | Ayarlar → Genel → Arayüz teması: koyu / açık / otomatik (07–19 açık); tüm renkler ve cam kartlar temaya göre; sunucu ayarı `theme` | ✓ | P2 |
+| 7 dil, Arapça sağdan sola | `app/i18n` | `Content/Simumav/Lang/*.json` (7 dil, eksiksiz); Arapçada tüm kabuk sağdan sola (FlowDirection RTL) | ✓ | P1 |
 | Hareket azaltma | `prefers-reduced-motion` | Ayarlar → Genel → Hareketi azalt | ✓ | — |
 | Çerez onayı / GA4 | `analytics.js` | Masaüstü oyunda yok | — | — |
 | Tanıtım / onboarding | (web'de yok; ipucu satırı) | İlk açılışta 6 sayfalık tanıtım + ilk uçuşta ipucu kartı + ana menüde dönen ipuçları | ✓ | — |
@@ -41,7 +41,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 |---|---|---|---|---|
 | Logo SIMU**MAV** | `menu/index.js` | ✓ (parıltılı) | ✓ | — |
 | 6 kart: Hangar, Mürettebat, Parkur, Görevler, Uç, Operasyon (renkleri) | `menu/index.js` | "UÇ" büyük kahraman kartı + 6 kart (Hangar #38bdf8, Mürettebat #f472b6, Parkur #34d399, Görevler #a78bfa, Karşılaşma, Kayıtlar #fb923c) | ✓ | — |
-| Kart 3B eğilme (±9°) + ışık noktası | `menu/index.js` | Büyüme + parıltı + süpürme ışığı; 3B eğilme yok | ◐ | P2 |
+| Kart 3B eğilme (±9°) + ışık noktası | `menu/index.js` | Fare konumuna göre ±9° eğilme (kayma dönüşümü) + ışık noktası; büyüme + parıltı | ✓ | P2 |
 | TOP 10 düğmesi, canlı uçuş rozeti, ipucu satırı | `menu/index.js` | ✓ (+ pilot kartı, SITL/Steam/bulut/harita durumu) | ✓ | — |
 
 ## 4. Hangar
@@ -62,16 +62,16 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
 | Pilot kartları, ★ varsayılan, sil | `crew/index.js` | ✓ | ✓ | — |
-| Canlı 3B tam boy önizleme, sekmeler (Beden/Yüz/Saç/Kıyafet/Aksesuar) | `avatar*.js` | Çizilmiş stilize portre (kask, vizör + ayna, tulum, ten, arma, aksesuar; nefes animasyonu); avatar v1 alanları | ◐ (beden/yüz/saç alanları yok; 3B karakter yok) | P1 |
+| Canlı 3B tam boy önizleme, sekmeler (Beden/Yüz/Saç/Kıyafet/Aksesuar) | `avatar*.js` | Pilot oluşturucu: 3B tam boy figür (ASmvPilotFigure; sürükle-döndür, tam boy/yüz yakınlaştırma), Beden/Yüz/Saç/Kıyafet/Aksesuar sekmeleri, avatar v2 alanları, rastgele | ✓ | P1 |
 | Rastgele, hazır pilotlar (p01–p10) | `crew/index.js` | Rastgele görünüm + karakter seçici | ✓ | — |
 | "Hoş geldin, {ad}!" | `crew/index.js` | ✓ | ✓ | — |
-| Sahnede 3B pilot (RC tutan) | `flightsim_pilot*.js` | — | ✗ | P2 |
+| Sahnede 3B pilot (RC tutan) | `flightsim_pilot*.js` | Uçuşta ev konumunun yanında RC kumanda tutan 3B pilot: başparmaklar çubuk girdisini izler, baş dronu takip eder, nefes | ✓ | P2 |
 
 ## 6. Parkur / harita
 
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
-| Parkurlarım / hazır FPV parkurları sekmeleri | `tracks/index.js`, `fly/fpv.js` | Parkurlar ekranı + Uç sihirbazında "Hazır haritalar" (Fab kayıt tablosu `SmvMapRegistry`: ad, açıklama, önizleme PNG, pakette yoksa pasif) + "Parkurlarım" | ◐ (8 FPV parkuru yok) | P1 |
+| Parkurlarım / hazır FPV parkurları sekmeleri | `tracks/index.js`, `fly/fpv.js` | Parkurlar ekranı + "Hazır haritalar" (SmvMapRegistry) + "Parkurlarım" + Hazır FPV parkurları galerisi (8 parkur) | ✓ | P1 |
 | Konum (harita tıkla / ara) | `gmap.js`, `satmap.js` | Enlem/boylam kutuları | ◐ | P2 |
 | Dünya kipi gerçek / Google 3B / prosedürel + ayarlar | `tracks/index.js` | ✓ (prosedürel ayarları kaydırıcı) | ✓ | — |
 | Rüzgâr kadranı, saat, hava | `tracks/index.js` | Kaydırıcılar + simgeli çipler; sihirbazda pusula | ✓ | — |
@@ -81,13 +81,13 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
-| Koridor / serbest / ilaçlama / FPV bayrak / tarama / FPV halka / yer kontrolünü koru | `missions/editor.js` | Görev listesi, tür çipleri (simgeli), plan JSON | ◐ (harita üzerinde tasarım yok) | P1 |
+| Koridor / serbest / ilaçlama / FPV bayrak / tarama / FPV halka / yer kontrolünü koru | `missions/editor.js` | Görev düzenleyici harita üzerinde: koridor, serbest rota, ilaçlama/tarama hatları, FPV bayrak/halka sırası, yer kontrolünü koru; web plan biçimi | ✓ | P1 |
 
 ## 8. Uç — seçim ve sihirbazlar
 
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
-| "Nasıl uçmak istersin?" (tek / FPV / çok oyunculu) | `fly/index.js` | Ana menü UÇ + Karşılaşma ekranı | ◐ | P1 |
+| "Nasıl uçmak istersin?" (tek / FPV / çok oyunculu) | `fly/index.js` | "Nasıl uçmak istersin?" ekranı: tek uçuş / FPV parkuru / çok oyunculu / yapay zekâ rakip | ✓ | P1 |
 | Adımlı tek oyunculu sihirbaz | `fly/wizard.js` | 7 adım: Araç (3B önizleme + statlar + pilot) → Harita (kartlar, önizleme görseli) → Ortam (saat, hava, rüzgâr pusulası; UDS'ye gider) → Kumanda (Mode 1–4 şemalı kartlar, cihaz, expo) → Görev ve kurallar (görev, yarış/it dalaşı, hedefler) → Gelişmiş (kalkış, güç, kamera, hız, arka uç, .BIN) → Özet + BAŞLAT; LB/RB / Q-E adım; "Hemen başlat" | ✓ | — |
 | Kalkış yöntemleri + rüzgâr önerisi | `wizard.js` | Yöntemler ve aralıklar ✓; rüzgâr önerisi yok | ◐ | P2 |
 | Yer kontrol (radar/EO) adımı | `wizard.js` | — | ✗ | P2 |
@@ -101,14 +101,14 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Halka yarışı / it dalaşı kurucu, davet + şifre | `fly/match.js` | Oluştur / YZ / Katıl sütunları | ✓ | — |
 | Bekleme salonu (oyuncu satırları, hazır, bot ekle, ayrıl) | `fly/match.js` | Renkli oyuncu satırları, hazır rozeti | ✓ | — |
 | Bot adları AI-Şahin… | `flightsim_match_bot.py` | Yerel yarışta aynı adlar | ✓ | — |
-| Sonuç penceresi, podyum, puan sayacı | `fly/match.js` | Uçuş özeti (rozetler) | ◐ | P1 |
-| Halka/it dalaşı ses efektleri | `flightsim_sfx.js` | Halka/kilit/başla tonları | ◐ | P2 |
+| Sonuç penceresi, podyum, puan sayacı | `fly/match.js` | Uçuş özeti + yarış podyumu (1–3) + sayan oyun puanı + FPV sonuç bölümü | ✓ | P1 |
+| Halka/it dalaşı ses efektleri | `flightsim_sfx.js` | Prosedürel efektler: halka (artan perde), bitiş, ters yön, kilit/angajman, kazanma/kaybetme, önleme, çarpma, kişisel rekor | ✓ | P2 |
 
 ## 10. FPV parkurları + hayalet
 
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
-| 8 hazır FPV parkuru, kapı türleri, sektörler, hayalet | `fly/fpv*.js`, `flightsim_fpvcourse*.js` | — (parkur halkaları ve yerel yarış var) | ✗ | P1 |
+| 8 hazır FPV parkuru, kapı türleri, sektörler, hayalet | `fly/fpv*.js`, `flightsim_fpvcourse*.js` | 8 hazır parkur (sunucu tanımı birebir), kapı türleri (çerçeve/halka/bayrak), sektörler, kaçırma/çarpma cezası, kişisel rekor hayaleti | ✓ | P1 |
 
 ## 11. Uçuş ekranı
 
@@ -130,8 +130,8 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Servo tetik "Dinle" | `flightsim_servotrig.js` | Duraklatma → Gelişmiş | ✓ | — |
 | Hedef sembolojisi / kilit (yalnız HUD + puan) | `flightsim_targets.js` | ✓ | ✓ | — |
 | Yer kontrol radar/EO pencereleri | `flightsim_gcs_ui.js` | — | ✗ | P2 |
-| Çarpışma efekti (patlama, sarsıntı) | `flightsim3d.js` | Çarpışma yazısı; efekt yok | ◐ | P2 |
-| Giriş sekansı 3-2-1-BAŞLA | `flightsim_intro.js` | Ekran üstünde sayaç + halka + parkur adı + bip (yarış dışı); kamera spirali yok | ◐ | P2 |
+| Çarpışma efekti (patlama, sarsıntı) | `flightsim3d.js` | Çarpma: darbe sesi, ekran parlaması, kamera sarsıntısı, savrulan enkaz parçaları | ✓ | P2 |
+| Giriş sekansı 3-2-1-BAŞLA | `flightsim_intro.js` | Sayaç + halka + parkur adı + bip; kamera 100 m / 80 m sarmalla takip konumuna iner (yarış dışı) | ✓ | P2 |
 | Esc → çıkış onayı / duraklatma | `session.js` | Duraklatma menüsü (SITL sürer): devam, RTL, sıfırla, yardım, hızlı ayarlar (Mode 1–4, ses, kokpit), gelişmiş (servo, MP), uçuşu bitir | ✓ | — |
 
 ## 12. Uçuş sonu raporu

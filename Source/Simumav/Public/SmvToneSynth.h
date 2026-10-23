@@ -19,6 +19,9 @@ public:
 	 *  (arayüz sesleri ayrı kazançla — SetUiGain). */
 	void Blip(int32 Kind);
 	void SetUiGain(float InGain);
+	/** Oyun efektleri (web flightsim_sfx): 11 halka (Pitch: sıra arttıkça tizleşir), 12 son halka fanfarı, 13 sıralama whoosh, 14 ters yön,
+	 *  15 angajman tonu, 16 zafer jingle'ı, 17 yenilgi, 18 coin, 19 çarpma darbesi, 20 kişisel rekor */
+	void Sfx(int32 Kind, float Pitch = 1.f);
 
 protected:
 	virtual bool Init(int32& SampleRate) override;
@@ -33,5 +36,8 @@ private:
 	int32 BlipKind = 0;
 	double BlipT = 0.0;
 	float BlipPh = 0.f;
+	float BlipPitch = 1.f;
+	uint32 Noise = 22222;
+	float Lp = 0.f;
 	float UiGain = 0.5f;
 };

@@ -561,11 +561,44 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 		CamRot = FRotator(-90.f, 0.f, 0.f);
 		break;
 	}
+	// giriş sekansı sarmalı: sonunda normal kip konumuna yumuşakça bağlanır
+	if (IntroLeft > 0.f && IntroDur > 0.f)
+	{
+		IntroLeft = FMath::Max(0.f, IntroLeft - Dt);
+		const float U = 1.f - IntroLeft / IntroDur;
+		const float E = U * U * U * (U * (U * 6.f - 15.f) + 10.f);   // quintic
+		const float A0 = FMath::DegreesToRadians(Body.Yaw + 180.f + 110.f), A1 = FMath::DegreesToRadians(Body.Yaw + 180.f);
+		const float A = FMath::Lerp(A0, A1, E);
+		const FVector Sp = Pos + FVector(FMath::Cos(A) * 8000.f, FMath::Sin(A) * 8000.f, 10000.f);
+		const FVector P = FMath::Lerp(Sp, CamPos, (double)FMath::Clamp((U - 0.7f) / 0.3f, 0.f, 1.f));
+		CamPos = P;
+		CamRot = FMath::Lerp(CamRot, (Pos - P).Rotation(), 1.f - FMath::Clamp((U - 0.85f) / 0.15f, 0.f, 1.f));
+	}
 	SetActorLocationAndRotation(CamPos, CamRot);
+	// sarsıntı
+	if (ShakeLeft > 0.f)
+	{
+		ShakeLeft = FMath::Max(0.f, ShakeLeft - Dt);
+		const float K = ShakeAmp * ShakeLeft;
+		Camera->SetRelativeLocation(FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f)) * K);
+	}
+	else Camera->SetRelativeLocation(FVector::ZeroVector);
 	if (bPip)
 	{
 		// PiP = gimbal kamerası
 		PipCapture->SetWorldLocationAndRotation(Pos + FVector(0, 0, -12.f * R), FRotator(GimbalPitch, Body.Yaw, 0.f));
 		PipCapture->CaptureScene();
 	}
+}
+
+void ASmvPilotPawn::PlayIntro(float Seconds)
+{
+	IntroDur = FMath::Max(0.1f, Seconds);
+	IntroLeft = IntroDur;
+}
+
+void ASmvPilotPawn::Shake(float AmpCm, float Seconds)
+{
+	ShakeAmp = AmpCm / FMath::Max(0.05f, Seconds);
+	ShakeLeft = Seconds;
 }

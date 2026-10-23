@@ -327,4 +327,8 @@ U = {
  'missions.map_help': ('Tıkla: nokta ekle · sürükle: taşı · sağ tık: sil · Shift+sürükle: kaydır · +/−: yakınlaştır', 'Click: add point · drag: move · right-click: delete · Shift+drag: pan · +/−: zoom', 'Klick: Punkt · Ziehen: verschieben · Rechtsklick: löschen · Umschalt+Ziehen: schwenken · +/−: Zoom', 'Clic : ajouter · glisser : déplacer · clic droit : supprimer · Maj+glisser : défiler · +/− : zoom', 'Clic: añadir · arrastrar: mover · clic derecho: borrar · Mayús+arrastrar: desplazar · +/−: zoom', 'Клик: точка · перетащить: сдвиг · ПКМ: удалить · Shift+перетащить: панорама · +/−: масштаб', 'انقر: إضافة نقطة · اسحب: تحريك · نقرة يمنى: حذف · Shift+سحب: تمرير · +/−: تكبير'),
  'missions.prep': ('Hazırlık süresi', 'Preparation time', 'Vorbereitungszeit', 'Temps de préparation', 'Tiempo de preparación', 'Время подготовки', 'وقت التحضير'),
  'missions.waves': ('Dalga sayısı', 'Waves', 'Wellen', 'Vagues', 'Oleadas', 'Волны', 'الموجات'),
+ 'set.theme': ('Arayüz teması', 'Interface theme', 'Oberflächen-Design', "Thème de l'interface", 'Tema de la interfaz', 'Тема интерфейса', 'سمة الواجهة'),
+ 'set.theme_auto': ('Otomatik (gündüz açık)', 'Auto (light by day)', 'Automatisch (tagsüber hell)', 'Auto (clair le jour)', 'Automático (claro de día)', 'Авто (днём светлая)', 'تلقائي (فاتح نهارًا)'),
+ 'set.theme_dark': ('Koyu', 'Dark', 'Dunkel', 'Sombre', 'Oscuro', 'Тёмная', 'داكن'),
+ 'set.theme_light': ('Açık', 'Light', 'Hell', 'Clair', 'Claro', 'Светлая', 'فاتح'),
 }

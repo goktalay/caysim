@@ -27,6 +27,7 @@ class USmvMusicSynth;
 class USoundBase;
 class ASmvMenuScene;
 class ASmvFpvCourseActor;
+class ASmvPilotFigure;
 class SSmvShell;
 class SWidget;
 namespace SmvCore { class FGpws; class FRingTracker; class FDogfight; class FBotPilot; struct FRing; }
@@ -130,6 +131,14 @@ private:
 	/** Hazır FPV parkuru (zaman denemesi) */
 	UPROPERTY() TObjectPtr<ASmvFpvCourseActor> FpvActor;
 	double FpvEndAt = 0;
+	/** Sahnede RC kumanda tutan 3B pilot (ev konumunun 8 m gerisinde, 3 m solunda) */
+	UPROPERTY() TObjectPtr<ASmvPilotFigure> PilotFigure;
+	/** Çarpma efekti: enkaz parçaları (elle balistik) */
+	UPROPERTY() TArray<TObjectPtr<AActor>> Debris;
+	TArray<FVector> DebrisVel;
+	double DebrisGroundZ = 0, DebrisUntil = 0;
+	void CrashFx();
+	void TickDebris(float Dt);
 	void UpdateFpv(const FCaySimTelemetry& T, double Now);
 	FString RaceResultBadge;
 	// yerel botlar

@@ -92,6 +92,8 @@ public:
 	void CloseRadial() { bModeMenu = false; }
 	void ToggleCockpit();
 	bool IsPanelOn() const { return bPanel; }
+	/** Tam ekran renk parlaması (çarpma vb.; ~0.9 sn'de söner) */
+	void Flash(const FLinearColor& C) { FlashC = C; FlashAt = FPlatformTime::Seconds(); }
 	bool AreSticksOn() const { return bSticks; }
 
 private:
@@ -108,6 +110,8 @@ private:
 	int32 LastIntroSec = 99;
 	bool bTips = false;
 	double TipsUntil = 0;
+	FLinearColor FlashC = FLinearColor::Transparent;
+	double FlashAt = -100.0;
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 
 	void Act(const FString& Name, const FString& Arg = FString());

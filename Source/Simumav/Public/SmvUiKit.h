@@ -77,6 +77,10 @@ namespace SmvUi
 
 	/** Hareket azaltma (Ayarlar → Erişilebilirlik): animasyonlar durur */
 	SIMUMAV_API bool& ReducedMotion();
+	/** Açık tema (Ayarlar → Genel → Tema: koyu / açık / otomatik — otomatik: 07–19 arası açık) */
+	SIMUMAV_API bool& Light();
+	/** Tema adını uygula: dark / light / auto (yerel saat 07–19 açık) */
+	SIMUMAV_API void ApplyTheme(const FString& Theme);
 	/** Son girdi gamepad mi (ipucu çubuğu gamepad simgeleri gösterir) */
 	SIMUMAV_API bool& PadActive();
 	/** Zaman (sn; hareket azaltmada sabit) */
@@ -160,8 +164,10 @@ private:
 class SIMUMAV_API SSmvBackdrop : public SLeafWidget
 {
 public:
-	SLATE_BEGIN_ARGS(SSmvBackdrop) : _Opacity(1.f), _Drones(true), _Grid(true), _Tint(FLinearColor::Transparent) {}
+	SLATE_BEGIN_ARGS(SSmvBackdrop) : _Opacity(1.f), _Drones(true), _Grid(true), _Tint(FLinearColor::Transparent), _Scene(0) {}
 		SLATE_ATTRIBUTE(float, Opacity)
+		/** Bölüme özel sahne: 0 genel, 1 hangar, 2 brifing (mürettebat), 3 küre (parkur), 4 tarla (görev), 5 gökyüzü (uç) */
+		SLATE_ATTRIBUTE(int32, Scene)
 		SLATE_ARGUMENT(bool, Drones)
 		SLATE_ARGUMENT(bool, Grid)
 		/** Mevsim / bayram vurgu rengi (alfa 0 = yok) */
@@ -175,7 +181,9 @@ public:
 
 private:
 	TAttribute<float> Opacity;
+	TAttribute<int32> Scene;
 	bool bDrones = true, bGrid = true;
+	void PaintScene(int32 S, FSlateWindowElementList& Out, int32 L, const FGeometry& G, double T) const;
 	FLinearColor Tint = FLinearColor::Transparent;
 };
 
@@ -210,6 +218,7 @@ public:
 	virtual void OnFocusLost(const FFocusEvent& E) override;
 	virtual void OnMouseEnter(const FGeometry& G, const FPointerEvent& E) override;
 	virtual void OnMouseLeave(const FPointerEvent& E) override;
+	virtual FReply OnMouseMove(const FGeometry& G, const FPointerEvent& E) override;
 	virtual FReply OnMouseButtonDown(const FGeometry& G, const FPointerEvent& E) override;
 	virtual FReply OnMouseButtonUp(const FGeometry& G, const FPointerEvent& E) override;
 	virtual FReply OnKeyDown(const FGeometry& G, const FKeyEvent& E) override;
@@ -225,6 +234,8 @@ private:
 	bool bHover = false, bPressed = false, bNavFocus = false, bCauseNav = false;
 	float HoverA = 0.f, PressA = 0.f, FocusA = 0.f;
 	double BornAt = 0;
+	/** Fare konumu (kart içinde −1..1) — 3B eğilme ve parlama */
+	FVector2D MouseN = FVector2D::ZeroVector, TiltN = FVector2D::ZeroVector;
 };
 
 /** Aç/kapa anahtarı */

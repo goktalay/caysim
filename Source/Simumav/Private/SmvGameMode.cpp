@@ -16,6 +16,8 @@
 #include "SSmvFlightUi.h"
 #include "SmvMenuScene.h"
 #include "SmvFpvActor.h"
+#include "SmvPilotFigure.h"
+#include "Engine/StaticMeshActor.h"
 #include "SmvMusicSynth.h"
 #include "SmvUiPrefs.h"
 #include "SmvUiKit.h"
@@ -320,6 +322,22 @@ void ASmvGameMode::BuildScene()
 			if (Self && Self->Link() && !Self->bPauseMenu) Self->Link()->SendRc(Rc);
 		});
 		P->OnAction.AddUObject(this, &ASmvGameMode::HandleAction);
+		if (Flow->Race.Kind == TEXT("none") && !(Flow->GetMatch() && Flow->GetMatch()->HasMatch())) P->PlayIntro(3.7f);
+	}
+	// RC kumanda tutan 3B pilot: ev konumunun 8 m gerisinde, 3 m solunda (pist yönüne göre), drona bakar
+	{
+		const double Yaw = Req.Track.World.RunwayHeading;
+		const double Fe = FMath::Sin(FMath::DegreesToRadians(Yaw)), Fn = FMath::Cos(FMath::DegreesToRadians(Yaw));
+		const double Re = Fn, Rn = -Fe;
+		const double E0 = -Fe * 8.0 - Re * 3.0, N0 = -Fn * 8.0 - Rn * 3.0;
+		double La, Lo, La2, Lo2;
+		SmvCore::LatLon(Req.Track.Lat, Req.Track.Lon, E0, N0, La, Lo);
+		SmvCore::LatLon(Req.Track.Lat, Req.Track.Lon, E0 + Fe * 10.0, N0 + Fn * 10.0, La2, Lo2);
+		const FVector P0 = Geo(La, Lo, GroundMsl), P1 = Geo(La2, Lo2, GroundMsl);
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		PilotFigure = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(FRotator(0.0, (P1 - P0).Rotation().Yaw, 0.0), P0), Sp);
+		if (PilotFigure) PilotFigure->Build(Req.Pilot.Avatar, true);
 	}
 
 	// ---- HUD ----
@@ -520,6 +538,9 @@ void ASmvGameMode::StopScene()
 	Gates.Reset(); Ghosts.Reset(); TargetActors.Reset(); GhostIndex.Reset();
 	if (Drone) { Drone->Destroy(); Drone = nullptr; }
 	if (FpvActor) { FpvActor->Destroy(); FpvActor = nullptr; }
+	if (PilotFigure) { PilotFigure->Destroy(); PilotFigure = nullptr; }
+	for (TObjectPtr<AActor>& Db : Debris) if (Db) Db->Destroy();
+	Debris.Reset(); DebrisVel.Reset();
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
 	ClearFabWorld();
 	if (WorldSetup) { WorldSetup->Destroy(); WorldSetup = nullptr; }
@@ -562,6 +583,7 @@ void ASmvGameMode::HandleMessage(const TSharedPtr<FJsonObject>& M)
 	if (T == TEXT("crash"))
 	{
 		bCrashed = true;
+		CrashFx();
 		PushEvent(FString::Printf(TEXT("ÇARPIŞMA: %s, %.1f m/s"), *SmvJson::Str(M, TEXT("reason")), SmvJson::Num(M, TEXT("speed"))), 2);
 		if (Gpws) { SmvCore::FGpwsInput I; I.T = Link() ? Link()->LastTele().Tbm / 1000.0 : 0; I.bCrashed = true; Gpws->Step(I); }
 		return;
@@ -575,11 +597,11 @@ void ASmvGameMode::HandleMessage(const TSharedPtr<FJsonObject>& M)
 	}
 	if (T == TEXT("target") && SmvJson::Str(M, TEXT("kind")) == TEXT("intercept"))
 	{
-		if (Tones) Tones->Blip(1);
+		if (Tones) Tones->Sfx(18);
 		PushEvent(FString::Printf(TEXT("ÖNLEME T%d — %.1f m%s"), (int32)SmvJson::Num(M, TEXT("i")), SmvJson::Num(M, TEXT("dist_m")), SmvJson::Bool(M, TEXT("locked")) ? TEXT(" (kilitli)") : TEXT("")), 5);
 		return;
 	}
-	if (T == TEXT("engage")) { if (Tones) Tones->Blip(2); PushEvent(FString::Printf(TEXT("ANGAJMAN %s T%d"), *SmvJson::Str(M, TEXT("kind")), (int32)SmvJson::Num(M, TEXT("i"))), 5); return; }
+	if (T == TEXT("engage")) { if (Tones) Tones->Sfx(15); PushEvent(FString::Printf(TEXT("ANGAJMAN %s T%d"), *SmvJson::Str(M, TEXT("kind")), (int32)SmvJson::Num(M, TEXT("i"))), 5); return; }
 	if (T == TEXT("launch")) { PushEvent(FString::Printf(TEXT("Kalkış: %s"), *SmvJson::Str(M, TEXT("phase"))), 6); return; }
 	if (T == TEXT("res") && !SmvJson::Bool(M, TEXT("ok"))) { PushEvent(FString::Printf(TEXT("%s: %s"), *SmvJson::Str(M, TEXT("name")), *SmvJson::Str(M, TEXT("error"))), 4); return; }
 	if (T == TEXT("end")) { if (Flow.IsValid()) Flow->EndFlight(SmvJson::Str(M, TEXT("reason"), TEXT("end"))); }
@@ -787,6 +809,7 @@ void ASmvGameMode::Tick(float Dt)
 	if (!bScene) return;
 	if (EndAt > 0 && FPlatformTime::Seconds() >= EndAt) { EndAt = 0; if (Flow.IsValid()) Flow->EndFlight(EndReasonPending); }
 	DetectCollision();
+	TickDebris(Dt);
 	UpdateRace(Dt);
 	UpdateTargets();
 	// ses
@@ -944,7 +967,8 @@ void ASmvGameMode::UpdateRace(float Dt)
 		const double Tt = Now - RaceStartWall;
 		for (const SmvCore::FRingEvent& E : MyTracker->Update(X, Y, T.AltMsl, Tt))
 		{
-			if (E.Kind == "ring") { if (Tones) Tones->Blip(1); PushEvent(FString::Printf(TEXT("HALKA %d/%d"), E.I, Rings->Num()), 6); }
+			if (E.Kind == "ring") { if (Tones) Tones->Sfx(E.I >= Rings->Num() ? 12 : 11, 1.f + 0.05f * E.I); PushEvent(FString::Printf(TEXT("HALKA %d/%d"), E.I, Rings->Num()), 6); }
+			if (E.Kind == "wrong_way") { if (Tones) Tones->Sfx(14); }
 			if (E.Kind == "wrong_way") PushEvent(FString::Printf(TEXT("TERS YÖN — halka %d"), E.I), 4);
 			if (E.Kind == "finish")
 			{
@@ -982,7 +1006,7 @@ void ASmvGameMode::UpdateRace(float Dt)
 				Ev.insert(Ev.end(), Ev2.begin(), Ev2.end());
 				for (const SmvCore::FDogfightEvent& E : Ev)
 				{
-					if (E.Kind == "lock_on" && Tones) Tones->Blip(2);
+					if (E.Kind == "lock_on" && Tones) Tones->Sfx(15);
 					if (E.Kind == "engage") { bRaceDone = true; if (bPlayerChaser) RaceResultBadge = TEXT("dogfight_win"); PushEvent(bPlayerChaser ? TEXT("İT DALAŞI KAZANILDI") : TEXT("VURULDUNUZ"), bPlayerChaser ? 5 : 3); }
 					if (E.Kind == "area") { bRaceDone = true; const bool bMeOut = E.Role == MeRole; if (!bMeOut) RaceResultBadge = TEXT("dogfight_win"); PushEvent(bMeOut ? TEXT("ALAN DIŞI — kaybettiniz") : TEXT("Rakip alan dışı — kazandınız"), 4); }
 				}
@@ -1219,6 +1243,7 @@ void ASmvGameMode::UpdateHud()
 				}
 			}
 		}
+		if (Pw && PilotFigure) PilotFigure->SetPose(Pw->GetStickL(), Pw->GetStickR(), Drone->GetActorLocation(), true);
 		if (Pw)
 		{
 			U.PadRight = Pw->GetPadRight();
@@ -1250,6 +1275,7 @@ void ASmvGameMode::AugmentSummary(FSmvFlightSummary& S)
 		if (MyTracker->Finished()) S.Laps = FMath::Max(S.Laps, 1);
 	}
 	if (!RaceResultBadge.IsEmpty()) S.Badges.AddUnique(RaceResultBadge);
+	if (Tones && Flow.IsValid() && Flow->Race.Kind != TEXT("none")) Tones->Sfx(RaceResultBadge.IsEmpty() ? 17 : 16);
 	// podyum + oyun puanı (yerel yarış / it dalaşı)
 	if (Flow.IsValid())
 	{
@@ -1669,6 +1695,7 @@ void ASmvGameMode::ApplyUiPrefs()
 	const FSmvSettings& S = GI->GetData()->Settings();
 	const FSmvUiPrefs& P = FSmvUiPrefs::Get();
 	SmvUi::ReducedMotion() = S.bReducedMotion;
+	SmvUi::ApplyTheme(S.Theme);
 	if (UiTones) UiTones->SetUiGain((S.bSound ? (float)S.Volume : 0.f) * P.VolUi);
 	UpdateMusic(Flow.IsValid() ? Flow->GetScreen() : ESmvScreen::Menu);
 	if (ASmvPilotPawn* Pw = GetPilot())
@@ -1744,7 +1771,7 @@ void ASmvGameMode::UpdateFpv(const FCaySimTelemetry& T, double Now)
 	for (const FSmvFpvEvent& E : FpvActor->Feed(X, Y, T.AltRel, T.Heading, Now))
 	{
 		auto Fmt = [](double S) { return FString::Printf(TEXT("%d:%05.2f"), (int32)(S / 60.0), FMath::Fmod(S, 60.0)); };
-		if (E.Kind == TEXT("ring")) { if (Tones) Tones->Blip(1); }
+		if (E.Kind == TEXT("ring")) { if (Tones) Tones->Sfx(11, 1.f + 0.04f * E.I); }
 		else if (E.Kind == TEXT("miss")) PushEvent(FSmvI18n::Format(TEXT("fpv.missed"), { { TEXT("s"), FString::Printf(TEXT("%.0f"), E.PenS) } }).ToString(), 4);
 		else if (E.Kind == TEXT("hit")) PushEvent(E.PenS > 0 ? FSmvI18n::Format(TEXT("fpv.hit"), { { TEXT("s"), FString::Printf(TEXT("%.0f"), E.PenS) } }).ToString() : FSmvI18n::T(TEXT("fpv.hit0")).ToString(), 3);
 		else if (E.Kind == TEXT("reset")) { Command(TEXT("reset")); PushEvent(FSmvI18n::T(TEXT("fpv.reset")).ToString(), 4); }
@@ -1757,11 +1784,11 @@ void ASmvGameMode::UpdateFpv(const FCaySimTelemetry& T, double Now)
 		}
 		else if (E.Kind == TEXT("finish"))
 		{
-			if (Tones) Tones->Blip(4);
 			PushEvent(FSmvI18n::Format(TEXT("fpv.finished"), { { TEXT("t"), Fmt(E.TotalS) } }).ToString(), 5);
 			const double PrevPb = FpvActor->GetRecord().TotalS;
 			const bool bPb = FpvActor->SaveIfRecord();
 			if (bPb) PushEvent(FSmvI18n::T(TEXT("fpv.new_pb")).ToString(), 5);
+			if (Tones) Tones->Sfx(bPb ? 20 : 12);
 			USmvFlow::FFpvResult& R = Flow->LastFpv;
 			R = USmvFlow::FFpvResult();
 			R.bValid = true; R.bFinished = true; R.bNewPb = bPb; R.PrevPbS = PrevPb;
@@ -1783,5 +1810,59 @@ void ASmvGameMode::UpdateFpv(const FCaySimTelemetry& T, double Now)
 		R.PenS = Tk->Penalty(); R.BestLapS = Tk->BestLap(); R.Misses = Tk->Misses(); R.Hits = Tk->Hits();
 		R.LapTimes = Tk->Laps(); R.Sectors = Tk->SectorTimes();
 		FpvEndAt = Now + 0.5;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// çarpma efekti: darbe sesi, ekran parlaması, kamera sarsıntısı, enkaz parçaları
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::CrashFx()
+{
+	if (Tones) Tones->Sfx(19);
+	if (FlightUi.IsValid()) FlightUi->Flash(FLinearColor(1.f, 0.55f, 0.3f, 0.75f));
+	if (ASmvPilotPawn* P = GetPilot()) P->Shake(60.f, 0.8f);
+	if (!Drone || !GetWorld()) return;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!Cube) return;
+	const FVector C = Drone->GetActorLocation();
+	const double AltRel = Link() ? Link()->LastTele().AltRel : 0.0;
+	DebrisGroundZ = C.Z - FMath::Max(0.0, AltRel) * 100.0;
+	DebrisUntil = FPlatformTime::Seconds() + 8.0;
+	for (int32 i = 0; i < 12; ++i)
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* A = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(FRotator(FMath::FRandRange(0.f, 360.f), FMath::FRandRange(0.f, 360.f), 0.f), C), Sp);
+		if (!A || !A->GetStaticMeshComponent()) continue;
+		A->SetMobility(EComponentMobility::Movable);
+		A->GetStaticMeshComponent()->SetStaticMesh(Cube);
+		A->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		const float Sz = FMath::FRandRange(0.04f, 0.16f);
+		A->SetActorScale3D(FVector(Sz, Sz * FMath::FRandRange(0.5f, 1.5f), Sz * 0.4f));
+		Debris.Add(A);
+		DebrisVel.Add(FVector(FMath::FRandRange(-600.f, 600.f), FMath::FRandRange(-600.f, 600.f), FMath::FRandRange(200.f, 900.f)));
+	}
+}
+
+void ASmvGameMode::TickDebris(float Dt)
+{
+	if (Debris.Num() == 0) return;
+	if (FPlatformTime::Seconds() > DebrisUntil)
+	{
+		for (TObjectPtr<AActor>& Db : Debris) if (Db) Db->Destroy();
+		Debris.Reset(); DebrisVel.Reset();
+		return;
+	}
+	for (int32 i = 0; i < Debris.Num(); ++i)
+	{
+		AActor* A = Debris[i];
+		if (!A || !DebrisVel.IsValidIndex(i)) continue;
+		FVector P = A->GetActorLocation();
+		if (P.Z <= DebrisGroundZ + 2.0) { DebrisVel[i] = FVector::ZeroVector; continue; }
+		DebrisVel[i].Z -= 981.0 * Dt;
+		P += DebrisVel[i] * Dt;
+		if (P.Z < DebrisGroundZ) P.Z = DebrisGroundZ;
+		A->SetActorLocationAndRotation(P, A->GetActorRotation() + FRotator(200.0 * Dt, 140.0 * Dt, 0.0));
 	}
 }

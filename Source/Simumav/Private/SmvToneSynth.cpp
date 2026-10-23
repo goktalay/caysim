@@ -24,6 +24,12 @@ void USmvToneSynth::Blip(int32 Kind)
 	SynthCommand([this, Kind]() { BlipKind = Kind; BlipT = 0.0; });
 }
 
+void USmvToneSynth::Sfx(int32 Kind, float Pitch)
+{
+	const float P = FMath::Clamp(Pitch, 0.25f, 4.f);
+	SynthCommand([this, Kind, P]() { BlipKind = Kind; BlipT = 0.0; BlipPitch = P; });
+}
+
 void USmvToneSynth::SetUiGain(float InGain)
 {
 	const float G = FMath::Clamp(InGain, 0.f, 1.f);
@@ -62,6 +68,40 @@ int32 USmvToneSynth::OnGenerateAudio(float* Out, int32 NumSamples)
 			{
 				const double D = BlipKind == 1 ? 0.18 : BlipKind == 4 ? 0.5 : 0.1;
 				if (BlipT < D) { Bf = BlipKind == 1 ? 900.f + 1200.f * (float)(BlipT / D) : BlipKind == 2 ? 2000.f : BlipKind == 3 ? 700.f : 1100.f; Ba = 0.45f; }
+				else BlipKind = 0;
+			}
+			else if (BlipKind >= 11)
+			{
+				// oyun efektleri: nota dizileri (yarıton adımlarıyla), gürültü süpürmeleri
+				auto Note = [](float Semi) { return 440.f * FMath::Pow(2.f, Semi / 12.f); };
+				float D = 0.3f, Amp = 0.32f;
+				bool bNoise = false;
+				switch (BlipKind)
+				{
+				case 11: D = 0.16f; Bf = 880.f * BlipPitch * (Tt < 0.05f ? 1.f : 1.5f); break;
+				case 12: { static const float Seq[4] = { 3.f, 7.f, 10.f, 15.f }; D = 0.72f; Bf = Note(Seq[FMath::Min(3, (int32)(Tt / 0.18f))]); break; }
+				case 13: D = 0.35f; bNoise = true; Bf = 0.f; Amp = 0.18f; break;
+				case 14: D = 0.4f; Bf = 600.f - 900.f * Tt; Amp = 0.22f; break;
+				case 15: D = 0.25f; Bf = FMath::Fmod(Tt, 0.08f) < 0.04f ? 1500.f : 0.f; break;
+				case 16: { static const float Seq[5] = { 0.f, 4.f, 7.f, 12.f, 16.f }; D = 0.9f; Bf = Note(Seq[FMath::Min(4, (int32)(Tt / 0.15f))]); break; }
+				case 17: { static const float Seq[4] = { 7.f, 3.f, 0.f, -5.f }; D = 0.8f; Bf = Note(Seq[FMath::Min(3, (int32)(Tt / 0.2f))]) * 0.5f; break; }
+				case 18: D = 0.22f; Bf = Tt < 0.07f ? 1976.f : 2637.f; Amp = 0.2f; break;
+				case 19: D = 0.45f; bNoise = true; Amp = 0.45f; break;
+				default: { static const float Seq[6] = { 0.f, 4.f, 7.f, 12.f, 7.f, 12.f }; D = 1.0f; Bf = Note(Seq[FMath::Min(5, (int32)(Tt / 0.16f))]); break; }
+				}
+				if (Tt < D)
+				{
+					const float Env = FMath::Min(1.f, Tt / 0.005f) * (1.f - Tt / D);
+					if (bNoise)
+					{
+						Noise = Noise * 1664525u + 1013904223u;
+						const float N = ((Noise >> 9) & 0x7fff) / 16384.f - 1.f;
+						Lp += (N - Lp) * (BlipKind == 19 ? 0.08f : 0.25f + 0.6f * (Tt / D));
+						S += Lp * Amp * Env * Gain;
+						Ba = 0.f;
+					}
+					else Ba = Bf > 0.f ? Amp * Env : 0.f;
+				}
 				else BlipKind = 0;
 			}
 			else

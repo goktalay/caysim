@@ -14,6 +14,7 @@
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Layout/Clipping.h"
+#include "Math/TransformCalculus2D.h"
 #include "InputCoreTypes.h"
 
 // ---------------------------------------------------------------------------
@@ -55,19 +56,29 @@ namespace SmvUi
 		C.A = A;
 		return C;
 	}
-	const FLinearColor& Bg() { static const FLinearColor C = Hex(0x070b14); return C; }
-	const FLinearColor& Bg2() { static const FLinearColor C = Hex(0x0d1526); return C; }
-	const FLinearColor& Card() { static const FLinearColor C = Hex(0x10182c, 0.78f); return C; }
-	const FLinearColor& CardHover() { static const FLinearColor C = Hex(0x182440, 0.92f); return C; }
-	const FLinearColor& Edge() { static const FLinearColor C = Hex(0x8eaae6, 0.20f); return C; }
-	const FLinearColor& Fg() { static const FLinearColor C = Hex(0xe8eefb); return C; }
-	const FLinearColor& Dim() { static const FLinearColor C = Hex(0x9aa8c7); return C; }
-	const FLinearColor& Mute() { static const FLinearColor C = Hex(0x5f6c8a); return C; }
-	const FLinearColor& Accent() { static const FLinearColor C = Hex(0x38bdf8); return C; }
-	const FLinearColor& Accent2() { static const FLinearColor C = Hex(0xa78bfa); return C; }
-	const FLinearColor& Accent3() { static const FLinearColor C = Hex(0x34d399); return C; }
-	const FLinearColor& Warn() { static const FLinearColor C = Hex(0xfbbf24); return C; }
-	const FLinearColor& Danger() { static const FLinearColor C = Hex(0xf87171); return C; }
+	bool& Light() { static bool b = false; return b; }
+	void ApplyTheme(const FString& Theme)
+	{
+		if (Theme == TEXT("light")) Light() = true;
+		else if (Theme == TEXT("auto")) { const int32 H = FDateTime::Now().GetHour(); Light() = H >= 7 && H < 19; }
+		else Light() = false;
+	}
+	// koyu / açık tema (web theme.css :root ve [data-theme=light])
+#define SMV_THEMED(Name, Dark, Light_) const FLinearColor& Name() { static const FLinearColor D = Dark; static const FLinearColor L = Light_; return Light() ? L : D; }
+	SMV_THEMED(Bg, Hex(0x070b14), Hex(0xe9eef8))
+	SMV_THEMED(Bg2, Hex(0x0d1526), Hex(0xf4f7fd))
+	SMV_THEMED(Card, Hex(0x10182c, 0.78f), Hex(0xffffff, 0.80f))
+	SMV_THEMED(CardHover, Hex(0x182440, 0.92f), Hex(0xffffff, 0.96f))
+	SMV_THEMED(Edge, Hex(0x8eaae6, 0.20f), Hex(0x283c78, 0.16f))
+	SMV_THEMED(Fg, Hex(0xe8eefb), Hex(0x0f1a33))
+	SMV_THEMED(Dim, Hex(0x9aa8c7), Hex(0x44547a))
+	SMV_THEMED(Mute, Hex(0x5f6c8a), Hex(0x8391b3))
+	SMV_THEMED(Accent, Hex(0x38bdf8), Hex(0x0284c7))
+	SMV_THEMED(Accent2, Hex(0xa78bfa), Hex(0x7c3aed))
+	SMV_THEMED(Accent3, Hex(0x34d399), Hex(0x059669))
+	SMV_THEMED(Warn, Hex(0xfbbf24), Hex(0xb45309))
+	SMV_THEMED(Danger, Hex(0xf87171), Hex(0xdc2626))
+#undef SMV_THEMED
 
 	FSlateFontInfo Font(int32 Size, const ANSICHAR* Weight, int32 Spacing)
 	{
@@ -107,7 +118,8 @@ namespace SmvUi
 	const FSlateBrush* GlassCard()
 	{
 		static const FSlateRoundedBoxBrush B(Hex(0x10182c, 0.80f), 18.f, Hex(0x8eaae6, 0.18f), 1.f);
-		return &B;
+		static const FSlateRoundedBoxBrush Lb(Hex(0xffffff, 0.82f), 18.f, Hex(0x283c78, 0.14f), 1.f);
+		return Light() ? &Lb : &B;
 	}
 
 	bool& ReducedMotion() { static bool b = false; return b; }
@@ -674,6 +686,7 @@ void SSmvCanvas::OnMouseCaptureLost(const FCaptureLostEvent& E)
 void SSmvBackdrop::Construct(const FArguments& A)
 {
 	Opacity = A._Opacity;
+	Scene = A._Scene;
 	bDrones = A._Drones;
 	bGrid = A._Grid;
 	Tint = A._Tint;
@@ -730,7 +743,7 @@ int32 SSmvBackdrop::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FS
 	const float Op = FMath::Clamp(Opacity.Get(1.f), 0.f, 1.f);
 	const double T = Now();
 	// zemin degradesi
-	DrGradient(Out, L, G, FVector2D::ZeroVector, Sz, { { 0.f, Bg2().CopyWithNewOpacity(Op) }, { 0.55f, Bg().CopyWithNewOpacity(Op * 0.92f) }, { 1.f, Hex(0x04060c, Op) } }, true);
+	DrGradient(Out, L, G, FVector2D::ZeroVector, Sz, { { 0.f, Bg2().CopyWithNewOpacity(Op) }, { 0.55f, Bg().CopyWithNewOpacity(Op * 0.92f) }, { 1.f, Light() ? Hex(0xd8e2f3, Op) : Hex(0x04060c, Op) } }, true);
 	// ışık lekeleri
 	{
 		const FVector2D A1(W * (0.25f + 0.08f * FMath::Sin(T * 0.11)), H * (0.30f + 0.06f * FMath::Cos(T * 0.13)));
@@ -771,8 +784,11 @@ int32 SSmvBackdrop::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FS
 		// ufuk parıltısı
 		DrGradient(Out, L + 2, G, FVector2D(0, Y0 - 40.f), FVector2D(W, 80.f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 0.5f, Accent().CopyWithNewOpacity(0.10f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, true);
 	}
+	// bölüme özel sahne
+	const int32 Sc = Scene.Get(0);
+	if (Sc > 0) PaintScene(Sc, Out, L + 2, G, T);
 	// süzülen dron siluetleri
-	if (bDrones)
+	if (bDrones && Sc != 1 && Sc != 3)
 	{
 		for (int32 d = 0; d < 3; ++d)
 		{
@@ -795,10 +811,108 @@ int32 SSmvBackdrop::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FS
 		DrGradient(Out, L + 4, G, FVector2D(0, y), FVector2D(W, 60.f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 0.5f, Accent().CopyWithNewOpacity(0.035f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, true);
 	}
 	// kenar kararması
-	DrGradient(Out, L + 5, G, FVector2D::ZeroVector, FVector2D(W * 0.22f, H), { { 0.f, FLinearColor(0, 0, 0, 0.55f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, false);
-	DrGradient(Out, L + 5, G, FVector2D(W * 0.78f, 0), FVector2D(W * 0.22f, H), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, FLinearColor(0, 0, 0, 0.55f) } }, false);
-	DrGradient(Out, L + 5, G, FVector2D(0, H * 0.82f), FVector2D(W, H * 0.18f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, FLinearColor(0, 0, 0, 0.6f) } }, true);
+	const float Vg = Light() ? 0.12f : 0.55f;
+	DrGradient(Out, L + 5, G, FVector2D::ZeroVector, FVector2D(W * 0.22f, H), { { 0.f, FLinearColor(0, 0, 0, Vg) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, false);
+	DrGradient(Out, L + 5, G, FVector2D(W * 0.78f, 0), FVector2D(W * 0.22f, H), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, FLinearColor(0, 0, 0, Vg) } }, false);
+	DrGradient(Out, L + 5, G, FVector2D(0, H * 0.82f), FVector2D(W, H * 0.18f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, FLinearColor(0, 0, 0, Vg) } }, true);
 	return L + 6;
+}
+
+void SSmvBackdrop::PaintScene(int32 S, FSlateWindowElementList& Out, int32 L, const FGeometry& G, double T) const
+{
+	const FVector2D Sz = FVector2D(G.GetLocalSize());
+	const float W = (float)Sz.X, H = (float)Sz.Y;
+	const FLinearColor Ac = Accent(), A2 = Accent2();
+	if (S == 1)
+	{
+		// hangar içi: kapı açıklığından gece göğü, projektör huzmeleri, pist ışıkları, taksi yapan uçak siluetleri
+		const FVector2D D0(W * 0.18f, H * 0.18f), D1(W * 0.82f, H * 0.62f);
+		DrBox(Out, L, G, D0, D1 - D0, Hex(0x020611, 0.55f));
+		for (int32 i = 0; i < 40; ++i) DrBox(Out, L, G, FVector2D(D0.X + SmvHash(i, 9) * (D1.X - D0.X), D0.Y + SmvHash(i, 8) * (D1.Y - D0.Y) * 0.6f), FVector2D(1.5f, 1.5f), FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin((float)T * 2.f + i)));
+		DrLine(Out, L + 1, G, { FVector2D(D0.X, D1.Y), D0, FVector2D(D1.X, D0.Y), FVector2D(D1.X, D1.Y) }, Edge().CopyWithNewOpacity(0.9f), 6.f);
+		for (int32 k = 0; k < 2; ++k)
+		{
+			const float A = FMath::DegreesToRadians(-90.f + 28.f * FMath::Sin((float)T * 0.35f + k * 2.1f));
+			const FVector2D O(W * (0.35f + 0.3f * k), D1.Y);
+			for (int32 j = 0; j < 7; ++j) DrSeg(Out, L + 1, G, O, O + FVector2D(FMath::Cos(A + (j - 3) * 0.02f), FMath::Sin(A + (j - 3) * 0.02f)) * H * 0.55f, Ac.CopyWithNewOpacity(0.035f), 18.f);
+		}
+		for (int32 i = 0; i < 12; ++i) DrBox(Out, L + 1, G, FVector2D(W * 0.2f + i * W * 0.05f, D1.Y + 18.f), FVector2D(5, 5), Hex(0xfbbf24, 0.4f + 0.4f * FMath::Sin((float)T * 3.f + i * 0.6f)), Circle());
+		const float Px = W * (float)FMath::Fmod(T * 0.04, 1.2) - W * 0.1f;
+		DrIcon(Out, L + 2, G, ESmvIcon::Plane, FVector2D(Px, D1.Y - 18.f), 46.f, Hex(0xcfe7ff, 0.35f), 2.f);
+	}
+	else if (S == 2)
+	{
+		// brifing: büyük radar, rota çizgileri, lazer imleç
+		const FVector2D C(W * 0.72f, H * 0.42f);
+		const float R = H * 0.32f;
+		for (int32 k = 1; k <= 4; ++k) DrArc(Out, L, G, C, R * k / 4.f, 0.f, 360.f, Accent3().CopyWithNewOpacity(0.12f), 1.f);
+		const float Sw = (float)FMath::Fmod(T * 60.0, 360.0);
+		for (int32 j = 0; j < 18; ++j) { const float A = FMath::DegreesToRadians(Sw - j * 2.f); DrSeg(Out, L + 1, G, C, C + FVector2D(FMath::Cos(A), FMath::Sin(A)) * R, Accent3().CopyWithNewOpacity(0.18f * (1.f - j / 18.f)), 2.f); }
+		TArray<FVector2D> Rt;
+		for (int32 i = 0; i < 6; ++i) Rt.Add(C + FVector2D(FMath::Cos(i * 1.7f + 0.4f), FMath::Sin(i * 1.3f)) * R * (0.3f + 0.1f * i));
+		DrLine(Out, L + 1, G, Rt, Hex(0xf472b6, 0.35f), 2.f);
+		const FVector2D Lz = Rt[(int32)FMath::Fmod(T * 0.5, 6.0)];
+		DrGlow(Out, L + 2, G, Lz, 14.f, Hex(0xff3b3b, 0.7f));
+	}
+	else if (S == 3)
+	{
+		// tel kafes küre + yörüngede uçaklar
+		const FVector2D C(W * 0.7f, H * 0.45f);
+		const float R = H * 0.3f;
+		const float Rot = (float)T * 0.25f;
+		DrArc(Out, L, G, C, R, 0.f, 360.f, Accent3().CopyWithNewOpacity(0.35f), 1.5f);
+		for (int32 k = 1; k < 6; ++k)
+		{
+			const float Lat = -75.f + k * 25.f, Ry = R * FMath::Cos(FMath::DegreesToRadians(Lat)), Yc = R * FMath::Sin(FMath::DegreesToRadians(Lat));
+			TArray<FVector2D> P;
+			for (int32 j = 0; j <= 36; ++j) { const float A = j * UE_TWO_PI / 36.f; P.Add(C + FVector2D(FMath::Cos(A) * Ry, Yc + FMath::Sin(A) * Ry * 0.18f)); }
+			DrLine(Out, L, G, P, Accent3().CopyWithNewOpacity(0.15f), 1.f);
+		}
+		for (int32 k = 0; k < 8; ++k)
+		{
+			const float A = Rot + k * UE_PI / 8.f, Sx = FMath::Cos(A);
+			TArray<FVector2D> P;
+			for (int32 j = 0; j <= 36; ++j) { const float B = j * UE_TWO_PI / 36.f; P.Add(C + FVector2D(FMath::Sin(B) * R * Sx, -FMath::Cos(B) * R)); }
+			DrLine(Out, L, G, P, Accent3().CopyWithNewOpacity(0.12f), 1.f);
+		}
+		for (int32 k = 0; k < 6; ++k)
+		{
+			const float A = (float)T * (0.4f + 0.07f * k) + k;
+			const FVector2D Pp = C + FVector2D(FMath::Cos(A) * R * 1.25f, FMath::Sin(A) * R * (0.35f + 0.1f * k));
+			DrGlow(Out, L + 1, G, Pp, 8.f, Ac.CopyWithNewOpacity(0.6f));
+		}
+	}
+	else if (S == 4)
+	{
+		// alacakaranlıkta ilaçlama tarlası: perspektif sıralar + püskürtme parçacıkları
+		const float Y0 = H * 0.55f;
+		DrGradient(Out, L, G, FVector2D(0, Y0), FVector2D(W, H - Y0), { { 0.f, Hex(0x1d3a1a, 0.0f) }, { 1.f, Hex(0x2f5d22, 0.45f) } }, true);
+		for (int32 i = -14; i <= 14; ++i) DrSeg(Out, L + 1, G, FVector2D(W * 0.5f + i * 8.f, Y0), FVector2D(W * 0.5f + i * W * 0.06f, H), Hex(0x6aa84f, 0.18f), 2.f);
+		const float Dx = W * (float)FMath::Fmod(T * 0.05, 1.0);
+		DrIcon(Out, L + 2, G, ESmvIcon::Drone, FVector2D(Dx, Y0 - 30.f), 40.f, Hex(0xcfe7ff, 0.5f), 2.f);
+		for (int32 i = 0; i < 40; ++i)
+		{
+			const float a = SmvHash(i, 3), b = (float)FMath::Fmod(T * 0.9 + SmvHash(i, 4), 1.0);
+			DrBox(Out, L + 2, G, FVector2D(Dx - 30.f + a * 60.f - b * 20.f, Y0 - 20.f + b * 60.f), FVector2D(2, 2), Hex(0xa7f3d0, 0.5f * (1.f - b)), Circle());
+		}
+	}
+	else if (S == 5)
+	{
+		// gökyüzü paralaksı: bulut katmanları + uçak siluetleri
+		for (int32 k = 0; k < 3; ++k)
+			for (int32 i = 0; i < 6; ++i)
+			{
+				const float Sp = 8.f + k * 14.f;
+				const float X = (float)FMath::Fmod(SmvHash(i, k) * W + T * Sp, (double)W + 400.0) - 200.f;
+				DrGlow(Out, L, G, FVector2D(X, H * (0.25f + 0.18f * k) + SmvHash(i, k + 5) * 40.f), 80.f + k * 30.f, FLinearColor(1, 1, 1, 0.05f + 0.02f * k));
+			}
+		for (int32 i = 0; i < 3; ++i)
+		{
+			const float X = (float)FMath::Fmod(T * (40.0 + i * 25.0) + i * 500.0, (double)W + 200.0) - 100.f;
+			DrIcon(Out, L + 1, G, ESmvIcon::Plane, FVector2D(X, H * (0.2f + 0.15f * i)), 28.f + i * 8.f, Hex(0xcfe7ff, 0.3f), 2.f);
+		}
+		(void)A2;
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -890,7 +1004,12 @@ void SSmvButton::Tick(const FGeometry& G, const double InNow, const float Dt)
 	const float Gain = Kind == ESmvBtn::Hero ? 0.035f : Kind == ESmvBtn::Tile ? 0.04f : 0.02f;
 	const float Intro = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - BornAt) * 4.f, 0.f, 1.f);
 	const float S = (1.f + Gain * HoverA - 0.03f * PressA) * FMath::Lerp(0.96f, 1.f, Intro);
-	if (FMath::Abs(S - 1.f) > 0.0005f) SetRenderTransform(FSlateRenderTransform(S));
+	// kart 3B eğilme (web en çok ±9°): fareye göre kayma (shear) ile perspektif hissi
+	const bool bTiltKind = (Kind == ESmvBtn::Tile || Kind == ESmvBtn::Hero) && !ReducedMotion();
+	TiltN = FMath::Lerp(TiltN, bTiltKind && bHover ? MouseN : FVector2D::ZeroVector, (double)K);
+	const float Tx = (float)TiltN.X * 0.035f, Ty = (float)TiltN.Y * 0.035f;
+	if (FMath::Abs(S - 1.f) > 0.0005f || FMath::Abs(Tx) + FMath::Abs(Ty) > 0.0005f)
+		SetRenderTransform(FSlateRenderTransform(FMatrix2x2f(S, -Ty * S, Tx * S, S), FVector2f(0.f, 0.f)));
 	else SetRenderTransform(TOptional<FSlateRenderTransform>());
 	SetRenderOpacity(FMath::Lerp(0.f, 1.f, Intro));
 }
@@ -939,6 +1058,14 @@ int32 SSmvButton::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSla
 		DrSeg(Out, L + 2, G, FVector2D(X, -4.0), FVector2D(X - Sz.Y * 0.5f, Sz.Y + 4.0), FLinearColor(1, 1, 1, 0.10f), 18.f);
 		Out.PopClip();
 	}
+	// fare parlaması (kart)
+	if (bTile && HoverA > 0.02f && !ReducedMotion())
+	{
+		const FVector2D Gp((MouseN.X * 0.5 + 0.5) * Sz.X, (MouseN.Y * 0.5 + 0.5) * Sz.Y);
+		Out.PushClip(FSlateClippingZone(G));
+		DrGlow(Out, L + 2, G, Gp, (float)Sz.Y * 0.7f, FLinearColor(1, 1, 1, 0.10f * HoverA));
+		Out.PopClip();
+	}
 	DrRoundRect(Out, L + 3, G, FVector2D(0.5f, 0.5f), Sz - FVector2D(1, 1), R, Ring, Kind == ESmvBtn::Hero ? 1.6f : 1.f);
 	if (bSel && !bTile) DrBox(Out, L + 3, G, FVector2D(0, Sz.Y * 0.2f), FVector2D(3.f, Sz.Y * 0.6f), AccentCol, Round(1.5f));
 	if (bTile && Kind == ESmvBtn::Tile) DrBox(Out, L + 3, G, FVector2D(R, Sz.Y - 3.f), FVector2D((Sz.X - 2 * R) * (0.25f + 0.75f * HoverA), 2.f), AccentCol.CopyWithNewOpacity(0.5f + 0.5f * HoverA), Round(1.f));
@@ -969,6 +1096,14 @@ void SSmvButton::OnMouseEnter(const FGeometry& G, const FPointerEvent& E)
 	bHover = true;
 	PadActive() = false;
 	if (IsEnabled()) FSmvUiSound::Play(ESmvSnd::Hover);
+}
+
+FReply SSmvButton::OnMouseMove(const FGeometry& G, const FPointerEvent& E)
+{
+	const FVector2D Lp = FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition()));
+	const FVector2D Sz = FVector2D(G.GetLocalSize());
+	MouseN = FVector2D(FMath::Clamp(Lp.X / FMath::Max(1.0, Sz.X) * 2.0 - 1.0, -1.0, 1.0), FMath::Clamp(Lp.Y / FMath::Max(1.0, Sz.Y) * 2.0 - 1.0, -1.0, 1.0));
+	return FReply::Unhandled();
 }
 
 void SSmvButton::OnMouseLeave(const FPointerEvent& E)

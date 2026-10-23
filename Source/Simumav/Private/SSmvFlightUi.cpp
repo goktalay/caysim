@@ -432,6 +432,19 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 	[
 		SNew(SOverlay)
 		.Visibility(EVisibility::SelfHitTestInvisible)
+		// çarpma parlaması (en altta, sahnenin üstünde)
+		+ SOverlay::Slot()
+		[
+			SNew(SBorder)
+			.Visibility(EVisibility::HitTestInvisible)
+			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+			.BorderBackgroundColor_Lambda([this]()
+			{
+				const double K = FMath::Clamp(1.0 - (FPlatformTime::Seconds() - FlashAt) / 0.9, 0.0, 1.0);
+				FLinearColor C = FlashC; C.A *= (float)(K * K);
+				return FSlateColor(C);
+			})
+		]
 		// sol üst: bilgi kartı
 		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(14.f)
 		[

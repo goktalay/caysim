@@ -90,6 +90,12 @@ public:
 	FVector2D GetPadRight() const { return RightStick; }
 	/** Tuş atamalarını yeniden kur (Ayarlar → Tuşlar; FSmvUiPrefs) */
 	void RemapKeys();
+	/** Giriş sekansı: kamera 100 m yükseklik / 80 m yarıçaptan 110°'lik sarmalla takip konumuna iner (web flightsim_intro) */
+	void PlayIntro(float Seconds);
+	/** Kamera sarsıntısı (çarpma) */
+	void Shake(float AmpCm, float Seconds);
+	/** Ham RC verici eksenleri (−1..1; Ayarlar → Kumanda → Algıla) */
+	float GetRawAxis(int32 I) const { return (I >= 0 && I < 8) ? RcAxis[I] : 0.f; }
 	float Expo = 0.3f;
 	TArray<int32> RcAxisMap;   // [roll, pitch, throttle, yaw, mode] → RawInput eksen numarası (1..8), 0 = yok
 	TArray<bool> RcInvert;
@@ -122,6 +128,7 @@ private:
 	bool bGroundPlaced = false;
 	bool bHud = true, bPip = false, bFlying = false;
 	float ChaseZoom = 1.f;
+	float IntroLeft = 0.f, IntroDur = 0.f, ShakeLeft = 0.f, ShakeAmp = 0.f;
 
 	// gamepad çubukları (Enhanced Input; −1..1)
 	FVector2D LeftStick = FVector2D::ZeroVector, RightStick = FVector2D::ZeroVector;

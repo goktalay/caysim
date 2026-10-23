@@ -272,6 +272,7 @@ void USmvDataService::LoadSettingsLocal()
 	S.BankCopter = (int32)SmvJson::Num(O, TEXT("bank_copter"), S.BankCopter);
 	S.BankPlane = (int32)SmvJson::Num(O, TEXT("bank_plane"), S.BankPlane);
 	S.GaugeTheme = SmvJson::Str(O, TEXT("gauge_theme"), S.GaugeTheme);
+	S.Theme = SmvJson::Str(O, TEXT("theme"), S.Theme);
 	S.GraphicsQuality = (int32)SmvJson::Num(O, TEXT("graphics_quality"), S.GraphicsQuality);
 	S.bMpUdpOut = SmvJson::Bool(O, TEXT("mp_udp_out"), S.bMpUdpOut);
 	S.MpUdpHost = SmvJson::Str(O, TEXT("mp_udp_host"), S.MpUdpHost);
@@ -298,6 +299,7 @@ void USmvDataService::SaveSettingsLocalOnly() const
 	O->SetNumberField(TEXT("bank_copter"), S.BankCopter);
 	O->SetNumberField(TEXT("bank_plane"), S.BankPlane);
 	O->SetStringField(TEXT("gauge_theme"), S.GaugeTheme);
+	O->SetStringField(TEXT("theme"), S.Theme);
 	O->SetNumberField(TEXT("graphics_quality"), S.GraphicsQuality);
 	O->SetBoolField(TEXT("mp_udp_out"), S.bMpUdpOut);
 	O->SetStringField(TEXT("mp_udp_host"), S.MpUdpHost);
