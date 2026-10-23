@@ -41,13 +41,13 @@ ASmvDroneActor::ASmvDroneActor()
 	Motor->SetupAttachment(Body);
 }
 
-UStaticMeshComponent* ASmvDroneActor::AddPart(UStaticMesh* M, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color)
+UStaticMeshComponent* ASmvDroneActor::AddPart(UStaticMesh* M, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color, USceneComponent* Parent)
 {
 	if (!M) return nullptr;
 	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this);
 	C->SetStaticMesh(M);
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	C->SetupAttachment(Body);
+	C->SetupAttachment(Parent ? Parent : Body.Get());
 	C->RegisterComponent();
 	// BasicShapes 100 cm birim ağlar → ölçek (m)
 	C->SetRelativeLocationAndRotation(PosM * 100.f, Rot);
@@ -62,9 +62,43 @@ UStaticMeshComponent* ASmvDroneActor::AddPart(UStaticMesh* M, const FVector& Pos
 	return C;
 }
 
-void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& /*ModelKey*/, const FLinearColor& Color)
+void ASmvDroneActor::AddRotor(const FVector& PosM, float DiaM, bool bForward, const FLinearColor& Color)
+{
+	USceneComponent* Hub = NewObject<USceneComponent>(this);
+	Hub->SetupAttachment(Body);
+	Hub->RegisterComponent();
+	Hub->SetRelativeLocation(PosM * 100.f);
+	Hubs.Add(Hub);
+	// iki kanatlı pala: tek ince kutu (uçtan uca çap); taban sınıfı göbeği döndürür (kopter: yaw, çekici pervane: roll)
+	if (bForward)
+	{
+		AddPart(CubeMesh, FVector::ZeroVector, FVector(0.006f, DiaM, DiaM * 0.09f), FRotator::ZeroRotator, Color, Hub);
+		AddPart(ConeMesh, FVector(0.02f, 0, 0), FVector(0.04f, 0.04f, 0.04f), FRotator(-90, 0, 0), FLinearColor(0.75f, 0.75f, 0.78f), Hub);   // sivri göbek
+	}
+	else
+	{
+		AddPart(CubeMesh, FVector::ZeroVector, FVector(DiaM, DiaM * 0.09f, 0.006f), FRotator(0, 0, 4), Color, Hub);
+		AddPart(CylinderMesh, FVector(0, 0, 0.004f), FVector(0.025f, 0.025f, 0.012f), FRotator::ZeroRotator, FLinearColor(0.75f, 0.75f, 0.78f), Hub);
+	}
+	Propellers.Add(Hub);
+}
+
+void ASmvDroneActor::ClearParts()
+{
+	for (TObjectPtr<UStaticMeshComponent>& P : Parts) if (IsValid(P)) P->DestroyComponent();
+	for (TObjectPtr<USceneComponent>& H : Hubs)
+	{
+		Propellers.Remove(H);
+		if (IsValid(H)) H->DestroyComponent();
+	}
+	Parts.Reset();
+	Hubs.Reset();
+}
+
+void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& ModelKey, const FLinearColor& Color)
 {
 	SmvType = InType;
+	SmvModelKey = ModelKey;
 	BodyColor = Color;
 	if (Motor)
 	{
@@ -82,70 +116,106 @@ void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& /*Mod
 
 void ASmvDroneActor::BuildPlaceholder()
 {
+	ClearParts();   // taban sınıfı Propellers'ı yok etmeden önce kendi göbek/parçalarımız
 	Super::BuildPlaceholder();   // dahili (BP) mesh yoksa gövde gizli kalır
-	for (TObjectPtr<UStaticMeshComponent>& P : Parts) if (P) P->DestroyComponent();
-	Parts.Reset();
-	if (!IsUsingPlaceholder()) return;
+	if (!IsUsingPlaceholder()) { Body->SetRelativeScale3D(FVector::OneVector); return; }
 	if (PlaceholderMesh && PlaceholderMesh->GetStaticMesh()) return;   // Blueprint gövdesi atanmış
-	const FLinearColor Dark(0.05f, 0.05f, 0.06f), Grey(0.4f, 0.4f, 0.42f), Glass(0.1f, 0.2f, 0.35f);
+	// Pervaneler görünür hızda dönsün (40 dev/sn 60 fps'te durağan/geri dönüyor görünür — stroboskop)
+	PropMaxRps = 7.f;
+	const FLinearColor Dark(0.04f, 0.04f, 0.05f), Grey(0.35f, 0.36f, 0.38f), Glass(0.08f, 0.16f, 0.3f), Prop(0.07f, 0.07f, 0.08f);
+	const FLinearColor NavL(1.f, 0.05f, 0.05f), NavR(0.05f, 1.f, 0.15f), White(0.95f, 0.95f, 0.95f);
 	Propellers.Reset();
-	auto Prop = [this, &Dark](const FVector& P, float DiaM, const FRotator& R)
-	{
-		if (UStaticMeshComponent* C = AddPart(CylinderMesh, P, FVector(DiaM, DiaM, 0.01f), R, Dark)) Propellers.Add(C);
-	};
+	float Low = -0.1f;   // gövdenin en alt noktası (m, ölçeksiz)
+	float Radius = 0.4f, Nose = 0.2f;
+	VisScale = 2.5f;
 	if (SmvType == TEXT("plane") || SmvType == TEXT("vtol") || SmvType == TEXT("interceptor"))
 	{
 		AddPart(CylinderMesh, FVector(0, 0, 0), FVector(0.12f, 0.12f, 1.0f), FRotator(90, 0, 0), BodyColor);   // gövde (X boyunca)
+		AddPart(SphereMesh, FVector(0.5f, 0, 0), FVector(0.12f, 0.12f, 0.12f), FRotator::ZeroRotator, BodyColor);   // burun
 		AddPart(CubeMesh, FVector(0.05f, 0, 0.03f), FVector(0.25f, 1.6f, 0.02f), FRotator::ZeroRotator, BodyColor);   // kanat
+		AddPart(CubeMesh, FVector(0.05f, -0.8f, 0.03f), FVector(0.22f, 0.02f, 0.025f), FRotator::ZeroRotator, NavL);   // sol kanat ucu (kırmızı)
+		AddPart(CubeMesh, FVector(0.05f, 0.8f, 0.03f), FVector(0.22f, 0.02f, 0.025f), FRotator::ZeroRotator, NavR);    // sağ kanat ucu (yeşil)
 		AddPart(CubeMesh, FVector(-0.45f, 0, 0.03f), FVector(0.12f, 0.5f, 0.015f), FRotator::ZeroRotator, BodyColor);   // yatay kuyruk
 		AddPart(CubeMesh, FVector(-0.45f, 0, 0.1f), FVector(0.12f, 0.015f, 0.15f), FRotator::ZeroRotator, BodyColor);   // dikey kuyruk
 		AddPart(SphereMesh, FVector(0.2f, 0, 0.06f), FVector(0.12f, 0.08f, 0.06f), FRotator::ZeroRotator, Glass);
-		Prop(FVector(0.52f, 0, 0), 0.25f, FRotator(90, 0, 0));
+		AddRotor(FVector(0.58f, 0, 0), 0.28f, true, Prop);   // çekici pervane (Propellers[0])
 		if (SmvType == TEXT("vtol"))
 		{
 			AddPart(CubeMesh, FVector(0.05f, 0.4f, 0.0f), FVector(0.8f, 0.03f, 0.03f), FRotator::ZeroRotator, Grey);
 			AddPart(CubeMesh, FVector(0.05f, -0.4f, 0.0f), FVector(0.8f, 0.03f, 0.03f), FRotator::ZeroRotator, Grey);
-			for (const FVector& P : { FVector(0.4f, 0.4f, 0.05f), FVector(-0.3f, 0.4f, 0.05f), FVector(0.4f, -0.4f, 0.05f), FVector(-0.3f, -0.4f, 0.05f) }) Prop(P, 0.3f, FRotator::ZeroRotator);
+			for (const FVector& P : { FVector(0.4f, 0.4f, 0.05f), FVector(-0.3f, 0.4f, 0.05f), FVector(0.4f, -0.4f, 0.05f), FVector(-0.3f, -0.4f, 0.05f) }) AddRotor(P, 0.3f, false, Prop);
 		}
-		GroundOffsetM = -0.08f;
-		return;
+		// iniş takımı (üç teker)
+		AddPart(CylinderMesh, FVector(0.3f, 0, -0.1f), FVector(0.05f, 0.05f, 0.02f), FRotator(0, 0, 90), Dark);
+		AddPart(CylinderMesh, FVector(-0.05f, 0.15f, -0.1f), FVector(0.06f, 0.06f, 0.025f), FRotator(0, 0, 90), Dark);
+		AddPart(CylinderMesh, FVector(-0.05f, -0.15f, -0.1f), FVector(0.06f, 0.06f, 0.025f), FRotator(0, 0, 90), Dark);
+		AddPart(CubeMesh, FVector(0.3f, 0, -0.07f), FVector(0.015f, 0.015f, 0.06f), FRotator::ZeroRotator, Grey);
+		AddPart(CubeMesh, FVector(-0.05f, 0.08f, -0.07f), FVector(0.015f, 0.15f, 0.015f), FRotator(0, 0, -25), Grey);
+		AddPart(CubeMesh, FVector(-0.05f, -0.08f, -0.07f), FVector(0.015f, 0.15f, 0.015f), FRotator(0, 0, 25), Grey);
+		Low = -0.13f; Radius = 0.8f; Nose = 0.65f;
 	}
-	if (SmvType == TEXT("rover"))
+	else if (SmvType == TEXT("rover"))
 	{
+		VisScale = 1.f;   // kara aracı gerçek boyutta (web ROVER_SCALE)
 		AddPart(CubeMesh, FVector(0, 0, 0.25f), FVector(1.8f, 0.9f, 0.4f), FRotator::ZeroRotator, BodyColor);
 		AddPart(CubeMesh, FVector(0.3f, 0, 0.55f), FVector(0.6f, 0.7f, 0.25f), FRotator::ZeroRotator, Glass);
 		for (const FVector& P : { FVector(0.6f, 0.5f, 0.15f), FVector(-0.6f, 0.5f, 0.15f), FVector(0.6f, -0.5f, 0.15f), FVector(-0.6f, -0.5f, 0.15f) })
 			AddPart(CylinderMesh, P, FVector(0.3f, 0.3f, 0.15f), FRotator(0, 0, 90), Dark);
-		GroundOffsetM = 0.f;
-		return;
+		Low = 0.f; Radius = 1.f; Nose = 0.9f;
 	}
-	if (SmvType == TEXT("heli"))
+	else if (SmvType == TEXT("heli"))
 	{
 		AddPart(SphereMesh, FVector(0, 0, 0), FVector(0.6f, 0.3f, 0.3f), FRotator::ZeroRotator, BodyColor);
+		AddPart(SphereMesh, FVector(0.15f, 0, 0.03f), FVector(0.3f, 0.24f, 0.2f), FRotator::ZeroRotator, Glass);
 		AddPart(CylinderMesh, FVector(-0.6f, 0, 0.05f), FVector(0.05f, 0.05f, 0.8f), FRotator(90, 0, 0), BodyColor);
+		AddPart(CubeMesh, FVector(-0.98f, 0, 0.13f), FVector(0.1f, 0.012f, 0.16f), FRotator::ZeroRotator, BodyColor);   // dikey kuyruk
+		AddPart(CubeMesh, FVector(-0.98f, 0.04f, 0.15f), FVector(0.02f, 0.006f, 0.26f), FRotator::ZeroRotator, Prop);   // kuyruk rotoru (sabit)
 		AddPart(CubeMesh, FVector(0, 0.15f, -0.2f), FVector(0.6f, 0.02f, 0.02f), FRotator::ZeroRotator, Dark);
 		AddPart(CubeMesh, FVector(0, -0.15f, -0.2f), FVector(0.6f, 0.02f, 0.02f), FRotator::ZeroRotator, Dark);
-		Prop(FVector(0, 0, 0.22f), 1.7f, FRotator::ZeroRotator);
-		Prop(FVector(-1.0f, 0.05f, 0.1f), 0.3f, FRotator(0, 0, 90));
-		GroundOffsetM = -0.22f;
-		return;
+		AddPart(CylinderMesh, FVector(0, 0, 0.17f), FVector(0.05f, 0.05f, 0.1f), FRotator::ZeroRotator, Grey);   // rotor mili
+		AddRotor(FVector(0, 0, 0.23f), 1.7f, false, Prop);
+		Low = -0.21f; Radius = 0.9f; Nose = 0.6f;
 	}
-	// çok rotor (X düzeni; FPV daha küçük)
-	const bool bFpv = SmvType == TEXT("fpv");
-	const float Arm = bFpv ? 0.12f : 0.25f;
-	AddPart(CubeMesh, FVector(0, 0, 0), FVector(bFpv ? 0.12f : 0.2f, bFpv ? 0.08f : 0.14f, 0.06f), FRotator::ZeroRotator, BodyColor);
-	AddPart(SphereMesh, FVector(bFpv ? 0.07f : 0.11f, 0, 0.01f), FVector(0.04f, 0.04f, 0.04f), FRotator::ZeroRotator, Glass);   // kamera
-	for (int32 i = 0; i < 4; ++i)
+	else
 	{
-		const float A = FMath::DegreesToRadians(45.f + 90.f * i);
-		const FVector Tip(FMath::Cos(A) * Arm, FMath::Sin(A) * Arm, 0.02f);
-		AddPart(CubeMesh, Tip * 0.5f, FVector(Arm * 1.0f, 0.02f, 0.015f), FRotator(0, FMath::RadiansToDegrees(A), 0), Grey);
-		AddPart(CylinderMesh, Tip, FVector(0.035f, 0.035f, 0.03f), FRotator::ZeroRotator, Dark);
-		Prop(Tip + FVector(0, 0, 0.03f), bFpv ? 0.13f : 0.25f, FRotator::ZeroRotator);
+		// çok rotor: X-quad (FPV daha küçük) ya da hexa (altı kol; model anahtarında hexa/typhoon)
+		const bool bFpv = SmvType == TEXT("fpv");
+		const FString MK = SmvModelKey.ToLower();
+		const bool bHexa = SmvType == TEXT("hexa") || MK.Contains(TEXT("hexa")) || MK.Contains(TEXT("typhoon")) || MK.Contains(TEXT("h480"));
+		const int32 N = bHexa ? 6 : 4;
+		const float Arm = bFpv ? 0.12f : bHexa ? 0.32f : 0.25f;
+		const float PropD = bFpv ? 0.13f : bHexa ? 0.26f : 0.25f;
+		const float Bw = bFpv ? 0.12f : 0.2f, Bd = bFpv ? 0.08f : 0.14f;
+		AddPart(CubeMesh, FVector(0, 0, 0), FVector(Bw, Bd, 0.05f), FRotator::ZeroRotator, BodyColor);   // gövde
+		AddPart(SphereMesh, FVector(0, 0, 0.025f), FVector(Bw * 0.85f, Bd * 0.85f, 0.05f), FRotator::ZeroRotator, BodyColor);   // üst kapak
+		AddPart(CubeMesh, FVector(Bw * 0.45f, 0, 0.0f), FVector(0.02f, Bd * 0.7f, 0.03f), FRotator::ZeroRotator, FLinearColor(1.f, 0.55f, 0.05f));   // burun şeridi (turuncu)
+		AddPart(SphereMesh, FVector(Bw * 0.5f, 0, -0.035f), FVector(0.045f, 0.045f, 0.045f), FRotator::ZeroRotator, Glass);   // kamera / gimbal
+		for (int32 i = 0; i < N; ++i)
+		{
+			const float Deg = bHexa ? 30.f + 60.f * i : 45.f + 90.f * i;
+			const float A = FMath::DegreesToRadians(Deg);
+			const FVector Tip(FMath::Cos(A) * Arm, FMath::Sin(A) * Arm, 0.01f);
+			const bool bFront = Tip.X > 0.01f;
+			const FLinearColor Led = bFront ? (Tip.Y < 0 ? NavL : NavR) : White;
+			AddPart(CubeMesh, Tip * 0.5f, FVector(Arm, 0.022f, 0.016f), FRotator(0, Deg, 0), Grey);   // kol
+			AddPart(CylinderMesh, Tip + FVector(0, 0, 0.012f), FVector(0.04f, 0.04f, 0.035f), FRotator::ZeroRotator, Dark);   // motor
+			AddPart(SphereMesh, Tip + FVector(0, 0, -0.012f), FVector(0.022f, 0.022f, 0.022f), FRotator::ZeroRotator, Led);   // seyir ışığı (sol kırmızı, sağ yeşil, arka beyaz)
+			AddRotor(Tip + FVector(0, 0, 0.034f), PropD, false, Prop);
+		}
+		// iniş takımı: iki kızak + dört bacak
+		const float Sk = bFpv ? 0.05f : 0.08f;
+		for (const float Y : { Sk, -Sk })
+		{
+			AddPart(CubeMesh, FVector(0, Y, -0.088f), FVector(Bw * 1.2f, 0.014f, 0.012f), FRotator::ZeroRotator, Dark);
+			AddPart(CubeMesh, FVector(Bw * 0.3f, Y, -0.058f), FVector(0.012f, 0.012f, 0.055f), FRotator::ZeroRotator, Dark);
+			AddPart(CubeMesh, FVector(-Bw * 0.3f, Y, -0.058f), FVector(0.012f, 0.012f, 0.055f), FRotator::ZeroRotator, Dark);
+		}
+		Low = -0.094f; Radius = Arm + PropD * 0.5f; Nose = Bw * 0.5f + 0.05f;
 	}
-	AddPart(CubeMesh, FVector(0, 0.08f, -0.08f), FVector(0.2f, 0.01f, 0.01f), FRotator::ZeroRotator, Dark);   // iniş takımı
-	AddPart(CubeMesh, FVector(0, -0.08f, -0.08f), FVector(0.2f, 0.01f, 0.01f), FRotator::ZeroRotator, Dark);
-	GroundOffsetM = -0.09f;
+	Body->SetRelativeScale3D(FVector(VisScale));
+	GroundOffsetM = Low * VisScale;
+	VisRadiusM = FMath::Max(0.3f, Radius * VisScale);
+	VisNoseM = Nose * VisScale;
 }
 
 void ASmvDroneActor::UpdateAudio(const FVector& Listener, float Volume)
@@ -393,9 +463,10 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	{
 		const double H = FMath::DegreesToRadians(W.RunwayHeading);
 		const FVector Fwd = ToUe(FMath::Sin(H) * 100.0, FMath::Cos(H) * 100.0, 0) - Origin;
-		Runway->SetRelativeLocation(Fwd * 2.5f + FVector(0, 0, 10.f));
+		// ince levha: üst yüzü zeminden 0,5 cm yukarıda (eskiden 20 cm kalınlıktaydı → yerdeki dron levhanın İÇİNDE kalıp görünmüyordu)
+		Runway->SetRelativeLocation(Fwd * 2.5f + FVector(0, 0, -1.5f));
 		Runway->SetRelativeRotation(FRotator(0, Fwd.Rotation().Yaw, 0));
-		Runway->SetRelativeScale3D(FVector(600.f, 30.f, 0.2f));   // 600 × 30 m (BasicShapes küpü 1 m)
+		Runway->SetRelativeScale3D(FVector(600.f, 30.f, 0.04f));   // 600 × 30 m × 4 cm (BasicShapes küpü 1 m)
 	}
 	// su: alçak kesimleri kaplayan düzlem (water oranıyla)
 	WaterPlane->SetVisibility(W.Water > 0.01);

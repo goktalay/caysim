@@ -31,6 +31,10 @@ public:
 	// Not: parametre adı üye SmvType ile aynı olmamalı (C4458)
 	void ConfigureVisual(const FString& InType, const FString& ModelKey, const FLinearColor& Color);
 	USmvMotorSynth* GetMotor() const { return Motor; }
+	/** Görünür yarıçap (m; görünürlük ölçeği dahil) — takip kamerası mesafesi buna göre. */
+	float GetVisualRadiusM() const { return VisRadiusM; }
+	/** Burun ucu (m, gövde ekseninde; ölçek dahil) — FPV kamerası. */
+	float GetVisualNoseM() const { return VisNoseM; }
 	/** Kamera konumuna göre ses (Doppler + uzaklık) — her kare. */
 	void UpdateAudio(const FVector& Listener, float Volume);
 
@@ -38,6 +42,8 @@ protected:
 	virtual void BuildPlaceholder() override;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USmvMotorSynth> Motor;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
+	/** Pervane göbekleri (dönen düğüm; kanatlar alt bileşen). */
+	UPROPERTY() TArray<TObjectPtr<USceneComponent>> Hubs;
 	UPROPERTY() TObjectPtr<UStaticMesh> CubeMesh;
 	UPROPERTY() TObjectPtr<UStaticMesh> CylinderMesh;
 	UPROPERTY() TObjectPtr<UStaticMesh> SphereMesh;
@@ -46,9 +52,17 @@ protected:
 
 private:
 	FString SmvType = TEXT("multirotor");
+	FString SmvModelKey;
 	FLinearColor BodyColor = FLinearColor(0.8f, 0.1f, 0.1f);
 	FVector LastPos = FVector::ZeroVector;
-	UStaticMeshComponent* AddPart(UStaticMesh* M, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color);
+	/** Görünürlük ölçeği (web MODEL_SCALE 2,5; kara aracı 1). */
+	float VisScale = 2.5f;
+	float VisRadiusM = 1.f;
+	float VisNoseM = 0.5f;
+	UStaticMeshComponent* AddPart(UStaticMesh* M, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color, USceneComponent* Parent = nullptr);
+	/** Dönen pervane: göbek + iki kanatlı pala (bForward: disk ileri bakar, X ekseni çevresinde döner). */
+	void AddRotor(const FVector& PosM, float DiaM, bool bForward, const FLinearColor& Color);
+	void ClearParts();
 };
 
 UCLASS()
