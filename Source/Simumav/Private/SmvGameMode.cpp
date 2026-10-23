@@ -220,14 +220,17 @@ void ASmvGameMode::BuildScene()
 			if (const FSmvFabMap* FM = FSmvFabContent::FindMap(Req.Track.WorldMode))
 			{
 				bool bOk = false;
-				FabLevel = ULevelStreamingDynamic::LoadLevelInstance(W, FM->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
-				if (bOk && FabLevel)
+				FabLevels.Reset();
+				bFabSubsRequested = false;
+				bFabPlaced = false;
+				ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, FM->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
+				if (bOk && Lv)
 				{
-					FabLevel->OnLevelShown.AddDynamic(this, &ASmvGameMode::HandleFabLevelShown);
+					Lv->OnLevelShown.AddDynamic(this, &ASmvGameMode::HandleFabLevelShown);
+					FabLevels.Add(Lv);
 					bFab = true;
 					UE_LOG(LogSimumav, Log, TEXT("Fab haritası yükleniyor: %s"), *FM->Level);
 				}
-				else FabLevel = nullptr;
 			}
 			if (!bFab) PushEvent(FSmvI18n::T(TEXT("flight.fab_missing")).ToString(), 4);
 		}
@@ -451,12 +454,13 @@ void ASmvGameMode::StopScene()
 	Gates.Reset(); Ghosts.Reset(); TargetActors.Reset(); GhostIndex.Reset();
 	if (Drone) { Drone->Destroy(); Drone = nullptr; }
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
-	if (FabLevel)
+	for (TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
 	{
-		FabLevel->OnLevelShown.RemoveAll(this);
-		FabLevel->SetIsRequestingUnloadAndRemoval(true);
-		FabLevel = nullptr;
+		if (!Lv) continue;
+		Lv->OnLevelShown.RemoveAll(this);
+		Lv->SetIsRequestingUnloadAndRemoval(true);
 	}
+	FabLevels.Reset();
 	if (WorldSetup) { WorldSetup->Destroy(); WorldSetup = nullptr; }
 	if (Tones) Tones->SetAlarm(0, 0.f);
 	FreeRace();
@@ -1153,27 +1157,70 @@ void ASmvGameMode::AugmentSummary(FSmvFlightSummary& S)
 
 void ASmvGameMode::HandleFabLevelShown()
 {
-	ULevel* L = FabLevel ? FabLevel->GetLoadedLevel() : nullptr;
 	UWorld* W = GetWorld();
-	if (!L || !W) return;
+	if (!W || FabLevels.Num() == 0 || bFabPlaced) return;
+	// kalıcı seviye ilk görünür olduğunda alt seviyelerini (kendi dünyasının akış listesi) aynı dönüşümle yükle:
+	// seviye örneği olarak yüklenen bir dünyanın alt seviyeleri kendiliğinden gelmez
+	if (!bFabSubsRequested)
+	{
+		bFabSubsRequested = true;
+		ULevel* PL = FabLevels[0] ? FabLevels[0]->GetLoadedLevel() : nullptr;
+		UWorld* LW = PL ? PL->GetTypedOuter<UWorld>() : nullptr;
+		if (LW && LW != W)
+		{
+			for (ULevelStreaming* Sub : LW->GetStreamingLevels())
+			{
+				if (!Sub) continue;
+				const FString Pkg = Sub->GetWorldAssetPackageName();
+				if (Pkg.IsEmpty()) continue;
+				bool bOk = false;
+				ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, Pkg, Sub->LevelTransform.GetLocation(), Sub->LevelTransform.Rotator(), bOk);
+				if (bOk && Lv)
+				{
+					Lv->OnLevelShown.AddDynamic(this, &ASmvGameMode::HandleFabLevelShown);
+					FabLevels.Add(Lv);
+					UE_LOG(LogSimumav, Log, TEXT("Fab alt seviyesi yükleniyor: %s"), *Pkg);
+				}
+				else UE_LOG(LogSimumav, Warning, TEXT("Fab alt seviyesi yüklenemedi: %s"), *Pkg);
+			}
+		}
+	}
+	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels) if (!Lv || !Lv->IsLevelVisible()) return;
+	PlaceFabLevels();
+}
+
+// Tüm Fab seviyeleri görünür: kendi gök/ışık aktörlerini kaldır (dünya kurulumu güneş/gök/sisi zaten sağlar),
+// ortak sınır kutusunun merkezini orijine (SITL ev konumu) ve merkezdeki zemini Z=0'a (düz dünya zemini) taşı.
+void ASmvGameMode::PlaceFabLevels()
+{
+	UWorld* W = GetWorld();
+	if (!W) return;
+	bFabPlaced = true;
 	FBox Box(ForceInit);
 	TArray<AActor*> Drop;
-	for (AActor* A : L->Actors)
+	TArray<ULevel*> Levels;
+	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
 	{
-		if (!IsValid(A)) continue;
-		const FString Cn = A->GetClass()->GetName();
-		if (A->IsA<ADirectionalLight>() || A->IsA<ASkyLight>() || A->IsA<ASkyAtmosphere>() || A->IsA<AExponentialHeightFog>() || A->IsA<AVolumetricCloud>()
-			|| Cn.Contains(TEXT("SkySphere")) || Cn.Contains(TEXT("Sky_Sphere")))
+		ULevel* L = Lv ? Lv->GetLoadedLevel() : nullptr;
+		if (!L) continue;
+		Levels.Add(L);
+		for (AActor* A : L->Actors)
 		{
-			Drop.Add(A);
-			continue;
-		}
-		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
-		for (UStaticMeshComponent* C : Comps)
-		{
-			if (!C || !C->IsRegistered() || !C->GetStaticMesh()) continue;
-			const FBox B = C->Bounds.GetBox();
-			if (B.IsValid && B.GetSize().GetMax() < 2.0e6) Box += B;   // 20 km'den büyük (gök küresi vb.) sayılmaz
+			if (!IsValid(A)) continue;
+			const FString Cn = A->GetClass()->GetName();
+			if (A->IsA<ADirectionalLight>() || A->IsA<ASkyLight>() || A->IsA<ASkyAtmosphere>() || A->IsA<AExponentialHeightFog>() || A->IsA<AVolumetricCloud>()
+				|| Cn.Contains(TEXT("SkySphere")) || Cn.Contains(TEXT("Sky_Sphere")))
+			{
+				Drop.Add(A);
+				continue;
+			}
+			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+			for (UStaticMeshComponent* SC : Comps)
+			{
+				if (!SC || !SC->IsRegistered() || !SC->GetStaticMesh()) continue;
+				const FBox SB = SC->Bounds.GetBox();
+				if (SB.IsValid && SB.GetSize().GetMax() < 2.0e6) Box += SB;   // 20 km'den büyük (gök küresi vb.) sayılmaz
+			}
 		}
 	}
 	for (AActor* A : Drop) A->Destroy();
@@ -1182,12 +1229,13 @@ void ASmvGameMode::HandleFabLevelShown()
 		UE_LOG(LogSimumav, Warning, TEXT("Fab haritası boş görünüyor (statik ağ yok)"));
 		return;
 	}
-	const FVector C = Box.GetCenter();
+	const FVector Ctr = Box.GetCenter();
 	double Zg = Box.Min.Z;
 	FHitResult Hit;
 	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvFabGround), true);
-	if (W->LineTraceSingleByChannel(Hit, FVector(C.X, C.Y, Box.Max.Z + 100.0), FVector(C.X, C.Y, Box.Min.Z - 100.0), ECC_WorldStatic, Q)) Zg = Hit.ImpactPoint.Z;
-	L->ApplyWorldOffset(FVector(-C.X, -C.Y, -Zg), false);
-	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi: kutu %s, merkez (%.0f, %.0f), zemin %.0f cm, %d gök/ışık aktörü kaldırıldı"),
-		*Box.GetSize().ToString(), C.X, C.Y, Zg, Drop.Num());
+	if (W->LineTraceSingleByChannel(Hit, FVector(Ctr.X, Ctr.Y, Box.Max.Z + 100.0), FVector(Ctr.X, Ctr.Y, Box.Min.Z - 100.0), ECC_WorldStatic, Q)) Zg = Hit.ImpactPoint.Z;
+	const FVector Off(-Ctr.X, -Ctr.Y, -Zg);
+	for (ULevel* L : Levels) L->ApplyWorldOffset(Off, false);
+	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi: %d seviye, kutu %s, merkez (%.0f, %.0f), zemin %.0f cm, %d gök/ışık aktörü kaldırıldı"),
+		Levels.Num(), *Box.GetSize().ToString(), Ctr.X, Ctr.Y, Zg, Drop.Num());
 }

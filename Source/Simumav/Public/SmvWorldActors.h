@@ -74,6 +74,8 @@ private:
 	TArray<FName> FabPropBones;
 	/** Pervane kemiklerinin bileşen uzayındaki başlangıç (referans) dönüşleri */
 	TArray<FQuat> FabPropRef;
+	/** Dönüş yönü (+1/−1; çapraz çiftler aynı) */
+	TArray<float> FabPropDir;
 	float FabPropPhase = 0.f;
 };
 

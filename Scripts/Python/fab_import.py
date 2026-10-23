@@ -24,8 +24,13 @@ def meta_ozet(yol):
     if not yol or not os.path.isfile(yol):
         return
     try:
-        with open(yol, encoding="utf-8", errors="replace") as f:
-            t = f.read()
+        with open(yol, "rb") as f:
+            ham = f.read()
+        # Launcher metadata dosyası UTF-16 (BOM'lu) olabilir
+        if ham[:2] in (b"\xff\xfe", b"\xfe\xff"):
+            t = ham.decode("utf-16", errors="replace")
+        else:
+            t = ham.decode("utf-8-sig", errors="replace")
         try:
             d = json.loads(t)
         except Exception:

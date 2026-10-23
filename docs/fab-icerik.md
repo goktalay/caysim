@@ -57,5 +57,5 @@ SITL ev konumuna oturtulur). Ruined Construction "Yıkık İnşaat" adıyla list
   yalnız değişenler kopyalanır.
 - Haritası olmayan paketler (ses, malzeme kütüphanesi) kopyalanır ama koddan başvurulmadıkça pakete girmez.
 - Dron gövdesi ayarları (`Config/DefaultGame.ini` → `[/Script/Simumav.SmvFabContent]`): `DroneSpanM` (gerçek
-  boyut, varsayılan 0,6 m; görünürlük ×2,5 ayrıca uygulanır), `DroneYawDeg` (burun yönü düzeltmesi).
+  boyut, m; verilmezse model 25–150 cm ise olduğu gibi kalır, değilse 0,6 m'ye ölçeklenir; görünürlük ×2,5 ayrıca uygulanır), `DroneYawDeg` (burun yönü düzeltmesi; verilmezse `_F_`/`_B_` pervane kemik adlarından, o da yoksa kamera kemiğinden).
 - Hazırlama projesinin yeri farklıysa depo değişkeni `FAB_PROJE` (Settings → Variables) ile değiştirilebilir.

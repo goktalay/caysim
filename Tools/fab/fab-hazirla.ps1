@@ -174,11 +174,16 @@ try {
 		$tercih = $umaps | Where-Object { $_.BaseName -match '(?i)demo|showcase|overview|example|preview|level|map' -and $_.BaseName -notmatch '(?i)test|template|empty|_BuiltData' } | Sort-Object Length -Descending | Select-Object -First 1
 		if (-not $tercih) { $tercih = $umaps | Where-Object { $_.BaseName -notmatch '_BuiltData' } | Sort-Object Length -Descending | Select-Object -First 1 }
 		if (-not $tercih) { continue }
+		$umaps | ForEach-Object { Write-Host ("    harita: " + $_.FullName.Substring($content.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
 		$rel = $tercih.FullName.Substring($content.Length).TrimStart('\') -replace '\.umap$', ''
 		$paket = '/Game/' + ($rel -replace '\\', '/')
 		$anahtar = ($p -replace '[^A-Za-z0-9]', '').ToLower()
 		Bilgi "paket: $p - harita $paket (anahtar $anahtar; $($umaps.Count) harita)"
-		$satirlar += "+MapsToCook=(FilePath=`"$paket`")"
+		# secilen haritanin klasorundeki diger haritalar (kalici seviyenin alt seviyeleri) de pisirilir
+		foreach ($u in ($umaps | Where-Object { $_.DirectoryName -eq $tercih.DirectoryName -and $_.BaseName -notmatch '_BuiltData' })) {
+			$r2 = '/Game/' + (($u.FullName.Substring($content.Length).TrimStart('\') -replace '\.umap$', '') -replace '\\', '/')
+			$satirlar += "+MapsToCook=(FilePath=`"$r2`")"
+		}
 		$haritalar += "+Maps=$anahtar|$paket"
 	}
 	if ($satirlar.Count -gt 0 -or $haritalar.Count -gt 0) {

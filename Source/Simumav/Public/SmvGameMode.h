@@ -50,9 +50,13 @@ public:
 protected:
 	UPROPERTY() TObjectPtr<ACaySimWorldSetup> WorldSetup;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> Terrain;
-	/** Fab haritası (parkur dünya kipi "fab:<anahtar>") — akış seviyesi olarak yüklenir, merkezi orijine oturtulur */
-	UPROPERTY() TObjectPtr<ULevelStreamingDynamic> FabLevel;
+	/** Fab haritası (parkur dünya kipi "fab:<anahtar>") — [0] kalıcı seviye, ardından onun alt seviyeleri; hepsi görünür olunca
+	 *  merkezi orijine (SITL ev konumu) oturtulur */
+	UPROPERTY() TArray<TObjectPtr<ULevelStreamingDynamic>> FabLevels;
+	bool bFabSubsRequested = false;
+	bool bFabPlaced = false;
 	UFUNCTION() void HandleFabLevelShown();
+	void PlaceFabLevels();
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Drone;
 	UPROPERTY() TArray<TObjectPtr<ASmvGateActor>> Gates;
 	UPROPERTY() TArray<TObjectPtr<ASmvDroneActor>> Ghosts;       // botlar / rakipler
