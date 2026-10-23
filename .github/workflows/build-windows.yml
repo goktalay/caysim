@@ -71,8 +71,9 @@ jobs:
 
       - name: Editor ikilileri (UBT)
         run: |
-          & "$env:UE_ROOT\Engine\Build\BatchFiles\Build.bat" SimumavEditor Win64 Development -Project="$PWD\Simumav.uproject" -WaitMutex -NoHotReload
-          if ($LASTEXITCODE -ne 0) { throw "Editor derlemesi basarisiz ($LASTEXITCODE)" }
+          . .\Tools\ci\kilit.ps1
+          $rc = Invoke-KilitTekrar { & "$env:UE_ROOT\Engine\Build\BatchFiles\Build.bat" SimumavEditor Win64 Development -Project="$PWD\Simumav.uproject" -WaitMutex -NoHotReload }
+          if ($rc -ne 0) { throw "Editor derlemesi basarisiz ($rc)" }
 
       - name: Fab içerikleri (hazırlama projesi + VaultCache; lisanslı dosyalar depoda değil)
         # D:\SimumavFab\Content paketleri ve VaultCache UE paketleri Content altina kopyalanir, FabLibrary FBX urunleri
@@ -89,13 +90,15 @@ jobs:
 
       - name: Paketle — Development
         run: |
-          & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -iostore -archive -archivedirectory="$env:ARCHIVE_DIR\Development" -utf8output -unattended
-          if ($LASTEXITCODE -ne 0) { throw "BuildCookRun Development basarisiz ($LASTEXITCODE)" }
+          . .\Tools\ci\kilit.ps1
+          $rc = Invoke-KilitTekrar { & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -iostore -archive -archivedirectory="$env:ARCHIVE_DIR\Development" -utf8output -unattended }
+          if ($rc -ne 0) { throw "BuildCookRun Development basarisiz ($rc)" }
 
       - name: Paketle — Shipping
         run: |
-          & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Shipping -build -cook -stage -pak -iostore -prereqs -archive -archivedirectory="$env:ARCHIVE_DIR\Shipping" -utf8output -unattended -nodebuginfo
-          if ($LASTEXITCODE -ne 0) { throw "BuildCookRun Shipping basarisiz ($LASTEXITCODE)" }
+          . .\Tools\ci\kilit.ps1
+          $rc = Invoke-KilitTekrar { & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Shipping -build -cook -stage -pak -iostore -prereqs -archive -archivedirectory="$env:ARCHIVE_DIR\Shipping" -utf8output -unattended -nodebuginfo }
+          if ($rc -ne 0) { throw "BuildCookRun Shipping basarisiz ($rc)" }
           # Shipping'de Steam istemcisi uygulamayi kendi kimligiyle baslatir; gelistirme testleri icin steam_appid.txt paket kokune de konur
           Copy-Item steam_appid.txt "$env:ARCHIVE_DIR\Shipping\Windows\" -Force
 
