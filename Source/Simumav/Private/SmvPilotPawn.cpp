@@ -258,7 +258,6 @@ void ASmvPilotPawn::SetVirtualStick(int32 Side, const FVector2D& V, bool bActive
 	bVStick[Side] = bActive;
 }
 
-static float SmvExpo(float V, float E) { return V * (1.f - E) + V * V * V * E; }
 static int32 SmvPwm(float V) { return FMath::RoundToInt(FMath::Clamp(1500.f + V * 500.f, 1000.f, 2000.f)); }
 
 void ASmvPilotPawn::ComputeRc(float Dt)
@@ -348,7 +347,9 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 		if (KThr != 0.f || (bAbsThr && FMath::Abs(AbsThr) > 0.05f)) bThrUsed = true;
 		StickL = FVector2D(*Ax[M[0]], *Ax[M[1]]);
 		StickR = FVector2D(*Ax[M[2]], *Ax[M[3]]);
-		Roll = SmvExpo(AxRoll, Expo); Pitch = SmvExpo(AxPitch, Expo); Yaw = SmvExpo(AxYaw, Expo); Thr = AxThr;
+		// hassasiyet (Ayarlar → Kumanda: ölü bölge / expo / oran; hazır ayar yoksa tek expo)
+		const FSmvUiPrefs& Pf = FSmvUiPrefs::Get();
+		Roll = Pf.Shape(AxRoll, 0, Expo); Pitch = Pf.Shape(AxPitch, 1, Expo); Yaw = Pf.Shape(AxYaw, 3, Expo); Thr = AxThr;
 	}
 	Rc.SetNum(8);
 	if (bRover)

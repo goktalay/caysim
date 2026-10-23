@@ -30,6 +30,12 @@ void FSmvUiPrefs::Load()
 	GConfig->GetBool(GSmvPrefsSection, TEXT("MenuScene"), bMenuScene, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("Preview3d"), bPreview3d, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("Season"), Season, Ini);
+	GConfig->GetString(GSmvPrefsSection, TEXT("SensPreset"), SensPreset, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("Deadzone"), Deadzone, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("ExpoRP"), ExpoRP, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("ExpoYaw"), ExpoYaw, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("RateRP"), RateRP, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("RateYaw"), RateYaw, Ini);
 	TArray<FString> Lines;
 	GConfig->GetArray(GSmvPrefsSection, TEXT("Bind"), Lines, Ini);
 	for (const FString& L : Lines)
@@ -58,6 +64,12 @@ void FSmvUiPrefs::Save()
 	GConfig->SetBool(GSmvPrefsSection, TEXT("MenuScene"), bMenuScene, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("Preview3d"), bPreview3d, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("Season"), *Season, Ini);
+	GConfig->SetString(GSmvPrefsSection, TEXT("SensPreset"), *SensPreset, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("Deadzone"), Deadzone, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("ExpoRP"), ExpoRP, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("ExpoYaw"), ExpoYaw, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("RateRP"), RateRP, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("RateYaw"), RateYaw, Ini);
 	TArray<FString> Lines;
 	for (const TPair<FString, FString>& B : Binds) Lines.Add(B.Key + TEXT("=") + B.Value);
 	GConfig->SetArray(GSmvPrefsSection, TEXT("Bind"), Lines, Ini);
@@ -130,4 +142,24 @@ FName FSmvUiPrefs::ConflictOf(FName Action, bool bPad, const FKey& Key) const
 		if (KeyFor(D.Action, bPad) == Key) return D.Action;
 	}
 	return NAME_None;
+}
+
+void FSmvUiPrefs::ApplySensPreset(const FString& P)
+{
+	SensPreset = P;
+	if (P == TEXT("precise")) { Deadzone = 0.05f; ExpoRP = 0.5f; ExpoYaw = 0.4f; RateRP = 0.6f; RateYaw = 0.6f; }
+	else if (P == TEXT("normal")) { Deadzone = 0.03f; ExpoRP = 0.3f; ExpoYaw = 0.2f; RateRP = 0.85f; RateYaw = 0.8f; }
+	else if (P == TEXT("agile")) { Deadzone = 0.02f; ExpoRP = 0.15f; ExpoYaw = 0.1f; RateRP = 1.f; RateYaw = 1.f; }
+}
+
+float FSmvUiPrefs::Shape(float V, int32 Axis, float FallbackExpo) const
+{
+	if (SensPreset.IsEmpty()) return V * (1.f - FallbackExpo) + V * V * V * FallbackExpo;
+	const float A = FMath::Abs(V);
+	if (A <= Deadzone) return 0.f;
+	const float N = FMath::Sign(V) * (A - Deadzone) / FMath::Max(0.01f, 1.f - Deadzone);
+	const bool bYaw = Axis == 3;
+	const float E = FMath::Clamp(bYaw ? ExpoYaw : ExpoRP, 0.f, 0.9f);
+	const float R = FMath::Clamp(bYaw ? RateYaw : RateRP, 0.3f, 1.f);
+	return (N * (1.f - E) + N * N * N * E) * R;
 }

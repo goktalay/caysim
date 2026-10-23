@@ -55,6 +55,8 @@ struct FSmvFlightUiState
 	/** Giriş sekansı (3-2-1) gösterilsin mi (yarış/karşılaşmada sunucu/HUD geri sayımı var) */
 	bool bIntroAllowed = true;
 	FString TrackName;
+	/** Parkur rüzgârı (m/s, nereden esdiği derece, esinti m/s) — rüzgâr göstergesi */
+	float WindMs = 0.f, WindDir = 0.f, WindGust = 0.f;
 	TArray<FString> Modes;
 	double FlightS = 0;
 	bool bHideGauges = false;       // FPV / gimbal HUD açıkken kadranlar gizli (web)
@@ -110,6 +112,7 @@ private:
 	TSharedRef<SWidget> Cockpit();
 	TSharedRef<SWidget> Intro();
 	TSharedRef<SWidget> Tips();
+	TSharedRef<SWidget> WindCard();
 	TSharedRef<SWidget> Sticks();
 	TSharedRef<SWidget> Feed();
 	TSharedRef<SWidget> Btn(TAttribute<FText> Label, TFunction<void()> OnClick, TFunction<FLinearColor()> Color, float MinW = 0.f);

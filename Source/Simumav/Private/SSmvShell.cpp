@@ -2514,7 +2514,58 @@ TSharedRef<SWidget> SSmvShell::SetControls()
 	V->AddSlot().AutoHeight().Padding(0, 6, 0, 8)[Section(Tx(TEXT("settings.input")), Accent2())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.device")), Chips(&S.InputDevice, { TEXT("keyboard"), TEXT("gamepad"), TEXT("rc") },
 		{ Tx(TEXT("device.keyboard")), Tx(TEXT("device.gamepad")), Tx(TEXT("device.rc")) }, { ESmvIcon::Keyboard, ESmvIcon::Gamepad, ESmvIcon::Stick }, [Self]() { Self->Refresh(); }))];
-	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.expo")), Slider(&S.StickExpo, 0, 1, 0.05, [](double X) { return FString::Printf(TEXT("%.0f%%"), X * 100.0); }))];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.expo")), Slider(&S.StickExpo, 0, 1, 0.05, [](double X) { return FString::Printf(TEXT("%.0f%%"), X * 100.0); }), Tx(TEXT("sens.expo_note")))];
+	// hassasiyet (web §27): hazır ayar + özel (ölü bölge, expo, oran) + canlı eğri
+	{
+		FSmvUiPrefs& P = FSmvUiPrefs::Get();
+		static FString SensP;
+		SensP = P.SensPreset.IsEmpty() ? FString(TEXT("legacy")) : P.SensPreset;
+		auto SaveP = []() { FSmvUiPrefs::Get().Save(); };
+		auto Pct = [](double X) { return FString::Printf(TEXT("%.0f%%"), X * 100.0); };
+		V->AddSlot().AutoHeight().Padding(0, 14, 0, 8)[Section(Tx(TEXT("sens.title")), Warn())];
+		V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.preset")), Chips(&SensP, { TEXT("legacy"), TEXT("precise"), TEXT("normal"), TEXT("agile"), TEXT("custom") },
+			{ Tx(TEXT("sens.legacy")), Tx(TEXT("sens.precise")), Tx(TEXT("sens.normal")), Tx(TEXT("sens.agile")), Tx(TEXT("sens.custom")) }, {}, [Self]()
+			{
+				FSmvUiPrefs& Q = FSmvUiPrefs::Get();
+				if (SensP == TEXT("legacy")) Q.SensPreset.Empty();
+				else if (SensP == TEXT("custom")) Q.SensPreset = TEXT("custom");
+				else Q.ApplySensPreset(SensP);
+				Q.Save();
+				Self->Refresh();
+			}, 3))];
+		if (P.SensPreset == TEXT("custom"))
+		{
+			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.deadzone")), SliderF(&P.Deadzone, 0.f, 0.2f, 0.01f, Pct, SaveP))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.expo_rp")), SliderF(&P.ExpoRP, 0.f, 0.9f, 0.05f, Pct, SaveP))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.expo_yaw")), SliderF(&P.ExpoYaw, 0.f, 0.9f, 0.05f, Pct, SaveP))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.rate_rp")), SliderF(&P.RateRP, 0.3f, 1.f, 0.05f, Pct, SaveP))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.rate_yaw")), SliderF(&P.RateYaw, 0.3f, 1.f, 0.05f, Pct, SaveP))];
+		}
+		TSharedRef<SSmvCanvas> Curve = SNew(SSmvCanvas).Size(FVector2D(260, 150));
+		Curve->Painter = [Self](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+		{
+			const FVector2D Sz = FVector2D(G.GetLocalSize());
+			DrBox(Out, L, G, FVector2D::ZeroVector, Sz, Hex(0x0b1222, 0.9f), Round(10.f));
+			DrSeg(Out, L + 1, G, FVector2D(0, Sz.Y * 0.5), FVector2D(Sz.X, Sz.Y * 0.5), Edge(), 1.f);
+			DrSeg(Out, L + 1, G, FVector2D(Sz.X * 0.5, 0), FVector2D(Sz.X * 0.5, Sz.Y), Edge(), 1.f);
+			DrSeg(Out, L + 1, G, FVector2D(0, Sz.Y), FVector2D(Sz.X, 0), FLinearColor(1, 1, 1, 0.12f), 1.f);
+			const float Fe = (float)Self->EditSettings.StickExpo;
+			for (int32 Ax : { 0, 3 })
+			{
+				TArray<FVector2D> P;
+				for (int32 i = 0; i <= 40; ++i)
+				{
+					const float X = -1.f + 2.f * i / 40.f;
+					const float Y = FSmvUiPrefs::Get().Shape(X, Ax, Fe);
+					P.Add(FVector2D(Sz.X * (X + 1.f) * 0.5f, Sz.Y * (1.f - (Y + 1.f) * 0.5f)));
+				}
+				DrLine(Out, L + 2, G, P, Ax == 0 ? Accent() : Warn(), 2.f);
+			}
+			DrText(Out, L + 3, G, TEXT("roll/pitch"), FVector2D(8.f, 12.f), Font(9, "Bold"), Accent(), -1);
+			DrText(Out, L + 3, G, TEXT("yaw"), FVector2D(8.f, 26.f), Font(9, "Bold"), Warn(), -1);
+		};
+		V->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[Row(Tx(TEXT("sens.curve")), Curve)];
+	}
 	if (S.InputDevice == TEXT("rc"))
 	{
 		const TCHAR* Slots[] = { TEXT("rc.roll"), TEXT("rc.pitch"), TEXT("rc.throttle"), TEXT("rc.yaw"), TEXT("rc.mode") };

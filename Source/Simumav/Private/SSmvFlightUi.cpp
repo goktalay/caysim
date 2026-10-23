@@ -435,7 +435,10 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		// sol üst: bilgi kartı
 		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(14.f)
 		[
-			InfoCard()
+			SNew(SVerticalBox)
+			.Visibility(EVisibility::SelfHitTestInvisible)
+			+ SVerticalBox::Slot().AutoHeight()[InfoCard()]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 8.f, 0.f, 0.f)[WindCard()]
 		]
 		// sağ üst: dron paneli
 		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(14.f)
@@ -1290,4 +1293,46 @@ TSharedRef<SWidget> SSmvFlightUi::Tips()
 				Btn(FText::FromString(TEXT("×")), [this]() { bTips = false; FSmvUiPrefs::Get().bFlightTipsDone = true; FSmvUiPrefs::Get().Save(); }, []() { return BtnGrey; }, 30.f)
 			]
 		];
+}
+
+// ---------------------------------------------------------------------------
+// rüzgâr göstergesi (web flightsim_wind: pusula, akış oku, hız/yön, baş-kuyruk / yan bileşen)
+// ---------------------------------------------------------------------------
+
+TSharedRef<SWidget> SSmvFlightUi::WindCard()
+{
+	TSharedRef<SSmvPaintBox> Box = SNew(SSmvPaintBox).Size(FVector2D(232.f, 78.f)).Visibility(EVisibility::HitTestInvisible);
+	Box->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		using namespace SmvFuiDraw;
+		using namespace SmvFuiTheme;
+		if (St.bMenuOpen) return;
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		DrRect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor::White, &CardBrush);
+		const FVector2D C(39.f, Sz.Y * 0.5f);
+		const float R = 30.f;
+		DrArc(Out, L + 1, G, C, R, 0.f, 360.f, Edge, 1.5f);
+		// pusula: araç yönü yukarı (dönen kart)
+		static const TCHAR* Card[] = { TEXT("N"), TEXT("E"), TEXT("S"), TEXT("W") };
+		for (int32 k = 0; k < 4; ++k)
+		{
+			const float A = FMath::DegreesToRadians(-90.f + k * 90.f - St.Heading);
+			DrText(Out, L + 1, G, Card[k], C + FVector2D(FMath::Cos(A), FMath::Sin(A)) * (R - 8.f), Font(7, true), k == 0 ? Amber : Dim, 0);
+		}
+		// akış oku: rüzgârın gittiği yön
+		const float To = FMath::DegreesToRadians(St.WindDir + 180.f - 90.f - St.Heading);
+		const FVector2D U(FMath::Cos(To), FMath::Sin(To)), Tn(-U.Y, U.X);
+		const float Len = R * FMath::Clamp(0.35f + St.WindMs / 15.f * 0.5f, 0.35f, 0.85f);
+		DrSeg(Out, L + 2, G, C - U * Len, C + U * Len, Accent, 2.5f);
+		DrPoly(Out, L + 2, G, { C + U * Len - U * 8.f + Tn * 5.f, C + U * Len, C + U * Len - U * 8.f - Tn * 5.f }, Accent, 2.5f);
+		// bileşenler (rüzgâr nereden: baş + / kuyruk −; yan: sağdan +)
+		const float Rel = FMath::DegreesToRadians(St.WindDir - St.Heading);
+		const float Head = St.WindMs * FMath::Cos(Rel), Cross = St.WindMs * FMath::Sin(Rel);
+		const float X = 80.f;
+		DrText(Out, L + 3, G, FString::Printf(TEXT("%.1f m/s  %03.0f°"), St.WindMs, FMath::Fmod(St.WindDir + 360.f, 360.f)), FVector2D(X, 16.f), Mono(10), Txt, -1);
+		DrText(Out, L + 3, G, St.WindGust > 0.05f ? FString::Printf(TEXT("%s %.1f"), *Loc(TEXT("fui.gust")), St.WindGust) : Loc(TEXT("fui.wind")), FVector2D(X, 34.f), Font(8, true), Dim, -1);
+		DrText(Out, L + 3, G, FString::Printf(TEXT("%s %+.1f · %s %+.1f"), *Loc(Head >= 0.f ? TEXT("fui.headwind") : TEXT("fui.tailwind")), FMath::Abs(Head),
+			*Loc(TEXT("fui.crosswind")), Cross), FVector2D(X, 54.f), Mono(8), FMath::Abs(Cross) > 6.f ? Amber : Txt, -1);
+	};
+	return Box;
 }

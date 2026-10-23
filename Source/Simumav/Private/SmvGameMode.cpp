@@ -1163,6 +1163,7 @@ void ASmvGameMode::UpdateHud()
 		}
 		U.StickMode = Set.StickMode;
 		U.TrackName = Req.Track.Name;
+		U.WindMs = (float)Req.Track.WindMs; U.WindDir = (float)Req.Track.WindDir; U.WindGust = (float)Req.Track.WindGust;
 		U.bIntroAllowed = Flow->Race.Kind == TEXT("none") && !(Flow->GetMatch() && Flow->GetMatch()->HasMatch());
 		if (Pw)
 		{

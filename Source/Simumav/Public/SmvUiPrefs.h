@@ -31,6 +31,16 @@ struct SIMUMAV_API FSmvUiPrefs
 	bool bMenuScene = true;
 	/** Hangar 3B önizleme */
 	bool bPreview3d = true;
+	/** Hassasiyet (web §27 ⚙): hazır ayar precise | normal | agile | custom; ölü bölge, expo ve oran (roll+pitch / yaw).
+	 *  Boş = eski tek expo (FSmvSettings::StickExpo). */
+	FString SensPreset;
+	float Deadzone = 0.03f;
+	float ExpoRP = 0.3f, ExpoYaw = 0.2f;
+	float RateRP = 0.85f, RateYaw = 0.8f;
+	/** Hazır ayarı değerlere uygula */
+	void ApplySensPreset(const FString& P);
+	/** Eksen şekillendirme (Axis: 0 roll, 1 pitch, 3 yaw) — FallbackExpo: hazır ayar yoksa */
+	float Shape(float V, int32 Axis, float FallbackExpo) const;
 	/** Bayram / mevsim teması: auto | off */
 	FString Season = TEXT("auto");
 	/** Tuş atamaları: "kb.<Eylem>" / "pad.<Eylem>" → FKey adı */
