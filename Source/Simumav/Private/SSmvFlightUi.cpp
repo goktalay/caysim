@@ -58,12 +58,12 @@ namespace SmvFuiDraw
 {
 	const FSlateBrush* White() { return FCoreStyle::Get().GetBrush("WhiteBrush"); }
 
-	void Rect(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& P, const FVector2D& S, const FLinearColor& C, const FSlateBrush* B = nullptr)
+	void DrRect(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& P, const FVector2D& S, const FLinearColor& C, const FSlateBrush* B = nullptr)
 	{
 		FSlateDrawElement::MakeBox(Out, L, G.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), B ? B : White(), ESlateDrawEffect::None, C);
 	}
 
-	void Poly(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const TArray<FVector2D>& Pts, const FLinearColor& C, float Thick)
+	void DrPoly(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const TArray<FVector2D>& Pts, const FLinearColor& C, float Thick)
 	{
 		if (Pts.Num() < 2) return;
 		TArray<FVector2f> P;
@@ -72,13 +72,13 @@ namespace SmvFuiDraw
 		FSlateDrawElement::MakeLines(Out, L, G.ToPaintGeometry(), P, ESlateDrawEffect::None, C, true, Thick);
 	}
 
-	void Seg(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& A, const FVector2D& B, const FLinearColor& C, float Thick)
+	void DrSeg(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& A, const FVector2D& B, const FLinearColor& C, float Thick)
 	{
-		Poly(Out, L, G, { A, B }, C, Thick);
+		DrPoly(Out, L, G, { A, B }, C, Thick);
 	}
 
 	/** Metin; Align −1 sol, 0 orta, 1 sağ — dikeyde Pos.Y ortalanır. */
-	void Text(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FString& S, FVector2D Pos, const FSlateFontInfo& F, const FLinearColor& C, int32 Align = -1)
+	void DrText(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FString& S, FVector2D Pos, const FSlateFontInfo& F, const FLinearColor& C, int32 Align = -1)
 	{
 		if (S.IsEmpty()) return;
 		const TSharedRef<FSlateFontMeasure> M = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
@@ -89,14 +89,14 @@ namespace SmvFuiDraw
 		FSlateDrawElement::MakeText(Out, L, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform(FVector2f(Pos))), S, F, ESlateDrawEffect::None, C);
 	}
 
-	FVector2D Rot(const FVector2D& P, float A)
+	FVector2D DrRot(const FVector2D& P, float A)
 	{
 		const float c = FMath::Cos(A), s = FMath::Sin(A);
 		return FVector2D(P.X * c - P.Y * s, P.X * s + P.Y * c);
 	}
 
 	/** Yay (ekran açısı derece; 0 = sağ, saat yönü artar — y aşağı). */
-	void Arc(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& C, float R, float A0, float A1, const FLinearColor& Col, float Thick)
+	void DrArc(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& C, float R, float A0, float A1, const FLinearColor& Col, float Thick)
 	{
 		const int32 N = FMath::Clamp((int32)(FMath::Abs(A1 - A0) / 4.f), 2, 120);
 		TArray<FVector2D> P;
@@ -105,7 +105,7 @@ namespace SmvFuiDraw
 			const float A = FMath::DegreesToRadians(FMath::Lerp(A0, A1, (float)i / N));
 			P.Add(C + FVector2D(FMath::Cos(A), FMath::Sin(A)) * R);
 		}
-		Poly(Out, L, G, P, Col, Thick);
+		DrPoly(Out, L, G, P, Col, Thick);
 	}
 
 	FString Pad3(float Deg)
@@ -184,13 +184,13 @@ static void SmvPaintPfd(const FGeometry& G, FSlateWindowElementList& Out, int32 
 	const float W = (float)Sz.X, H = (float)Sz.Y;
 	Out.PushClip(FSlateClippingZone(G));
 	const FLinearColor Sky(0.13f, 0.38f, 0.70f, 1.f), Ground(0.45f, 0.29f, 0.14f, 1.f), Wht(1.f, 1.f, 1.f, 0.92f);
-	Rect(Out, L, G, FVector2D::ZeroVector, Sz, Sky);
+	DrRect(Out, L, G, FVector2D::ZeroVector, Sz, Sky);
 	const float Ppd = H / 48.f;   // piksel / derece
 	const float Roll = S.Roll, PitchDeg = FMath::RadiansToDegrees(S.Pitch);
 	const FVector2D C(W * 0.5f, H * 0.46f);
 	// ufuk: zemin = (p − H0)·N > 0; N roll ile döner (sağa yatış → ufuk ekranda saat yönünün tersine)
-	const FVector2D N = Rot(FVector2D(0, 1), -Roll);
-	const FVector2D H0 = C + Rot(FVector2D(0, PitchDeg * Ppd), -Roll);
+	const FVector2D N = DrRot(FVector2D(0, 1), -Roll);
+	const FVector2D H0 = C + DrRot(FVector2D(0, PitchDeg * Ppd), -Roll);
 	for (float y = 0.f; y < H; y += 2.f)
 	{
 		const float Yc = y + 1.f;
@@ -205,52 +205,52 @@ static void SmvPaintPfd(const FGeometry& G, FSlateWindowElementList& Out, int32 
 			if (N.X > 0) X0 = FMath::Max(0.f, Xs); else X1 = FMath::Min(W, Xs);
 			if (X1 <= X0) continue;
 		}
-		Seg(Out, L + 1, G, FVector2D(X0, Yc), FVector2D(X1, Yc), Ground, 2.6f);
+		DrSeg(Out, L + 1, G, FVector2D(X0, Yc), FVector2D(X1, Yc), Ground, 2.6f);
 	}
 	// ufuk çizgisi + pitch merdiveni
 	{
-		const FVector2D Dir = Rot(FVector2D(1, 0), -Roll);
-		Seg(Out, L + 2, G, H0 - Dir * W, H0 + Dir * W, Wht, 1.5f);
+		const FVector2D Dir = DrRot(FVector2D(1, 0), -Roll);
+		DrSeg(Out, L + 2, G, H0 - Dir * W, H0 + Dir * W, Wht, 1.5f);
 		for (int32 Deg = -40; Deg <= 40; Deg += 5)
 		{
 			if (Deg == 0) continue;
 			const float Off = (PitchDeg - Deg) * Ppd;
 			if (FMath::Abs(Off) > H * 0.40f) continue;
 			const float Hw = Deg % 10 == 0 ? 30.f : 14.f;
-			const FVector2D P0 = C + Rot(FVector2D(-Hw, Off), -Roll), P1 = C + Rot(FVector2D(Hw, Off), -Roll);
-			Seg(Out, L + 2, G, P0, P1, Wht, 1.2f);
+			const FVector2D P0 = C + DrRot(FVector2D(-Hw, Off), -Roll), P1 = C + DrRot(FVector2D(Hw, Off), -Roll);
+			DrSeg(Out, L + 2, G, P0, P1, Wht, 1.2f);
 			if (Deg % 10 == 0)
 			{
 				const FString Lb = FString::FromInt(FMath::Abs(Deg));
-				Text(Out, L + 3, G, Lb, C + Rot(FVector2D(-Hw - 11.f, Off), -Roll), Mono(7), Wht, 0);
-				Text(Out, L + 3, G, Lb, C + Rot(FVector2D(Hw + 11.f, Off), -Roll), Mono(7), Wht, 0);
+				DrText(Out, L + 3, G, Lb, C + DrRot(FVector2D(-Hw - 11.f, Off), -Roll), Mono(7), Wht, 0);
+				DrText(Out, L + 3, G, Lb, C + DrRot(FVector2D(Hw + 11.f, Off), -Roll), Mono(7), Wht, 0);
 			}
 		}
 	}
 	// roll yayı (sabit ölçek) + ufukla dönen işaretçi
 	{
 		const float Rr = H * 0.40f;
-		Arc(Out, L + 3, G, C, Rr, -150.f, -30.f, Wht, 1.2f);
+		DrArc(Out, L + 3, G, C, Rr, -150.f, -30.f, Wht, 1.2f);
 		for (const float A : { -60.f, -45.f, -30.f, -20.f, -10.f, 0.f, 10.f, 20.f, 30.f, 45.f, 60.f })
 		{
 			const float Rad = FMath::DegreesToRadians(-90.f + A);
 			const float Len = (FMath::Abs(A) == 30.f || FMath::Abs(A) == 60.f || A == 0.f) ? 9.f : 5.f;
 			const FVector2D U(FMath::Cos(Rad), FMath::Sin(Rad));
-			Seg(Out, L + 3, G, C + U * Rr, C + U * (Rr + Len), Wht, 1.2f);
+			DrSeg(Out, L + 3, G, C + U * Rr, C + U * (Rr + Len), Wht, 1.2f);
 		}
 		const float Pa = FMath::DegreesToRadians(-90.f) - Roll;
 		const FVector2D U(FMath::Cos(Pa), FMath::Sin(Pa)), Tn(-U.Y, U.X);
 		const FVector2D Tip = C + U * (Rr - 1.f);
-		Poly(Out, L + 4, G, { Tip, Tip - U * 9.f + Tn * 6.f, Tip - U * 9.f - Tn * 6.f, Tip }, Amber, 2.f);
+		DrPoly(Out, L + 4, G, { Tip, Tip - U * 9.f + Tn * 6.f, Tip - U * 9.f - Tn * 6.f, Tip }, Amber, 2.f);
 	}
 	// uçak sembolü (sabit)
 	{
 		const FLinearColor Y(1.f, 0.85f, 0.1f, 1.f);
-		Poly(Out, L + 5, G, { C + FVector2D(-62, 0), C + FVector2D(-24, 0), C + FVector2D(-24, 7) }, FLinearColor(0, 0, 0, 0.6f), 5.f);
-		Poly(Out, L + 5, G, { C + FVector2D(62, 0), C + FVector2D(24, 0), C + FVector2D(24, 7) }, FLinearColor(0, 0, 0, 0.6f), 5.f);
-		Poly(Out, L + 6, G, { C + FVector2D(-62, 0), C + FVector2D(-24, 0), C + FVector2D(-24, 7) }, Y, 3.f);
-		Poly(Out, L + 6, G, { C + FVector2D(62, 0), C + FVector2D(24, 0), C + FVector2D(24, 7) }, Y, 3.f);
-		Rect(Out, L + 6, G, C - FVector2D(3, 3), FVector2D(6, 6), Y);
+		DrPoly(Out, L + 5, G, { C + FVector2D(-62, 0), C + FVector2D(-24, 0), C + FVector2D(-24, 7) }, FLinearColor(0, 0, 0, 0.6f), 5.f);
+		DrPoly(Out, L + 5, G, { C + FVector2D(62, 0), C + FVector2D(24, 0), C + FVector2D(24, 7) }, FLinearColor(0, 0, 0, 0.6f), 5.f);
+		DrPoly(Out, L + 6, G, { C + FVector2D(-62, 0), C + FVector2D(-24, 0), C + FVector2D(-24, 7) }, Y, 3.f);
+		DrPoly(Out, L + 6, G, { C + FVector2D(62, 0), C + FVector2D(24, 0), C + FVector2D(24, 7) }, Y, 3.f);
+		DrRect(Out, L + 6, G, C - FVector2D(3, 3), FVector2D(6, 6), Y);
 	}
 	const FLinearColor Tape(0.f, 0.f, 0.f, 0.38f);
 	const float HdgH = 22.f;
@@ -258,70 +258,70 @@ static void SmvPaintPfd(const FGeometry& G, FSlateWindowElementList& Out, int32 
 	// hız şeridi (sol, km/h)
 	{
 		const float Tw = 46.f, Ppu = 2.4f, V = S.Gs * 3.6f;
-		Rect(Out, L + 7, G, FVector2D(0, 0), FVector2D(Tw, TapeH), Tape);
+		DrRect(Out, L + 7, G, FVector2D(0, 0), FVector2D(Tw, TapeH), Tape);
 		const int32 Lo = FMath::FloorToInt((V - TapeH / 2.f / Ppu) / 5.f) * 5;
 		for (int32 v = FMath::Max(0, Lo); v <= V + TapeH / 2.f / Ppu; v += 5)
 		{
 			const float Y = TapeH * 0.5f - (v - V) * Ppu;
 			if (Y < 4.f || Y > TapeH - 4.f) continue;
-			Seg(Out, L + 8, G, FVector2D(Tw - (v % 10 == 0 ? 8.f : 4.f), Y), FVector2D(Tw, Y), Wht, 1.f);
-			if (v % 20 == 0) Text(Out, L + 8, G, FString::FromInt(v), FVector2D(Tw - 11.f, Y), Mono(7), Wht, 1);
+			DrSeg(Out, L + 8, G, FVector2D(Tw - (v % 10 == 0 ? 8.f : 4.f), Y), FVector2D(Tw, Y), Wht, 1.f);
+			if (v % 20 == 0) DrText(Out, L + 8, G, FString::FromInt(v), FVector2D(Tw - 11.f, Y), Mono(7), Wht, 1);
 		}
 		const float Cy = TapeH * 0.5f;
-		Rect(Out, L + 9, G, FVector2D(1, Cy - 10.f), FVector2D(Tw + 4.f, 20.f), FLinearColor(0.02f, 0.03f, 0.04f, 0.95f));
-		Poly(Out, L + 10, G, { FVector2D(1, Cy - 10.f), FVector2D(Tw + 4.f, Cy - 10.f), FVector2D(Tw + 4.f, Cy + 10.f), FVector2D(1, Cy + 10.f), FVector2D(1, Cy - 10.f) }, Wht, 1.f);
-		Text(Out, L + 10, G, FString::Printf(TEXT("%.0f"), V), FVector2D(Tw - 2.f, Cy), Mono(10), Wht, 1);
-		Text(Out, L + 8, G, TEXT("km/h"), FVector2D(Tw * 0.5f, 7.f), Mono(6), Dim, 0);
+		DrRect(Out, L + 9, G, FVector2D(1, Cy - 10.f), FVector2D(Tw + 4.f, 20.f), FLinearColor(0.02f, 0.03f, 0.04f, 0.95f));
+		DrPoly(Out, L + 10, G, { FVector2D(1, Cy - 10.f), FVector2D(Tw + 4.f, Cy - 10.f), FVector2D(Tw + 4.f, Cy + 10.f), FVector2D(1, Cy + 10.f), FVector2D(1, Cy - 10.f) }, Wht, 1.f);
+		DrText(Out, L + 10, G, FString::Printf(TEXT("%.0f"), V), FVector2D(Tw - 2.f, Cy), Mono(10), Wht, 1);
+		DrText(Out, L + 8, G, TEXT("km/h"), FVector2D(Tw * 0.5f, 7.f), Mono(6), Dim, 0);
 	}
 	// irtifa şeridi (sağ, m — kalkış noktasına göre)
 	{
 		const float Tw = 50.f, Ppu = 3.2f, A = S.AltRel, X0 = W - Tw;
-		Rect(Out, L + 7, G, FVector2D(X0, 0), FVector2D(Tw, TapeH), Tape);
+		DrRect(Out, L + 7, G, FVector2D(X0, 0), FVector2D(Tw, TapeH), Tape);
 		const int32 Lo = FMath::FloorToInt((A - TapeH / 2.f / Ppu) / 5.f) * 5;
 		for (int32 a = Lo; a <= A + TapeH / 2.f / Ppu; a += 5)
 		{
 			const float Y = TapeH * 0.5f - (a - A) * Ppu;
 			if (Y < 4.f || Y > TapeH - 4.f) continue;
-			Seg(Out, L + 8, G, FVector2D(X0, Y), FVector2D(X0 + (a % 10 == 0 ? 8.f : 4.f), Y), Wht, 1.f);
-			if (a % 10 == 0) Text(Out, L + 8, G, FString::FromInt(a), FVector2D(X0 + 11.f, Y), Mono(7), Wht, -1);
+			DrSeg(Out, L + 8, G, FVector2D(X0, Y), FVector2D(X0 + (a % 10 == 0 ? 8.f : 4.f), Y), Wht, 1.f);
+			if (a % 10 == 0) DrText(Out, L + 8, G, FString::FromInt(a), FVector2D(X0 + 11.f, Y), Mono(7), Wht, -1);
 		}
 		const float Cy = TapeH * 0.5f;
-		Rect(Out, L + 9, G, FVector2D(X0 - 4.f, Cy - 10.f), FVector2D(Tw + 3.f, 20.f), FLinearColor(0.02f, 0.03f, 0.04f, 0.95f));
-		Poly(Out, L + 10, G, { FVector2D(X0 - 4.f, Cy - 10.f), FVector2D(W - 1.f, Cy - 10.f), FVector2D(W - 1.f, Cy + 10.f), FVector2D(X0 - 4.f, Cy + 10.f), FVector2D(X0 - 4.f, Cy - 10.f) }, Wht, 1.f);
-		Text(Out, L + 10, G, FString::Printf(TEXT("%.1f"), A), FVector2D(X0 + 2.f, Cy), Mono(10), Wht, -1);
-		Text(Out, L + 8, G, TEXT("ALT m"), FVector2D(X0 + Tw * 0.5f, 7.f), Mono(6), Dim, 0);
+		DrRect(Out, L + 9, G, FVector2D(X0 - 4.f, Cy - 10.f), FVector2D(Tw + 3.f, 20.f), FLinearColor(0.02f, 0.03f, 0.04f, 0.95f));
+		DrPoly(Out, L + 10, G, { FVector2D(X0 - 4.f, Cy - 10.f), FVector2D(W - 1.f, Cy - 10.f), FVector2D(W - 1.f, Cy + 10.f), FVector2D(X0 - 4.f, Cy + 10.f), FVector2D(X0 - 4.f, Cy - 10.f) }, Wht, 1.f);
+		DrText(Out, L + 10, G, FString::Printf(TEXT("%.1f"), A), FVector2D(X0 + 2.f, Cy), Mono(10), Wht, -1);
+		DrText(Out, L + 8, G, TEXT("ALT m"), FVector2D(X0 + Tw * 0.5f, 7.f), Mono(6), Dim, 0);
 		// dikey hız çubuğu
 		const float Vs = FMath::Clamp(S.Climb, -10.f, 10.f);
 		const float Bh = Vs / 10.f * (TapeH * 0.4f);
-		Rect(Out, L + 8, G, FVector2D(X0 - 8.f, Bh > 0 ? Cy - Bh : Cy), FVector2D(3.f, FMath::Abs(Bh)), Vs >= 0 ? Green : Amber);
+		DrRect(Out, L + 8, G, FVector2D(X0 - 8.f, Bh > 0 ? Cy - Bh : Cy), FVector2D(3.f, FMath::Abs(Bh)), Vs >= 0 ? Green : Amber);
 	}
 	// yön şeridi (alt)
 	{
 		const float Y0 = H - HdgH, Ppu = 2.2f, Hd = S.Heading;
-		Rect(Out, L + 7, G, FVector2D(0, Y0), FVector2D(W, HdgH), FLinearColor(0.f, 0.f, 0.f, 0.55f));
+		DrRect(Out, L + 7, G, FVector2D(0, Y0), FVector2D(W, HdgH), FLinearColor(0.f, 0.f, 0.f, 0.55f));
 		const int32 Lo = FMath::FloorToInt((Hd - W / 2.f / Ppu) / 5.f) * 5;
 		for (int32 d = Lo; d <= Hd + W / 2.f / Ppu; d += 5)
 		{
 			const float X = W * 0.5f + (d - Hd) * Ppu;
 			const int32 Dn = ((d % 360) + 360) % 360;
-			Seg(Out, L + 8, G, FVector2D(X, Y0), FVector2D(X, Y0 + (Dn % 10 == 0 ? 6.f : 3.f)), Wht, 1.f);
+			DrSeg(Out, L + 8, G, FVector2D(X, Y0), FVector2D(X, Y0 + (Dn % 10 == 0 ? 6.f : 3.f)), Wht, 1.f);
 			if (Dn % 30 == 0)
 			{
 				const FString Lb = Dn == 0 ? TEXT("N") : Dn == 90 ? TEXT("E") : Dn == 180 ? TEXT("S") : Dn == 270 ? TEXT("W") : FString::FromInt(Dn / 10);
-				Text(Out, L + 8, G, Lb, FVector2D(X, Y0 + 14.f), Mono(7), Dn % 90 == 0 ? Amber : Wht, 0);
+				DrText(Out, L + 8, G, Lb, FVector2D(X, Y0 + 14.f), Mono(7), Dn % 90 == 0 ? Amber : Wht, 0);
 			}
 		}
-		Rect(Out, L + 9, G, FVector2D(W * 0.5f - 18.f, Y0 - 15.f), FVector2D(36.f, 15.f), FLinearColor(0.02f, 0.03f, 0.04f, 0.95f));
-		Text(Out, L + 10, G, Pad3(Hd), FVector2D(W * 0.5f, Y0 - 7.5f), Mono(9), Wht, 0);
+		DrRect(Out, L + 9, G, FVector2D(W * 0.5f - 18.f, Y0 - 15.f), FVector2D(36.f, 15.f), FLinearColor(0.02f, 0.03f, 0.04f, 0.95f));
+		DrText(Out, L + 10, G, Pad3(Hd), FVector2D(W * 0.5f, Y0 - 7.5f), Mono(9), Wht, 0);
 	}
 	// kip + ARM, dikey hız
-	Text(Out, L + 10, G, S.Mode.IsEmpty() ? TEXT("—") : S.Mode, FVector2D(52.f, 12.f), Font(9, true), Wht, -1);
-	Text(Out, L + 10, G, S.bArmed ? TEXT("ARMED") : TEXT("DISARMED"), FVector2D(52.f, 26.f), Font(8, true), S.bArmed ? Green : FLinearColor(1.f, 0.55f, 0.55f, 1.f), -1);
-	Text(Out, L + 10, G, FString::Printf(TEXT("VS %+.1f"), S.Climb), FVector2D(W - 56.f, 12.f), Mono(8), Wht, 1);
+	DrText(Out, L + 10, G, S.Mode.IsEmpty() ? TEXT("—") : S.Mode, FVector2D(52.f, 12.f), Font(9, true), Wht, -1);
+	DrText(Out, L + 10, G, S.bArmed ? TEXT("ARMED") : TEXT("DISARMED"), FVector2D(52.f, 26.f), Font(8, true), S.bArmed ? Green : FLinearColor(1.f, 0.55f, 0.55f, 1.f), -1);
+	DrText(Out, L + 10, G, FString::Printf(TEXT("VS %+.1f"), S.Climb), FVector2D(W - 56.f, 12.f), Mono(8), Wht, 1);
 	if (!S.bTele)
 	{
-		Rect(Out, L + 11, G, FVector2D::ZeroVector, Sz, FLinearColor(0.02f, 0.03f, 0.04f, 0.72f));
-		Text(Out, L + 12, G, TEXT("Telemetri bekleniyor…"), FVector2D(W * 0.5f, H * 0.5f), Font(10, true), Dim, 0);
+		DrRect(Out, L + 11, G, FVector2D::ZeroVector, Sz, FLinearColor(0.02f, 0.03f, 0.04f, 0.72f));
+		DrText(Out, L + 12, G, TEXT("Telemetri bekleniyor…"), FVector2D(W * 0.5f, H * 0.5f), Font(10, true), Dim, 0);
 	}
 	Out.PopClip();
 }
@@ -346,10 +346,10 @@ static void SmvPaintDial(const FGeometry& G, FSlateWindowElementList& Out, int32
 	const bool bBlink = FMath::Fmod(FPlatformTime::Seconds(), 0.9) < 0.45;
 	const float A0 = 150.f, Sweep = 240.f;
 	auto Ang = [A0, Sweep](float F) { return A0 + Sweep * FMath::Clamp(F, 0.f, 1.f); };
-	Rect(Out, L, G, C - FVector2D(R, R), FVector2D(2 * R, 2 * R), FLinearColor(0.035f, 0.05f, 0.065f, 0.90f), Circle);
-	Arc(Out, L + 1, G, C, R - 1.f, 0.f, 360.f, D.bDanger && bBlink ? Red : FLinearColor(1, 1, 1, 0.16f), D.bDanger ? 2.5f : 1.5f);
+	DrRect(Out, L, G, C - FVector2D(R, R), FVector2D(2 * R, 2 * R), FLinearColor(0.035f, 0.05f, 0.065f, 0.90f), Circle);
+	DrArc(Out, L + 1, G, C, R - 1.f, 0.f, 360.f, D.bDanger && bBlink ? Red : FLinearColor(1, 1, 1, 0.16f), D.bDanger ? 2.5f : 1.5f);
 	const float Alpha = D.bOn ? 1.f : 0.35f;
-	if (D.RedA >= 0.f && D.RedB > D.RedA) Arc(Out, L + 1, G, C, R - 7.f, Ang(D.RedA), Ang(D.RedB), Red.CopyWithNewOpacity(0.85f * Alpha), 4.f);
+	if (D.RedA >= 0.f && D.RedB > D.RedA) DrArc(Out, L + 1, G, C, R - 7.f, Ang(D.RedA), Ang(D.RedB), Red.CopyWithNewOpacity(0.85f * Alpha), 4.f);
 	const int32 Major = FMath::Max(1, D.Labels.Num() - 1);
 	for (int32 i = 0; i <= Major * 5; ++i)
 	{
@@ -357,19 +357,19 @@ static void SmvPaintDial(const FGeometry& G, FSlateWindowElementList& Out, int32
 		const float Rad = FMath::DegreesToRadians(Ang(F));
 		const FVector2D U(FMath::Cos(Rad), FMath::Sin(Rad));
 		const bool bMaj = i % 5 == 0;
-		Seg(Out, L + 2, G, C + U * (R - 3.f), C + U * (R - (bMaj ? 12.f : 7.f)), FLinearColor(1, 1, 1, (bMaj ? 0.85f : 0.45f) * Alpha), bMaj ? 2.f : 1.f);
-		if (bMaj && D.Labels.IsValidIndex(i / 5) && R > 50.f) Text(Out, L + 2, G, D.Labels[i / 5], C + U * (R - 22.f), Mono(7), Dim.CopyWithNewOpacity(Alpha), 0);
-		else if (bMaj && D.Labels.IsValidIndex(i / 5) && (i == 0 || i == Major * 5)) Text(Out, L + 2, G, D.Labels[i / 5], C + U * (R - 20.f), Mono(7), Dim.CopyWithNewOpacity(Alpha), 0);
+		DrSeg(Out, L + 2, G, C + U * (R - 3.f), C + U * (R - (bMaj ? 12.f : 7.f)), FLinearColor(1, 1, 1, (bMaj ? 0.85f : 0.45f) * Alpha), bMaj ? 2.f : 1.f);
+		if (bMaj && D.Labels.IsValidIndex(i / 5) && R > 50.f) DrText(Out, L + 2, G, D.Labels[i / 5], C + U * (R - 22.f), Mono(7), Dim.CopyWithNewOpacity(Alpha), 0);
+		else if (bMaj && D.Labels.IsValidIndex(i / 5) && (i == 0 || i == Major * 5)) DrText(Out, L + 2, G, D.Labels[i / 5], C + U * (R - 20.f), Mono(7), Dim.CopyWithNewOpacity(Alpha), 0);
 	}
 	// ibre
 	const float Nr = FMath::DegreesToRadians(Ang(D.bOn ? D.Frac : 0.f));
 	const FVector2D U(FMath::Cos(Nr), FMath::Sin(Nr));
-	Seg(Out, L + 3, G, C - U * 8.f, C + U * (R - 10.f), FLinearColor(0, 0, 0, 0.6f), 4.5f);
-	Seg(Out, L + 4, G, C - U * 8.f, C + U * (R - 10.f), D.bDanger ? Red : Accent, 2.5f);
-	Rect(Out, L + 5, G, C - FVector2D(5, 5), FVector2D(10, 10), FLinearColor(0.85f, 0.87f, 0.9f, 1.f), Circle);
-	Text(Out, L + 5, G, D.Title, C + FVector2D(0, -R * 0.36f), Font(R > 50.f ? 8 : 7, true), Dim, 0);
-	Text(Out, L + 5, G, D.Value, C + FVector2D(0, R * 0.42f), Mono(R > 50.f ? 13 : 10), D.bDanger ? Red : Txt.CopyWithNewOpacity(Alpha), 0);
-	if (!D.Sub.IsEmpty()) Text(Out, L + 5, G, D.Sub, C + FVector2D(0, R * 0.70f), Mono(7), Dim, 0);
+	DrSeg(Out, L + 3, G, C - U * 8.f, C + U * (R - 10.f), FLinearColor(0, 0, 0, 0.6f), 4.5f);
+	DrSeg(Out, L + 4, G, C - U * 8.f, C + U * (R - 10.f), D.bDanger ? Red : Accent, 2.5f);
+	DrRect(Out, L + 5, G, C - FVector2D(5, 5), FVector2D(10, 10), FLinearColor(0.85f, 0.87f, 0.9f, 1.f), Circle);
+	DrText(Out, L + 5, G, D.Title, C + FVector2D(0, -R * 0.36f), Font(R > 50.f ? 8 : 7, true), Dim, 0);
+	DrText(Out, L + 5, G, D.Value, C + FVector2D(0, R * 0.42f), Mono(R > 50.f ? 13 : 10), D.bDanger ? Red : Txt.CopyWithNewOpacity(Alpha), 0);
+	if (!D.Sub.IsEmpty()) DrText(Out, L + 5, G, D.Sub, C + FVector2D(0, R * 0.70f), Mono(7), Dim, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -384,19 +384,19 @@ static void SmvPaintStick(const FGeometry& G, FSlateWindowElementList& Out, int3
 	const FVector2D Sz = FVector2D(G.GetLocalSize());
 	const FVector2D C = Sz * 0.5;
 	const float R = (float)FMath::Min(Sz.X, Sz.Y) * 0.5f - 16.f;
-	Rect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor::White, Card);
-	Arc(Out, L + 1, G, C, R, 0.f, 360.f, FLinearColor(1, 1, 1, 0.14f), 1.f);
-	Arc(Out, L + 1, G, C, R * 0.5f, 0.f, 360.f, FLinearColor(1, 1, 1, 0.07f), 1.f);
-	Seg(Out, L + 1, G, C - FVector2D(R, 0), C + FVector2D(R, 0), FLinearColor(1, 1, 1, 0.12f), 1.f);
-	Seg(Out, L + 1, G, C - FVector2D(0, R), C + FVector2D(0, R), FLinearColor(1, 1, 1, 0.12f), 1.f);
+	DrRect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor::White, Card);
+	DrArc(Out, L + 1, G, C, R, 0.f, 360.f, FLinearColor(1, 1, 1, 0.14f), 1.f);
+	DrArc(Out, L + 1, G, C, R * 0.5f, 0.f, 360.f, FLinearColor(1, 1, 1, 0.07f), 1.f);
+	DrSeg(Out, L + 1, G, C - FVector2D(R, 0), C + FVector2D(R, 0), FLinearColor(1, 1, 1, 0.12f), 1.f);
+	DrSeg(Out, L + 1, G, C - FVector2D(0, R), C + FVector2D(0, R), FLinearColor(1, 1, 1, 0.12f), 1.f);
 	const FVector2D K = C + FVector2D(FMath::Clamp(V.X, -1.0, 1.0) * R, -FMath::Clamp(V.Y, -1.0, 1.0) * R);
-	Seg(Out, L + 2, G, C, K, FLinearColor(1, 1, 1, 0.55f), 3.f);   // kol
-	Rect(Out, L + 2, G, C - FVector2D(4, 4), FVector2D(8, 8), FLinearColor(1, 1, 1, 0.5f), Circle);
+	DrSeg(Out, L + 2, G, C, K, FLinearColor(1, 1, 1, 0.55f), 3.f);   // kol
+	DrRect(Out, L + 2, G, C - FVector2D(4, 4), FVector2D(8, 8), FLinearColor(1, 1, 1, 0.5f), Circle);
 	const FLinearColor Kc = bActive ? Accent : FLinearColor(0.88f, 0.91f, 0.95f, 1.f);
-	Rect(Out, L + 3, G, K - FVector2D(12, 12), FVector2D(24, 24), FLinearColor(0, 0, 0, 0.5f), Circle);
-	Rect(Out, L + 4, G, K - FVector2D(10, 10), FVector2D(20, 20), Kc, Circle);
-	Text(Out, L + 4, G, Ly, FVector2D(C.X, 8.f), Font(7, true), Dim, 0);
-	Text(Out, L + 4, G, Lx, FVector2D(Sz.X - 6.f, C.Y), Font(7, true), Dim, 1);
+	DrRect(Out, L + 3, G, K - FVector2D(12, 12), FVector2D(24, 24), FLinearColor(0, 0, 0, 0.5f), Circle);
+	DrRect(Out, L + 4, G, K - FVector2D(10, 10), FVector2D(20, 20), Kc, Circle);
+	DrText(Out, L + 4, G, Ly, FVector2D(C.X, 8.f), Font(7, true), Dim, 0);
+	DrText(Out, L + 4, G, Lx, FVector2D(Sz.X - 6.f, C.Y), Font(7, true), Dim, 1);
 }
 
 // ---------------------------------------------------------------------------
