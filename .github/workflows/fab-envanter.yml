@@ -79,6 +79,32 @@ jobs:
             } else { W "  (Content yok)" }
             try { $acl = (Get-Acl $fp).Access | Where-Object { $_.IdentityReference -match 'NETWORK SERVICE|Users|Everyone|Authenticated' } | ForEach-Object { $_.IdentityReference.ToString() + ':' + $_.FileSystemRights } ; W ("  izinler: " + ($acl -join '; ')) } catch { W "  izinler okunamadi" }
           } else { W ("  (yok) " + $fp) }
+          W "=== Haritalar (.umap; hazirlama projesi + VaultCache data\Content) ==="
+          $hk = @("$fp\Content") + @(Get-ChildItem $vc -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' } | ForEach-Object { Join-Path $_.FullName 'data\Content' })
+          foreach ($k in $hk) {
+            if (-not (Test-Path $k)) { continue }
+            Get-ChildItem $k -Recurse -File -Filter *.umap -ErrorAction SilentlyContinue | ForEach-Object { W ("  " + $_.FullName.Substring($k.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB  <" + $k + ">") }
+          }
+          W "=== Paket klasor agaci (ilk 2 duzey, hazirlama projesi) ==="
+          if (Test-Path "$fp\Content") {
+            Get-ChildItem "$fp\Content" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+              W ("  " + $_.Name)
+              Get-ChildItem $_.FullName -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $n = @(Get-ChildItem $_.FullName -Recurse -File -Filter *.uasset -ErrorAction SilentlyContinue).Count
+                W ("    " + $_.Name + "  (" + $n + " uasset)")
+                Get-ChildItem $_.FullName -Directory -ErrorAction SilentlyContinue | Select-Object -First 25 | ForEach-Object { W ("      " + $_.Name) }
+              }
+            }
+          }
+          W "=== Ses varliklari (adinda Sound/Audio/SFX gecen paketler; ilk 120 dosya) ==="
+          if (Test-Path "$fp\Content") {
+            Get-ChildItem "$fp\Content" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)sound|audio|sfx' } | ForEach-Object {
+              $r = $_.FullName
+              Get-ChildItem $r -Recurse -File -Filter *.uasset -ErrorAction SilentlyContinue | Select-Object -First 120 | ForEach-Object { W ("  " + $_.FullName.Substring($r.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
+            }
+          }
+          W "=== Ultra Dynamic Sky ust duzey varliklar ==="
+          if (Test-Path "$fp\Content\UltraDynamicSky") { Get-ChildItem "$fp\Content\UltraDynamicSky" -Recurse -File -Filter *.uasset -Depth 1 -ErrorAction SilentlyContinue | ForEach-Object { W ("  " + $_.FullName.Substring($fp.Length)) } }
           W "=== VaultCache UE paketleri: indirme durumu ==="
           Get-ChildItem $vc -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' } | ForEach-Object {
             $dc = Join-Path $_.FullName 'data\Content'
