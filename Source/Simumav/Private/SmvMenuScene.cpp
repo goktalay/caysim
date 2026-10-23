@@ -230,6 +230,7 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	if (PilotPrev) PilotPrev->Destroy();
 	if (SnapFig) SnapFig->Destroy();
 	if (DSnapActor) DSnapActor->Destroy();
+	if (WorldPrev) WorldPrev->Destroy();
 	if (Cam) Cam->Destroy();
 	if (Terrain) Terrain->Destroy();
 	if (WorldSetup) WorldSetup->Destroy();
@@ -262,6 +263,7 @@ void ASmvMenuScene::SetPreview(const FString& Type, const FString& ModelKey, con
 	if (!W) return;
 	if (Preview) { Preview->Destroy(); Preview = nullptr; }
 	if (PilotPrev) { PilotPrev->Destroy(); PilotPrev = nullptr; PilotKey.Empty(); }
+	if (WorldPrev) { WorldPrev->Destroy(); WorldPrev = nullptr; }
 	PrevType = Type; PrevModel = ModelKey; PrevColor = ColorHex;
 	FActorSpawnParameters P;
 	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -315,6 +317,7 @@ void ASmvMenuScene::SetPilotPreview(const FSmvAvatar& A, bool bFace)
 	const FString Key = SmvJson::ToString(A.ToJson());
 	if (PilotPrev && Key == PilotKey) return;
 	if (Preview) { Preview->Destroy(); Preview = nullptr; PrevType.Empty(); }
+	if (WorldPrev) { WorldPrev->Destroy(); WorldPrev = nullptr; }
 	if (!PilotPrev)
 	{
 		FActorSpawnParameters P;
@@ -338,7 +341,7 @@ void ASmvMenuScene::AddPreviewYaw(float Deg)
 void ASmvMenuScene::SetPreviewActive(bool bOn)
 {
 	bPreviewOn = bOn && FSmvUiPrefs::Get().bPreview3d;
-	Capture->bCaptureEveryFrame = bPreviewOn && (Preview != nullptr || PilotPrev != nullptr);
+	Capture->bCaptureEveryFrame = bPreviewOn && (Preview != nullptr || PilotPrev != nullptr || WorldPrev != nullptr);
 }
 
 void ASmvMenuScene::UpdateCamera(float Dt, const FVector& D, const FVector& Fwd)
@@ -423,6 +426,16 @@ void ASmvMenuScene::Tick(float Dt)
 		}
 	}
 	TickSnaps();
+	if (WorldPrev && WorldSetup && !Preview && !PilotPrev)
+	{
+		// dünya önizlemesi: merkez çevresinde yavaş yörünge (eğik kuş bakışı)
+		if (FPlatformTime::Seconds() > ManualUntil) PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 6.f, 360.f);
+		const FVector Ctr = WorldSetup->GeoToUnreal(WpLon, WpLat, WorldSetup->MslToWorldHeight(WpLat, WpLon, GroundMsl));
+		const double R = WpSize * 100.0 * 0.62, A = FMath::DegreesToRadians(PreviewYaw);
+		const FVector At = Ctr + FVector(FMath::Cos(A) * R, FMath::Sin(A) * R, WpSize * 100.0 * 0.32);
+		Capture->FOVAngle = 55.f;
+		Capture->SetWorldLocationAndRotation(At, (Ctr - At).Rotation());
+	}
 	if (PilotPrev)
 	{
 		if (FPlatformTime::Seconds() > ManualUntil) PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 14.f, 360.f);
@@ -643,4 +656,30 @@ float ASmvMenuScene::GroundAt(double E, double N)
 		return (float)Hit.ImpactPoint.Z;
 	}
 	return (float)P.Z;   // henüz yüklenmedi: önbelleğe yazma
+}
+
+void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
+{
+	if (!FSmvUiPrefs::Get().bPreview3d || !WorldSetup) return;
+	UWorld* W = GetWorld();
+	if (!W) return;
+	if (Preview) { Preview->Destroy(); Preview = nullptr; PrevType.Empty(); }
+	if (PilotPrev) { PilotPrev->Destroy(); PilotPrev = nullptr; PilotKey.Empty(); }
+	if (WorldPrev) { WorldPrev->Destroy(); WorldPrev = nullptr; }
+	// menü dünyasından ~0,6° uzakta (görünmez) — yalnız önizleme yakalaması görür
+	FSmvTrack T = Track;
+	WpLat = Lat0 + 0.6; WpLon = Lon0 + 0.6; WpSize = FMath::Clamp(T.World.SizeM, 500.0, 8000.0);
+	T.Lat = WpLat; T.Lon = WpLon; T.GroundMsl = GroundMsl;
+	FActorSpawnParameters P;
+	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	WorldPrev = W->SpawnActor<ASmvProcTerrain>(ASmvProcTerrain::StaticClass(), FTransform::Identity, P);
+	if (!WorldPrev) return;
+	WorldPrev->Build(T, GroundMsl, WorldSetup);
+	Capture->ShowOnlyActors.Reset();
+	Capture->ShowOnlyActors.Add(WorldPrev);
+	// arazinin oluşturduğu alt aktörler (ağaç / bina ISM'leri ayrı aktörse) de görünsün
+	TArray<AActor*> Att;
+	WorldPrev->GetAttachedActors(Att, true);
+	for (AActor* A : Att) Capture->ShowOnlyActors.Add(A);
+	Capture->bCaptureEveryFrame = bPreviewOn;
 }

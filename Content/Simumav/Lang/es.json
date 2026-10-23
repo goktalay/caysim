@@ -851,6 +851,8 @@
  "login.welcome": "Bienvenido, {name}",
  "map.hint_pick": "Clic: ubicación · arrastrar: mover · rueda: zoom",
  "map.hint_rings": "Clic: añadir anillo · arrastrar: mover · clic derecho: borrar",
+ "map.live_hint": "Vista en vivo: cambia el mundo y la vista 3D se actualiza",
+ "map.mode_3d": "Vista 3D",
  "map.mode_pick": "Ubicación",
  "map.mode_rings": "Anillos",
  "map.not_found": "Lugar no encontrado",

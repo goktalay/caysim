@@ -851,6 +851,8 @@
  "login.welcome": "Bienvenue, {name}",
  "map.hint_pick": "Clic : position · glisser : déplacer · molette : zoom",
  "map.hint_rings": "Clic : ajouter · glisser : déplacer · clic droit : supprimer",
+ "map.live_hint": "Aperçu en direct : modifiez le monde — la vue 3D se met à jour",
+ "map.mode_3d": "Aperçu 3D",
  "map.mode_pick": "Position",
  "map.mode_rings": "Anneaux",
  "map.not_found": "Lieu introuvable",

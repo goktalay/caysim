@@ -851,6 +851,8 @@
  "login.welcome": "Willkommen, {name}",
  "map.hint_pick": "Klick: Standort · Ziehen: verschieben · Rad: Zoom",
  "map.hint_rings": "Klick: Ring hinzufügen · Ziehen: bewegen · Rechtsklick: löschen",
+ "map.live_hint": "Live-Vorschau: Welteinstellungen ändern — die 3D-Ansicht aktualisiert sich",
+ "map.mode_3d": "3D-Vorschau",
  "map.mode_pick": "Standort",
  "map.mode_rings": "Ringe",
  "map.not_found": "Ort nicht gefunden",

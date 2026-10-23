@@ -45,6 +45,8 @@ public:
 	UTextureRenderTarget2D* DroneSnap(const FString& Type, const FString& ModelKey, const FString& ColorHex);
 	/** "Hangara indi": önizlemedeki araç yukarıdan süzülerek iner (1,6 sn) */
 	void PlayLanding();
+	/** Dünya oluşturucu canlı 3B önizlemesi: parkurun prosedürel dünyası uzak bir noktada kurulur, önizleme yakalaması yörüngede döner */
+	void SetWorldPreview(const FSmvTrack& Track);
 	bool IsLive() const { return bLive; }
 
 protected:
@@ -68,6 +70,7 @@ protected:
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> SnapFig;
 	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> DSnapActor;
+	UPROPERTY() TObjectPtr<ASmvProcTerrain> WorldPrev;
 
 private:
 	bool bLive = false;
@@ -98,6 +101,7 @@ private:
 	FString DPending;
 	int32 DFrames = 0;
 	double LandAt = -100.0;
+	double WpLat = 0, WpLon = 0, WpSize = 4000;
 	void TickSnaps();
 	void TickDroneSnaps();
 

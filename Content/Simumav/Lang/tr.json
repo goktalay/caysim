@@ -851,6 +851,8 @@
  "login.welcome": "Hoş geldin, {name}",
  "map.hint_pick": "Tıkla: konum · sürükle: kaydır · tekerlek: yakınlaştır",
  "map.hint_rings": "Tıkla: halka ekle · sürükle: taşı · sağ tık: sil",
+ "map.live_hint": "Canlı önizleme: dünya ayarlarını değiştirin — 3B görünüm kendiliğinden yenilenir",
+ "map.mode_3d": "3B önizleme",
  "map.mode_pick": "Konum",
  "map.mode_rings": "Halkalar",
  "map.not_found": "Yer bulunamadı",

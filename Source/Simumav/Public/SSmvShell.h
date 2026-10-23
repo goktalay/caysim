@@ -134,6 +134,9 @@ private:
 	TSharedRef<SWidget> Achievements();
 	/** Parkur haritası: kip (konum / halka düzenleyici), arama metni */
 	FString MapMode = TEXT("pick"), MapQuery;
+	uint32 WorldPrevHash = 0;
+	double WorldPrevAt = 0;
+	bool bWorldPrevDirty = false;
 	TSharedPtr<class SSmvTileMap> TrackMap;
 	/** Kayıttan oynatma ekranı durumu */
 	TArray<FSmvReplayInfo> RepList;

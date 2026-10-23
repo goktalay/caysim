@@ -525,6 +525,15 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 		// ilk açılış tanıtımı (ana menüye ilk girişte)
 		if (Built == ESmvScreen::Menu && !FSmvUiPrefs::Get().bTutorialDone && !bOverlay) OpenTutorial();
 	}
+	// dünya oluşturucu canlı önizlemesi: parametre değişince 0,6 sn sonra yeniden kur
+	if (Built == ESmvScreen::Tracks && MapMode == TEXT("3d"))
+	{
+		const FSmvTrackWorld& Wo = EditTrack.World;
+		const uint32 H = HashCombine(HashCombine(GetTypeHash(Wo.Seed), GetTypeHash(Wo.MountainCount)), HashCombine(GetTypeHash((int32)(Wo.TreeDensity * 100)), HashCombine(GetTypeHash(Wo.BuildingCount),
+			HashCombine(GetTypeHash((int32)(Wo.Water * 100)), HashCombine(GetTypeHash((int32)Wo.MountainHeight), HashCombine(GetTypeHash((int32)Wo.SizeM), GetTypeHash(Wo.bRunway)))))));
+		if (H != WorldPrevHash) { WorldPrevHash = H; WorldPrevAt = FPlatformTime::Seconds(); bWorldPrevDirty = true; }
+		if (bWorldPrevDirty && FPlatformTime::Seconds() - WorldPrevAt > 0.6) { bWorldPrevDirty = false; if (ASmvMenuScene* S = Scene()) S->SetWorldPreview(EditTrack); }
+	}
 	if (ASmvMenuScene* S = Scene()) S->SetPreviewActive(bPreviewVisible);
 	// RC eksen algılama: tabandan en çok sapan eksen (> 0,45) seçilir; eksi yönde ise ters çevrilir (kol yukarı / sağa itilir)
 	if (DetectSlot >= 0)
@@ -1751,7 +1760,8 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 	Mid->AddSlot().AutoHeight().Padding(0, 0, 0, 8)
 	[
 		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Chips(&MapMode, { TEXT("pick"), TEXT("rings") }, { Tx(TEXT("map.mode_pick")), Tx(TEXT("map.mode_rings")) }, { ESmvIcon::Map, ESmvIcon::Flag })]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Chips(&MapMode, { TEXT("pick"), TEXT("rings"), TEXT("3d") }, { Tx(TEXT("map.mode_pick")), Tx(TEXT("map.mode_rings")), Tx(TEXT("map.mode_3d")) },
+			{ ESmvIcon::Map, ESmvIcon::Flag, ESmvIcon::Globe }, [Self]() { Self->WorldPrevHash = 0; Self->Refresh(); })]
 		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(8, 0, 6, 0)[TextEdit(&MapQuery, false, Tx(TEXT("map.search_ph")), 160.f)]
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(11).Icon(ESmvIcon::Globe).Text(Tx(TEXT("map.search")))
 			.OnClick([Self]()
@@ -1769,6 +1779,23 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 				});
 			})]
 	];
+	if (MapMode == TEXT("3d") && Scene() && FSmvUiPrefs::Get().bPreview3d && Scene()->GetPreviewTarget())
+	{
+		PreviewBrush.SetResourceObject(Scene()->GetPreviewTarget());
+		PreviewBrush.ImageSize = FVector2D(960, 600);
+		bPreviewVisible = true;
+		Mid->AddSlot().AutoHeight()
+		[
+			SNew(SBox).WidthOverride(520.f).HeightOverride(325.f)
+			[
+				SNew(SOverlay)
+				+ SOverlay::Slot()[SNew(SBorder).BorderImage(Round(14.f)).BorderBackgroundColor(Hex(0x0b1222, 0.9f))]
+				+ SOverlay::Slot()[SNew(SImage).Image(&PreviewBrush)]
+				+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(10.f)[SmvUi::Text(Tx(TEXT("map.live_hint")), 10, "Regular", Dim(), false)]
+			]
+		];
+	}
+	else
 	Mid->AddSlot().AutoHeight()
 	[
 		SAssignNew(TrackMap, SSmvTileMap).Size(FVector2D(520.f, 340.f)).Lat(&EditTrack.Lat).Lon(&EditTrack.Lon).Gates(&EditTrack.Gates).RadiusM(&EditTrack.RadiusM)
