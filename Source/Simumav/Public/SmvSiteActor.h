@@ -52,3 +52,53 @@ private:
 	FVector EoAt = FVector::ZeroVector;
 	UStaticMeshComponent* Part(USceneComponent* Parent, int32 Shape, const FVector& PosCm, const FVector& SizeCm, const FLinearColor& Color, const FRotator& Rot = FRotator::ZeroRotator);
 };
+
+/** Rüzgâr tulumu (web flightsim3d sockState): 6 m direk + 5 halkalı turuncu-beyaz tulum; şişkinlik 7,7 m/s'de tam, düşük rüzgârda sarkar, dalgalanır. */
+UCLASS()
+class SIMUMAV_API ASmvWindSock : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	ASmvWindSock();
+	virtual void BeginPlay() override;
+	virtual void Tick(float Dt) override;
+	/** Rüzgâr: hız (m/s), geldiği yön (° kuzeyden) */
+	void SetWind(float Ms, float FromDeg) { WindMs = Ms; WindFrom = FromDeg; }
+
+protected:
+	UPROPERTY() TObjectPtr<USceneComponent> Root;
+	UPROPERTY() TObjectPtr<USceneComponent> Pivot;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Rings;
+
+private:
+	float WindMs = 3.f, WindFrom = 270.f, Yaw = 0.f, Droop = 60.f, T = 0.f;
+};
+
+/** Bayram süsleri 3B (web flightsim_holiday3d eşi): çarpışmasız, ≤ 4 m (direkler 8 m), evden 45–95 m halkada; pist koridoru ve saha tamponlu.
+ *  Tema: kurban (koyunlar), ramazan/hicri (fener dizileri), noel (çam + hediye), paskalya (yumurtalar), cadılar (balkabakları + korkuluk),
+ *  yılbaşı/ay yeni yılı/diwali (ışık dizileri), diğerleri (dalgalanan bayraklar, tema renkleri). */
+UCLASS()
+class SIMUMAV_API ASmvHolidayDecor : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	ASmvHolidayDecor();
+	virtual void Tick(float Dt) override;
+	void Build(const FString& Theme, double HeadingDeg, TFunction<FVector(double E, double N, double Up)> ToWorld);
+
+protected:
+	UPROPERTY() TObjectPtr<USceneComponent> Root;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Cloths;
+	UPROPERTY() TObjectPtr<UStaticMesh> CubeMesh;
+	UPROPERTY() TObjectPtr<UStaticMesh> CylMesh;
+	UPROPERTY() TObjectPtr<UStaticMesh> SphMesh;
+	UPROPERTY() TObjectPtr<UStaticMesh> ConeMesh;
+	UPROPERTY() TObjectPtr<UMaterialInterface> BaseMat;
+
+private:
+	float T = 0.f;
+	UStaticMeshComponent* Part(int32 Shape, const FVector& PosCm, const FVector& SizeCm, const FLinearColor& Color, const FRotator& Rot = FRotator::ZeroRotator);
+};

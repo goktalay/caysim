@@ -142,6 +142,8 @@ private:
 	double DebrisGroundZ = 0, DebrisUntil = 0;
 	void CrashFx();
 	UPROPERTY() TObjectPtr<class ASmvSiteActor> Site;
+	UPROPERTY() TObjectPtr<class ASmvWindSock> Sock;
+	UPROPERTY() TObjectPtr<class ASmvHolidayDecor> Decor;
 	bool bRadarOn = true, bEoOn = true;
 	int32 EoSel = 0;          // 0 = kendi İHA, i>0 = hedef i
 	int32 EoTypeIdx = 0;      // 0 gündüz, 1 termal, 2 gece

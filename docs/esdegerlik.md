@@ -123,7 +123,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Hassasiyet ⚙ (ölü bölge/expo/oran, hazır ayarlar, eğri) | `flightsim_sens*.js` | Ayarlar → Kumanda: Hassas / Normal / Çevik / Özel; eksen başına (roll, pitch, yaw, gaz) oran, expo ve ölü bölge, roll+pitch bağla; canlı eğri; gaz eğrisi yalnız kopterde | ✓ | P2 |
 | Gamepad profili / eksen algıla | `flightsim_gamepad.js` | XInput sabit eşleme + tuş atama (Ayarlar → Tuşlar) + RC verici eksen eşlemesi ve "Algıla" (kolu oynat → eksen + ters yön otomatik) | ✓ | P2 |
 | Kamera kipleri 1–7, PiP, FPV FOV | `flightsim_camera.js` | ✓ — PiP (gimbal) penceresi sürükleyerek taşınır, sağ alt köşeden boyutlandırılır (16:9), konum/boyut kalıcı | ✓ | P2 |
-| Rüzgâr göstergesi (pusula, bileşenler) | `flightsim_wind.js` | Sol üstte kart: dönen pusula, akış oku, hız/yön, esinti, baş-kuyruk / yan bileşeni (yan > 6 m/s amber); 3B rüzgâr tulumu yok | ◐ | P2 |
+| Rüzgâr göstergesi (pusula, bileşenler) | `flightsim_wind.js` | Sol üstte kart: dönen pusula, akış oku, hız/yön, esinti, baş-kuyruk / yan bileşeni (yan > 6 m/s amber) + sahnede 3B rüzgâr tulumu (şişkinlik/sarkma/dalgalanma rüzgâra göre) | ✓ | P2 |
 | Hava efektleri (yağmur/kar/şimşek) | `flightsim3d.js` | Ultra Dynamic Weather (pakette varsa; içerik ajanı) | ◐ | — |
 | GPWS uyarıları + MASTER lambaları + ton | `flightsim_gpws*.js` | ✓ + sesli uyarı (Windows SAPI konuşma; havacılık İngilizcesi ya da arayüz dili, onaylayınca susar; Ayarlar → Uyarılar) | ✓ | P2 |
 | Grafik ▾ (ön ayarlar, FPS, kare sınırı, özel kaydırıcılar) | `flightsim_gfx.js` | Ayarlar → Görüntü: 5 ön ayar kartı + otomatik algılama + çözünürlük, pencere kipi, VSync, kare sınırı, ölçek, 8 ayrıntı kaydırıcısı | ✓ | — |
@@ -158,7 +158,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
-| 20 tema, ülke tespiti, 3B süsler | `holiday_fx.js`, `flightsim_holiday3d.js` | TR takvimi (resmî + dini bayramlar 2026–2028, yaklaşık): ana menüde kutlama şeridi + arka plan rengi; Ayarlar → Otomatik/Kapalı. 3B süs yok | ◐ | P2 |
+| 20 tema, ülke tespiti, 3B süsler | `holiday_fx.js`, `flightsim_holiday3d.js` | 20 tema (web listesi), 247 ülke 2026–2030 takvimi (Content/Simumav/Holidays), ülke: Ayarlar ya da Windows bölgesi; ana menüde kutlama şeridi (7 dilde tebrik + bayram adı), tema rengi ve süzülen parçacıklar; Ayarlar'da ülke + tema önizleme; uçuş sahnesinde çarpışmasız 3B süsler (koyun, fener/ışık dizileri, çam + hediye, balkabağı, yumurta, dalgalanan bayraklar) | ✓ | P2 |
 
 ## 16. Müzik ve ses mikseri
 

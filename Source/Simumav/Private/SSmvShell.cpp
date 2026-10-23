@@ -17,6 +17,7 @@
 #include "SmvSpeech.h"
 #include "SmvReplay.h"
 #include "SmvTileMap.h"
+#include "SmvHoliday.h"
 #include "HAL/PlatformProcess.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
@@ -160,32 +161,15 @@ USmvDataService* SSmvShell::Data() const { return Flow.IsValid() ? Flow->Data() 
 USimumavClient* SSmvShell::Client() const { return Flow.IsValid() ? Flow->Client() : nullptr; }
 ASmvMenuScene* SSmvShell::Scene() const { return GameMode.IsValid() ? GameMode->GetMenuScene() : nullptr; }
 
-FString SSmvShell::SeasonId()
-{
-	if (FSmvUiPrefs::Get().Season == TEXT("off")) return FString();
-	const FDateTime N = FDateTime::Now();
-	const int32 Y = N.GetYear(), C = N.GetMonth() * 100 + N.GetDay();
-	auto In = [C](int32 A, int32 B) { return C >= A && C <= B; };
-	if (In(101, 101) || In(1231, 1231)) return TEXT("newyear");
-	if (In(423, 423)) return TEXT("children");
-	if (In(501, 501)) return TEXT("labour");
-	if (In(519, 519)) return TEXT("youth");
-	if (In(715, 715)) return TEXT("democracy");
-	if (In(830, 830)) return TEXT("victory");
-	if (In(1028, 1029)) return TEXT("republic");
-	// dini bayramlar (hicri — yaklaşık; Diyanet takvimi)
-	if ((Y == 2026 && In(320, 322)) || (Y == 2027 && In(309, 311)) || (Y == 2028 && In(226, 228))) return TEXT("ramadan");
-	if ((Y == 2026 && In(527, 530)) || (Y == 2027 && In(516, 519)) || (Y == 2028 && In(504, 507))) return TEXT("sacrifice");
-	return FString();
-}
+FString SSmvShell::SeasonId() { return SmvHoliday::ActiveTheme(); }
 
-FLinearColor SSmvShell::SeasonColor(const FString& Id)
+FLinearColor SSmvShell::SeasonColor(const FString& Id) { return SmvHoliday::ThemeColor(Id); }
+
+FString SSmvShell::HolidayLine()
 {
-	if (Id == TEXT("republic") || Id == TEXT("victory") || Id == TEXT("youth") || Id == TEXT("children") || Id == TEXT("democracy")) return Hex(0xe30a17, 0.9f);
-	if (Id == TEXT("ramadan") || Id == TEXT("sacrifice")) return Hex(0x34d399, 0.9f);
-	if (Id == TEXT("newyear")) return Hex(0xfbbf24, 0.9f);
-	if (Id == TEXT("labour")) return Hex(0xf87171, 0.9f);
-	return FLinearColor::Transparent;
+	FSmvHolidayItem I;
+	SmvHoliday::ActiveTheme(&I);
+	return I.Name + (I.Country.IsEmpty() ? FString() : TEXT(" · ") + I.Country);
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +188,6 @@ void SSmvShell::Construct(const FArguments& InArgs)
 	TextStyle.SetPadding(FMargin(12.f, 8.f));
 	TextStyle.SetForegroundColor(Fg());
 	PreviewBrush.DrawAs = ESlateBrushDrawType::Image;
-	const FString Season = SeasonId();
 	if (Data()) { EditSettings = Data()->Settings(); ReducedMotion() = EditSettings.bReducedMotion; }
 
 	TSharedRef<SSmvCanvas> Sweep = SNew(SSmvCanvas);
@@ -240,7 +223,7 @@ void SSmvShell::Construct(const FArguments& InArgs)
 					if (!bLive) return 1.f;
 					return (Built == ESmvScreen::Menu || Built == ESmvScreen::Welcome) ? 0.30f : 0.80f;
 				})
-				.Tint(SeasonColor(Season))
+				.Tint_Lambda([]() { return SmvUi::ReducedMotion() ? FLinearColor::Transparent : SeasonColor(SeasonId()); })
 				.Scene_Lambda([this]()
 				{
 					// bölüme özel arka plan (web bölüm arka planları): canlı 3B sahne varken menüde gizli kalır
@@ -1169,7 +1152,12 @@ TSharedRef<SWidget> SSmvShell::Menu()
 			[
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)[Icon(ESmvIcon::Flag, 22.f, FLinearColor::White)]
-				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(FSmvI18n::T(FString(TEXT("season.")) + Season), 13, "Bold", FLinearColor::White)]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FSmvI18n::T(TEXT("holiday.greet_") + Season), 14, "Bold", FLinearColor::White)]
+					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(HolidayLine()), 11, "Regular", FLinearColor(1, 1, 1, 0.8f))]
+				]
 			]
 		];
 	}
@@ -3380,6 +3368,15 @@ TSharedRef<SWidget> SSmvShell::SetGeneral()
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.menu_scene")), Toggle(&P.bMenuScene, SaveP), Tx(TEXT("set.menu_scene_hint")))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.preview3d")), Toggle(&P.bPreview3d, SaveP))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.season")), Chips(&P.Season, { TEXT("auto"), TEXT("off") }, { Tx(TEXT("set.season_auto")), Tx(TEXT("set.season_off")) }, {}, SaveP))];
+	{
+		static TArray<FString> Cc; static TArray<FText> CcL;
+		if (Cc.Num() == 0) { Cc.Add(FString()); CcL.Add(Tx(TEXT("holiday.auto"))); for (const FString& C : SmvHoliday::Countries()) { Cc.Add(C); CcL.Add(FText::FromString(C)); } }
+		V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("holiday.country")), Cycle(&P.HolidayCountry, Cc, CcL, [Self]() { FSmvUiPrefs::Get().Save(); Self->Refresh(); }, 220.f),
+			FText::FromString(SmvHoliday::Country() + TEXT(" · ") + (SmvHoliday::Today(SmvHoliday::Country()).Num() ? SmvHoliday::Today(SmvHoliday::Country())[0].Name : FSmvI18n::T(TEXT("holiday.none")).ToString())))];
+		static TArray<FString> Th; static TArray<FText> ThL;
+		if (Th.Num() == 0) { Th.Add(FString()); ThL.Add(FText::FromString(TEXT("—"))); for (const FString& T : SmvHoliday::Themes()) { Th.Add(T); ThL.Add(FSmvI18n::T(TEXT("holiday.name_") + T)); } }
+		V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("holiday.preview")), Cycle(&SmvHoliday::Preview(), Th, ThL, [Self]() { Self->Refresh(); }, 220.f))];
+	}
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("bind.cockpit")), Toggle(&P.bCockpit, SaveP), Tx(TEXT("set.cockpit_hint")))];
 	V->AddSlot().AutoHeight().Padding(0, 10, 0, 0)
 	[

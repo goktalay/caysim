@@ -171,7 +171,7 @@ public:
 		SLATE_ARGUMENT(bool, Drones)
 		SLATE_ARGUMENT(bool, Grid)
 		/** Mevsim / bayram vurgu rengi (alfa 0 = yok) */
-		SLATE_ARGUMENT(FLinearColor, Tint)
+		SLATE_ATTRIBUTE(FLinearColor, Tint)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& A);
@@ -184,7 +184,7 @@ private:
 	TAttribute<int32> Scene;
 	bool bDrones = true, bGrid = true;
 	void PaintScene(int32 S, FSlateWindowElementList& Out, int32 L, const FGeometry& G, double T) const;
-	FLinearColor Tint = FLinearColor::Transparent;
+	TAttribute<FLinearColor> Tint;
 };
 
 /** Düğme / kart: fare üzerindeyken parlar ve hafifçe büyür, basınca içe çöker; odak halkası (gezinme), ses geri bildirimi. */

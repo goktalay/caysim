@@ -33,6 +33,7 @@ void FSmvUiPrefs::Load()
 	GConfig->GetString(GSmvPrefsSection, TEXT("SensPreset"), SensPreset, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("LinkRP"), bLinkRP, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("GpwsSpeech"), bGpwsSpeech, Ini);
+	GConfig->GetString(GSmvPrefsSection, TEXT("HolidayCountry"), HolidayCountry, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("RecordVideo"), bRecordVideo, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("ThermalPalette"), ThermalPalette, Ini);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
@@ -76,6 +77,7 @@ void FSmvUiPrefs::Save()
 	GConfig->SetString(GSmvPrefsSection, TEXT("SensPreset"), *SensPreset, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("LinkRP"), bLinkRP, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("GpwsSpeech"), bGpwsSpeech, Ini);
+	GConfig->SetString(GSmvPrefsSection, TEXT("HolidayCountry"), *HolidayCountry, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("RecordVideo"), bRecordVideo, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("ThermalPalette"), *ThermalPalette, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);

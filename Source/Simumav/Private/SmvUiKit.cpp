@@ -753,7 +753,22 @@ int32 SSmvBackdrop::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FS
 		const FVector2D A2(W * (0.78f + 0.07f * FMath::Cos(T * 0.09)), H * (0.42f + 0.07f * FMath::Sin(T * 0.12)));
 		DrGlow(Out, L + 1, G, A1, H * 0.55f, Accent().CopyWithNewOpacity(0.22f));
 		DrGlow(Out, L + 1, G, A2, H * 0.45f, Accent2().CopyWithNewOpacity(0.16f));
-		if (Tint.A > 0.f) DrGlow(Out, L + 1, G, FVector2D(W * 0.5f, H * 0.15f), H * 0.5f, Tint.CopyWithNewOpacity(Tint.A * 0.3f));
+		const FLinearColor Tc = Tint.Get();
+		if (Tc.A > 0.f)
+		{
+			DrGlow(Out, L + 1, G, FVector2D(W * 0.5f, H * 0.15f), H * 0.5f, Tc.CopyWithNewOpacity(Tc.A * 0.3f));
+			// bayram parçacıkları: süzülen konfeti / fener ışıkları (tema rengi + beyaz-altın)
+			for (int32 k = 0; k < 46; ++k)
+			{
+				const float Sd = k * 12.9898f;
+				const float Fx = FMath::Frac(FMath::Sin(Sd) * 43758.5453f), Fs = 0.4f + FMath::Frac(FMath::Sin(Sd * 1.7f) * 24634.63f);
+				const float Y = FMath::Frac((float)(T * 0.035 * Fs) + Fx * 3.1f) * (H + 40.f) - 20.f;
+				const float X = Fx * W + FMath::Sin((float)T * Fs + k) * 26.f;
+				const float Sz = 3.f + 4.f * Fs;
+				const FLinearColor Pc = (k % 3 == 0) ? FLinearColor(1.f, 0.85f, 0.4f, 0.55f) : Tc.CopyWithNewOpacity(0.6f);
+				DrBox(Out, L + 2, G, FVector2D(X, Y), FVector2D(Sz, Sz * (k % 2 ? 1.f : 0.5f)), Pc, k % 2 ? Circle() : nullptr);
+			}
+		}
 	}
 	// parçacıklar (yukarı süzülür, göz kırpar)
 	for (int32 i = 0; i < 70; ++i)

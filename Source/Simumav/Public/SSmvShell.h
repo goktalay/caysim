@@ -220,4 +220,5 @@ public:
 	/** Bayram / mevsim teması (tarih tabanlı TR takvimi; yoksa boş) */
 	static FString SeasonId();
 	static FLinearColor SeasonColor(const FString& Id);
+	static FString HolidayLine();
 };

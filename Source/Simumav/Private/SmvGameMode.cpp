@@ -20,6 +20,7 @@
 #include "SmvSpeech.h"
 #include "SmvVideoRec.h"
 #include "SmvSiteActor.h"
+#include "SmvHoliday.h"
 #include "Engine/StaticMeshActor.h"
 #include "SmvMusicSynth.h"
 #include "SmvUiPrefs.h"
@@ -387,6 +388,35 @@ void ASmvGameMode::BuildScene()
 	{
 		Flow->GetMatch()->OnPositions.AddUObject(this, &ASmvGameMode::HandleMatchPositions);
 	}
+	// ---- rüzgâr tulumu: kalkışın 12 m sağında ----
+	{
+		const double Hd = FMath::DegreesToRadians(Req.Track.World.RunwayHeading);
+		double La, Lo;
+		SmvCore::LatLon(Req.Track.Lat, Req.Track.Lon, 12.0 * FMath::Cos(Hd), -12.0 * FMath::Sin(Hd), La, Lo);
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Sock = W->SpawnActor<ASmvWindSock>(ASmvWindSock::StaticClass(), FTransform(Geo(La, Lo, GroundMsl)), Sp);
+		if (Sock) Sock->SetWind((float)Req.Track.WindMs, (float)Req.Track.WindDir);
+	}
+	// ---- bayram süsleri (tema etkinse) ----
+	{
+		const FString Th = SmvHoliday::ActiveTheme();
+		if (!Th.IsEmpty())
+		{
+			FActorSpawnParameters Sp;
+			Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Decor = W->SpawnActor<ASmvHolidayDecor>(ASmvHolidayDecor::StaticClass(), FTransform::Identity, Sp);
+			TWeakObjectPtr<ASmvGameMode> WG(this);
+			if (Decor) Decor->Build(Th, Req.Track.World.RunwayHeading, [WG](double E, double N, double Up)
+			{
+				ASmvGameMode* G = WG.Get();
+				if (!G) return FVector(E * 100.0, -N * 100.0, Up * 100.0);
+				double La, Lo;
+				SmvCore::LatLon(G->Req.Track.Lat, G->Req.Track.Lon, E, N, La, Lo);
+				return G->Geo(La, Lo, G->GroundMsl + Up);
+			});
+		}
+	}
 	// ---- yer kontrol sahası (istasyon / radar / EO) ----
 	if (Req.Site.Any())
 	{
@@ -566,6 +596,8 @@ void ASmvGameMode::StopScene()
 	if (FpvActor) { FpvActor->Destroy(); FpvActor = nullptr; }
 	if (PilotFigure) { PilotFigure->Destroy(); PilotFigure = nullptr; }
 	if (Site) { Site->Destroy(); Site = nullptr; }
+	if (Sock) { Sock->Destroy(); Sock = nullptr; }
+	if (Decor) { Decor->Destroy(); Decor = nullptr; }
 	for (TObjectPtr<AActor>& Db : Debris) if (Db) Db->Destroy();
 	Debris.Reset(); DebrisVel.Reset();
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
@@ -1316,6 +1348,7 @@ void ASmvGameMode::UpdateHud()
 		U.Pip = PipRt;
 		U.PipLabel = ASmvPilotPawn::ModeLabel(ESmvCamMode::Gimbal);
 		UpdateSite(U);
+		if (Sock && Link() && Link()->LastExtra().WindSpd > 0.0) Sock->SetWind((float)Link()->LastExtra().WindSpd, (float)Link()->LastExtra().WindDir);
 		FlightUi->SetState(U);
 	}
 }
