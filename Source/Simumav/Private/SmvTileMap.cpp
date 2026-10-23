@@ -256,3 +256,30 @@ void SSmvTileMap::Search(const FString& Query, TFunction<void(bool, double, doub
 	});
 	R->ProcessRequest();
 }
+
+void SSmvTileMap::PaintImagery(FSlateWindowElementList& Out, int32 L, const FGeometry& G, double CLat, double CLon, double Mpp, TFunction<FVector2D(double, double)> ToScr, float Alpha)
+{
+	if (Mpp <= 0 || !ToScr) return;
+	// karonun 1 pikseli ≈ ekranın 1 pikseli olacak yakınlaştırma
+	const double Base = 156543.03392 * FMath::Cos(FMath::DegreesToRadians(CLat));
+	const int32 Z = FMath::Clamp(FMath::RoundToInt(FMath::Log2(Base / Mpp)), 3, 19);
+	const FVector2D Sz = FVector2D(G.GetLocalSize());
+	const FVector2D C = Project(CLat, CLon, Z);
+	const double Span = FMath::Max(Sz.X, Sz.Y) * Mpp / (Base / (1 << Z)) * 0.75 + 256.0;   // karo pikseli cinsinden yarı genişlik
+	const int32 Tx0 = FMath::FloorToInt((C.X - Span) / 256.0), Tx1 = FMath::FloorToInt((C.X + Span) / 256.0);
+	const int32 Ty0 = FMath::FloorToInt((C.Y - Span) / 256.0), Ty1 = FMath::FloorToInt((C.Y + Span) / 256.0);
+	if ((Tx1 - Tx0 + 1) * (Ty1 - Ty0 + 1) > 64) return;
+	for (int32 ty = Ty0; ty <= Ty1; ++ty)
+		for (int32 tx = Tx0; tx <= Tx1; ++tx)
+		{
+			const FSlateBrush* B = TileBrush(Z, tx, ty);
+			if (!B) continue;
+			double La0, Lo0, La1, Lo1;
+			Unproject(tx * 256.0, ty * 256.0, Z, La0, Lo0);
+			Unproject((tx + 1) * 256.0, (ty + 1) * 256.0, Z, La1, Lo1);
+			const FVector2D P0 = ToScr(La0, Lo0), P1 = ToScr(La1, Lo1);
+			const FVector2D Pmin(FMath::Min(P0.X, P1.X), FMath::Min(P0.Y, P1.Y)), Psz(FMath::Abs(P1.X - P0.X), FMath::Abs(P1.Y - P0.Y));
+			if (Pmin.X > Sz.X || Pmin.Y > Sz.Y || Pmin.X + Psz.X < 0 || Pmin.Y + Psz.Y < 0) continue;
+			FSlateDrawElement::MakeBox(Out, L, G.ToPaintGeometry(FVector2f(Psz), FSlateLayoutTransform(FVector2f(Pmin))), B, ESlateDrawEffect::None, FLinearColor(1, 1, 1, Alpha));
+		}
+}

@@ -2066,6 +2066,8 @@ TSharedRef<SWidget> SSmvShell::MissionMap(float Wd, float Ht)
 		Out.PushClip(FSlateClippingZone(G));
 		const FSmvTrack* T = Track();
 		const double K = Scale();
+		// uydu görüntüsü (Esri; parkur merkezi çevresi)
+		if (T) SSmvTileMap::PaintImagery(Out, L + 1, G, T->Lat, T->Lon, 1.0 / FMath::Max(1e-6, K), [ToScr](double La, double Lo) { return ToScr(FVector2D(La, Lo)); }, 0.75f);
 		// ızgara (100 m)
 		const FVector2D O = T ? ToScr(FVector2D(T->Lat, T->Lon)) : Sz * 0.5;
 		const double Step = 100.0 * K;
@@ -3874,15 +3876,15 @@ TSharedRef<SWidget> SSmvShell::FlyMode()
 	TWeakObjectPtr<USmvFlow> F = Flow;
 	SSmvShell* Self = this;
 	const bool bIn = Client() && Client()->IsLoggedIn();
-	TSharedRef<SSmvButton> Solo = SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Plane).Accent(Hex(0xfbbf24)).MinHeight(220.f)
+	TSharedRef<SSmvButton> Solo = SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Plane).Accent(Hex(0xfbbf24)).MinHeight(340.f)
 		.Text(Tx(TEXT("fly.solo"))).SubText(Tx(TEXT("fly.solo_sub")))
 		.OnClick([F]() { if (F.IsValid()) { F->NewDraft(); F->Race.Kind = TEXT("none"); F->SetScreen(ESmvScreen::Wizard); } });
 	DefaultFocus = Solo;
 	TSharedRef<SUniformGridPanel> G = SNew(SUniformGridPanel).SlotPadding(FMargin(8.f)).MinDesiredSlotHeight(220.f);
 	G->AddSlot(0, 0)[Solo];
-	G->AddSlot(1, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Fpv).Accent(Hex(0xf472b6)).MinHeight(220.f)
+	G->AddSlot(1, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Fpv).Accent(Hex(0xf472b6)).MinHeight(340.f)
 		.Text(Tx(TEXT("fly.fpv"))).SubText(Tx(TEXT("fly.fpv_sub"))).OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::FpvGallery); })];
-	G->AddSlot(2, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Match).Accent(Hex(0x34d399)).MinHeight(220.f)
+	G->AddSlot(2, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Match).Accent(Hex(0x34d399)).MinHeight(340.f)
 		.Text(Tx(TEXT("fly.multi"))).SubText(Tx(bIn ? TEXT("fly.multi_sub") : TEXT("fly.multi_login"))).OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Lobby); })];
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight()[G];

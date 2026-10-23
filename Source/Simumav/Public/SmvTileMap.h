@@ -26,6 +26,8 @@ public:
 	void CenterOn(double Lat, double Lon, int32 Zoom = -1);
 	/** Ad / adres araması (OpenStreetMap Nominatim) → ilk sonuç; Done(bOk, lat, lon, ad) */
 	static void Search(const FString& Query, TFunction<void(bool, double, double, const FString&)> Done);
+	/** Başka çizimlerin altına uydu karoları: ToScr (enlem, boylam) → yerel piksel; MetersPerPx ölçeği (görev haritası vb.) */
+	static void PaintImagery(FSlateWindowElementList& Out, int32 Layer, const FGeometry& G, double CenterLat, double CenterLon, double MetersPerPx, TFunction<FVector2D(double, double)> ToScr, float Alpha = 0.85f);
 
 	virtual FVector2D ComputeDesiredSize(float) const override { return Size; }
 	virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSlateRect& Cull, FSlateWindowElementList& Out, int32 Layer, const FWidgetStyle& Style, bool bParentEnabled) const override;
@@ -54,6 +56,9 @@ private:
 
 	static FVector2D Project(double Lat, double Lon, int32 Z);
 	static void Unproject(double X, double Y, int32 Z, double& Lat, double& Lon);
+public:
+	static FVector2D ProjectPub(double Lat, double Lon, int32 Z) { return Project(Lat, Lon, Z); }
+private:
 	FVector2D ToLocal(const FGeometry& G, double La, double Lo) const;
 	void ToGeo(const FGeometry& G, const FVector2D& P, double& La, double& Lo) const;
 	int32 HitGate(const FGeometry& G, const FVector2D& P) const;
