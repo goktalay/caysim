@@ -74,6 +74,13 @@ jobs:
           & "$env:UE_ROOT\Engine\Build\BatchFiles\Build.bat" SimumavEditor Win64 Development -Project="$PWD\Simumav.uproject" -WaitMutex -NoHotReload
           if ($LASTEXITCODE -ne 0) { throw "Editor derlemesi basarisiz ($LASTEXITCODE)" }
 
+      - name: Fab içerikleri (hazırlama projesi + VaultCache; lisanslı dosyalar depoda değil)
+        # D:\SimumavFab\Content paketleri ve VaultCache UE paketleri Content altina kopyalanir, FabLibrary FBX urunleri
+        # /Game/Fab altina ice aktarilir, DefaultGame.ini'ye pisirme/harita satirlari eklenir. Hicbiri yoksa uyari verir, derleme surer.
+        env:
+          FAB_PROJE: ${{ vars.FAB_PROJE }}
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File Tools/fab/fab-hazirla.ps1 -Proje "$PWD" -UeRoot "$env:UE_ROOT"
+
       - name: Varlıkları koddan üret (Editor Python, headless)
         run: |
           $env:SIMUMAV_EDITOR_ACIK = "0"

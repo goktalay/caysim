@@ -44,7 +44,9 @@ public class Simumav : ModuleRules
 			"OnlineSubsystemUtils",
 			"ProceduralMeshComponent",
 			"RenderCore",
-			"Projects"
+			"Projects",
+			// Fab dron gövdesi /Game/Fab/Drone altında adı bilinmeden aranır (SmvFabContent)
+			"AssetRegistry"
 		});
 
 		// Steam başlatma OnlineSubsystemSteam eklentisiyle yapılır (DefaultEngine.ini); modül yalnız OSS arayüzlerini kullanır.

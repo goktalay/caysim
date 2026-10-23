@@ -399,7 +399,7 @@ TSharedRef<FJsonObject> FSmvFlightRequest::ToStartJson() const
 	TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
 	SmvSetIdField(O, TEXT("drone_id"), Drone.Id);
 	SmvSetIdField(O, TEXT("pilot_id"), Pilot.Id);
-	SmvSetIdField(O, TEXT("track_id"), Track.Id);
+	if (!Track.Id.StartsWith(TEXT("fab:"))) SmvSetIdField(O, TEXT("track_id"), Track.Id);   // Fab haritası: sanal yerel parkur
 	if (bHasMission) SmvSetIdField(O, TEXT("mission_id"), Mission.Id);
 	if (const TSharedPtr<FJsonObject> L = Launch.ToJson()) O->SetObjectField(TEXT("launch"), L);
 	TSharedRef<FJsonObject> Rec = MakeShared<FJsonObject>();

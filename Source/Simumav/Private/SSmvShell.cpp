@@ -8,6 +8,7 @@
 #include "SmvGameMode.h"
 #include "SmvGameInstance.h"
 #include "SmvSteam.h"
+#include "SmvFabContent.h"
 #include "SmvI18n.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
@@ -699,7 +700,15 @@ TSharedRef<SWidget> SSmvShell::Wizard()
 	B->AddSlot().AutoHeight()[Field(Tx(TEXT("wizard.pilot")), Combo(&PilotId, Ids, Ls, [Self, F]() { for (const FSmvPilot& X : Self->Data()->Pilots()) if (X.Id == PilotId) F->Draft.Pilot = X; }))];
 	Ids.Reset(); Ls.Reset();
 	for (const FSmvTrack& X : D->Tracks()) { Ids.Add(X.Id); Ls.Add(FText::FromString(FString::Printf(TEXT("%s · %s"), *X.Name, *FSmvI18n::T(FString(TEXT("world.")) + X.WorldMode).ToString()))); }
-	B->AddSlot().AutoHeight()[Field(Tx(TEXT("wizard.track")), Combo(&TrackId, Ids, Ls, [Self, F]() { for (const FSmvTrack& X : Self->Data()->Tracks()) if (X.Id == TrackId) F->Draft.Track = X; F->Draft.bHasMission = false; Self->Refresh(); }))];
+	// Fab haritaları (pakette varsa): sanal parkur, kimliği "fab:<anahtar>" (sunucu kimlikleri hiçbir zaman böyle başlamaz)
+	for (const FSmvFabMap& M : FSmvFabContent::Maps()) { Ids.Add(FString(TEXT("fab:")) + M.Key); Ls.Add(FText::FromString(FString::Printf(TEXT("%s · %s"), *M.Name.ToString(), *FSmvI18n::T(TEXT("world.fab")).ToString()))); }
+	B->AddSlot().AutoHeight()[Field(Tx(TEXT("wizard.track")), Combo(&TrackId, Ids, Ls, [Self, F]()
+	{
+		for (const FSmvTrack& X : Self->Data()->Tracks()) if (X.Id == TrackId) F->Draft.Track = X;
+		if (const FSmvFabMap* M = FSmvFabContent::FindMap(TrackId)) F->Draft.Track = FSmvFabContent::MakeTrack(*M);
+		F->Draft.bHasMission = false;
+		Self->Refresh();
+	}))];
 	Ids = { TEXT("-") }; Ls = { Tx(TEXT("wizard.no_mission")) };
 	for (const FSmvMission& X : D->Missions()) if (X.TrackId == R.Track.Id) { Ids.Add(X.Id); Ls.Add(FText::FromString(X.Name)); }
 	B->AddSlot().AutoHeight()[Field(Tx(TEXT("wizard.mission")), Combo(&MissionId, Ids, Ls, [Self, F]()

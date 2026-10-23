@@ -67,6 +67,26 @@ jobs:
           }
           W "=== FabLibrary icindeki metin/json dosyalari (ilk 4000 karakter) ==="
           if (Test-Path "$vc\FabLibrary") { Get-ChildItem "$vc\FabLibrary" -Recurse -File -Include *.json,*.txt,*.ini -ErrorAction SilentlyContinue | Select-Object -First 5 | ForEach-Object { W ("--- " + $_.FullName); $t = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue; if ($t) { W ($t.Substring(0, [Math]::Min(4000, $t.Length))) } } }
+          W "=== Fab hazirlama projesi (D:\SimumavFab; docs/fab-icerik.md) ==="
+          $fp = 'D:\SimumavFab'
+          if (Test-Path $fp) {
+            Get-ChildItem $fp -Filter *.uproject -File -ErrorAction SilentlyContinue | ForEach-Object { W ("  proje: " + $_.FullName) }
+            if (Test-Path "$fp\Content") {
+              Get-ChildItem "$fp\Content" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $n = @(Get-ChildItem $_.FullName -Recurse -File -Filter *.umap -ErrorAction SilentlyContinue).Count
+                W ("  " + $_.Name + "  [" + (Size $_.FullName) + "]  harita: " + $n)
+              }
+            } else { W "  (Content yok)" }
+            try { $acl = (Get-Acl $fp).Access | Where-Object { $_.IdentityReference -match 'NETWORK SERVICE|Users|Everyone|Authenticated' } | ForEach-Object { $_.IdentityReference.ToString() + ':' + $_.FileSystemRights } ; W ("  izinler: " + ($acl -join '; ')) } catch { W "  izinler okunamadi" }
+          } else { W ("  (yok) " + $fp) }
+          W "=== VaultCache UE paketleri: indirme durumu ==="
+          Get-ChildItem $vc -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' } | ForEach-Object {
+            $dc = Join-Path $_.FullName 'data\Content'
+            $st = Join-Path $_.FullName 'stage'
+            $d = if (Test-Path $dc) { 'data\Content VAR [' + (Size $dc) + ']' } else { 'data\Content YOK' }
+            $s2 = if (Test-Path $st) { 'stage [' + (Size $st) + ']' } else { 'stage yok' }
+            W ("  " + $_.Name + ": " + $d + ", " + $s2)
+          }
           W "=== Disk bos alan ==="
           Get-PSDrive -PSProvider FileSystem | ForEach-Object { W ("  " + $_.Name + ": bos " + ('{0:N0} GB' -f ($_.Free / 1GB))) }
       - name: Artefakt

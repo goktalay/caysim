@@ -17,6 +17,7 @@ class ASmvDroneActor;
 class ASmvGateActor;
 class ASmvProcTerrain;
 class ASmvPilotPawn;
+class ULevelStreamingDynamic;
 class UCaySimHudWidget;
 class USmvHudOverlay;
 class USmvFlow;
@@ -49,6 +50,9 @@ public:
 protected:
 	UPROPERTY() TObjectPtr<ACaySimWorldSetup> WorldSetup;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> Terrain;
+	/** Fab haritası (parkur dünya kipi "fab:<anahtar>") — akış seviyesi olarak yüklenir, merkezi orijine oturtulur */
+	UPROPERTY() TObjectPtr<ULevelStreamingDynamic> FabLevel;
+	UFUNCTION() void HandleFabLevelShown();
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Drone;
 	UPROPERTY() TArray<TObjectPtr<ASmvGateActor>> Gates;
 	UPROPERTY() TArray<TObjectPtr<ASmvDroneActor>> Ghosts;       // botlar / rakipler

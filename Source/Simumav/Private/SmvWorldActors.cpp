@@ -4,6 +4,11 @@
 #include "CaySimGeo.h"
 #include "SmvRace.h"
 #include "SmvPyRandom.h"
+#include "SmvFabContent.h"
+#include "Components/PoseableMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
+#include "ReferenceSkeleton.h"
+#include "Misc/ConfigCacheIni.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -93,6 +98,92 @@ void ASmvDroneActor::ClearParts()
 	}
 	Parts.Reset();
 	Hubs.Reset();
+	if (IsValid(FabMesh)) FabMesh->DestroyComponent();
+	FabMesh = nullptr;
+	FabPropBones.Reset();
+	FabPropRef.Reset();
+}
+
+bool ASmvDroneActor::BuildFabBody()
+{
+	USkeletalMesh* SK = FSmvFabContent::LoadDroneMesh();
+	if (!SK) return false;
+	UPoseableMeshComponent* C = NewObject<UPoseableMeshComponent>(this);
+	C->SetSkinnedAssetAndUpdate(SK);
+	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	C->SetCastShadow(true);
+	C->SetupAttachment(Body);
+	C->RegisterComponent();
+	FabMesh = C;
+
+	// kemikler: bileşen uzayı referans pozu (yerel pozların zinciri)
+	const FReferenceSkeleton& Ref = SK->GetRefSkeleton();
+	const TArray<FTransform>& Local = Ref.GetRefBonePose();
+	const int32 NB = Ref.GetNum();
+	TArray<FTransform> Cs; Cs.SetNum(NB);
+	TArray<bool> IsProp; IsProp.Init(false, NB);
+	int32 Gimbal = INDEX_NONE;
+	FString Names;
+	for (int32 i = 0; i < NB; ++i)
+	{
+		const int32 P = Ref.GetParentIndex(i);
+		Cs[i] = P >= 0 ? Local[i] * Cs[P] : Local[i];
+		const FString N = Ref.GetBoneName(i).ToString();
+		const FString L = N.ToLower();
+		Names += (i ? TEXT(", ") : TEXT("")) + N;
+		IsProp[i] = L.Contains(TEXT("prop")) || L.Contains(TEXT("rotor")) || L.Contains(TEXT("blade")) || L.Contains(TEXT("pervane")) || L.Contains(TEXT("fan"));
+		// yalnız en üstteki pervane kemiği döner (alt kemikler onunla birlikte gelir)
+		if (IsProp[i] && !(P >= 0 && IsProp[P]))
+		{
+			FabPropBones.Add(Ref.GetBoneName(i));
+			FabPropRef.Add(Cs[i].GetRotation());
+		}
+		if (Gimbal == INDEX_NONE && (L.Contains(TEXT("gimbal")) || L.Contains(TEXT("camera")) || L.StartsWith(TEXT("cam")))) Gimbal = i;
+	}
+	UE_LOG(LogSimumav, Log, TEXT("Fab dron kemikleri (%d): %s — pervane kemiği %d"), NB, *Names, FabPropBones.Num());
+
+	// ölçek: yatay en büyük boyut gerçek quad boyutuna (~0,6 m pervane uçları dahil; motorlar arası çapraz ~0,5 m) + web görünürlük büyütmesi
+	const FBoxSphereBounds B = SK->GetBounds();
+	const FVector Ext = B.BoxExtent;
+	const float SpanCm = 2.f * FMath::Max(1.f, (float)FMath::Max(Ext.X, Ext.Y));
+	const float S = FSmvFabContent::GetFloat(TEXT("DroneSpanM"), 0.6f) * 100.f / SpanCm;
+	// yön: ayar varsa o; yoksa gimbal/kamera kemiği burun (+X) kabul edilir
+	float Yaw = 0.f;
+	if (!GConfig || !GConfig->GetFloat(TEXT("/Script/Simumav.SmvFabContent"), TEXT("DroneYawDeg"), Yaw, GGameIni))
+	{
+		if (Gimbal != INDEX_NONE)
+		{
+			const FVector G = Cs[Gimbal].GetLocation() - B.Origin;
+			if (FVector2D(G.X, G.Y).Size() > SpanCm * 0.05f) Yaw = -(float)FMath::RadiansToDegrees(FMath::Atan2(G.Y, G.X));
+		}
+	}
+	const FRotator Rot(0.f, Yaw, 0.f);
+	FVector Loc = -Rot.RotateVector(FVector(B.Origin.X, B.Origin.Y, 0.0) * S);
+	Loc.Z = 0.0;
+	C->SetRelativeLocationAndRotation(Loc, Rot);
+	C->SetRelativeScale3D(FVector(S));
+	VisScale = 2.5f;
+	GroundOffsetM = (float)(B.Origin.Z - Ext.Z) * S / 100.f * VisScale;
+	VisRadiusM = FMath::Max(0.3f, (float)FVector2D(Ext.X, Ext.Y).Size() * S / 100.f * VisScale);
+	VisNoseM = (float)FMath::Max(Ext.X, Ext.Y) * S / 100.f * VisScale;
+	UE_LOG(LogSimumav, Log, TEXT("Fab dron: sınır %.1f×%.1f×%.1f cm, ölçek %.4f, yön %.0f°"), Ext.X * 2, Ext.Y * 2, Ext.Z * 2, S, Yaw);
+	return true;
+}
+
+void ASmvDroneActor::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (!FabMesh || FabPropBones.Num() == 0) return;
+	const FCaySimTelemetry& T = GetLatestTelemetry();
+	const float Target = T.bArmed ? FMath::Max(0.15f, T.Throttle / 100.f) : 0.f;
+	if (Target <= 0.f) return;
+	FabPropPhase = FMath::Fmod(FabPropPhase + DeltaSeconds * PropMaxRps * Target * 360.f, 360.f);
+	for (int32 i = 0; i < FabPropBones.Num(); ++i)
+	{
+		const float Dir = (i % 2 == 0) ? 1.f : -1.f;   // karşıt dönüşlü çiftler
+		const FQuat Q = FQuat(FVector::UpVector, FMath::DegreesToRadians(FabPropPhase * Dir)) * FabPropRef[i];
+		FabMesh->SetBoneRotationByName(FabPropBones[i], Q.Rotator(), EBoneSpaces::ComponentSpace);
+	}
 }
 
 void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& ModelKey, const FLinearColor& Color)
@@ -182,6 +273,12 @@ void ASmvDroneActor::BuildPlaceholder()
 		const bool bFpv = SmvType == TEXT("fpv");
 		const FString MK = SmvModelKey.ToLower();
 		const bool bHexa = SmvType == TEXT("hexa") || MK.Contains(TEXT("hexa")) || MK.Contains(TEXT("typhoon")) || MK.Contains(TEXT("h480"));
+		// quad (FPV yarışçı hariç): Fab gövdesi varsa onu kullan; hexa/uçak/heli/kara aracı basit gövdede kalır
+		if (!bFpv && !bHexa && BuildFabBody())
+		{
+			Body->SetRelativeScale3D(FVector(VisScale));
+			return;
+		}
 		const int32 N = bHexa ? 6 : 4;
 		const float Arm = bFpv ? 0.12f : bHexa ? 0.32f : 0.25f;
 		const float PropD = bFpv ? 0.13f : bHexa ? 0.26f : 0.25f;

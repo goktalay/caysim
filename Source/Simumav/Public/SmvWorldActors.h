@@ -17,6 +17,7 @@ class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UStaticMesh;
+class UPoseableMeshComponent;
 class USmvMotorSynth;
 class ICaySimGeoTransform;
 
@@ -37,9 +38,14 @@ public:
 	float GetVisualNoseM() const { return VisNoseM; }
 	/** Kamera konumuna göre ses (Doppler + uzaklık) — her kare. */
 	void UpdateAudio(const FVector& Listener, float Volume);
+	virtual void Tick(float DeltaSeconds) override;
+	/** Fab dron gövdesi (skeletal) kullanılıyor mu. */
+	bool IsUsingFabBody() const { return FabMesh != nullptr; }
 
 protected:
 	virtual void BuildPlaceholder() override;
+	/** Fab quad gövdesi (SmvFabContent::LoadDroneMesh); pervane kemikleri ARM'lıyken döner. */
+	UPROPERTY() TObjectPtr<UPoseableMeshComponent> FabMesh;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USmvMotorSynth> Motor;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 	/** Pervane göbekleri (dönen düğüm; kanatlar alt bileşen). */
@@ -63,6 +69,12 @@ private:
 	/** Dönen pervane: göbek + iki kanatlı pala (bForward: disk ileri bakar, X ekseni çevresinde döner). */
 	void AddRotor(const FVector& PosM, float DiaM, bool bForward, const FLinearColor& Color);
 	void ClearParts();
+	/** Fab gövdesini kurar (yoksa false → BasicShapes gövdesi). */
+	bool BuildFabBody();
+	TArray<FName> FabPropBones;
+	/** Pervane kemiklerinin bileşen uzayındaki başlangıç (referans) dönüşleri */
+	TArray<FQuat> FabPropRef;
+	float FabPropPhase = 0.f;
 };
 
 UCLASS()

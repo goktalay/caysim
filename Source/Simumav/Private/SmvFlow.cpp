@@ -1,4 +1,5 @@
 #include "SmvFlow.h"
+#include "SmvFabContent.h"
 #include "SimumavModule.h"
 #include "SimumavClient.h"
 #include "SmvDataService.h"
@@ -140,6 +141,8 @@ FString USmvFlow::ValidateDraft() const
 {
 	if (Draft.Drone.Id.IsEmpty()) return FSmvI18n::T(TEXT("wizard.err_drone")).ToString();
 	if (Draft.Track.Id.IsEmpty()) return FSmvI18n::T(TEXT("wizard.err_track")).ToString();
+	// Fab haritaları yalnız bu bilgisayarın paketinde var; bulut SITL'i parkuru sunucudan bekler
+	if (Draft.Backend == ESmvFlightBackend::Cloud && FSmvFabContent::IsFabWorld(Draft.Track.WorldMode)) return FSmvI18n::T(TEXT("wizard.err_fab_cloud")).ToString();
 	if (Draft.Backend == ESmvFlightBackend::Cloud && !ClientObj->IsLoggedIn()) return FSmvI18n::T(TEXT("wizard.err_cloud_login")).ToString();
 	if (Draft.Backend == ESmvFlightBackend::LocalSitl && !USmvLocalFlightLink::SitlAvailable()) return FSmvI18n::T(TEXT("wizard.err_no_sitl")).ToString();
 	if (Race.Kind != TEXT("none") && (Draft.Drone.Type == TEXT("rover"))) return FSmvI18n::T(TEXT("wizard.err_race_rover")).ToString();
