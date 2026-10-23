@@ -1,6 +1,6 @@
 // SIMUMAV HUD katmanı — CAYSIM askeri HUD'unun (UCaySimHudWidget) üstünde, NativePaint ile kodla çizilir (UMG tasarım dosyası yok):
-// uçuş uyarıları (MASTER WARNING / CAUTION şeridi), güç/yakıt çubukları, yarış/it dalaşı paneli, hedef kilit nişangâhı, olay şeridi,
-// PiP (gimbal kamerası), RC çubuk göstergesi, FPV OSD teması, mesajlar.
+// uçuş uyarıları (MASTER WARNING / CAUTION şeridi), yarış/it dalaşı paneli, hedef kilit nişangâhı, PiP (gimbal kamerası), FPV OSD teması,
+// çarpışma / geri sayım / duraklatma yazıları. Bilgi kartı, dron paneli, güç kadranları, ileti akışı ve sanal kumanda: SSmvFlightUi.
 #pragma once
 
 #include "CoreMinimal.h"

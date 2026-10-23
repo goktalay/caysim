@@ -25,6 +25,7 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Colors/SColorBlock.h"
 #include "Styling/CoreStyle.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Engine/GameInstance.h"
@@ -50,6 +51,7 @@ void SSmvShell::Construct(const FArguments& InArgs)
 {
 	Flow = InArgs._Flow;
 	GameMode = InArgs._GameMode;
+	ToastBrush = FSlateRoundedBoxBrush(FLinearColor::White, 8.f);
 	ChildSlot
 	[
 		SNew(SOverlay)
@@ -57,11 +59,14 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		[
 			SAssignNew(Content, SBox)
 		]
-		+ SOverlay::Slot().VAlign(VAlign_Bottom).HAlign(HAlign_Center).Padding(0, 0, 0, 40)
+		// bildirim üst ortada: uçuşta alt bant / kadranlarla çakışmasın
+		+ SOverlay::Slot().VAlign(VAlign_Top).HAlign(HAlign_Center).Padding(0, 150, 0, 0)
 		[
-			SAssignNew(ToastBox, SBox)
+			SAssignNew(ToastBox, SBox).Visibility(EVisibility::HitTestInvisible)
 		]
 	];
+	// kabuk tüm ekranı kaplar: kendisi tıklamayı yutmasın (alttaki uçuş arayüzü düğmeleri çalışsın)
+	SetVisibility(EVisibility::SelfHitTestInvisible);
 	if (Data()) EditSettings = Data()->Settings();
 	Refresh();
 }
@@ -74,7 +79,7 @@ void SSmvShell::ShowToast(const FString& Text, int32 Severity)
 	if (!ToastBox.IsValid()) return;
 	const FLinearColor C = Severity <= 3 ? FLinearColor(1.f, 0.3f, 0.25f) : Severity == 4 ? FLinearColor(1.f, 0.8f, 0.2f) : GSmvText;
 	ToastBox->SetContent(
-		SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(FLinearColor(0, 0, 0, 0.8f)).Padding(FMargin(18, 10))
+		SNew(SBorder).BorderImage(&ToastBrush).BorderBackgroundColor(FLinearColor(0.02f, 0.03f, 0.04f, 0.88f)).Padding(FMargin(18, 10))
 		[
 			SNew(STextBlock).Text(FText::FromString(Text)).ColorAndOpacity(C).Font(FCoreStyle::GetDefaultFontStyle("Regular", 13))
 		]);

@@ -28,6 +28,8 @@ MOTOR = {
     'CoreMinimal.h': 'Core', 'Modules/ModuleManager.h': 'Core', 'Containers/Ticker.h': 'Core', 'Misc/AES.h': 'Core', 'Misc/FileHelper.h': 'Core',
     'Misc/Paths.h': 'Core', 'HAL/FileManager.h': 'Core', 'HAL/PlatformMisc.h': 'Core', 'HAL/PlatformProcess.h': 'Core', 'HAL/PlatformTime.h': 'Core', 'Components/InputComponent.h': 'Engine',
     'Rendering/SlateRenderer.h': 'SlateCore', 'Misc/ConfigCacheIni.h': 'Core',
+    'Styling/SlateTypes.h': 'SlateCore', 'Brushes/SlateRoundedBoxBrush.h': 'SlateCore', 'Widgets/SLeafWidget.h': 'SlateCore', 'Layout/Clipping.h': 'SlateCore',
+    'Widgets/Images/SImage.h': 'Slate',
     'Misc/DateTime.h': 'Core', 'Misc/App.h': 'Core', 'Internationalization/Culture.h': 'Core', 'Internationalization/Internationalization.h': 'Core',
     'GenericPlatform/GenericPlatformHttp.h': 'Core',
     'Misc/Base64.h': 'Core', 'Misc/SecureHash.h': 'Core', 'Dom/JsonValue.h': 'Json', 'zlib.h': 'zlib',

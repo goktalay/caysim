@@ -6,6 +6,7 @@
 #include "Widgets/SCompoundWidget.h"
 #include "SimumavTypes.h"
 #include "SmvFlow.h"
+#include "Styling/SlateBrush.h"
 
 class ASmvGameMode;
 class SBox;
@@ -31,6 +32,7 @@ private:
 	TWeakObjectPtr<ASmvGameMode> GameMode;
 	TSharedPtr<SBox> Content;
 	TSharedPtr<SBox> ToastBox;
+	FSlateBrush ToastBrush;
 	FString ToastText; int32 ToastSev = 6; double ToastUntil = 0;
 	ESmvScreen Built = ESmvScreen::Welcome;
 	bool bBuiltPause = false;

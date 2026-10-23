@@ -13,6 +13,7 @@
 #include "SmvMotorSynth.h"
 #include "SmvI18n.h"
 #include "SSmvShell.h"
+#include "SSmvFlightUi.h"
 #include "CesiumWorldSetup.h"
 #include "HudWidget.h"
 #include "TelemetryBuffer.h"
@@ -28,6 +29,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Widgets/SWeakWidget.h"
+#include "Misc/DateTime.h"
 
 ASmvGameMode::ASmvGameMode()
 {
@@ -64,7 +66,7 @@ void ASmvGameMode::BeginPlay()
 	if (GEngine && GEngine->GameViewport)
 	{
 		Shell = SNew(SSmvShell).Flow(Flow.Get()).GameMode(this);
-		GEngine->GameViewport->AddViewportWidgetContent(SNew(SWeakWidget).PossiblyNullContent(Shell.ToSharedRef()), 50);
+		GEngine->GameViewport->AddViewportWidgetContent(SNew(SWeakWidget).Visibility(EVisibility::SelfHitTestInvisible).PossiblyNullContent(Shell.ToSharedRef()), 50);
 	}
 	ToneHost = GetWorld()->SpawnActor<AActor>();
 	if (ToneHost)
@@ -107,10 +109,13 @@ void ASmvGameMode::HandleScreen(ESmvScreen Screen)
 	if (!bFlightScreens && bScene) StopScene();
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 	{
-		const bool bMenu = Screen != ESmvScreen::Flight || bPauseMenu;
-		PC->bShowMouseCursor = bMenu;
-		if (bMenu) { FInputModeGameAndUI M; M.SetHideCursorDuringCapture(false); PC->SetInputMode(M); }
-		else PC->SetInputMode(FInputModeGameOnly());
+		// uçuşta da imleç görünür (alt bant düğmeleri, sanal çubuklar); klavye odağı oyun görünümünde kalır,
+		// 3B görünümde fareyle sürükleme kamerayı döndürür (yakalama yalnız tuş basılıyken)
+		PC->bShowMouseCursor = true;
+		FInputModeGameAndUI M;
+		M.SetHideCursorDuringCapture(false);
+		M.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		PC->SetInputMode(M);
 	}
 	if (ASmvPilotPawn* P = GetPilot()) P->SetFlying(Screen == ESmvScreen::Flight);
 	if (Shell.IsValid()) Shell->Refresh();
@@ -245,9 +250,18 @@ void ASmvGameMode::BuildScene()
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 	{
 		Hud = CreateWidget<UCaySimHudWidget>(PC, UCaySimHudWidget::StaticClass());
-		if (Hud) Hud->AddToViewport(5);
+		if (Hud) { Hud->AddToViewport(5); Hud->SetVisibility(ESlateVisibility::HitTestInvisible); }
 		Overlay = CreateWidget<USmvHudOverlay>(PC, USmvHudOverlay::StaticClass());
-		if (Overlay) Overlay->AddToViewport(6);
+		if (Overlay) { Overlay->AddToViewport(6); Overlay->SetVisibility(ESlateVisibility::HitTestInvisible); }
+	}
+	// ---- uçuş arayüzü (dron paneli, kadranlar, alt bant, sanal kumanda) ----
+	UiLog.Reset();
+	ArmConfirmUntil = 0;
+	if (GEngine && GEngine->GameViewport)
+	{
+		FlightUi = SNew(SSmvFlightUi).GameMode(this);
+		FlightUiHost = SNew(SWeakWidget).Visibility(EVisibility::SelfHitTestInvisible).PossiblyNullContent(FlightUi);
+		GEngine->GameViewport->AddViewportWidgetContent(FlightUiHost.ToSharedRef(), 20);
 	}
 
 	// ---- uyarılar ----
@@ -398,6 +412,9 @@ void ASmvGameMode::StopScene()
 	if (ASmvPilotPawn* P = GetPilot()) { P->OnRc.Clear(); P->OnAction.RemoveAll(this); P->SetFlying(false); P->SetTarget(nullptr, TEXT("multirotor")); }
 	if (Hud) { Hud->RemoveFromParent(); Hud = nullptr; }
 	if (Overlay) { Overlay->RemoveFromParent(); Overlay = nullptr; }
+	if (FlightUiHost.IsValid() && GEngine && GEngine->GameViewport) GEngine->GameViewport->RemoveViewportWidgetContent(FlightUiHost.ToSharedRef());
+	FlightUiHost.Reset();
+	FlightUi.Reset();
 	for (TObjectPtr<ASmvGateActor>& G : Gates) if (G) G->Destroy();
 	for (TObjectPtr<ASmvDroneActor>& G : Ghosts) if (G) G->Destroy();
 	for (TObjectPtr<ASmvDroneActor>& G : TargetActors) if (G) G->Destroy();
@@ -419,6 +436,11 @@ void ASmvGameMode::PushEvent(const FString& Text, int32 Sev)
 	if (Text.IsEmpty()) return;
 	Events.Add(TPair<FString, int32>(Text, Sev));
 	if (Events.Num() > 40) Events.RemoveAt(0);
+	FSmvUiLog E;
+	E.Text = Text; E.Sev = Sev; E.Wall = FPlatformTime::Seconds();
+	E.Clock = FDateTime::Now().ToString(TEXT("%H:%M:%S"));
+	UiLog.Add(MoveTemp(E));
+	if (UiLog.Num() > 60) UiLog.RemoveAt(0);
 }
 
 void ASmvGameMode::HandleTele(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
@@ -495,6 +517,41 @@ void ASmvGameMode::Command(const FString& Name, TSharedPtr<FJsonObject> Params)
 	if (USmvFlightLink* L = Link()) L->Command(Name, Params.IsValid() ? Params : MakeShared<FJsonObject>());
 }
 
+/** Uçuş modu listesi (web flightsim_fltbar FLIGHT_MODES ile aynı). */
+static TArray<FString> SmvFlightModes(const FString& Kind)
+{
+	if (Kind == TEXT("plane")) return { TEXT("MANUAL"), TEXT("STABILIZE"), TEXT("ACRO"), TEXT("FBWA"), TEXT("FBWB"), TEXT("CRUISE"), TEXT("TAKEOFF"), TEXT("AUTO"), TEXT("LOITER"), TEXT("CIRCLE"), TEXT("GUIDED"), TEXT("RTL") };
+	if (Kind == TEXT("vtol")) return { TEXT("MANUAL"), TEXT("FBWA"), TEXT("FBWB"), TEXT("CRUISE"), TEXT("TAKEOFF"), TEXT("AUTO"), TEXT("LOITER"), TEXT("CIRCLE"), TEXT("GUIDED"), TEXT("RTL"),
+		TEXT("QSTABILIZE"), TEXT("QHOVER"), TEXT("QLOITER"), TEXT("QACRO"), TEXT("QLAND"), TEXT("QRTL") };
+	if (Kind == TEXT("icept")) return { TEXT("FBWA"), TEXT("FBWB"), TEXT("CRUISE"), TEXT("AUTO"), TEXT("LOITER"), TEXT("GUIDED"), TEXT("RTL"), TEXT("QSTABILIZE"), TEXT("QHOVER"), TEXT("QLOITER"), TEXT("QLAND"), TEXT("QRTL") };
+	if (Kind == TEXT("rover")) return { TEXT("MANUAL"), TEXT("ACRO"), TEXT("STEERING"), TEXT("HOLD"), TEXT("LOITER"), TEXT("FOLLOW"), TEXT("SIMPLE"), TEXT("AUTO"), TEXT("RTL"), TEXT("SMART_RTL"), TEXT("GUIDED") };
+	return { TEXT("STABILIZE"), TEXT("ALT_HOLD"), TEXT("LOITER"), TEXT("POSHOLD"), TEXT("ACRO"), TEXT("GUIDED"), TEXT("AUTO"), TEXT("BRAKE"), TEXT("CIRCLE"), TEXT("RTL"), TEXT("SMART_RTL"), TEXT("LAND") };
+}
+
+static FString SmvModeKind(const FString& Type)
+{
+	if (Type == TEXT("rover")) return TEXT("rover");
+	if (Type == TEXT("interceptor")) return TEXT("icept");
+	if (Type == TEXT("vtol")) return TEXT("vtol");
+	if (Type == TEXT("plane")) return TEXT("plane");
+	return TEXT("copter");
+}
+
+void ASmvGameMode::UiAction(const FString& Name, const FString& Arg)
+{
+	if (!Flow.IsValid() || Flow->GetScreen() != ESmvScreen::Flight) return;
+	if (Name == TEXT("Mode"))
+	{
+		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+		P->SetStringField(TEXT("mode"), Arg);
+		Command(TEXT("mode"), P);
+		PushEvent(FString::Printf(TEXT("Mod isteği: %s"), *Arg), 6);
+		return;
+	}
+	if (Name == TEXT("CamCycle")) { if (ASmvPilotPawn* P = GetPilot()) P->CycleMode(); return; }
+	HandleAction(FName(*Name));
+}
+
 void ASmvGameMode::TogglePause()
 {
 	bPauseMenu = !bPauseMenu;
@@ -508,6 +565,42 @@ void ASmvGameMode::HandleAction(FName A)
 	const bool bRaceLocked = !bRaceStarted;
 	const bool bMatch = Flow->GetMatch() && Flow->GetMatch()->HasMatch();
 	if (A == TEXT("Pause")) { TogglePause(); return; }
+	if (A == TEXT("Panel")) { if (FlightUi.IsValid()) FlightUi->TogglePanel(); return; }
+	if (A == TEXT("Sticks")) { if (FlightUi.IsValid()) FlightUi->ToggleSticks(); return; }
+	if (A == TEXT("ModeMenu")) { if (FlightUi.IsValid()) FlightUi->ToggleModeMenu(); return; }
+	if (A == TEXT("ArmToggle"))
+	{
+		// web flightsim_fltbar disarmAction: sabit kanat havada → motor kes (süzülür); kopter havada → onay (araç düşer); yerde gerçek DISARM
+		USmvFlightLink* Lk = Link();
+		if (!Lk) return;
+		const FCaySimTelemetry& Tl = Lk->LastTele();
+		const bool bPlaneLike = Req.Drone.Type == TEXT("plane") || Req.Drone.Type == TEXT("vtol") || Req.Drone.Type == TEXT("interceptor");
+		const double Now = FPlatformTime::Seconds();
+		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+		if (Lk->LastExtra().bMotorCut) { P->SetBoolField(TEXT("on"), false); Command(TEXT("motor_cut"), P); return; }
+		if (!Tl.bArmed)
+		{
+			if (bRaceLocked) { HandleToast(FSmvI18n::T(TEXT("race.wait_start")).ToString(), 4); return; }
+			Command(TEXT("arm"));
+			return;
+		}
+		if (bPlaneLike && Tl.AltRel > 3.0)
+		{
+			P->SetBoolField(TEXT("on"), true);
+			Command(TEXT("motor_cut"), P);
+			PushEvent(TEXT("MOTOR KESİK · SÜZÜLÜYOR — yeniden basınca motor verilir"), 4);
+			return;
+		}
+		if (!bPlaneLike && Tl.AltRel > 1.5 && Now > ArmConfirmUntil)
+		{
+			ArmConfirmUntil = Now + 2.5;
+			HandleToast(TEXT("Havada DISARM aracı düşürür — onaylamak için 2 sn içinde yeniden basın (X)"), 4);
+			return;
+		}
+		ArmConfirmUntil = 0;
+		Command(TEXT("disarm"));
+		return;
+	}
 	if (A == TEXT("Ack")) { if (Gpws) Gpws->Ack(); bAlertUnacked = false; if (Tones) Tones->SetAlarm(0, 0.f); return; }
 	if ((A == TEXT("Arm") || A == TEXT("Takeoff")) && bRaceLocked) { HandleToast(FSmvI18n::T(TEXT("race.wait_start")).ToString(), 4); return; }
 	if (A == TEXT("Arm")) Command(TEXT("arm"));
@@ -869,6 +962,7 @@ void ASmvGameMode::UpdateHud()
 	}
 	if (!Overlay) return;
 	FSmvHudState S;
+	const double LinkAge = L->LinkAgeMs();
 	USimumavClient* C = GI->GetClient();
 	S.AccountLine = C->IsLoggedIn() ? FString::Printf(TEXT("simumav.com — %s"), *C->GetUser().DisplayName)
 		: FSmvI18n::Format(TEXT("hud.guest"), { { TEXT("name"), Req.Pilot.Name } }).ToString();
@@ -940,6 +1034,53 @@ void ASmvGameMode::UpdateHud()
 	S.bCrashed = bCrashed;
 	if (bPauseMenu) S.Paused = FSmvI18n::T(TEXT("flight.paused_hint")).ToString();
 	Overlay->SetState(S);
+
+	// ---- uçuş arayüzü ----
+	if (FlightUi.IsValid())
+	{
+		FSmvFlightUiState U;
+		U.Title = Req.Drone.Name.IsEmpty() ? Req.Drone.Type : Req.Drone.Name;
+		U.Account = S.AccountLine;
+		U.Backend = S.BackendLine;
+		U.MpLine = S.MpLine;
+		U.CamLabel = Pw ? ASmvPilotPawn::ModeLabel(Pw->GetMode()) : FString();
+		U.ModeKind = SmvModeKind(Req.Drone.Type);
+		U.bPlane = U.ModeKind == TEXT("plane") || U.ModeKind == TEXT("vtol") || U.ModeKind == TEXT("icept");
+		U.bRover = U.ModeKind == TEXT("rover");
+		U.Modes = SmvFlightModes(U.ModeKind);
+		U.bTele = LinkAge >= 0.0;
+		U.bFresh = LinkAge >= 0.0 && LinkAge < 1500.0;
+		U.bArmed = T.bArmed;
+		U.bMotorCut = X.bMotorCut;
+		U.bGcs = X.bGcsConnected;
+		U.bHasHome = T.bHasHome;
+		U.Mode = T.Mode;
+		float Rr = 0, Rp = 0, Ry = 0;
+		Drone->GetRenderedPose(Rr, Rp, Ry);
+		U.Roll = Rr; U.Pitch = Rp;
+		U.Heading = T.Heading;
+		U.AltRel = (float)T.AltRel; U.AltMsl = (float)T.AltMsl;
+		U.Gs = T.Groundspeed; U.As = T.Airspeed; U.Climb = T.Climb; U.Throttle = T.Throttle;
+		U.BattV = T.BattV; U.BattPct = T.BattPct; U.Speedup = (float)X.Speedup;
+		U.DistHome = T.bHasHome ? (float)CaySimGeo::HaversineM(T.Lat, T.Lon, T.HomeLat, T.HomeLon) : 0.f;
+		U.GpsFix = T.GpsFix; U.Sats = T.Sats;
+		U.bFuel = X.bFuel; U.FuelPct = (float)X.FuelPct; U.FuelL = (float)X.FuelL; U.RangeKm = (float)X.RangeKm;
+		U.bElec = X.bElec; U.ElecPct = (float)X.ElecPct; U.ElecV = (float)X.ElecV; U.ElecW = (float)X.ElecW; U.ElecMin = (float)X.ElecMinLeft;
+		const double MaxMs = Req.Power.MaxSpeedMs > 3 ? Req.Power.MaxSpeedMs : Req.Drone.Power.MaxSpeedMs > 3 ? Req.Drone.Power.MaxSpeedMs : (U.bPlane ? 45.0 : U.bRover ? 8.0 : 18.0);
+		U.MaxKmh = (float)(MaxMs * 3.6);
+		U.Log = UiLog;
+		if (Pw)
+		{
+			U.StickL = Pw->GetStickL(); U.StickR = Pw->GetStickR();
+			U.Ch5 = Pw->GetCh5(); U.bThrUsed = Pw->IsThrottleEngaged();
+			U.bHideGauges = (Pw->GetMode() == ESmvCamMode::Fpv || Pw->GetMode() == ESmvCamMode::Gimbal) && Pw->IsHudOn();
+		}
+		U.bStickMode2 = Set.bStickMode2;
+		U.bRcDevice = Set.InputDevice == TEXT("rc");
+		U.FlightS = FPlatformTime::Seconds() - SceneT0;
+		U.bMenuOpen = bPauseMenu;
+		FlightUi->SetState(U);
+	}
 }
 
 // ---------------------------------------------------------------------------

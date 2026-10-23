@@ -41,12 +41,7 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 	const bool bBlink = FMath::Fmod(FPlatformTime::Seconds(), 0.8) < 0.45;
 	++Layer;
 
-	// sol üst: hesap / fizik / Mission Planner
-	SmvBox(Out, Layer, G, FVector2D(12, 12), FVector2D(430, 70), Panel, W);
-	SmvText(Out, Layer + 1, G, FVector2D(22, 16), State.AccountLine, 12, Txt);
-	SmvText(Out, Layer + 1, G, FVector2D(22, 36), State.BackendLine + (State.ModeLine.IsEmpty() ? FString() : TEXT("  ·  ") + State.ModeLine), 12, Dim, false);
-	if (!State.MpLine.IsEmpty()) SmvText(Out, Layer + 1, G, FVector2D(22, 56), State.MpLine, 10, Dim, false);
-
+	// hesap / fizik / kip satırları, güç göstergeleri, ileti akışı ve RC çubukları artık SSmvFlightUi'da (bilgi kartı, kadranlar, sanal kumanda)
 	// uyarılar (orta üst): kırmızı WARNING / sarı CAUTION; onaylanmamışsa yanıp söner
 	if (State.Alerts.Num())
 	{
@@ -63,25 +58,10 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 		SmvText(Out, Layer + 2, G, P + FVector2D(Bw - 120, 12), bWarn ? TEXT("MASTER WARN") : TEXT("MASTER CAUT"), 10, C, false);
 	}
 
-	// güç (sağ üst)
-	float Y = 12.f;
-	auto Bar = [&](const FString& Label, float Pct, const FString& T)
-	{
-		const FVector2D P(Sz.X - 262.f, Y);
-		SmvBox(Out, Layer, G, P, FVector2D(250, 34), Panel, W);
-		SmvText(Out, Layer + 1, G, P + FVector2D(8, 2), Label + TEXT("  ") + T, 10, Txt, false);
-		const float F = FMath::Clamp(Pct / 100.f, 0.f, 1.f);
-		SmvBox(Out, Layer + 1, G, P + FVector2D(8, 21), FVector2D(234, 7), FLinearColor(1, 1, 1, 0.15f), W);
-		SmvBox(Out, Layer + 2, G, P + FVector2D(8, 21), FVector2D(234 * F, 7), F < 0.1f ? Red : F < 0.25f ? Amber : Green, W);
-		Y += 40.f;
-	};
-	if (State.bElec) Bar(TEXT("BAT"), State.ElecPct, State.ElecText);
-	if (State.bFuel) Bar(TEXT("YAKIT"), State.FuelPct, State.FuelText);
-
-	// yarış / it dalaşı paneli (sağ)
+	// yarış / it dalaşı paneli (sol, bilgi kartının altında; sağ üstte dron paneli var)
 	if (State.bRace || State.bDogfight)
 	{
-		const FVector2D P(Sz.X - 262.f, Y + 6.f);
+		const FVector2D P(14.f, 118.f);
 		const int32 Rows = 3 + State.Standings.Num();
 		SmvBox(Out, Layer, G, P, FVector2D(250, 20.f + 18.f * Rows + (State.bDogfight ? 22.f : 0.f)), Panel, W);
 		SmvText(Out, Layer + 1, G, P + FVector2D(8, 4), State.RaceTitle, 12, Amber);
@@ -110,36 +90,11 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 		SmvText(Out, Layer + 2, G, P + FVector2D(R + 6, -R), State.TargetLabel, 11, C, false);
 	}
 
-	// olay şeridi (sol alt)
-	{
-		const int32 N = FMath::Min(6, State.Events.Num());
-		const float Base = Sz.Y - 40.f - 18.f * N - (State.bShowSticks ? 110.f : 0.f);
-		for (int32 i = 0; i < N; ++i)
-		{
-			const TPair<FString, int32>& E = State.Events[State.Events.Num() - N + i];
-			const FLinearColor C = E.Value <= 3 ? Red : E.Value == 4 ? Amber : Dim;
-			SmvText(Out, Layer + 1, G, FVector2D(18, Base + 18.f * i), E.Key, 11, C, false);
-		}
-	}
-
-	// RC çubuk göstergesi (sol alt)
-	if (State.bShowSticks && State.Rc.Num() >= 4)
-	{
-		auto Stick = [&](const FVector2D& C, int32 Xc, int32 Yc)
-		{
-			SmvBox(Out, Layer, G, C - FVector2D(40, 40), FVector2D(80, 80), Panel, W);
-			const float X = (State.Rc[Xc] - 1500) / 500.f, Yv = (State.Rc[Yc] - 1500) / 500.f;
-			SmvBox(Out, Layer + 1, G, C + FVector2D(X * 34.f - 4.f, -Yv * 34.f - 4.f), FVector2D(8, 8), Green, W);
-		};
-		Stick(FVector2D(62, Sz.Y - 62), 3, 2);       // yaw / gaz
-		Stick(FVector2D(156, Sz.Y - 62), 0, 1);      // roll / pitch (ch2 ters)
-	}
-
 	// PiP (sağ alt)
 	if (State.Pip)
 	{
 		const FVector2D PSz(384, 216);
-		const FVector2D P(Sz.X - PSz.X - 16, Sz.Y - PSz.Y - 16);
+		const FVector2D P(Sz.X - PSz.X - 16, Sz.Y - PSz.Y - 80);   // alt bandın üstü
 		SmvBox(Out, Layer, G, P - FVector2D(2, 2), PSz + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.8f), W);
 		FSlateDrawElement::MakeBox(Out, Layer + 1, G.ToPaintGeometry(PSz, FSlateLayoutTransform(FVector2f(P))), &PipBrush, ESlateDrawEffect::None, FLinearColor::White);
 		SmvText(Out, Layer + 2, G, P + FVector2D(6, 4), TEXT("GIMBAL"), 10, Green, false);
@@ -158,12 +113,7 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 	}
 
 	if (State.bCrashed) SmvText(Out, Layer + 3, G, FVector2D(Sz.X * 0.5f - 150.f, Sz.Y * 0.45f), TEXT("ÇARPIŞMA"), 40, Red);
-	if (!State.Toast.IsEmpty())
-	{
-		const FLinearColor C = State.ToastSeverity <= 3 ? Red : State.ToastSeverity == 4 ? Amber : Txt;
-		SmvBox(Out, Layer + 2, G, FVector2D(Sz.X * 0.5f - 300.f, Sz.Y - 120.f), FVector2D(600, 34), Panel, W);
-		SmvText(Out, Layer + 3, G, FVector2D(Sz.X * 0.5f - 288.f, Sz.Y - 114.f), State.Toast, 13, C, false);
-	}
+	// bildirim (toast) kabukta gösterilir (SSmvShell::ShowToast) — burada çift çizilmez
 	if (!State.Paused.IsEmpty())
 	{
 		SmvBox(Out, Layer + 3, G, FVector2D(0, 0), Sz, FLinearColor(0, 0, 0, 0.35f), W);

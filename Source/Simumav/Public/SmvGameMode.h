@@ -9,6 +9,7 @@
 #include "SimumavTypes.h"
 #include "SmvMatchClient.h"
 #include "SmvFlow.h"
+#include "SSmvFlightUi.h"
 #include "SmvGameMode.generated.h"
 
 class ACaySimWorldSetup;
@@ -22,6 +23,7 @@ class USmvFlow;
 class USmvFlightLink;
 class USmvToneSynth;
 class SSmvShell;
+class SWidget;
 namespace SmvCore { class FGpws; class FRingTracker; class FDogfight; class FBotPilot; struct FRing; }
 
 UCLASS()
@@ -41,6 +43,8 @@ public:
 	void Command(const FString& Name, TSharedPtr<FJsonObject> Params = nullptr);
 	ASmvPilotPawn* GetPilot() const;
 	FString MissionPlannerLine() const;
+	/** Uçuş arayüzü düğmeleri (SSmvFlightUi): Mode{arg}, CamCycle ya da pilot eylem adları (ArmToggle, Takeoff, Rtl, Land, Reset, Pause …). */
+	void UiAction(const FString& Name, const FString& Arg = FString());
 
 protected:
 	UPROPERTY() TObjectPtr<ACaySimWorldSetup> WorldSetup;
@@ -57,6 +61,10 @@ protected:
 private:
 	TWeakObjectPtr<USmvFlow> Flow;
 	TSharedPtr<SSmvShell> Shell;
+	TSharedPtr<SSmvFlightUi> FlightUi;
+	TSharedPtr<SWidget> FlightUiHost;
+	TArray<FSmvUiLog> UiLog;
+	double ArmConfirmUntil = 0;
 	bool bScene = false;
 	bool bPauseMenu = false;
 	bool bCrashed = false;
