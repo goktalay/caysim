@@ -14,6 +14,7 @@
 #include "SmvUiPrefs.h"
 #include "SmvFpv.h"
 #include "SmvI18n.h"
+#include "SmvSpeech.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Layout/SBox.h"
@@ -2447,7 +2448,10 @@ TSharedRef<SWidget> SSmvShell::WizAdvanced()
 
 	Rt->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("wizard.sim")), Accent2())];
 	Rt->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("wizard.camera")), Chips(&R.Camera, { TEXT("day"), TEXT("thermal"), TEXT("night"), TEXT("none") },
-		{ Tx(TEXT("cam.day")), Tx(TEXT("cam.thermal")), Tx(TEXT("cam.night")), Tx(TEXT("cam.none")) }, { ESmvIcon::Sun, ESmvIcon::Bolt, ESmvIcon::Moon, ESmvIcon::Camera }, nullptr, 2))];
+		{ Tx(TEXT("cam.day")), Tx(TEXT("cam.thermal")), Tx(TEXT("cam.night")), Tx(TEXT("cam.none")) }, { ESmvIcon::Sun, ESmvIcon::Bolt, ESmvIcon::Moon, ESmvIcon::Camera }, [Self]() { Self->Refresh(); }, 2))];
+	if (R.Camera == TEXT("thermal"))
+		Rt->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("camera.palette")), Chips(&FSmvUiPrefs::Get().ThermalPalette, { TEXT("white"), TEXT("black"), TEXT("iron") },
+			{ Tx(TEXT("camera.pal_white")), Tx(TEXT("camera.pal_black")), Tx(TEXT("camera.pal_iron")) }, {}, []() { FSmvUiPrefs::Get().Save(); }, 3))];
 	Rt->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("wizard.speedup")), Chips(&WizSpeed, { TEXT("0.25"), TEXT("0.5"), TEXT("1.0"), TEXT("2.0"), TEXT("4.0"), TEXT("8.0") },
 		{ FText::FromString(TEXT("0,25×")), FText::FromString(TEXT("0,5×")), FText::FromString(TEXT("1×")), FText::FromString(TEXT("2×")), FText::FromString(TEXT("4×")), FText::FromString(TEXT("8×")) }, {},
 		[Self, F]() { F->Draft.Speedup = FCString::Atod(*Self->WizSpeed); }, 3))];
@@ -3540,7 +3544,13 @@ TSharedRef<SWidget> SSmvShell::SetAlerts()
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("gpws.lang")), Chips(&S.GpwsLang, { TEXT("aviation"), TEXT("ui") }, { Tx(TEXT("gpws.lang_aviation")), Tx(TEXT("gpws.lang_ui")) }, {}))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("gpws.bank_copter")), SliderI(&S.BankCopter, 20, 60, 1, Deg))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("gpws.bank_plane")), SliderI(&S.BankPlane, 30, 70, 1, Deg))];
-	V->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Volume).Text(Tx(TEXT("set.alert_test"))).OnClick([]() { FSmvUiSound::Play(ESmvSnd::Error); })];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.gpws_speech")), Toggle(&FSmvUiPrefs::Get().bGpwsSpeech, []() { FSmvUiPrefs::Get().Save(); }), Tx(TEXT("set.gpws_speech_hint")))];
+	V->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Volume).Text(Tx(TEXT("set.alert_test"))).OnClick([Self = this]()
+	{
+		FSmvUiSound::Play(ESmvSnd::Error);
+		const bool bAv = Self->EditSettings.GpwsLang != TEXT("ui");
+		if (FSmvUiPrefs::Get().bGpwsSpeech) SmvSpeech::Say(bAv ? FString(TEXT("pull up")) : FSmvI18n::T(TEXT("gpws.c_PULL_UP")).ToString().ToLower(), bAv ? FString(TEXT("en")) : FSmvI18n::Language(), (float)Self->EditSettings.Volume, 500);
+	})];
 	return V;
 }
 

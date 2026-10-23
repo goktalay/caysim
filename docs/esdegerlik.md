@@ -91,7 +91,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Adımlı tek oyunculu sihirbaz | `fly/wizard.js` | 7 adım: Araç (3B önizleme + statlar + pilot) → Harita (kartlar, önizleme görseli) → Ortam (saat, hava, rüzgâr pusulası; UDS'ye gider) → Kumanda (Mode 1–4 şemalı kartlar, cihaz, expo) → Görev ve kurallar (görev, yarış/it dalaşı, hedefler) → Gelişmiş (kalkış, güç, kamera, hız, arka uç, .BIN) → Özet + BAŞLAT; LB/RB / Q-E adım; "Hemen başlat" | ✓ | — |
 | Kalkış yöntemleri + rüzgâr önerisi | `wizard.js` | Yöntemler ve aralıklar + rüzgâra karşı kalkış önerisi (baş/yan/kuyruk bileşeni, uygun değilse amber; "Rüzgâra karşı çevir" pist yönünü ayarlar) | ✓ | P2 |
 | Yer kontrol (radar/EO) adımı | `wizard.js` | — | ✗ | P2 |
-| Kamera türü + termal paleti, gösterge tasarımı, grafik ön ayarı | `wizard.js` | Kamera türü ✓ (palet yok); gösterge teması Ayarlar'da; grafik Ayarlar'da | ◐ | P2 |
+| Kamera türü + termal paleti, gösterge tasarımı, grafik ön ayarı | `wizard.js` | Kamera türü + termal paleti (beyaz-sıcak / siyah-sıcak / ironbow; renk tablosu LUT), gösterge tasarımı ve grafik ön ayarı Ayarlar'da | ✓ | P2 |
 | Video kaydı (WebM) | `wizard.js` | — | ✗ | P2 |
 
 ## 9. Karşılaşma / lobi / yapay zekâ
@@ -122,10 +122,10 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Sanal kumanda + Mode 1–4 + klavye WASD/oklar | `rc.js`, `flightsim_stickmode.js` | ✓ (aynı eşleme; çubuk etiketleri ve ipucu moda göre) | ✓ | — |
 | Hassasiyet ⚙ (ölü bölge/expo/oran, hazır ayarlar, eğri) | `flightsim_sens*.js` | Ayarlar → Kumanda: Hassas / Normal / Çevik / Özel; eksen başına (roll, pitch, yaw, gaz) oran, expo ve ölü bölge, roll+pitch bağla; canlı eğri; gaz eğrisi yalnız kopterde | ✓ | P2 |
 | Gamepad profili / eksen algıla | `flightsim_gamepad.js` | XInput sabit eşleme + tuş atama (Ayarlar → Tuşlar) + RC verici eksen eşlemesi ve "Algıla" (kolu oynat → eksen + ters yön otomatik) | ✓ | P2 |
-| Kamera kipleri 1–7, PiP, FPV FOV | `flightsim_camera.js` | ✓ (PiP sürükleme/boyut yok) | ◐ | P2 |
+| Kamera kipleri 1–7, PiP, FPV FOV | `flightsim_camera.js` | ✓ — PiP (gimbal) penceresi sürükleyerek taşınır, sağ alt köşeden boyutlandırılır (16:9), konum/boyut kalıcı | ✓ | P2 |
 | Rüzgâr göstergesi (pusula, bileşenler) | `flightsim_wind.js` | Sol üstte kart: dönen pusula, akış oku, hız/yön, esinti, baş-kuyruk / yan bileşeni (yan > 6 m/s amber); 3B rüzgâr tulumu yok | ◐ | P2 |
 | Hava efektleri (yağmur/kar/şimşek) | `flightsim3d.js` | Ultra Dynamic Weather (pakette varsa; içerik ajanı) | ◐ | — |
-| GPWS uyarıları + MASTER lambaları + ton | `flightsim_gpws*.js` | ✓ (konuşma sentezi yok) | ◐ | P2 |
+| GPWS uyarıları + MASTER lambaları + ton | `flightsim_gpws*.js` | ✓ + sesli uyarı (Windows SAPI konuşma; havacılık İngilizcesi ya da arayüz dili, onaylayınca susar; Ayarlar → Uyarılar) | ✓ | P2 |
 | Grafik ▾ (ön ayarlar, FPS, kare sınırı, özel kaydırıcılar) | `flightsim_gfx.js` | Ayarlar → Görüntü: 5 ön ayar kartı + otomatik algılama + çözünürlük, pencere kipi, VSync, kare sınırı, ölçek, 8 ayrıntı kaydırıcısı | ✓ | — |
 | Servo tetik "Dinle" | `flightsim_servotrig.js` | Duraklatma → Gelişmiş | ✓ | — |
 | Hedef sembolojisi / kilit (yalnız HUD + puan) | `flightsim_targets.js` | ✓ | ✓ | — |

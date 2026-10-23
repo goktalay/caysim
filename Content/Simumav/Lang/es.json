@@ -1235,6 +1235,8 @@
  "set.display_applied": "Ajustes de pantalla aplicados",
  "set.flight_tips": "Mostrar de nuevo los consejos de vuelo",
  "set.fps_limit": "Límite de fotogramas",
+ "set.gpws_speech": "Alertas habladas",
+ "set.gpws_speech_hint": "En modo completo la alerta se pronuncia tras el tono (voz de Windows; voz predeterminada si falta el paquete de idioma)",
  "set.interface": "Interfaz",
  "set.key_kb": "TECLADO",
  "set.key_note": "WASD / flechas son los ejes de los sticks (según modo) y no se reasignan. Una tecla en conflicto se intercambia.",

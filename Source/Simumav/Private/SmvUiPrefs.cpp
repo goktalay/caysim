@@ -32,6 +32,11 @@ void FSmvUiPrefs::Load()
 	GConfig->GetString(GSmvPrefsSection, TEXT("Season"), Season, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("SensPreset"), SensPreset, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("LinkRP"), bLinkRP, Ini);
+	GConfig->GetBool(GSmvPrefsSection, TEXT("GpwsSpeech"), bGpwsSpeech, Ini);
+	GConfig->GetString(GSmvPrefsSection, TEXT("ThermalPalette"), ThermalPalette, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipR"), PipR, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipB"), PipB, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("DialTheme"), DialTheme, Ini);
 	for (int32 i = 0; i < 4; ++i)
 	{
@@ -69,6 +74,11 @@ void FSmvUiPrefs::Save()
 	GConfig->SetString(GSmvPrefsSection, TEXT("Season"), *Season, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("SensPreset"), *SensPreset, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("LinkRP"), bLinkRP, Ini);
+	GConfig->SetBool(GSmvPrefsSection, TEXT("GpwsSpeech"), bGpwsSpeech, Ini);
+	GConfig->SetString(GSmvPrefsSection, TEXT("ThermalPalette"), *ThermalPalette, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipR"), PipR, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipB"), PipB, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("DialTheme"), *DialTheme, Ini);
 	for (int32 i = 0; i < 4; ++i)
 	{

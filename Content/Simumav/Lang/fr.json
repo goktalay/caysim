@@ -1235,6 +1235,8 @@
  "set.display_applied": "Réglages d'affichage appliqués",
  "set.flight_tips": "Réafficher les conseils de vol",
  "set.fps_limit": "Limite d'images",
+ "set.gpws_speech": "Alertes vocales",
+ "set.gpws_speech_hint": "En mode complet, l'alerte est prononcée après la tonalité (voix Windows ; voix par défaut sans pack de langue)",
  "set.interface": "Interface",
  "set.key_kb": "CLAVIER",
  "set.key_note": "ZQSD/WASD et flèches sont les axes des manches (selon le mode) et non réaffectables. Une touche en conflit est échangée.",

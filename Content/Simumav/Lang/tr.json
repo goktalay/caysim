@@ -1235,6 +1235,8 @@
  "set.display_applied": "Görüntü ayarları uygulandı",
  "set.flight_tips": "Uçuş ipuçlarını yeniden göster",
  "set.fps_limit": "Kare sınırı",
+ "set.gpws_speech": "Sesli uyarı (konuşma)",
+ "set.gpws_speech_hint": "Tam kipte tondan sonra uyarı seslendirilir (Windows konuşma sesi; dil paketi yoksa varsayılan ses)",
  "set.interface": "Arayüz",
  "set.key_kb": "KLAVYE",
  "set.key_note": "WASD / ok tuşları çubuk eksenleridir (kumanda moduna göre) ve atanamaz. Çakışan tuş diğer eylemle yer değiştirir.",

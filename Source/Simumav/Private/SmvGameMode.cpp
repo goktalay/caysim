@@ -17,6 +17,7 @@
 #include "SmvMenuScene.h"
 #include "SmvFpvActor.h"
 #include "SmvPilotFigure.h"
+#include "SmvSpeech.h"
 #include "Engine/StaticMeshActor.h"
 #include "SmvMusicSynth.h"
 #include "SmvUiPrefs.h"
@@ -734,7 +735,7 @@ void ASmvGameMode::HandleAction(FName A)
 		Command(TEXT("disarm"));
 		return;
 	}
-	if (A == TEXT("Ack")) { if (Gpws) Gpws->Ack(); bAlertUnacked = false; if (Tones) Tones->SetAlarm(0, 0.f); return; }
+	if (A == TEXT("Ack")) { if (Gpws) Gpws->Ack(); bAlertUnacked = false; if (Tones) Tones->SetAlarm(0, 0.f); SmvSpeech::Stop(); return; }
 	if ((A == TEXT("Arm") || A == TEXT("Takeoff")) && bRaceLocked) { HandleToast(FSmvI18n::T(TEXT("race.wait_start")).ToString(), 4); return; }
 	if (A == TEXT("Arm")) Command(TEXT("arm"));
 	else if (A == TEXT("Disarm")) Command(TEXT("disarm"));
@@ -924,6 +925,12 @@ void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 		const SmvCore::FGpwsCodeDef* D = SmvCore::GpwsCode(F);
 		if (!D) continue;
 		PushEvent(FString::Printf(TEXT("%s · %s"), std::string(D->Level) == "warning" ? TEXT("WARNING") : TEXT("CAUTION"), UTF8_TO_TCHAR(D->Av)), std::string(D->Level) == "warning" ? 3 : 4);
+		// sesli uyarı (tam kip): havacılık kalıbı İngilizce, arayüz dilinde küçük harfle (motor harf harf okumasın)
+		if (S.GpwsMode == TEXT("full") && S.bSound && FSmvUiPrefs::Get().bGpwsSpeech)
+		{
+			const FString Txt = bAviation ? FString(UTF8_TO_TCHAR(D->Say)) : FSmvI18n::T(FString(TEXT("gpws.c_")) + UTF8_TO_TCHAR(D->Code)).ToString().ToLower();
+			SmvSpeech::Say(Txt, bAviation ? FString(TEXT("en")) : FSmvI18n::Language(), (float)S.Volume * FSmvUiPrefs::Get().VolAlerts, 800);
+		}
 	}
 	for (const SmvCore::FGpwsEpisode& E : R.Ended)
 	{
@@ -1170,6 +1177,9 @@ void ASmvGameMode::UpdateHud()
 	if (FPlatformTime::Seconds() < ToastUntil) { S.Toast = ToastText; S.ToastSeverity = ToastSev; }
 	S.bCrashed = bCrashed;
 	if (bPauseMenu) S.Paused = FSmvI18n::T(TEXT("flight.paused_hint")).ToString();
+	// PiP artık uçuş arayüzünde (sürükle / boyutlandır); HUD katmanı çizmez
+	UTextureRenderTarget2D* PipRt = S.Pip;
+	S.Pip = nullptr;
 	Overlay->SetState(S);
 
 	// ---- uçuş arayüzü ----
@@ -1252,6 +1262,8 @@ void ASmvGameMode::UpdateHud()
 		U.bRcDevice = Set.InputDevice == TEXT("rc");
 		U.FlightS = FPlatformTime::Seconds() - SceneT0;
 		U.bMenuOpen = bPauseMenu;
+		U.Pip = PipRt;
+		U.PipLabel = ASmvPilotPawn::ModeLabel(ESmvCamMode::Gimbal);
 		FlightUi->SetState(U);
 	}
 }

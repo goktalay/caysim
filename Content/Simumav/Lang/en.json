@@ -1235,6 +1235,8 @@
  "set.display_applied": "Display settings applied",
  "set.flight_tips": "Show flight tips again",
  "set.fps_limit": "Frame limit",
+ "set.gpws_speech": "Spoken alerts",
+ "set.gpws_speech_hint": "In full mode the alert is spoken after the tone (Windows voice; default voice if the language pack is missing)",
  "set.interface": "Interface",
  "set.key_kb": "KEYBOARD",
  "set.key_note": "WASD / arrow keys are the stick axes (per stick mode) and can't be rebound. A clashing key swaps with the other action.",

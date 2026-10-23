@@ -5,6 +5,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Texture2D.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -473,6 +474,13 @@ void ASmvPilotPawn::ApplyCamTypePost()
 		P.bOverride_ColorContrast = true; P.ColorContrast = FVector4(1.8f, 1.8f, 1.8f, 1.f);
 		P.bOverride_ColorGamma = true; P.ColorGamma = FVector4(0.7f, 0.7f, 0.7f, 1.f);
 		P.bOverride_FilmGrainIntensity = true; P.FilmGrainIntensity = 0.3f;
+		// palet: ton eşlemeden sonra parlaklık → palet (renk tablosu)
+		const FString& Pal = FSmvUiPrefs::Get().ThermalPalette;
+		if (UTexture2D* Lut = PaletteLut(Pal == TEXT("black") ? 1 : Pal == TEXT("iron") ? 2 : 0))
+		{
+			P.bOverride_ColorGradingLUT = true; P.ColorGradingLUT = Lut;
+			P.bOverride_ColorGradingIntensity = true; P.ColorGradingIntensity = 1.f;
+		}
 	}
 	Camera->PostProcessSettings = (Mode == ESmvCamMode::Gimbal || Mode == ESmvCamMode::Fpv) ? P : FPostProcessSettings();
 	Camera->PostProcessBlendWeight = 1.f;
@@ -603,4 +611,43 @@ void ASmvPilotPawn::Shake(float AmpCm, float Seconds)
 {
 	ShakeAmp = AmpCm / FMath::Max(0.05f, Seconds);
 	ShakeLeft = Seconds;
+}
+
+UTexture2D* ASmvPilotPawn::PaletteLut(int32 Index)
+{
+	if (Index <= 0) return nullptr;   // beyaz-sıcak: gri tonlama yeterli
+	if (PaletteLuts.Num() < 3) PaletteLuts.SetNum(3);
+	if (PaletteLuts[Index]) return PaletteLuts[Index];
+	// ironbow durakları (siyah → lacivert → mor → kırmızı → turuncu → sarı → beyaz)
+	static const FLinearColor Iron[] = { FLinearColor(0.f, 0.f, 0.f), FLinearColor(0.08f, 0.02f, 0.35f), FLinearColor(0.45f, 0.02f, 0.55f), FLinearColor(0.85f, 0.12f, 0.25f),
+		FLinearColor(0.98f, 0.45f, 0.05f), FLinearColor(1.f, 0.82f, 0.15f), FLinearColor(1.f, 1.f, 0.92f) };
+	UTexture2D* T = UTexture2D::CreateTransient(256, 16, PF_B8G8R8A8);
+	if (!T) return nullptr;
+	T->SRGB = false;
+	T->Filter = TF_Bilinear;
+	T->LODGroup = TEXTUREGROUP_ColorLookupTable;
+	T->AddressX = TA_Clamp; T->AddressY = TA_Clamp;
+	FTexture2DMipMap& Mip = T->GetPlatformData()->Mips[0];
+	FColor* Px = (FColor*)Mip.BulkData.Lock(LOCK_READ_WRITE);
+	for (int32 y = 0; y < 16; ++y)
+	{
+		for (int32 x = 0; x < 256; ++x)
+		{
+			const float R = (x % 16) / 15.f, G = y / 15.f, B = (x / 16) / 15.f;
+			const float Lum = FMath::Clamp(0.2126f * R + 0.7152f * G + 0.0722f * B, 0.f, 1.f);
+			FLinearColor C;
+			if (Index == 1) C = FLinearColor(1.f - Lum, 1.f - Lum, 1.f - Lum);
+			else
+			{
+				const float F = Lum * 6.f;
+				const int32 I = FMath::Clamp((int32)F, 0, 5);
+				C = FMath::Lerp(Iron[I], Iron[I + 1], F - I);
+			}
+			Px[y * 256 + x] = FColor((uint8)FMath::RoundToInt(C.R * 255.f), (uint8)FMath::RoundToInt(C.G * 255.f), (uint8)FMath::RoundToInt(C.B * 255.f), 255);
+		}
+	}
+	Mip.BulkData.Unlock();
+	T->UpdateResource();
+	PaletteLuts[Index] = T;
+	return T;
 }

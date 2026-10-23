@@ -1235,6 +1235,8 @@
  "set.display_applied": "Anzeigeeinstellungen angewendet",
  "set.flight_tips": "Flugtipps erneut zeigen",
  "set.fps_limit": "Bildratenlimit",
+ "set.gpws_speech": "Gesprochene Warnungen",
+ "set.gpws_speech_hint": "Im Vollmodus wird die Warnung nach dem Ton gesprochen (Windows-Stimme; Standardstimme ohne Sprachpaket)",
  "set.interface": "Oberfläche",
  "set.key_kb": "TASTATUR",
  "set.key_note": "WASD / Pfeiltasten sind die Stickachsen (je nach Modus) und nicht belegbar. Doppelte Tasten werden getauscht.",

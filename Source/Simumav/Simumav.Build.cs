@@ -59,6 +59,8 @@ public class Simumav : ModuleRules
 		{
 			// Windows Kimlik Bilgisi Yöneticisi (CredWriteW/CredReadW/CredDeleteW) — simumav.com belirteci
 			PublicSystemLibraries.Add("Advapi32.lib");
+			// GPWS konuşması: Windows SAPI (ISpVoice; COM) — SmvSpeech
+			PublicSystemLibraries.Add("ole32.lib");
 			PublicDefinitions.Add("SIMUMAV_WITH_WINCRED=1");
 		}
 		else

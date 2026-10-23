@@ -18,6 +18,7 @@
 #include "Styling/CoreStyle.h"
 #include "Rendering/DrawElements.h"
 #include "Rendering/SlateRenderer.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Layout/Clipping.h"
@@ -471,6 +472,12 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 	[
 		SNew(SOverlay)
 		.Visibility(EVisibility::SelfHitTestInvisible)
+		// PiP penceresi (sürükle: taşı · sağ alt köşe: boyut)
+		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom)
+		.Padding(TAttribute<FMargin>::CreateLambda([]() { const FSmvUiPrefs& P = FSmvUiPrefs::Get(); return FMargin(0.f, 0.f, P.PipR, P.PipB); }))
+		[
+			PipWindow()
+		]
 		// çarpma parlaması (en altta, sahnenin üstünde)
 		+ SOverlay::Slot()
 		[
@@ -1452,4 +1459,54 @@ TSharedRef<SWidget> SSmvFlightUi::FpvBar()
 			DrText(Out, L + 1, G, FString::Printf(TEXT("%s %+.2f"), *Loc(TEXT("fpv.ghost_hud")), St.FpvGhost), FVector2D(Rx, 64.f), Mono(10), St.FpvGhost <= 0.f ? Green : Red, 1);
 	};
 	return Box;
+}
+
+// ---------------------------------------------------------------------------
+// PiP penceresi: sürükleyerek taşı, sağ alt köşeden boyutlandır (16:9; 240–900 px); konum/boyut kalıcı
+// ---------------------------------------------------------------------------
+
+TSharedRef<SWidget> SSmvFlightUi::PipWindow()
+{
+	using namespace SmvFuiDraw;
+	using namespace SmvFuiTheme;
+	PipBrush.DrawAs = ESlateBrushDrawType::Image;
+	TSharedRef<SSmvPaintBox> Box = SNew(SSmvPaintBox).Size(FVector2D(384, 216));
+	Box->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		if (!St.Pip) return;
+		if (PipBrush.GetResourceObject() != St.Pip) { PipBrush.SetResourceObject(St.Pip); PipBrush.ImageSize = FVector2D(St.Pip->SizeX, St.Pip->SizeY); }
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		DrRect(Out, L, G, FVector2D(-2, -2), Sz + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.8f), &CardBrush);
+		FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &PipBrush, ESlateDrawEffect::None, FLinearColor::White);
+		DrText(Out, L + 2, G, St.PipLabel.IsEmpty() ? FString(TEXT("GIMBAL")) : St.PipLabel, FVector2D(8, 12), Mono(9), FLinearColor(0.4f, 1.f, 0.5f, 1.f), -1);
+		// köşe tutamağı
+		const FVector2D C = Sz - FVector2D(4, 4);
+		for (int32 i = 0; i < 3; ++i) DrSeg(Out, L + 2, G, C - FVector2D(4 + i * 5, 0), C - FVector2D(0, 4 + i * 5), FLinearColor(1, 1, 1, PipDragMode ? 0.9f : 0.5f), 1.5f);
+		if (PipDragMode) DrPoly(Out, L + 3, G, { FVector2D(0, 0), FVector2D(Sz.X, 0), Sz, FVector2D(0, Sz.Y), FVector2D(0, 0) }, Accent, 1.5f);
+	};
+	Box->OnDrag = [this](const FGeometry& G, const FVector2D& P, int32 Phase)
+	{
+		FSmvUiPrefs& Pr = FSmvUiPrefs::Get();
+		const FVector2D Abs = FVector2D(G.LocalToAbsolute(FVector2f(P)));
+		const float Sc = FMath::Max(0.1f, G.Scale);
+		if (Phase == 0)
+		{
+			const FVector2D Sz = FVector2D(G.GetLocalSize());
+			PipDragMode = (P.X > Sz.X - 26.0 && P.Y > Sz.Y - 26.0) ? 2 : 1;
+			PipDragAbs = Abs;
+			PipStart = PipDragMode == 2 ? FVector2D(Pr.PipW, 0) : FVector2D(Pr.PipR, Pr.PipB);
+			return;
+		}
+		const FVector2D D = (Abs - PipDragAbs) / Sc;
+		if (PipDragMode == 2) Pr.PipW = FMath::Clamp((float)(PipStart.X + D.X), 240.f, 900.f);
+		else if (PipDragMode == 1) { Pr.PipR = FMath::Max(0.f, (float)(PipStart.X - D.X)); Pr.PipB = FMath::Max(0.f, (float)(PipStart.Y - D.Y)); }
+		if (Phase == 2) { PipDragMode = 0; Pr.Save(); }
+	};
+	return SNew(SBox)
+		.Visibility_Lambda([this]() { return St.Pip && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })
+		.WidthOverride_Lambda([]() { return FOptionalSize(FSmvUiPrefs::Get().PipW); })
+		.HeightOverride_Lambda([]() { return FOptionalSize(FSmvUiPrefs::Get().PipW * 9.f / 16.f); })
+		[
+			Box
+		];
 }

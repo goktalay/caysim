@@ -27,6 +27,12 @@ struct SIMUMAV_API FSmvUiPrefs
 	bool bFlightTipsDone = false;
 	/** Sabit kanat / VTOL için klasik kokpit gösterge paneli (altılı) */
 	bool bCockpit = false;
+	/** GPWS sesli uyarı (konuşma; tam kipte) */
+	bool bGpwsSpeech = true;
+	/** Termal paleti: white (beyaz-sıcak) | black (siyah-sıcak) | iron (ironbow) */
+	FString ThermalPalette = TEXT("white");
+	/** PiP penceresi: genişlik (px, 16:9) ve sağ/alt kenara uzaklık */
+	float PipW = 384.f, PipR = 16.f, PipB = 80.f;
 	/** Güç kadranları tasarımı (web gtheme): cockpit | classic | glass | minimal | military | none */
 	FString DialTheme = TEXT("cockpit");
 	/** Ana menüde canlı 3B sahne (uçan dron); kapalıysa yalnız animasyonlu arka plan */

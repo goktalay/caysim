@@ -16,6 +16,7 @@
 class UCameraComponent;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
+class UTexture2D;
 class UInputMappingContext;
 class UInputAction;
 class ACaySimDroneActor;
@@ -107,6 +108,9 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UCameraComponent> Camera;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> PipCapture;
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> PipTarget;
+	/** Termal palet renk tabloları (256×16 LUT; 0 beyaz-sıcak, 1 siyah-sıcak, 2 ironbow) */
+	UPROPERTY() TArray<TObjectPtr<UTexture2D>> PaletteLuts;
+	UTexture2D* PaletteLut(int32 Index);
 	UPROPERTY() TObjectPtr<UInputMappingContext> Imc;
 	UPROPERTY() TMap<FName, TObjectPtr<UInputAction>> Actions;
 

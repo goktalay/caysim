@@ -33,6 +33,9 @@ struct FSmvUiLog
 struct FSmvFlightUiState
 {
 	FString Title, Account, Backend, MpLine, CamLabel;
+	/** PiP (gimbal kamerası) render hedefi — sürüklenebilir / boyutlandırılabilir pencere */
+	class UTextureRenderTarget2D* Pip = nullptr;
+	FString PipLabel;
 	FString ModeKind = TEXT("copter");   // copter | plane | vtol | icept | rover
 	bool bTele = false, bFresh = false, bArmed = false, bMotorCut = false, bGcs = false, bHasHome = false, bPlane = false, bRover = false;
 	FString Mode;
@@ -127,6 +130,10 @@ private:
 	TSharedRef<SWidget> Tips();
 	TSharedRef<SWidget> WindCard();
 	TSharedRef<SWidget> FpvBar();
+	TSharedRef<SWidget> PipWindow();
+	FSlateBrush PipBrush;
+	FVector2D PipDragAbs = FVector2D::ZeroVector, PipStart = FVector2D::ZeroVector;
+	int32 PipDragMode = 0;   // 1 taşı, 2 boyutlandır
 	TSharedRef<SWidget> Sticks();
 	TSharedRef<SWidget> Feed();
 	TSharedRef<SWidget> Btn(TAttribute<FText> Label, TFunction<void()> OnClick, TFunction<FLinearColor()> Color, float MinW = 0.f);
