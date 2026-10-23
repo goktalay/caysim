@@ -24,6 +24,7 @@ class USmvFlow;
 class USmvFlightLink;
 class USmvToneSynth;
 class USmvMusicSynth;
+class USoundBase;
 class ASmvMenuScene;
 class SSmvShell;
 class SWidget;
@@ -88,6 +89,11 @@ protected:
 	UPROPERTY() TObjectPtr<USmvToneSynth> UiTones;
 	UPROPERTY() TObjectPtr<USmvMusicSynth> Music;
 	UPROPERTY() TObjectPtr<ASmvMenuScene> MenuScene;
+	/** Arayüz sesleri: Fab Airplane Controller & Instruments düğme/anahtar sesleri pakette varsa onlar (tık, aç/kapa, açılış),
+	 *  yoksa / diğerleri için prosedürel ton */
+	UPROPERTY() TMap<int32, TObjectPtr<USoundBase>> UiSounds;
+	bool bUiSoundsLoaded = false;
+	void PlayUiSound(int32 Kind);
 	void UpdateMenuScene(ESmvScreen Screen);
 	void UpdateMusic(ESmvScreen Screen);
 

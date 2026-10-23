@@ -47,6 +47,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 #include "Widgets/SWeakWidget.h"
 #include "Misc/DateTime.h"
 
@@ -105,8 +106,8 @@ void ASmvGameMode::BeginPlay()
 		Music->SetupAttachment(R);
 		Music->RegisterComponent();
 		Music->Start();
-		TWeakObjectPtr<USmvToneSynth> WT(UiTones);
-		FSmvUiSound::SetSink([WT](int32 Kind) { if (WT.IsValid()) WT->Blip(Kind); });
+		TWeakObjectPtr<ASmvGameMode> WG(this);
+		FSmvUiSound::SetSink([WG](int32 Kind) { if (WG.IsValid()) WG->PlayUiSound(Kind); });
 	}
 	ApplyUiPrefs();
 	HandleScreen(Flow->GetScreen());
@@ -1569,4 +1570,41 @@ void ASmvGameMode::ApplyUiPrefs()
 		Pw->RcInvert = S.RcInvert;
 		Pw->RemapKeys();
 	}
+}
+
+void ASmvGameMode::PlayUiSound(int32 Kind)
+{
+	if (!bUiSoundsLoaded)
+	{
+		bUiSoundsLoaded = true;
+		// Fab "Airplane Controller & Instruments" ses ipuçları (hazırlama projesinden Content/AirplaneInstruments olarak gelir)
+		struct FCue { int32 Key; const TCHAR* Value; };
+		const FCue Map[] = {
+			{ 6, TEXT("PlasticButton/PlasticButton_Cue") }, { 9, TEXT("PlasticSwitch/PlasticSwitch_Cue") }, { 8, TEXT("MetalSwitch/MetalSwitch_Cue") } };
+		for (const FCue& M : Map)
+		{
+			for (const TCHAR* Root : { TEXT("/Game/AirplaneInstruments"), TEXT("/Game/Fab/AirplaneInstruments") })
+			{
+				const FString Rel(M.Value);
+				FString Name;
+				Rel.Split(TEXT("/"), nullptr, &Name);
+				const FString Path = FString::Printf(TEXT("%s/Sound/ButtonsAndSwitches/%s.%s"), Root, *Rel, *Name);
+				if (USoundBase* S = LoadObject<USoundBase>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet))
+				{
+					UiSounds.Add(M.Key, S);
+					break;
+				}
+			}
+		}
+		if (UiSounds.Num()) UE_LOG(LogSimumav, Log, TEXT("Arayüz sesleri: %d Fab ses ipucu"), UiSounds.Num());
+	}
+	if (const TObjectPtr<USoundBase>* S = UiSounds.Find(Kind))
+	{
+		USmvGameInstance* GI = USmvGameInstance::GetSmv(this);
+		const FSmvSettings* Set = GI && GI->GetData() ? &GI->GetData()->Settings() : nullptr;
+		const float Vol = Set && Set->bSound ? (float)Set->Volume * FSmvUiPrefs::Get().VolUi : 0.f;
+		if (Vol > 0.01f && *S) UGameplayStatics::PlaySound2D(this, *S, Vol);
+		return;
+	}
+	if (UiTones) UiTones->Blip(Kind);
 }
