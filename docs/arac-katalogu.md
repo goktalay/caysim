@@ -85,7 +85,8 @@ Sınama: `python3 -I tests/sitl/sitl_varyant.py [anahtar …]` (pymavlink, g++ v
 ## Gövde davranışı (`USmvGlbBody`)
 
 Eksen: glTF (sağ el, Y yukarı, burun +X, sağ +Z, metre) → Unreal (X ileri, Y sağ, Z yukarı, cm) = (x, z, y)·100; katalog `GlbYawDeg`
-önce uygulanır. Sarım yönü eksen değişiminde (ve ayna dönüşümlü düğümlerde) ters çevrilir. Görünürlük ölçeği: açıklık ≤ 0,64 m → ×2,5
+önce uygulanır. Sarım yönü eksen değişiminde (ve ayna dönüşümlü düğümlerde) ters çevrilir. Normal içermeyen ağlar (Gazebo STL türevi
+modellerin çoğu; üçgen yönleri tutarsız) düz gölgelenir ve iki yüzlü malzemeyle (`M_SmvPbr2S`) çizilir. Görünürlük ölçeği: açıklık ≤ 0,64 m → ×2,5
 (web MODEL_SCALE), 1,6 m'ye doğru ×1'e iner; kara aracı ×1.
 
 | Düğüm adı | Davranış |
@@ -94,7 +95,7 @@ Eksen: glTF (sağ el, Y yukarı, burun +X, sağ +Z, metre) → Unreal (X ileri, 
 | helikopterde dikey eksenli rotor / yatay eksenli rotor | Ana rotor(lar) / kuyruk rotoru: ARM'da ~4 sn'de tam devir (RSC gibi), kapatınca ~8 sn'de durur; tandem/koaksiyel ana rotorlar karşıt. **Kuyruk rotoru artık döner.** |
 | `aileron_l/r`, `elevon_l/r`, `elevator*`, `rudder`, `ruddervator_l/r`, `flap_l/r` | Kontrol yüzeyi: menteşe = ön kenar, eksen = açıklık (PCA). Sapma, SITL'in kendi kanal yorumuyla (SIM_Plane: kanal 1 aileron, 2 elevatör, 4 dümen; elevon ve V-kuyruk karışımı) ±25°; flap SERVOn_FUNCTION 2/3'ten. |
 | `wheel_*`, `steer_*` | Teker yer hızıyla döner; direksiyon SERVO1'den ±28°. |
-| `nav_*`, `beacon`, `strobe` | Seyir ışıkları: sol kırmızı, sağ yeşil, kuyruk beyaz, kırmızı çakar (ARM'da 1,2 sn'de bir). Modelde yoksa sınır kutusundan üretilir (parlak küre + nokta ışık). |
+| `nav_*`, `beacon`, `strobe` | Seyir ışıkları: sol kırmızı, sağ yeşil, kuyruk beyaz, kırmızı çakar (ARM'da 1,2 sn'de bir). Modelde yoksa sınır kutusundan üretilir. Gündüz yalnız parlayan küre (yayılım + bloom); gece / alacakaranlıkta ayrıca gölgesiz küçük nokta ışık (yerel ışık sayısı sınırlı tutulur). |
 
 Ses: katalog `Sound` (multi / prop / pusher / jet / heli / electric_heli / rover) ve motor sayısı prosedürel motor sesine ve Fab
 uçak motor döngülerine bağlanır.
