@@ -16,6 +16,7 @@
 #include "SmvI18n.h"
 #include "SmvSpeech.h"
 #include "SmvReplay.h"
+#include "SmvTileMap.h"
 #include "HAL/PlatformProcess.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
@@ -1704,7 +1705,33 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 		})]
 	];
 	TSharedRef<SVerticalBox> Mid = SNew(SVerticalBox);
-	Mid->AddSlot().AutoHeight()[SNew(SBox).WidthOverride(460.f).HeightOverride(280.f)[MapThumb(EditTrack.Name + EditTrack.Id, EditTrack.WorldMode, 460.f, 280.f)]];
+	// uydu haritası: konum seç / halka düzenleyici + yer araması
+	Mid->AddSlot().AutoHeight().Padding(0, 0, 0, 8)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Chips(&MapMode, { TEXT("pick"), TEXT("rings") }, { Tx(TEXT("map.mode_pick")), Tx(TEXT("map.mode_rings")) }, { ESmvIcon::Map, ESmvIcon::Flag })]
+		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(8, 0, 6, 0)[TextEdit(&MapQuery, false, Tx(TEXT("map.search_ph")), 160.f)]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(11).Icon(ESmvIcon::Globe).Text(Tx(TEXT("map.search")))
+			.OnClick([Self]()
+			{
+				TWeakPtr<SSmvShell> W = StaticCastSharedRef<SSmvShell>(Self->AsShared());
+				SSmvTileMap::Search(Self->MapQuery, [W](bool bOk, double La, double Lo, const FString& Name)
+				{
+					TSharedPtr<SSmvShell> S = W.Pin();
+					if (!S.IsValid()) return;
+					if (!bOk) { S->Toast(FSmvI18n::T(TEXT("map.not_found")).ToString(), 4); return; }
+					S->EditTrack.Lat = La; S->EditTrack.Lon = Lo;
+					if (S->TrackMap.IsValid()) S->TrackMap->CenterOn(La, Lo, 15);
+					S->Toast(Name.Left(90), 6);
+					S->Refresh();
+				});
+			})]
+	];
+	Mid->AddSlot().AutoHeight()
+	[
+		SAssignNew(TrackMap, SSmvTileMap).Size(FVector2D(520.f, 340.f)).Lat(&EditTrack.Lat).Lon(&EditTrack.Lon).Gates(&EditTrack.Gates).RadiusM(&EditTrack.RadiusM)
+		.RingMode_Lambda([Self]() { return Self->MapMode == TEXT("rings"); })
+	];
 	Mid->AddSlot().AutoHeight().Padding(4, 12, 0, 0)[Title(FText::FromString(EditTrack.Name.IsEmpty() ? FString(TEXT("—")) : EditTrack.Name), 20)];
 	Mid->AddSlot().AutoHeight().Padding(4, 4, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%.5f, %.5f · %.0f m · %s · %s"), EditTrack.Lat, EditTrack.Lon, EditTrack.RadiusM,
 		*FSmvI18n::T(FString(TEXT("time.")) + EditTrack.TimeOfDay).ToString(), *FSmvI18n::T(FString(TEXT("weather.")) + EditTrack.Weather).ToString())), 11, "Regular", Dim(), false)];

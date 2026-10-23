@@ -126,6 +126,9 @@ private:
 	int32 CrewTab = 0;
 	int32 LogTab = 0;
 	TSharedRef<SWidget> Achievements();
+	/** Parkur haritası: kip (konum / halka düzenleyici), arama metni */
+	FString MapMode = TEXT("pick"), MapQuery;
+	TSharedPtr<class SSmvTileMap> TrackMap;
 	/** Kayıttan oynatma ekranı durumu */
 	TArray<FSmvReplayInfo> RepList;
 	int32 RepSel = 0;

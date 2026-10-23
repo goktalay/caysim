@@ -72,10 +72,10 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
 | Parkurlarım / hazır FPV parkurları sekmeleri | `tracks/index.js`, `fly/fpv.js` | Parkurlar ekranı + "Hazır haritalar" (SmvMapRegistry) + "Parkurlarım" + Hazır FPV parkurları galerisi (8 parkur) | ✓ | P1 |
-| Konum (harita tıkla / ara) | `gmap.js`, `satmap.js` | Enlem/boylam kutuları | ◐ | P2 |
+| Konum (harita tıkla / ara) | `gmap.js`, `satmap.js` | Parkurlar: uydu haritası (Esri World Imagery karoları; sürükle/tekerlek), tıkla → konum, yer araması (OpenStreetMap Nominatim) | ✓ | P2 |
 | Dünya kipi gerçek / Google 3B / prosedürel + ayarlar | `tracks/index.js` | ✓ (prosedürel ayarları kaydırıcı) | ✓ | — |
 | Rüzgâr kadranı, saat, hava | `tracks/index.js` | Kaydırıcılar + simgeli çipler; sihirbazda pusula | ✓ | — |
-| Halka editörü (haritada) | `tracks/index.js` | 8 halkalık tur üretici | ◐ | P2 |
+| Halka editörü (haritada) | `tracks/index.js` | Haritada halka düzenleyici: tıkla → ekle, sürükle → taşı, sağ tık → sil (numaralı, yarıçap ölçekli, tur çizgisi) + 8 halkalık tur üretici | ✓ | P2 |
 
 ## 7. Görevler
 

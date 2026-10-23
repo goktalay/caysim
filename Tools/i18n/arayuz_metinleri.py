@@ -428,4 +428,11 @@ U = {
  'video.wizard': ('Video kaydı', 'Video recording', 'Videoaufnahme', 'Enregistrement vidéo', 'Grabación de vídeo', 'Запись видео', 'تسجيل الفيديو'),
  'power.recommended': ('★ Önerilen (son uçuşta ölçülen)', '★ Recommended (measured last flight)', '★ Empfohlen (im letzten Flug gemessen)', '★ Recommandé (mesuré au dernier vol)', '★ Recomendado (medido en el último vuelo)', '★ Рекомендуется (измерено в прошлом полёте)', '★ موصى به (مُقاس في آخر رحلة)'),
  'power.recommended_applied': ('Önerilen tüketim uygulandı', 'Recommended consumption applied', 'Empfohlener Verbrauch übernommen', 'Consommation recommandée appliquée', 'Consumo recomendado aplicado', 'Рекомендуемый расход применён', 'طُبّق الاستهلاك الموصى به'),
+ 'map.hint_pick': ('Tıkla: konum · sürükle: kaydır · tekerlek: yakınlaştır', 'Click: location · drag: pan · wheel: zoom', 'Klick: Standort · Ziehen: verschieben · Rad: Zoom', 'Clic : position · glisser : déplacer · molette : zoom', 'Clic: ubicación · arrastrar: mover · rueda: zoom', 'Клик: место · тянуть: сдвиг · колесо: масштаб', 'نقرة: الموقع · سحب: تحريك · العجلة: تكبير'),
+ 'map.hint_rings': ('Tıkla: halka ekle · sürükle: taşı · sağ tık: sil', 'Click: add ring · drag: move · right-click: delete', 'Klick: Ring hinzufügen · Ziehen: bewegen · Rechtsklick: löschen', 'Clic : ajouter · glisser : déplacer · clic droit : supprimer', 'Clic: añadir anillo · arrastrar: mover · clic derecho: borrar', 'Клик: добавить кольцо · тянуть: переместить · ПКМ: удалить', 'نقرة: إضافة حلقة · سحب: نقل · نقر أيمن: حذف'),
+ 'map.mode_pick': ('Konum', 'Location', 'Standort', 'Position', 'Ubicación', 'Место', 'الموقع'),
+ 'map.mode_rings': ('Halkalar', 'Rings', 'Ringe', 'Anneaux', 'Anillos', 'Кольца', 'الحلقات'),
+ 'map.not_found': ('Yer bulunamadı', 'Place not found', 'Ort nicht gefunden', 'Lieu introuvable', 'Lugar no encontrado', 'Место не найдено', 'لم يُعثر على المكان'),
+ 'map.search': ('Ara', 'Search', 'Suchen', 'Rechercher', 'Buscar', 'Найти', 'بحث'),
+ 'map.search_ph': ('Yer ara (ör. Kalecik, Ankara)', 'Search place (e.g. Kalecik, Ankara)', 'Ort suchen (z. B. Kalecik, Ankara)', 'Rechercher un lieu (ex. Kalecik, Ankara)', 'Buscar lugar (p. ej. Kalecik, Ankara)', 'Поиск места (напр. Kalecik, Ankara)', 'ابحث عن مكان (مثل Kalecik، أنقرة)'),
 }
