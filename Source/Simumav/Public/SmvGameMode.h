@@ -157,6 +157,8 @@ public:
 	/** Radar ekranında temas seç (EO izler; hedefse kilit) */
 	void RadarPick(int32 Id);
 	void CycleEoType();
+	/** Uçuşu bitir (arayüz düğmesi; onay sonrası) */
+	void EndFlightUi() { if (Flow.IsValid()) Flow->EndFlight(TEXT("user")); }
 	/** Uçuşta onay diyaloğu (kabuk katmanı) */
 	void ConfirmUi(const FText& Title, const FText& Body, const FText& Yes, bool bDanger, TFunction<void()> OnYes);
 	bool IsRecording() const;

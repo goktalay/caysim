@@ -26,6 +26,16 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Layout/Clipping.h"
 
+// GÖKTUNGU / web harekât paneli renkleri (sRGB) ve yazı boyutları (CSS px → Slate punto × 0,75)
+namespace SmvGt
+{
+	FLinearColor C(uint32 Hex, float A = 1.f) { FLinearColor L = FLinearColor::FromSRGBColor(FColor((Hex >> 16) & 255, (Hex >> 8) & 255, Hex & 255)); L.A = A; return L; }
+	const FLinearColor PanelArka = C(0x0b0e11, 0.94f), Cizgi = C(0x1e2630), Ic = C(0x35d0ff), Metin = C(0xcfd8e3), Soluk = C(0x5c6b7a),
+		Iyi = C(0x3ddc84), Kotu = C(0xff5d5d), Uyari = C(0xffc94d), Giris = C(0x060809), Dugme = C(0x141a21), DugmeH = C(0x1c2530), Kon = C(0x0b0f14);
+	FSlateFontInfo Mono(float Px, bool bBold = false) { (void)bBold; return FCoreStyle::GetDefaultFontStyle("Mono", FMath::RoundToInt(Px * 0.75f)); }
+	FSlateFontInfo Sans(float Px, bool bBold = false) { return FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", FMath::RoundToInt(Px * 0.75f)); }
+}
+
 // ---------------------------------------------------------------------------
 // tema (SIMUMAV web: koyu lacivert cam zemin, neon mavi vurgu #38bdf8, yeşil #22c55e, kırmızı #ef4444, amber #ffbf47)
 // ---------------------------------------------------------------------------
@@ -499,7 +509,8 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		[
 			SNew(SVerticalBox)
 			.Visibility(EVisibility::SelfHitTestInvisible)
-			+ SVerticalBox::Slot().AutoHeight()[InfoCard()]
+			// sade görünüm bilgi kartı: kart açıkken gizli (web .fs-ops .fs-hud)
+			+ SVerticalBox::Slot().AutoHeight()[SNew(SBox).Visibility_Lambda([this]() { return bPanel ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })[InfoCard()]]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 8.f, 0.f, 0.f)[WindCard()]
 		]
 		// sağ üst: dron kartı (web harekât paneli birebir; başlıktan sürüklenir)
@@ -517,7 +528,8 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		[
 			SNew(SVerticalBox)
 			.Visibility(EVisibility::SelfHitTestInvisible)
-			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)[Feed()]
+			// olay akışı: kart açıkken kartın HABERLEŞME konsolunda (web .fs-ops .fs-events gizli)
+			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)[SNew(SBox).Visibility_Lambda([this]() { return bPanel ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })[Feed()]]
 			+ SVerticalBox::Slot().AutoHeight()
 			[
 				SNew(SBox)
@@ -545,8 +557,8 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 				Btn(TAttribute<FText>::CreateLambda([]() { return FSmvI18n::T(TEXT("gtheme.none_show")); }), [this]() { ToggleCockpit(); }, []() { return FLinearColor(0.6f, 0.7f, 0.8f, 0.85f); })
 			]
 		]
-		// alt bant
-		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0.f, 0.f, 0.f, 12.f)
+		// alt bant (web .fs-bar: tam genişlik, rgba(11,18,32,.82), üst çizgi)
+		+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Bottom).Padding(0.f)
 		[
 			SNew(SBox)
 			.Visibility_Lambda([this]() { return St.bMenuOpen ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })
@@ -1032,75 +1044,87 @@ TSharedRef<SWidget> SSmvFlightUi::Feed()
 TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 {
 	using namespace SmvFuiTheme;
-	const bool* bP = &bPanel;
-	const bool* bS = &bSticks;
-	return SNew(SBorder).BorderImage(&BarBrush).Padding(FMargin(8.f, 6.f))
+	// web session.js fs-bar sırası: kamera · (HUD/FPV) · Panel … boşluk … MOD + ARM/DISARM · [Kalkış · RTL] · [Sanal kumanda · Hassasiyet] · [↺ Sıfırla · ■ Uçuşu Bitir]
+	BarPill = FSlateRoundedBoxBrush(FLinearColor(1, 1, 1, 0.06f), 14.f);
+	BarBtnB = FSlateRoundedBoxBrush(FLinearColor::White, 12.f);
+	BarBg = FSlateRoundedBoxBrush(SmvGt::C(0x0b1220, 0.82f), 0.f);
+	auto PB = [this](TAttribute<FText> Label, TFunction<void()> OnClick, TFunction<FLinearColor()> Fill) -> TSharedRef<SWidget>
+	{
+		return SNew(SButton).ButtonStyle(FCoreStyle::Get(), "NoBorder").IsFocusable(false).ContentPadding(0.f)
+			.OnClicked_Lambda([OnClick]() { if (OnClick) OnClick(); FSmvUiSound::Play(ESmvSnd::Click); return FReply::Handled(); })
+			[
+				SNew(SBorder).BorderImage(&BarBtnB).Padding(FMargin(11.f, 5.f))
+				.BorderBackgroundColor_Lambda([Fill]() { return FSlateColor(Fill ? Fill() : FLinearColor(1, 1, 1, 0.f)); })
+				[
+					SNew(STextBlock).Text(Label).Font(SmvGt::Sans(13, true)).ColorAndOpacity(SmvGt::C(0xe6e9ef))
+				]
+			];
+	};
+	auto Pill = [this](TArray<TSharedRef<SWidget>> Items) -> TSharedRef<SWidget>
+	{
+		TSharedRef<SHorizontalBox> H = SNew(SHorizontalBox);
+		for (int32 i = 0; i < Items.Num(); ++i) H->AddSlot().AutoWidth().Padding(i ? 4.f : 0.f, 0.f, 0.f, 0.f)[Items[i]];
+		return SNew(SBorder).BorderImage(&BarPill).Padding(3.f)[H];
+	};
+	auto Tx = [](const TCHAR* K) { return TAttribute<FText>::CreateLambda([K]() { return FSmvI18n::T(K); }); };
+	const FLinearColor Clear(1, 1, 1, 0.f);
+	TSharedRef<SHorizontalBox> H = SNew(SHorizontalBox);
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
 	[
-		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
+		PB(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FSmvI18n::T(TEXT("bar.camera")).ToString() + TEXT(": ") + St.CamLabel + TEXT(" ▾")); }), [this]() { Act(TEXT("CamCycle")); }, [Clear]() { return FLinearColor(1, 1, 1, 0.06f); })
+	];
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
+	[
+		PB(Tx(TEXT("bar.panel")), [this]() { bPanel = !bPanel; }, [this]() { return bPanel ? SmvGt::C(0x3b82f6) : FLinearColor(1, 1, 1, 0.06f); })
+	];
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
+	[
+		SNew(SBox).Visibility_Lambda([this]() { return St.bPlane ? EVisibility::SelfHitTestInvisible : EVisibility::Collapsed; })
 		[
-			Btn(TAttribute<FText>::CreateLambda([this]()
+			PB(FText::FromString(Loc(TEXT("fui.cockpit"))), [this]() { ToggleCockpit(); }, []() { return FSmvUiPrefs::Get().bCockpit ? SmvGt::C(0x3b82f6) : FLinearColor(1, 1, 1, 0.06f); })
+		]
+	];
+	H->AddSlot().FillWidth(1.f)[SNew(SSpacer)];
+	// MOD rozeti + ARM/DISARM (fltbar)
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
+	[
+		Pill({
+			PB(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("%s ▾"), St.Mode.IsEmpty() ? TEXT("—") : *St.Mode)); }), [this]() { ToggleModeMenu(); },
+				[this]() { return bModeMenu ? SmvGt::C(0x3b82f6) : SmvGt::C(0x22d3ee, 0.18f); }),
+			PB(TAttribute<FText>::CreateLambda([this]()
 				{
 					if (St.bMotorCut) return FText::FromString(Loc(TEXT("fui.motor_on")));
 					if (!St.bArmed) return FText::FromString(TEXT("ARM"));
 					return FText::FromString(St.bPlane && St.AltRel > 3.f ? Loc(TEXT("fui.motor_off")) : FString(TEXT("DISARM")));
-				}),
-				[this]() { Act(TEXT("ArmToggle")); },
-				[this]() { return St.bMotorCut ? Amber * 0.85f : St.bArmed ? Red * 0.85f : Green * 0.8f; }, 96.f)
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
+				}), [this]() { Act(TEXT("ArmToggle")); },
+				[this]() { return St.bMotorCut ? SmvGt::C(0xf59e0b, 0.8f) : St.bArmed ? SmvGt::C(0xef4444, 0.85f) : SmvGt::C(0x22c55e, 0.8f); })
+		})
+	];
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
+	[
+		SNew(SBox).Visibility_Lambda([this]() { return St.bRover ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })
 		[
-			SNew(SBox).Visibility_Lambda([this]() { return St.bRover ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })
-			[
-				Btn(FText::FromString(Loc(TEXT("fui.takeoff"))), [this]() { Act(TEXT("Takeoff")); }, []() { return Blue * 0.8f; })
-			]
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			Btn(FText::FromString(Loc(TEXT("fui.land"))), [this]() { Act(TEXT("Land")); }, []() { return BtnGrey; })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			Btn(FText::FromString(TEXT("RTL")), [this]() { Act(TEXT("Rtl")); }, []() { return Amber * 0.7f; })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			Btn(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("%s · %s"), *Loc(TEXT("fui.mode")), St.Mode.IsEmpty() ? TEXT("—") : *St.Mode)); }),
-				[this]() { ToggleModeMenu(); }, [this]() { return bModeMenu ? Accent * 0.85f : BtnGrey; }, 150.f)
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			Btn(FText::FromString(Loc(TEXT("fui.reset"))), [this]() { Act(TEXT("Reset")); }, []() { return BtnGrey; })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(10, 0, 3, 0)
-		[
-			Btn(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("%s · %s"), *Loc(TEXT("fui.camera")), *St.CamLabel)); }),
-				[this]() { Act(TEXT("CamCycle")); }, []() { return BtnGrey; }, 128.f)
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			Btn(FText::FromString(Loc(TEXT("fui.sticks"))), [this]() { bSticks = !bSticks; }, [bS]() { return *bS ? Accent * 0.75f : BtnGrey; })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			Btn(FText::FromString(Loc(TEXT("fui.panel"))), [this]() { bPanel = !bPanel; }, [bP]() { return *bP ? Accent * 0.75f : BtnGrey; })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			Btn(FText::FromString(Loc(TEXT("fui.menu"))), [this]() { Act(TEXT("Pause")); }, []() { return BtnGrey; })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			SNew(SBox).Visibility_Lambda([this]() { return St.bPlane ? EVisibility::SelfHitTestInvisible : EVisibility::Collapsed; })
-			[
-				Btn(FText::FromString(Loc(TEXT("fui.cockpit"))), [this]() { ToggleCockpit(); }, []() { return FSmvUiPrefs::Get().bCockpit ? Accent * 0.75f : BtnGrey; })
-			]
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
-		[
-			Btn(FText::FromString(TEXT("?")), [this]() { Act(TEXT("Help")); }, []() { return BtnGrey; }, 34.f)
+			Pill({ PB(FText::FromString(Loc(TEXT("fui.takeoff"))), [this]() { Act(TEXT("Takeoff")); }, nullptr), PB(FText::FromString(TEXT("RTL")), [this]() { Act(TEXT("Rtl")); }, nullptr) })
 		]
 	];
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
+	[
+		Pill({ PB(Tx(TEXT("bar.vrc")), [this]() { bSticks = !bSticks; }, [this]() { return bSticks ? SmvGt::C(0x3b82f6) : FLinearColor(1, 1, 1, 0.f); }),
+			PB(Tx(TEXT("bar.sens")), [this]() { Act(TEXT("Pause")); }, nullptr) })
+	];
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center)
+	[
+		Pill({ PB(Tx(TEXT("pn.c_reset")), [this]() { if (GM.IsValid()) GM->ConfirmUi(FSmvI18n::T(TEXT("pn.c_reset")), FSmvI18n::T(TEXT("flight.reset_confirm")), FSmvI18n::T(TEXT("pn.c_reset")), true, [this]() { if (GM.IsValid()) GM->Command(TEXT("reset")); }); }, nullptr),
+			PB(Tx(TEXT("bar.end")), [this]() { if (GM.IsValid()) GM->ConfirmUi(FSmvI18n::T(TEXT("dlg.end_title")), FSmvI18n::T(TEXT("dlg.end_body")), FSmvI18n::T(TEXT("dlg.yes_end")), true, [this]() { if (GM.IsValid()) GM->EndFlightUi(); }); },
+				[]() { return SmvGt::C(0xdc2626, 0.85f); }),
+			PB(Tx(TEXT("bar.menu")), [this]() { Act(TEXT("Pause")); }, nullptr),
+			PB(FText::FromString(TEXT("?")), [this]() { Act(TEXT("Help")); }, nullptr) })
+	];
+	return SNew(SBorder).BorderImage(&BarBg).Padding(FMargin(12.f, 8.f))
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()[H]
+		];
 }
 
 TSharedRef<SWidget> SSmvFlightUi::ModeMenu()
@@ -1724,14 +1748,6 @@ TSharedRef<SWidget> SSmvFlightUi::EoWindow()
 // CSS px → Slate punto: × 0,75.
 // ---------------------------------------------------------------------------
 
-namespace SmvGt
-{
-	FLinearColor C(uint32 Hex, float A = 1.f) { FLinearColor L = FLinearColor::FromSRGBColor(FColor((Hex >> 16) & 255, (Hex >> 8) & 255, Hex & 255)); L.A = A; return L; }
-	const FLinearColor PanelArka = C(0x0b0e11, 0.94f), Cizgi = C(0x1e2630), Ic = C(0x35d0ff), Metin = C(0xcfd8e3), Soluk = C(0x5c6b7a),
-		Iyi = C(0x3ddc84), Kotu = C(0xff5d5d), Uyari = C(0xffc94d), Giris = C(0x060809), Dugme = C(0x141a21), DugmeH = C(0x1c2530), Kon = C(0x0b0f14);
-	FSlateFontInfo Mono(float Px, bool bBold = false) { (void)bBold; return FCoreStyle::GetDefaultFontStyle("Mono", FMath::RoundToInt(Px * 0.75f)); }
-	FSlateFontInfo Sans(float Px, bool bBold = false) { return FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", FMath::RoundToInt(Px * 0.75f)); }
-}
 
 bool SSmvFlightUi::IsFolded(const FString& Key) const
 {

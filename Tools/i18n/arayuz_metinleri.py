@@ -534,4 +534,10 @@ U = {
  'pn.tele': ('TELEMETRİ', 'TELEMETRY', 'TELEMETRIE', 'TÉLÉMÉTRIE', 'TELEMETRÍA', 'ТЕЛЕМЕТРИЯ', 'القياس عن بعد'),
  'map.live_hint': ('Canlı önizleme: dünya ayarlarını değiştirin — 3B görünüm kendiliğinden yenilenir', 'Live preview: change world settings — the 3D view refreshes automatically', 'Live-Vorschau: Welteinstellungen ändern — die 3D-Ansicht aktualisiert sich', 'Aperçu en direct : modifiez le monde — la vue 3D se met à jour', 'Vista en vivo: cambia el mundo y la vista 3D se actualiza', 'Живой просмотр: меняйте настройки мира — 3D-вид обновится сам', 'معاينة حية: غيّر إعدادات العالم وسيتحدث العرض ثلاثي الأبعاد تلقائيًا'),
  'map.mode_3d': ('3B önizleme', '3D preview', '3D-Vorschau', 'Aperçu 3D', 'Vista 3D', '3D-просмотр', 'معاينة ثلاثية الأبعاد'),
+ 'bar.camera': ('Kamera', 'Camera', 'Kamera', 'Caméra', 'Cámara', 'Камера', 'الكاميرا'),
+ 'bar.end': ('■ Uçuşu Bitir', '■ End flight', '■ Flug beenden', '■ Terminer le vol', '■ Terminar vuelo', '■ Завершить полёт', '■ إنهاء الرحلة'),
+ 'bar.menu': ('Menü (Esc)', 'Menu (Esc)', 'Menü (Esc)', 'Menu (Échap)', 'Menú (Esc)', 'Меню (Esc)', 'القائمة (Esc)'),
+ 'bar.panel': ('Panel', 'Panel', 'Panel', 'Panneau', 'Panel', 'Панель', 'اللوحة'),
+ 'bar.sens': ('⚙ Hassasiyet', '⚙ Sensitivity', '⚙ Empfindlichkeit', '⚙ Sensibilité', '⚙ Sensibilidad', '⚙ Чувствительность', '⚙ الحساسية'),
+ 'bar.vrc': ('🎮 Sanal kumanda', '🎮 Virtual sticks', '🎮 Virtuelle Sticks', '🎮 Manettes virtuelles', '🎮 Mandos virtuales', '🎮 Виртуальные стики', '🎮 عصي افتراضية'),
 }

@@ -155,6 +155,7 @@ private:
 	FSlateBrush GtTint, GtCard, GtHead, GtTileB, GtCellB, GtCellH, GtInput, GtCapsule, GtSectB, GtConsole;
 	FVector2D PanelDragAbs = FVector2D::ZeroVector, PanelStart = FVector2D::ZeroVector;
 	TWeakPtr<SWidget> PanelHead;
+	FSlateBrush BarPill, BarBtnB, BarBg;
 	TSharedRef<SWidget> EoWindow();
 	FSlateBrush EoBrush;
 	FSlateBrush PipBrush;
