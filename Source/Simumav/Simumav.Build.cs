@@ -7,6 +7,9 @@ public class Simumav : ModuleRules
 	public Simumav(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+		// birleşik (unity) derleme kapalı: arayüz dosyaları (SmvUiKit, SSmvShell, SSmvFlightUi) dosya kapsamında farklı tema ad alanları
+		// kullanır (using namespace) ve aynı adlı yardımcılar (Accent, Dim, DrText …) unity birleşiminde belirsizleşir
+		bUseUnity = false;
 
 		// Saf C++ çekirdek (Unreal'sız; tests/cpp ile g++'ta sınanır) özel alt klasörlerde
 		PrivateIncludePaths.AddRange(new string[]

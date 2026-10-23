@@ -282,10 +282,10 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 		{
 			// eksen sırası: 0 roll, 1 pitch, 2 gaz, 3 yaw; mod eşlemesi [solX, solY, sağX, sağY]
 			static const int32 Map[5][4] = { { 3, 2, 0, 1 }, { 3, 1, 0, 2 }, { 3, 2, 0, 1 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 } };
-			const int32* M = Map[FMath::Clamp(StickMode, 0, 4)];
+			const int32* SM = Map[FMath::Clamp(StickMode, 0, 4)];
 			const float V[4] = { Roll, Pitch, Thr, Yaw };
-			StickL = FVector2D(V[M[0]], V[M[1]]);
-			StickR = FVector2D(V[M[2]], V[M[3]]);
+			StickL = FVector2D(V[SM[0]], V[SM[1]]);
+			StickR = FVector2D(V[SM[2]], V[SM[3]]);
 		}
 	}
 	else
@@ -317,7 +317,7 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 		}
 		// kumanda modu (1–4): yuva [solX, solY, sağX, sağY] → eksen (0 roll, 1 pitch, 2 gaz, 3 yaw)
 		static const int32 Map[5][4] = { { 3, 2, 0, 1 }, { 3, 1, 0, 2 }, { 3, 2, 0, 1 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 } };
-		const int32* M = Map[FMath::Clamp(StickMode, 0, 4)];
+		const int32* SM = Map[FMath::Clamp(StickMode, 0, 4)];
 		float* Ax[4] = { &AxRoll, &AxPitch, &AxThr, &AxYaw };
 		const float KeySlot[4] = { KLx, KLy, KRx, KRy };
 		const bool AbsSlot[4] = { bAbsL, bAbsL, bAbsR, bAbsR };
@@ -326,8 +326,8 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 		int32 ThrSlot = 1;
 		for (int32 k = 0; k < 4; ++k)
 		{
-			if (M[k] == 2) { ThrSlot = k; continue; }   // gaz aşağıda (uçakta tutmalı)
-			if (AbsSlot[k]) *Ax[M[k]] = AbsVal[k]; else Spring(*Ax[M[k]], KeySlot[k]);
+			if (SM[k] == 2) { ThrSlot = k; continue; }   // gaz aşağıda (uçakta tutmalı)
+			if (AbsSlot[k]) *Ax[SM[k]] = AbsVal[k]; else Spring(*Ax[SM[k]], KeySlot[k]);
 		}
 		const float KThr = KeySlot[ThrSlot];
 		const bool bAbsThr = AbsSlot[ThrSlot];
@@ -345,8 +345,8 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 			if (bAbsThr) AxThr = AbsThr; else Spring(AxThr, KThr);
 		}
 		if (KThr != 0.f || (bAbsThr && FMath::Abs(AbsThr) > 0.05f)) bThrUsed = true;
-		StickL = FVector2D(*Ax[M[0]], *Ax[M[1]]);
-		StickR = FVector2D(*Ax[M[2]], *Ax[M[3]]);
+		StickL = FVector2D(*Ax[SM[0]], *Ax[SM[1]]);
+		StickR = FVector2D(*Ax[SM[2]], *Ax[SM[3]]);
 		// hassasiyet (Ayarlar → Kumanda: ölü bölge / expo / oran; hazır ayar yoksa tek expo)
 		const FSmvUiPrefs& Pf = FSmvUiPrefs::Get();
 		Roll = Pf.Shape(AxRoll, 0, Expo); Pitch = Pf.Shape(AxPitch, 1, Expo); Yaw = Pf.Shape(AxYaw, 3, Expo); Thr = AxThr;
