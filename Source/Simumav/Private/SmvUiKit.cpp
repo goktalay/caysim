@@ -764,9 +764,9 @@ int32 SSmvBackdrop::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FS
 				const float Fx = FMath::Frac(FMath::Sin(Sd) * 43758.5453f), Fs = 0.4f + FMath::Frac(FMath::Sin(Sd * 1.7f) * 24634.63f);
 				const float Y = FMath::Frac((float)(T * 0.035 * Fs) + Fx * 3.1f) * (H + 40.f) - 20.f;
 				const float X = Fx * W + FMath::Sin((float)T * Fs + k) * 26.f;
-				const float Sz = 3.f + 4.f * Fs;
+				const float Ps = 3.f + 4.f * Fs;
 				const FLinearColor Pc = (k % 3 == 0) ? FLinearColor(1.f, 0.85f, 0.4f, 0.55f) : Tc.CopyWithNewOpacity(0.6f);
-				DrBox(Out, L + 2, G, FVector2D(X, Y), FVector2D(Sz, Sz * (k % 2 ? 1.f : 0.5f)), Pc, k % 2 ? Circle() : nullptr);
+				DrBox(Out, L + 2, G, FVector2D(X, Y), FVector2D(Ps, Ps * (k % 2 ? 1.f : 0.5f)), Pc, k % 2 ? Circle() : nullptr);
 			}
 		}
 	}

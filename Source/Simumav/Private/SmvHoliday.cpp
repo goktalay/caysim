@@ -140,7 +140,7 @@ namespace SmvHoliday
 		TArray<FString> Out;
 		const TSharedPtr<FJsonObject> Y = LoadYear(FDateTime::Now().GetYear());
 		const TSharedPtr<FJsonObject>* Cs = nullptr;
-		if (Y.IsValid() && Y->TryGetObjectField(TEXT("c"), Cs) && Cs) (*Cs)->Values.GetKeys(Out);
+		if (Y.IsValid() && Y->TryGetObjectField(TEXT("c"), Cs) && Cs) for (const auto& Kv : (*Cs)->Values) Out.Add(Kv.Key);
 		Out.Sort();
 		return Out;
 	}

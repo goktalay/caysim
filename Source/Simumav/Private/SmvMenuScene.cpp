@@ -245,9 +245,9 @@ FVector ASmvMenuScene::EnuToWorld(double E, double N, double Agl) const
 	const double Lon = Lon0 + FMath::RadiansToDegrees(E / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));
 	if (bFabMap)
 	{
-		const double Lat = Lat0 + FMath::RadiansToDegrees((N + FabStartN) / 6378137.0);
-		const double Lon = Lon0 + FMath::RadiansToDegrees((E + FabStartE) / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));
-		FVector P = WorldSetup->GeoToUnreal(Lon, Lat, WorldSetup->MslToWorldHeight(Lat, Lon, GroundMsl));
+		const double FLa = Lat0 + FMath::RadiansToDegrees((N + FabStartN) / 6378137.0);
+		const double FLo = Lon0 + FMath::RadiansToDegrees((E + FabStartE) / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));
+		FVector P = WorldSetup->GeoToUnreal(FLo, FLa, WorldSetup->MslToWorldHeight(FLa, FLo, GroundMsl));
 		P.Z = const_cast<ASmvMenuScene*>(this)->GroundAt(E, N) + Agl * 100.0;
 		return P;
 	}
