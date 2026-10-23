@@ -7,6 +7,7 @@
 #include "UObject/Object.h"
 #include "SimumavTypes.h"
 #include "SmvFpv.h"
+#include "SmvReplay.h"
 #include "SmvFlow.generated.h"
 
 class USimumavClient;
@@ -92,6 +93,13 @@ public:
 	/** Taslağı doğrular; hata metni (boş = geçerli). */
 	FString ValidateDraft() const;
 	void StartFlight();
+	/** Kayıttan oynat (3B sahne + 0,25–8× telemetri; kumanda yok) */
+	bool StartReplay(const FString& File, float Speed = 1.f);
+	bool IsReplay() const { return bReplay; }
+	/** Son uçuşun 5 Hz izi (rota haritası, rapor, kayıt) */
+	TArray<FSmvReplayFrame> LastPath;
+	FSmvFlightRequest LastRequest;
+	FString LastReplayFile;
 	/** Uçuşu bitir (kullanıcı, çarpışma, servo tetik, süre). Özet gelince Summary ekranı. */
 	void EndFlight(const FString& Reason);
 
@@ -142,5 +150,10 @@ private:
 	bool bFirstRun = true;
 	bool bEnding = false;
 	void HandleSummary(const FSmvFlightSummary& S);
+	void BindLink();
+	bool bReplay = false;
+	FSmvFlightRequest ReplaySavedDraft;
+	FSmvLocalRace ReplaySavedRace;
+	FSmvFpvCfg ReplaySavedFpv;
 	void EvaluateAchievements(const FSmvFlightSummary& S);
 };

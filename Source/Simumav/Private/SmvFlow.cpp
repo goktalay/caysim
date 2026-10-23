@@ -199,6 +199,16 @@ void USmvFlow::StartFlight()
 		L->SetMissionPlannerOut(S.bMpUdpOut, S.MpUdpHost, S.MpUdpPort);
 		Link = L;
 	}
+	BindLink();
+	LastPath.Reset();
+	LastRequest = Draft;
+	LoadingText = FSmvI18n::T(TEXT("loading.starting")).ToString();
+	SetScreen(ESmvScreen::Loading);
+	Link->Start(Draft);
+}
+
+void USmvFlow::BindLink()
+{
 	TWeakObjectPtr<USmvFlow> Weak(this);
 	Link->OnSummary.AddLambda([Weak](const FSmvFlightSummary& S) { if (USmvFlow* Self = Weak.Get()) Self->HandleSummary(S); });
 	Link->OnMessage.AddLambda([Weak](const TSharedPtr<FJsonObject>& M)
@@ -214,9 +224,32 @@ void USmvFlow::StartFlight()
 			if (St == TEXT("HATA") && Self->Screen == ESmvScreen::Loading) { Self->Toast(Self->LoadingText, 3); Self->SetScreen(ESmvScreen::Wizard); }
 		}
 	});
-	LoadingText = FSmvI18n::T(TEXT("loading.starting")).ToString();
+}
+
+bool USmvFlow::StartReplay(const FString& File, float Speed)
+{
+	FSmvFlightRequest R;
+	TArray<FSmvReplayFrame> Frames;
+	if (!SmvReplay::Load(File, R, Frames)) { Toast(FSmvI18n::T(TEXT("replay.bad")).ToString(), 3); return false; }
+	ReplaySavedDraft = Draft;
+	ReplaySavedRace = Race;
+	ReplaySavedFpv = Fpv;
+	Draft = R;
+	Draft.Backend = ESmvFlightBackend::LocalSitl;
+	Race = FSmvLocalRace();
+	Fpv = FSmvFpvCfg();
+	bReplay = true;
+	bEnding = false;
+	LastSummary = FSmvFlightSummary();
+	LastFpv = FFpvResult();
+	USmvReplayFlightLink* L = NewObject<USmvReplayFlightLink>(this);
+	L->Init(Frames, Speed);
+	Link = L;
+	BindLink();
+	LoadingText = FSmvI18n::T(TEXT("replay.loading")).ToString();
 	SetScreen(ESmvScreen::Loading);
 	Link->Start(Draft);
+	return true;
 }
 
 void USmvFlow::EndFlight(const FString& Reason)
@@ -228,9 +261,20 @@ void USmvFlow::EndFlight(const FString& Reason)
 
 void USmvFlow::HandleSummary(const FSmvFlightSummary& In)
 {
+	if (bReplay)
+	{
+		// kayıttan oynatma bitti: kayıt yazılmaz, taslak geri yüklenir
+		bReplay = false;
+		Draft = ReplaySavedDraft;
+		Race = ReplaySavedRace;
+		Fpv = ReplaySavedFpv;
+		SetScreen(ESmvScreen::Replay);
+		return;
+	}
 	LastSummary = In;
 	if (SummaryAugmenter) SummaryAugmenter(LastSummary);
 	DataObj->AddFlightRecord(LastSummary);
+	LastReplayFile = SmvReplay::Save(LastRequest, LastSummary, LastPath);
 	EvaluateAchievements(LastSummary);
 	SetScreen(ESmvScreen::Summary);
 }

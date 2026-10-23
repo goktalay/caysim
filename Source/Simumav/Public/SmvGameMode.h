@@ -140,6 +140,7 @@ private:
 	TArray<FVector> DebrisVel;
 	double DebrisGroundZ = 0, DebrisUntil = 0;
 	void CrashFx();
+	double PathAt = 0, PathT0 = 0;
 	void TickDebris(float Dt);
 	void UpdateFpv(const FCaySimTelemetry& T, double Now);
 	FString RaceResultBadge;

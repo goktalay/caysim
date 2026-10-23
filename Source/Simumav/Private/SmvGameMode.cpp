@@ -571,6 +571,23 @@ void ASmvGameMode::HandleTele(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 	if (!bScene || !Drone) return;
 	Drone->PushTelemetry(T);
 	UpdateGpws(T, X);
+	// 5 Hz iz (kayıt / rota haritası / rapor) — kayıttan oynatmada yazılmaz
+	if (Flow.IsValid() && !Flow->IsReplay())
+	{
+		const double Now = FPlatformTime::Seconds();
+		if (Flow->LastPath.Num() == 0) PathT0 = Now;
+		if (Now - PathAt >= 0.2 && Flow->LastPath.Num() < 20000)
+		{
+			PathAt = Now;
+			FSmvReplayFrame F;
+			F.T = Now - PathT0;
+			F.Lat = T.Lat; F.Lon = T.Lon; F.AltMsl = T.AltMsl; F.AltRel = T.AltRel;
+			F.Roll = T.Roll; F.Pitch = T.Pitch; F.Yaw = T.Yaw; F.Vn = T.Vn; F.Ve = T.Ve; F.Vd = T.Vd;
+			F.As = T.Airspeed; F.Gs = T.Groundspeed; F.Hdg = T.Heading; F.Climb = T.Climb; F.Thr = T.Throttle;
+			F.Batt = X.bElec ? (float)X.ElecPct : T.BattPct; F.bArmed = T.bArmed; F.Mode = T.Mode;
+			Flow->LastPath.Add(F);
+		}
+	}
 }
 
 void ASmvGameMode::HandleMessage(const TSharedPtr<FJsonObject>& M)
@@ -1187,6 +1204,11 @@ void ASmvGameMode::UpdateHud()
 	{
 		FSmvFlightUiState U;
 		U.Title = Req.Drone.Name.IsEmpty() ? Req.Drone.Type : Req.Drone.Name;
+		if (USmvReplayFlightLink* Rl = Cast<USmvReplayFlightLink>(Link()))
+		{
+			U.bReplay = true; U.ReplayT = (float)Rl->GetPlayT(); U.ReplayDur = (float)Rl->GetDuration(); U.ReplaySpeed = Rl->GetSpeed();
+			U.Title = FSmvI18n::T(TEXT("replay.badge")).ToString() + TEXT(" · ") + U.Title;
+		}
 		U.Account = S.AccountLine;
 		U.Backend = S.BackendLine;
 		U.MpLine = S.MpLine;

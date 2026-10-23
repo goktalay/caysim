@@ -126,6 +126,16 @@ private:
 	int32 CrewTab = 0;
 	int32 LogTab = 0;
 	TSharedRef<SWidget> Achievements();
+	/** Kayıttan oynatma ekranı durumu */
+	TArray<FSmvReplayInfo> RepList;
+	int32 RepSel = 0;
+	TArray<FSmvReplayFrame> RepFrames;
+	FSmvFlightRequest RepReq;
+	FString RepLoaded, RepSpeed = TEXT("1");
+	void RepSelect(int32 I);
+	/** 2B rota haritası (kuzey yukarı; irtifaya göre renk; başlangıç/bitiş) */
+	TSharedRef<SWidget> RouteMap(const TArray<FSmvReplayFrame>* Frames, float W, float H);
+	void OpenReport(const FSmvFlightRequest& Req, const FSmvFlightSummary& Sum, const TArray<FSmvReplayFrame>& Frames);
 	/** Görev haritası düzenleyici durumu (web missions/editor.js eşi): şekil noktaları (enlem, boylam), FPV kapı sırası, parametreler */
 	struct FMPlan
 	{

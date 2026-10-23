@@ -139,7 +139,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
 | Uçuş özeti: sonuç, süre, mesafe, azami hız, disiplin notu, halkalar, en iyi tur, yakıt/enerji, hedef puanı, rozetler, servo | `showFlightReport`, `flightsim_report.js` | Sonuç başlığı + karo ızgarası + rozet çipleri; Tekrar uç / Ayarları değiştir / Kayıtlar / Menü | ✓ | — |
-| 2B mini harita (rota), PDF | `flightsim_report.js` | — | ✗ | P2 |
+| 2B mini harita (rota), PDF | `flightsim_report.js` | Uçuş özetinde 2B rota haritası (irtifaya göre renk, başlangıç/bitiş) + yazdırılabilir rapor (rota SVG, irtifa profili, özet tablosu; tarayıcıda Yazdır → PDF) | ✓ | P2 |
 
 ## 13. TOP 10
 
@@ -180,7 +180,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
 | Uçuş kayıtları listesi | `ops/index.js` | Kayıtlar ekranı (sonuç rozeti, süre, mesafe, not) | ✓ | — |
-| Kayıttan oynatma (3B, hız 1–8×) | `ops/replay.js` | — (CAYSIM `ReplayPlayer` HEPGO biçiminde; yerel .BIN oynatma yok) | ✗ | P2 |
+| Kayıttan oynatma (3B, hız 1–8×) | `ops/replay.js` | Her uçuş 5 Hz kaydedilir (Saved/Simumav/Replays, son 30); Seyir defteri → Kayıtlar: liste + rota haritası; 3B sahnede oynatma ½–8× (şeritte hız, ilerleme, baştan), rapor, silme | ✓ | P2 |
 
 ## Eklentiler (Fab) — kullanım durumu
 

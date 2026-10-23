@@ -569,6 +569,11 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		[
 			FpvBar()
 		]
+		// kayıttan oynatma şeridi
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 14.f, 0.f, 0.f)
+		[
+			ReplayBar()
+		]
 		// ilk uçuş ipuçları
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 104.f, 0.f, 0.f)
 		[
@@ -1508,5 +1513,51 @@ TSharedRef<SWidget> SSmvFlightUi::PipWindow()
 		.HeightOverride_Lambda([]() { return FOptionalSize(FSmvUiPrefs::Get().PipW * 9.f / 16.f); })
 		[
 			Box
+		];
+}
+
+// ---------------------------------------------------------------------------
+// kayıttan oynatma şeridi: ilerleme + hız (0,5 / 1 / 2 / 4 / 8×) + baştan
+// ---------------------------------------------------------------------------
+
+TSharedRef<SWidget> SSmvFlightUi::ReplayBar()
+{
+	using namespace SmvFuiDraw;
+	using namespace SmvFuiTheme;
+	TSharedRef<SSmvPaintBox> Prog = SNew(SSmvPaintBox).Size(FVector2D(360, 26));
+	Prog->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		const float K = St.ReplayDur > 0.f ? FMath::Clamp(St.ReplayT / St.ReplayDur, 0.f, 1.f) : 0.f;
+		DrRect(Out, L, G, FVector2D(0, Sz.Y * 0.5 - 3), FVector2D(Sz.X, 6), FLinearColor(1, 1, 1, 0.12f), &ChipBrush);
+		DrRect(Out, L + 1, G, FVector2D(0, Sz.Y * 0.5 - 3), FVector2D(Sz.X * K, 6), Accent, &ChipBrush);
+		auto Clock = [](float S) { const int32 V = FMath::Max(0, (int32)S); return FString::Printf(TEXT("%02d:%02d"), V / 60, V % 60); };
+		DrText(Out, L + 2, G, Clock(St.ReplayT) + TEXT(" / ") + Clock(St.ReplayDur), FVector2D(Sz.X, 4), Mono(8), Dim, 1);
+	};
+	TSharedRef<SHorizontalBox> H = SNew(SHorizontalBox);
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(10, 0)[SNew(STextBlock).Text_Lambda([]() { return FSmvI18n::T(TEXT("replay.badge")); }).Font(Font(10, true)).ColorAndOpacity(Accent)];
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(4, 0)[Prog];
+	for (float Sp : { 0.5f, 1.f, 2.f, 4.f, 8.f })
+	{
+		H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(3, 0)
+		[
+			Btn(FText::FromString(Sp < 1.f ? FString(TEXT("½×")) : FString::Printf(TEXT("%.0f×"), Sp)), [this, Sp]()
+			{
+				TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+				P->SetNumberField(TEXT("factor"), Sp);
+				if (GM.IsValid()) GM->Command(TEXT("speed"), P);
+			}, [this, Sp]() { return FMath::IsNearlyEqual(St.ReplaySpeed, Sp) ? Accent : FLinearColor(0.55f, 0.6f, 0.68f, 0.9f); }, 40.f)
+		];
+	}
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 10, 0)
+	[
+		Btn(TAttribute<FText>::CreateLambda([]() { return FSmvI18n::T(TEXT("replay.restart")); }), [this]() { if (GM.IsValid()) GM->Command(TEXT("reset"), MakeShared<FJsonObject>()); },
+			[]() { return FLinearColor(0.55f, 0.6f, 0.68f, 0.9f); })
+	];
+	return SNew(SBorder)
+		.Visibility_Lambda([this]() { return St.bReplay && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })
+		.BorderImage(&BarBrush).Padding(FMargin(4.f, 6.f))
+		[
+			H
 		];
 }

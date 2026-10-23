@@ -15,6 +15,8 @@
 #include "SmvFpv.h"
 #include "SmvI18n.h"
 #include "SmvSpeech.h"
+#include "SmvReplay.h"
+#include "HAL/PlatformProcess.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Layout/SBox.h"
@@ -468,6 +470,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 			if (Built == ESmvScreen::Tracks && Data()->Tracks().Num()) EditTrack = Data()->DefaultTrack() ? *Data()->DefaultTrack() : Data()->Tracks()[0];
 			if (Built == ESmvScreen::Leaderboard) Flow->FetchLeaderboard();
 			if (Built == ESmvScreen::Support) { Sup.OpenId.Empty(); Sup.Detail.Reset(); SupLoad(); }
+			if (Built == ESmvScreen::Replay) { RepList = SmvReplay::List(); RepLoaded.Empty(); RepSelect(0); }
 			if (Built == ESmvScreen::Wizard) WizStep = 0;
 			FSmvUiSound::Play(ESmvSnd::Open);
 		}
@@ -2821,6 +2824,21 @@ TSharedRef<SWidget> SSmvShell::Summary()
 		B->AddSlot().AutoHeight().Padding(6, 14, 0, 0)[Glass(Fv, FMargin(18.f))];
 	}
 	if (S.Badges.Num()) B->AddSlot().AutoHeight().Padding(6, 12, 0, 0)[Badges];
+	if (Flow->LastPath.Num() > 1)
+		B->AddSlot().AutoHeight().Padding(6, 14, 0, 0)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth()[RouteMap(&Flow->LastPath, 420.f, 260.f)]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(14, 0, 0, 0)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)[SNew(SSmvButton).Icon(ESmvIcon::Book).Text(Tx(TEXT("report.open")))
+					.OnClick([this, F]() { if (F.IsValid()) OpenReport(F->LastRequest, F->LastSummary, F->LastPath); })]
+				+ SVerticalBox::Slot().AutoHeight()[SNew(SSmvButton).Icon(ESmvIcon::Replay).Text(Tx(TEXT("replay.play")))
+					.IsEnabled(!Flow->LastReplayFile.IsEmpty())
+					.OnClick([F]() { if (F.IsValid() && !F->LastReplayFile.IsEmpty()) F->StartReplay(F->LastReplayFile, 1.f); })]
+			]
+		];
 	if (S.bServoTriggerFired) B->AddSlot().AutoHeight().Padding(6, 12, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s · %.1f m AGL · %.0f m"), *Tx(TEXT("summary.servo_fired")).ToString(), S.ServoTriggerAglM, S.ServoTriggerDistM)), 12, "Bold", Warn())];
 	B->AddSlot().AutoHeight().Padding(6, 12, 0, 0)[SmvUi::Text(Client() && Client()->IsLoggedIn() && F->Draft.Backend == ESmvFlightBackend::Cloud ? Tx(TEXT("summary.cloud_saved")) : Tx(TEXT("summary.local_saved")), 10, "Regular", Mute())];
 	B->AddSlot().AutoHeight().Padding(0, 18, 0, 0)
@@ -3062,7 +3080,13 @@ TSharedRef<SWidget> SSmvShell::Logbook()
 	B->AddSlot().AutoHeight().Padding(0, 12, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s: %s"), *FSmvI18n::T(TEXT("logbook.bin")).ToString(),
 		*FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Simumav"), TEXT("Logs"))))), 10, "Regular", Mute())];
 	TSharedRef<SVerticalBox> Top = SNew(SVerticalBox);
-	Top->AddSlot().AutoHeight().Padding(0, 0, 0, 14)[Tabs({ Tx(TEXT("ach.tab_flights")), Tx(TEXT("ach.tab")) }, { ESmvIcon::Book, ESmvIcon::Trophy }, &LogTab)];
+	Top->AddSlot().AutoHeight().Padding(0, 0, 0, 14)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(1.f)[Tabs({ Tx(TEXT("ach.tab_flights")), Tx(TEXT("ach.tab")) }, { ESmvIcon::Book, ESmvIcon::Trophy }, &LogTab)]
+		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Replay).Text(Tx(TEXT("replay.open")))
+			.OnClick([F = Flow]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Replay); })]
+	];
 	Top->AddSlot().AutoHeight()[LogTab == 1 ? Achievements() : AsW<SVerticalBox>(B)];
 	return Page(Tx(TEXT("menu.logbook")), Tx(TEXT("menu.logbook_sub")), ESmvIcon::Replay, SNew(SBox).HAlign(HAlign_Left)[SNew(SBox).WidthOverride(1020.f)[Top]], true, true, true);
 }
@@ -3758,9 +3782,116 @@ TSharedRef<SWidget> SSmvShell::FpvGallery()
 		+ SHorizontalBox::Slot().AutoWidth()[Glass(R, FMargin(20.f))]);
 }
 
+void SSmvShell::RepSelect(int32 I)
+{
+	RepSel = I;
+	if (!RepList.IsValidIndex(I)) { RepFrames.Reset(); RepLoaded.Empty(); return; }
+	if (RepLoaded == RepList[I].File) return;
+	FSmvReplayInfo Info;
+	if (SmvReplay::Load(RepList[I].File, RepReq, RepFrames, &Info)) { RepList[I] = Info; RepLoaded = Info.File; }
+	else { RepFrames.Reset(); RepLoaded.Empty(); }
+}
+
+void SSmvShell::OpenReport(const FSmvFlightRequest& Req, const FSmvFlightSummary& Sum, const TArray<FSmvReplayFrame>& Frames)
+{
+	const FString Path = SmvReplay::WriteReport(Req, Sum, Frames);
+	if (Path.IsEmpty()) { Toast(FSmvI18n::T(TEXT("replay.bad")).ToString(), 3); return; }
+	FPlatformProcess::LaunchURL(*(FString(TEXT("file:///")) + Path.Replace(TEXT("\\"), TEXT("/"))), nullptr, nullptr);
+	Toast(FSmvI18n::T(TEXT("report.opened")).ToString(), 6);
+}
+
+TSharedRef<SWidget> SSmvShell::RouteMap(const TArray<FSmvReplayFrame>* Frames, float W, float H)
+{
+	TSharedRef<SSmvCanvas> C = SNew(SSmvCanvas).Size(FVector2D(W, H));
+	C->Painter = [Frames](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		DrBox(Out, L, G, FVector2D::ZeroVector, Sz, Hex(0x0b1222, 0.92f), Round(14.f));
+		for (int32 k = 1; k < 6; ++k)
+		{
+			DrSeg(Out, L + 1, G, FVector2D(Sz.X * k / 6.0, 0), FVector2D(Sz.X * k / 6.0, Sz.Y), FLinearColor(1, 1, 1, 0.04f), 1.f);
+			DrSeg(Out, L + 1, G, FVector2D(0, Sz.Y * k / 6.0), FVector2D(Sz.X, Sz.Y * k / 6.0), FLinearColor(1, 1, 1, 0.04f), 1.f);
+		}
+		if (!Frames || Frames->Num() < 2) { DrText(Out, L + 2, G, FSmvI18n::T(TEXT("ops.no_data")).ToString(), Sz * 0.5, Font(11), Mute(), 0); return; }
+		const TArray<FSmvReplayFrame>& F = *Frames;
+		const double La0 = F[0].Lat, Lo0 = F[0].Lon, Kx = 111320.0 * FMath::Cos(FMath::DegreesToRadians(La0)), Ky = 110540.0;
+		double X0 = 1e18, X1 = -1e18, Y0 = 1e18, Y1 = -1e18, MaxA = 1;
+		for (const FSmvReplayFrame& Q : F)
+		{
+			const double X = (Q.Lon - Lo0) * Kx, Y = (Q.Lat - La0) * Ky;
+			X0 = FMath::Min(X0, X); X1 = FMath::Max(X1, X); Y0 = FMath::Min(Y0, Y); Y1 = FMath::Max(Y1, Y); MaxA = FMath::Max(MaxA, Q.AltRel);
+		}
+		const double Span = FMath::Max3(X1 - X0, Y1 - Y0, 20.0), S = (FMath::Min(Sz.X, Sz.Y) - 36.0) / Span;
+		const FVector2D Off((Sz.X - (X1 - X0) * S) * 0.5, (Sz.Y - (Y1 - Y0) * S) * 0.5);
+		auto P = [&](const FSmvReplayFrame& Q) { return FVector2D(Off.X + ((Q.Lon - Lo0) * Kx - X0) * S, Sz.Y - Off.Y - ((Q.Lat - La0) * Ky - Y0) * S); };
+		const int32 Step = FMath::Max(1, F.Num() / 600);
+		for (int32 i = Step; i < F.Num(); i += Step)
+		{
+			const float K = (float)FMath::Clamp(F[i].AltRel / MaxA, 0.0, 1.0);
+			DrSeg(Out, L + 2, G, P(F[i - Step]), P(F[i]), FLinearColor::LerpUsingHSV(Hex(0x38bdf8), Hex(0xfbbf24), K), 2.5f);
+		}
+		DrBox(Out, L + 3, G, P(F[0]) - FVector2D(6, 6), FVector2D(12, 12), Accent3(), Circle());
+		DrBox(Out, L + 3, G, P(F.Last()) - FVector2D(6, 6), FVector2D(12, 12), Danger(), Circle());
+		DrText(Out, L + 4, G, FString::Printf(TEXT("N ↑   %.0f m"), Span), FVector2D(Sz.X - 12, 16), Font(10, "Bold"), Dim(), 1);
+		DrText(Out, L + 4, G, FString::Printf(TEXT("▲ %.0f m"), MaxA), FVector2D(12, 16), Font(10, "Bold"), Warn(), -1);
+	};
+	return C;
+}
+
 TSharedRef<SWidget> SSmvShell::ReplayScreen()
 {
-	return Page(Tx(TEXT("menu.logbook")), Tx(TEXT("menu.logbook_sub")), ESmvIcon::Replay, SmvUi::Text(Tx(TEXT("logbook.empty")), 13, "Regular", Mute()));
+	SSmvShell* Self = this;
+	TSharedRef<SVerticalBox> Lf = SNew(SVerticalBox);
+	if (RepList.Num() == 0) Lf->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("replay.empty")), 13, "Regular", Mute())];
+	for (int32 i = 0; i < RepList.Num(); ++i)
+	{
+		const FSmvReplayInfo& I = RepList[i];
+		FString When = I.Created.Left(16).Replace(TEXT("T"), TEXT(" "));
+		const FString Sub = FString::Printf(TEXT("%s · %02d:%02d · %.2f km"), *When, (int32)I.DurationS / 60, (int32)I.DurationS % 60, I.DistM / 1000.0);
+		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Normal).LeftAlign(true).MinWidth(380.f)
+			.Icon(I.DroneType == TEXT("plane") ? ESmvIcon::Plane : I.DroneType == TEXT("rover") ? ESmvIcon::Rover : I.DroneType == TEXT("heli") ? ESmvIcon::Heli : ESmvIcon::Drone)
+			.Text(FText::FromString(I.Drone + (I.Track.IsEmpty() ? FString() : TEXT(" — ") + I.Track))).SubText(FText::FromString(Sub))
+			.Selected(i == RepSel).OnClick([Self, i]() { Self->RepSelect(i); Self->Refresh(); });
+		if (i == RepSel) DefaultFocus = B;
+		Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[B];
+	}
+	TSharedRef<SVerticalBox> Rt = SNew(SVerticalBox);
+	Rt->AddSlot().AutoHeight().HAlign(HAlign_Center)[RouteMap(&RepFrames, 520.f, 420.f)];
+	if (RepList.IsValidIndex(RepSel))
+	{
+		const FSmvReplayInfo& I = RepList[RepSel];
+		Rt->AddSlot().AutoHeight().Padding(0, 12, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s · %s · ▲ %.0f m · %d"), *FSmvI18n::T(TEXT("result.") + (I.Result.IsEmpty() ? FString(TEXT("ok")) : I.Result)).ToString(),
+			*FString::Printf(TEXT("%.2f km"), I.DistM / 1000.0), I.MaxAltM, I.Frames)), 12, "Bold", Dim(), false)];
+		Rt->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[Row(Tx(TEXT("replay.speed")), Chips(&RepSpeed, { TEXT("0.5"), TEXT("1"), TEXT("2"), TEXT("4"), TEXT("8") },
+			{ FText::FromString(TEXT("½×")), FText::FromString(TEXT("1×")), FText::FromString(TEXT("2×")), FText::FromString(TEXT("4×")), FText::FromString(TEXT("8×")) }, {}))];
+		const FString File = I.File;
+		Rt->AddSlot().AutoHeight().Padding(0, 14, 0, 0)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 10, 0)[SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Play).Text(Tx(TEXT("replay.play")))
+				.OnClick([Self, File]() { if (Self->Flow.IsValid()) Self->Flow->StartReplay(File, FCString::Atof(*Self->RepSpeed)); })]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 10, 0)[SNew(SSmvButton).Icon(ESmvIcon::Book).Text(Tx(TEXT("report.open")))
+				.OnClick([Self]()
+				{
+					FSmvFlightSummary Sm;
+					if (Self->RepList.IsValidIndex(Self->RepSel)) { Sm.DurationS = Self->RepList[Self->RepSel].DurationS; Sm.DistM = Self->RepList[Self->RepSel].DistM; Sm.Result = Self->RepList[Self->RepSel].Result; }
+					Self->OpenReport(Self->RepReq, Sm, Self->RepFrames);
+				})]
+			+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Danger).Icon(ESmvIcon::Trash).Text(Tx(TEXT("common.delete")))
+				.OnClick([Self, File]()
+				{
+					Self->Confirm(FSmvI18n::T(TEXT("dlg.delete_title")), FSmvI18n::T(TEXT("ops.delete_q")), FSmvI18n::T(TEXT("dlg.yes_delete")), true, [Self, File]()
+					{
+						IFileManager::Get().Delete(*File);
+						Self->RepList = SmvReplay::List(); Self->RepLoaded.Empty(); Self->RepSelect(FMath::Clamp(Self->RepSel, 0, FMath::Max(0, Self->RepList.Num() - 1)));
+						Self->Refresh();
+					});
+				})]
+		];
+	}
+	return Page(Tx(TEXT("replay.title")), Tx(TEXT("replay.sub")), ESmvIcon::Replay, SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 22, 0)[Glass(Lf, FMargin(18.f))]
+		+ SHorizontalBox::Slot().FillWidth(1.f)[Glass(Rt, FMargin(18.f))]);
 }
 
 void SSmvShell::SupLoad()

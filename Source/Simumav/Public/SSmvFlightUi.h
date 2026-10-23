@@ -62,6 +62,9 @@ struct FSmvFlightUiState
 	float WindMs = 0.f, WindDir = 0.f, WindGust = 0.f;
 	/** FPV parkuru zaman denemesi şeridi */
 	bool bFpv = false, bFpvFinished = false;
+	/** Kayıttan oynatma şeridi */
+	bool bReplay = false;
+	float ReplayT = 0.f, ReplayDur = 0.f, ReplaySpeed = 1.f;
 	int32 FpvLap = 0, FpvLaps = 0, FpvNext = 0, FpvTotalCp = 0, FpvMisses = 0, FpvHits = 0;
 	float FpvLapT = 0.f, FpvBest = -1.f, FpvTotal = 0.f, FpvPen = 0.f, FpvDist = 0.f;
 	/** hayalete göre fark (sn; + geride); çok büyükse yok */
@@ -131,6 +134,7 @@ private:
 	TSharedRef<SWidget> WindCard();
 	TSharedRef<SWidget> FpvBar();
 	TSharedRef<SWidget> PipWindow();
+	TSharedRef<SWidget> ReplayBar();
 	FSlateBrush PipBrush;
 	FVector2D PipDragAbs = FVector2D::ZeroVector, PipStart = FVector2D::ZeroVector;
 	int32 PipDragMode = 0;   // 1 taşı, 2 boyutlandır
