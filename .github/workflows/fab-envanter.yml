@@ -58,6 +58,15 @@ jobs:
             $c = Join-Path $_.DirectoryName 'Content'
             if (Test-Path $c) { Get-ChildItem $c -Directory -ErrorAction SilentlyContinue | ForEach-Object { W ("  " + $_.FullName + "  [" + (Size $_.FullName) + "]") } }
           }
+          W "=== VaultCache ayrinti (FabLibrary dosyalari + paketlerin ilk 3 duzeyi) ==="
+          $vc = 'C:\ProgramData\Epic\EpicGamesLauncher\VaultCache'
+          if (Test-Path "$vc\FabLibrary") { Get-ChildItem "$vc\FabLibrary" -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { W ("  " + $_.FullName + "  " + $_.Length) } }
+          Get-ChildItem $vc -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' } | ForEach-Object {
+            Get-ChildItem $_.FullName -Directory -Recurse -Depth 3 -ErrorAction SilentlyContinue | ForEach-Object { W ("  " + $_.FullName) }
+            Get-ChildItem $_.FullName -File -Recurse -Depth 1 -ErrorAction SilentlyContinue | ForEach-Object { W ("  F " + $_.FullName + "  " + $_.Length) }
+          }
+          W "=== FabLibrary icindeki metin/json dosyalari (ilk 4000 karakter) ==="
+          if (Test-Path "$vc\FabLibrary") { Get-ChildItem "$vc\FabLibrary" -Recurse -File -Include *.json,*.txt,*.ini -ErrorAction SilentlyContinue | Select-Object -First 5 | ForEach-Object { W ("--- " + $_.FullName); $t = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue; if ($t) { W ($t.Substring(0, [Math]::Min(4000, $t.Length))) } } }
           W "=== Disk bos alan ==="
           Get-PSDrive -PSProvider FileSystem | ForEach-Object { W ("  " + $_.Name + ": bos " + ('{0:N0} GB' -f ($_.Free / 1GB))) }
       - name: Artefakt
