@@ -106,7 +106,7 @@ void ASmvPilotPawn::BuildInput()
 	const FName Btn[] = { TEXT("Arm"), TEXT("ArmToggle"), TEXT("Takeoff"), TEXT("Rtl"), TEXT("Land"), TEXT("Lock"), TEXT("Ack"), TEXT("Pause"), TEXT("Reset"),
 		TEXT("CamCycle"), TEXT("CamType"), TEXT("Hud"), TEXT("Pip"), TEXT("Panel"), TEXT("Sticks"), TEXT("ModeMenu"), TEXT("SpeedUp"), TEXT("SpeedDown"),
 		TEXT("Mode1"), TEXT("Mode2"), TEXT("Mode3"), TEXT("MotorCut"), TEXT("GimbalUp"), TEXT("GimbalDown"),
-		TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7"), TEXT("Ch5Up"), TEXT("Ch5Down"), TEXT("ThrCenter"),
+		TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7"), TEXT("Cam8"), TEXT("Ch5Up"), TEXT("Ch5Down"), TEXT("ThrCenter"),
 		TEXT("Help"), TEXT("Cockpit"), TEXT("Radar"), TEXT("Eo") };
 	for (const FName& B : Btn) MakeAction(B, 0);
 	MapAllKeys();
@@ -166,6 +166,7 @@ void ASmvPilotPawn::MapAllKeys()
 	MapKey(TEXT("Cam5"), EKeys::Five);
 	MapKey(TEXT("Cam6"), EKeys::Six);
 	MapKey(TEXT("Cam7"), EKeys::Seven);
+	MapKey(TEXT("Cam8"), EKeys::Eight);
 	MapKey(TEXT("CamType"), EKeys::N);
 	MapKey(TEXT("Hud"), EKeys::H);
 	MapKey(TEXT("Panel"), EKeys::P);
@@ -226,9 +227,9 @@ void ASmvPilotPawn::OnRcAxis(const FInputActionValue& V, int32 Index)
 void ASmvPilotPawn::Fire(FName Name)
 {
 	if (Name == TEXT("CamCycle")) { CycleMode(); return; }
-	static const FName CamKeys[] = { TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7") };
-	static const ESmvCamMode CamModes[] = { ESmvCamMode::Chase, ESmvCamMode::Fpv, ESmvCamMode::Gimbal, ESmvCamMode::Free, ESmvCamMode::Ground, ESmvCamMode::Orbit, ESmvCamMode::Top };
-	for (int32 i = 0; i < 7; ++i) if (Name == CamKeys[i]) { SetMode(CamModes[i]); OnAction.Broadcast(TEXT("CamCycle")); return; }
+	static const FName CamKeys[] = { TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7"), TEXT("Cam8") };
+	static const ESmvCamMode CamModes[] = { ESmvCamMode::Chase, ESmvCamMode::Fpv, ESmvCamMode::Gimbal, ESmvCamMode::Free, ESmvCamMode::Ground, ESmvCamMode::Orbit, ESmvCamMode::Top, ESmvCamMode::Pilot };
+	for (int32 i = 0; i < 8; ++i) if (Name == CamKeys[i]) { SetMode(CamModes[i]); OnAction.Broadcast(TEXT("CamCycle")); return; }
 	if (Name == TEXT("CamType")) { SetCamType((ESmvCamType)(((uint8)CamType + 1) % 3)); }
 	if (Name == TEXT("Hud")) bHud = !bHud;
 	if (Name == TEXT("Pip")) bPip = !bPip;
@@ -418,6 +419,7 @@ FString ASmvPilotPawn::ModeLabel(ESmvCamMode M)
 	case ESmvCamMode::Ground: return FSmvI18n::T(TEXT("cammode.ground")).ToString();
 	case ESmvCamMode::Orbit: return FSmvI18n::T(TEXT("cammode.orbit")).ToString();
 	case ESmvCamMode::Top: return FSmvI18n::T(TEXT("cammode.top")).ToString();
+	case ESmvCamMode::Pilot: return FSmvI18n::T(TEXT("cammode.pilot")).ToString();
 	default: return TEXT("?");
 	}
 }
@@ -435,10 +437,12 @@ void ASmvPilotPawn::SetMode(ESmvCamMode M)
 void ASmvPilotPawn::CycleMode()
 {
 	// web sırası: Takip → FPV → Gimbal → Serbest → Yer → (Yörünge → Tepeden)
-	static const ESmvCamMode Order[] = { ESmvCamMode::Chase, ESmvCamMode::Fpv, ESmvCamMode::Gimbal, ESmvCamMode::Free, ESmvCamMode::Ground, ESmvCamMode::Orbit, ESmvCamMode::Top };
+	static const ESmvCamMode Order[] = { ESmvCamMode::Chase, ESmvCamMode::Fpv, ESmvCamMode::Gimbal, ESmvCamMode::Free, ESmvCamMode::Ground, ESmvCamMode::Pilot, ESmvCamMode::Orbit, ESmvCamMode::Top };
 	int32 Cur = 0;
-	for (int32 i = 0; i < 7; ++i) if (Order[i] == Mode) Cur = i;
-	SetMode(Order[(Cur + 1) % 7]);
+	for (int32 i = 0; i < 8; ++i) if (Order[i] == Mode) Cur = i;
+	ESmvCamMode Next = Order[(Cur + 1) % 8];
+	if (Next == ESmvCamMode::Pilot && !bHasPilot) Next = Order[(Cur + 2) % 8];
+	SetMode(Next);
 }
 
 float ASmvPilotPawn::GetFov() const
@@ -572,6 +576,17 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 		CamPos = Pos + FVector(0, 0, 8000.f * ChaseZoom);
 		CamRot = FRotator(-90.f, 0.f, 0.f);
 		break;
+	case ESmvCamMode::Pilot:
+	{
+		// omuz kamerası (web shoulderCam): pilottan drona doğrultuda 1,05 m geri, 0,55 m sağ, göz + 0,18 m; drona bakar
+		if (!bHasPilot) { CamPos = Pos - Body.Vector() * 1200.f + FVector(0, 0, 300.f); CamRot = (Pos - CamPos).Rotation(); break; }
+		FVector D = Pos - PilotBase; D.Z = 0;
+		D = D.IsNearlyZero() ? FVector(1, 0, 0) : D.GetSafeNormal();
+		const FVector Rt = FVector::CrossProduct(FVector::UpVector, D).GetSafeNormal() * -1.0;
+		CamPos = PilotBase - D * 105.f + Rt * 55.f + FVector(0, 0, PilotEyeCm + 18.f);
+		CamRot = FMath::RInterpTo(GetActorRotation(), (Pos - CamPos).Rotation(), Dt, 6.f);
+		break;
+	}
 	}
 	// giriş sekansı sarmalı: sonunda normal kip konumuna yumuşakça bağlanır
 	if (IntroLeft > 0.f && IntroDur > 0.f)

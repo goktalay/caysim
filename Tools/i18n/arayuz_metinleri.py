@@ -540,4 +540,5 @@ U = {
  'bar.panel': ('Panel', 'Panel', 'Panel', 'Panneau', 'Panel', 'Панель', 'اللوحة'),
  'bar.sens': ('⚙ Hassasiyet', '⚙ Sensitivity', '⚙ Empfindlichkeit', '⚙ Sensibilité', '⚙ Sensibilidad', '⚙ Чувствительность', '⚙ الحساسية'),
  'bar.vrc': ('🎮 Sanal kumanda', '🎮 Virtual sticks', '🎮 Virtuelle Sticks', '🎮 Manettes virtuelles', '🎮 Mandos virtuales', '🎮 Виртуальные стики', '🎮 عصي افتراضية'),
+ 'cammode.pilot': ('Pilot (omuz)', 'Pilot (shoulder)', 'Pilot (Schulter)', 'Pilote (épaule)', 'Piloto (hombro)', 'Пилот (через плечо)', 'الطيار (الكتف)'),
 }

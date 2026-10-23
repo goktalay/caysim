@@ -351,6 +351,7 @@ void ASmvGameMode::BuildScene()
 		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		PilotFigure = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(FRotator(0.0, (P1 - P0).Rotation().Yaw, 0.0), P0), Sp);
 		if (PilotFigure) PilotFigure->Build(Req.Pilot.Avatar, true);
+		if (PilotFigure) if (ASmvPilotPawn* Pp = GetPilot()) Pp->SetPilotEye(P0, PilotFigure->HeadHeightCm());
 	}
 
 	// ---- HUD ----

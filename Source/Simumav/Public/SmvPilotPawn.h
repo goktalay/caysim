@@ -26,7 +26,9 @@ struct FKey;   // InputCoreTypes.h (MapKey bildirimi için yeterli)
 UENUM(BlueprintType)
 enum class ESmvCamMode : uint8
 {
-	Chase, Fpv, Gimbal, Orbit, Ground, Free, Top
+	Chase, Fpv, Gimbal, Orbit, Ground, Free, Top,
+	/** İnsan pilot görünümü: sahnedeki pilotun omzunun gerisinden drona bakar (web shoulderCam) */
+	Pilot
 };
 
 /** Görüntü tipi (sunucu `camera` alanı). */
@@ -93,6 +95,8 @@ public:
 	void RemapKeys();
 	/** Giriş sekansı: kamera 100 m yükseklik / 80 m yarıçaptan 110°'lik sarmalla takip konumuna iner (web flightsim_intro) */
 	void PlayIntro(float Seconds);
+	/** Sahnedeki pilot figürü: ayak konumu (dünya) ve göz yüksekliği (cm) — Pilot kamera kipi */
+	void SetPilotEye(const FVector& Base, float EyeCm) { PilotBase = Base; PilotEyeCm = EyeCm; bHasPilot = true; }
 	/** Kamera sarsıntısı (çarpma) */
 	void Shake(float AmpCm, float Seconds);
 	/** Ham RC verici eksenleri (−1..1; Ayarlar → Kumanda → Algıla) */
@@ -133,6 +137,9 @@ private:
 	bool bHud = true, bPip = false, bFlying = false;
 	float ChaseZoom = 1.f;
 	float IntroLeft = 0.f, IntroDur = 0.f, ShakeLeft = 0.f, ShakeAmp = 0.f;
+	FVector PilotBase = FVector::ZeroVector;
+	float PilotEyeCm = 165.f;
+	bool bHasPilot = false;
 
 	// gamepad çubukları (Enhanced Input; −1..1)
 	FVector2D LeftStick = FVector2D::ZeroVector, RightStick = FVector2D::ZeroVector;
