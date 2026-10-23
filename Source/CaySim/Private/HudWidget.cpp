@@ -63,8 +63,12 @@ struct UCaySimHudWidget::FPainter
 		Stroke(Pts, Alpha);
 	}
 
-	void Stroke(const TArray<FVector2D>& Pts, float Alpha) const
+	void Stroke(const TArray<FVector2D>& PtsD, float Alpha) const
 	{
+		// MakeLines: UE 5.x'te FVector2f aşırı yükü (FVector2D sürümü kaldırılabilir)
+		TArray<FVector2f> Pts;
+		Pts.Reserve(PtsD.Num());
+		for (const FVector2D& V : PtsD) Pts.Add(FVector2f((float)V.X, (float)V.Y));
 		// dış çizgi
 		FSlateDrawElement::MakeLines(Out, Layer, Geo.ToPaintGeometry(), Pts, ESlateDrawEffect::None, FLinearColor(0, 0, 0, 0.6f * Alpha), true, Thick + 2.f);
 		FSlateDrawElement::MakeLines(Out, Layer + 1, Geo.ToPaintGeometry(), Pts, ESlateDrawEffect::None, C.CopyWithNewOpacity(Alpha), true, Thick);
@@ -355,7 +359,7 @@ int32 UCaySimHudWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, 
 			const FVector2D Sz = P.Measure->Measure(Wn, P.FontBig);
 			const FVector2D Min(Ctr.X - Sz.X * 0.5f - 12, Y), Max(Ctr.X + Sz.X * 0.5f + 12, Y + Sz.Y + 8);
 			if (bBlink) P.FilledBox(Min, Max, FLinearColor(0.8f, 0, 0, 0.55f));
-			const TArray<FVector2D> Frame = { Min, FVector2D(Max.X, Min.Y), Max, FVector2D(Min.X, Max.Y), Min };
+			const TArray<FVector2f> Frame = { FVector2f(Min), FVector2f((float)Max.X, (float)Min.Y), FVector2f(Max), FVector2f((float)Min.X, (float)Max.Y), FVector2f(Min) };
 			FSlateDrawElement::MakeLines(Out, P.Layer + 1, G.ToPaintGeometry(), Frame, ESlateDrawEffect::None, FLinearColor::Red, true, 2.f);
 			P.Text(Wn, FVector2D(Ctr.X, Y + 4), 0, true, FLinearColor::White);
 			Y += Sz.Y + 16;
