@@ -35,6 +35,10 @@ struct SIMUMAV_API FSmvUiPrefs
 	FString ThermalPalette = TEXT("white");
 	/** PiP penceresi: genişlik (px, 16:9) ve sağ/alt kenara uzaklık */
 	float PipW = 384.f, PipR = 16.f, PipB = 80.f;
+	/** Dron kartı (web harekât paneli): sağ/üst kenara uzaklık, küçültülmüş mü, katlı bölümler (virgüllü) */
+	float PanelR = 12.f, PanelT = 56.f;
+	bool bPanelMin = false;
+	FString PanelFold = TEXT("ops");
 	/** Güç kadranları tasarımı (web gtheme): cockpit | classic | glass | minimal | military | none */
 	FString DialTheme = TEXT("cockpit");
 	/** Ana menüde canlı 3B sahne (uçan dron); kapalıysa yalnız animasyonlu arka plan */

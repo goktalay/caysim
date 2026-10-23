@@ -34,6 +34,8 @@ public:
 	/** Kısayol yardımı (F1) aç/kapa */
 	void ToggleHelp();
 	bool IsOverlayOpen() const { return bOverlay; }
+	/** Onay diyaloğu (web confirmDlg): başlık, açıklama, onay düğmesi (tehlikeli = kırmızı); odak Vazgeç'te; Esc/B kapatır */
+	void Confirm(const FText& Title, const FText& Body, const FText& YesLabel, bool bDanger, TFunction<void()> OnYes);
 
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 	virtual FReply OnKeyDown(const FGeometry& G, const FKeyEvent& E) override;
@@ -213,8 +215,6 @@ private:
 	void SaveSettingsQuiet();
 	void OpenTutorial();
 	void CloseOverlay();
-	/** Onay diyaloğu (web confirmDlg): başlık, açıklama, onay düğmesi (tehlikeli = kırmızı); odak Vazgeç'te; Esc/B kapatır */
-	void Confirm(const FText& Title, const FText& Body, const FText& YesLabel, bool bDanger, TFunction<void()> OnYes);
 	void FocusDefault();
 	class USmvDataService* Data() const;
 	class USimumavClient* Client() const;

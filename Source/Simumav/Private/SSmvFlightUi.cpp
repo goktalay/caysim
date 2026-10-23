@@ -19,6 +19,9 @@
 #include "Rendering/DrawElements.h"
 #include "Rendering/SlateRenderer.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "SmvSvgIcon.h"
+#include "Widgets/Layout/SScrollBox.h"
+#include "HAL/PlatformApplicationMisc.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Layout/Clipping.h"
@@ -499,13 +502,14 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 			+ SVerticalBox::Slot().AutoHeight()[InfoCard()]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 8.f, 0.f, 0.f)[WindCard()]
 		]
-		// sağ üst: dron paneli
-		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(14.f)
+		// sağ üst: dron kartı (web harekât paneli birebir; başlıktan sürüklenir)
+		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Top)
+		.Padding(TAttribute<FMargin>::CreateLambda([]() { const FSmvUiPrefs& P = FSmvUiPrefs::Get(); return FMargin(0.f, P.PanelT, P.PanelR, 0.f); }))
 		[
 			SNew(SBox)
-			.Visibility_Lambda([this]() { return bPanel ? EVisibility::Visible : EVisibility::Collapsed; })
+			.Visibility_Lambda([this]() { return bPanel && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })
 			[
-				DronePanel()
+				GtPanel()
 			]
 		]
 		// sol alt: ileti akışı + sanal kumanda
@@ -1711,5 +1715,412 @@ TSharedRef<SWidget> SSmvFlightUi::EoWindow()
 				]
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(2.f)[View]
+		];
+}
+
+// ---------------------------------------------------------------------------
+// DRON KARTI — web flightsim_panel.js + app.css .fs-pn-* (GÖKTUNGU stil.css .dron-kart.ayrik) birebir:
+// 400 px, zemin rgba(11,14,17,.94), 1 px #1e2630, 6 px köşe; başlık #141a21 (10 px dolgu); gövde Consolas 12 px, 10 px dolgu.
+// CSS px → Slate punto: × 0,75.
+// ---------------------------------------------------------------------------
+
+namespace SmvGt
+{
+	FLinearColor C(uint32 Hex, float A = 1.f) { FLinearColor L = FLinearColor::FromSRGBColor(FColor((Hex >> 16) & 255, (Hex >> 8) & 255, Hex & 255)); L.A = A; return L; }
+	const FLinearColor PanelArka = C(0x0b0e11, 0.94f), Cizgi = C(0x1e2630), Ic = C(0x35d0ff), Metin = C(0xcfd8e3), Soluk = C(0x5c6b7a),
+		Iyi = C(0x3ddc84), Kotu = C(0xff5d5d), Uyari = C(0xffc94d), Giris = C(0x060809), Dugme = C(0x141a21), DugmeH = C(0x1c2530), Kon = C(0x0b0f14);
+	FSlateFontInfo Mono(float Px, bool bBold = false) { (void)bBold; return FCoreStyle::GetDefaultFontStyle("Mono", FMath::RoundToInt(Px * 0.75f)); }
+	FSlateFontInfo Sans(float Px, bool bBold = false) { return FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", FMath::RoundToInt(Px * 0.75f)); }
+}
+
+bool SSmvFlightUi::IsFolded(const FString& Key) const
+{
+	TArray<FString> P;
+	FSmvUiPrefs::Get().PanelFold.ParseIntoArray(P, TEXT(","));
+	return P.Contains(Key);
+}
+
+void SSmvFlightUi::SetFolded(const FString& Key, bool bFold)
+{
+	FSmvUiPrefs& Pr = FSmvUiPrefs::Get();
+	TArray<FString> P;
+	Pr.PanelFold.ParseIntoArray(P, TEXT(","));
+	if (bFold) P.AddUnique(Key); else P.Remove(Key);
+	Pr.PanelFold = FString::Join(P, TEXT(","));
+	Pr.Save();
+}
+
+void SSmvFlightUi::ArmToggleConfirm()
+{
+	if (!GM.IsValid()) return;
+	const bool bArmed = St.bArmed;
+	GM->ConfirmUi(FText::FromString(bArmed ? TEXT("DISARM") : TEXT("ARM")), FSmvI18n::T(bArmed ? TEXT("pn.disarm_q") : TEXT("pn.arm_q")), FText::FromString(bArmed ? TEXT("DISARM") : TEXT("ARM")), bArmed,
+		[this, bArmed]() { if (GM.IsValid()) GM->Command(bArmed ? TEXT("disarm") : TEXT("arm")); });
+}
+
+TSharedRef<SWidget> SSmvFlightUi::GtSection(const FString& Key, TAttribute<FText> Title, TSharedRef<SWidget> Body, TSharedPtr<SWidget> Extra)
+{
+	using namespace SmvGt;
+	TSharedRef<SSmvPaintBox> Arrow = SNew(SSmvPaintBox).Size(FVector2D(9, 9));
+	Arrow->Painter = [this, Key](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		SmvSvg::Draw(Out, L, G, SmvSvg::Icon(IsFolded(Key) ? TEXT("down") : TEXT("down")), FVector2D::ZeroVector, 9.f, Soluk, 2.2f);
+	};
+	Arrow->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+	Arrow->SetRenderTransform(TAttribute<TOptional<FSlateRenderTransform>>::CreateLambda([this, Key]() { return TOptional<FSlateRenderTransform>(FSlateRenderTransform(FQuat2D(IsFolded(Key) ? -PI / 2 : 0.f))); }));
+	return SNew(SVerticalBox)
+		// üst çizgi (.fs-pn-bolum border-top)
+		+ SVerticalBox::Slot().AutoHeight().Padding(0, 2, 0, 0)[SNew(SBox).HeightOverride(1.f)[SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(Cizgi)]]
+		+ SVerticalBox::Slot().AutoHeight()
+		[
+			SNew(SButton).ButtonStyle(FCoreStyle::Get(), "NoBorder").IsFocusable(false).ContentPadding(0.f)
+			.OnClicked_Lambda([this, Key]() { SetFolded(Key, !IsFolded(Key)); return FReply::Handled(); })
+			.ToolTipText(FSmvI18n::T(TEXT("pn.fold")))
+			[
+				SNew(SBorder).BorderImage(&GtSectB).Padding(FMargin(6.f, 3.f))
+				.BorderBackgroundColor_Lambda([this]() { return FSlateColor(Dugme); })
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 6, 0)[Arrow]
+					+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SNew(STextBlock).Text(Title).Font(Sans(11, true)).ColorAndOpacity(Soluk)]
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Extra.IsValid() ? Extra.ToSharedRef() : SNullWidget::NullWidget]
+				]
+			]
+		]
+		+ SVerticalBox::Slot().AutoHeight()
+		[
+			SNew(SBox).Visibility_Lambda([this, Key]() { return IsFolded(Key) ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })[Body]
+		];
+}
+
+TSharedRef<SWidget> SSmvFlightUi::GtTile(const FString& Icon, TAttribute<FText> Label, TFunction<FString()> Value, TFunction<FString()> Sub, TFunction<FLinearColor()> IconCol, TFunction<void()> OnClick)
+{
+	using namespace SmvGt;
+	TSharedRef<SSmvPaintBox> Ico = SNew(SSmvPaintBox).Size(FVector2D(20, 20));
+	Ico->Painter = [Icon, IconCol](const FGeometry& G, FSlateWindowElementList& Out, int32 L) { SmvSvg::Draw(Out, L, G, SmvSvg::Icon(Icon), FVector2D::ZeroVector, 20.f, IconCol ? IconCol() : Ic); };
+	TSharedRef<SWidget> Inner = SNew(SBorder).BorderImage(&GtTileB).Padding(FMargin(4.f, 8.f)).HAlign(HAlign_Center)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 0, 0, 3)[Ico]
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SNew(STextBlock).Font(Mono(12, true)).ColorAndOpacity(Metin).Text_Lambda([Value]() { return FText::FromString(Value ? Value() : FString(TEXT("—"))); })]
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SNew(STextBlock).Font(Sans(9)).ColorAndOpacity(Soluk).Text_Lambda([Sub]() { return FText::FromString(Sub ? Sub() : FString()); })
+				.Visibility_Lambda([Sub]() { return Sub && !Sub().IsEmpty() ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })]
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 3, 0, 0)[SNew(STextBlock).Font(Sans(9)).ColorAndOpacity(Soluk).Text(Label)]
+		];
+	if (!OnClick) return Inner;
+	return SNew(SButton).ButtonStyle(FCoreStyle::Get(), "NoBorder").IsFocusable(false).ContentPadding(0.f).OnClicked_Lambda([OnClick]() { OnClick(); return FReply::Handled(); })[Inner];
+}
+
+TSharedRef<SWidget> SSmvFlightUi::GtCell(const FString& Icon, TAttribute<FText> Label, TFunction<void()> OnClick, bool bDanger)
+{
+	using namespace SmvGt;
+	TSharedRef<SSmvPaintBox> Ico = SNew(SSmvPaintBox).Size(FVector2D(19, 19));
+	const FLinearColor Col = bDanger ? C(0xf09b9b) : Ic;
+	Ico->Painter = [Icon, Col](const FGeometry& G, FSlateWindowElementList& Out, int32 L) { SmvSvg::Draw(Out, L, G, SmvSvg::Icon(Icon), FVector2D::ZeroVector, 19.f, Col); };
+	TSharedPtr<SButton> B;
+	SAssignNew(B, SButton).ButtonStyle(FCoreStyle::Get(), "NoBorder").IsFocusable(false).ContentPadding(0.f)
+		.OnClicked_Lambda([OnClick]() { if (OnClick) OnClick(); FSmvUiSound::Play(ESmvSnd::Click); return FReply::Handled(); })
+		[
+			SNew(SBox).MinDesiredHeight(74.f)
+			[
+				SNew(SBorder).BorderImage(&GtCellB).Padding(FMargin(5.f, 9.f)).HAlign(HAlign_Center).VAlign(VAlign_Center)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 0, 0, 7)[Ico]
+					+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SNew(STextBlock).Font(Sans(10, true)).ColorAndOpacity(Metin).Justification(ETextJustify::Center).AutoWrapText(true).Text(Label)]
+				]
+			]
+		];
+	return B.ToSharedRef();
+}
+
+TSharedRef<SWidget> SSmvFlightUi::GtPanel()
+{
+	using namespace SmvGt;
+	GtCard = FSlateRoundedBoxBrush(PanelArka, 6.f, Cizgi, 1.f);
+	GtHead = FSlateRoundedBoxBrush(Dugme, 6.f);
+	GtHead.OutlineSettings.CornerRadii = FVector4(6.f, 6.f, 0.f, 0.f);
+	GtTileB = FSlateRoundedBoxBrush(FLinearColor(0, 0, 0, 0.18f), 5.f, Cizgi, 1.f);
+	GtCellB = FSlateRoundedBoxBrush(Dugme, 6.f, Cizgi, 1.f);
+	GtInput = FSlateRoundedBoxBrush(Giris, 5.f, Cizgi, 1.f);
+	GtCapsule = FSlateRoundedBoxBrush(FLinearColor(1, 1, 1, 0.04f), 11.f, Cizgi, 1.f);
+	GtSectB = FSlateRoundedBoxBrush(FLinearColor::White, 0.f);
+	GtTint = FSlateRoundedBoxBrush(FLinearColor::White, 5.f);
+	GtConsole = FSlateRoundedBoxBrush(Kon, 4.f, Cizgi, 1.f);
+	auto Tx = [](const TCHAR* K) { return TAttribute<FText>::CreateLambda([K]() { return FSmvI18n::T(K); }); };
+	auto F0 = [](float V) { return FString::Printf(TEXT("%.0f"), V); };
+
+	// ---- başlık şeridi: LED · ad · özet (irtifa + kip) · ARM kapsülü · ↺ · küçült ----
+	TSharedRef<SSmvPaintBox> MinIco = SNew(SSmvPaintBox).Size(FVector2D(12, 12));
+	MinIco->Painter = [](const FGeometry& G, FSlateWindowElementList& Out, int32 L) { SmvSvg::Draw(Out, L, G, SmvSvg::Icon(FSmvUiPrefs::Get().bPanelMin ? TEXT("down") : TEXT("up")), FVector2D::ZeroVector, 12.f, Soluk, 2.2f); };
+	TSharedRef<SSmvPaintBox> ResetIco = SNew(SSmvPaintBox).Size(FVector2D(13, 13));
+	ResetIco->Painter = [](const FGeometry& G, FSlateWindowElementList& Out, int32 L) { SmvSvg::Draw(Out, L, G, SmvSvg::Icon(TEXT("reset")), FVector2D::ZeroVector, 13.f, Soluk, 2.f); };
+	TSharedPtr<SBorder> Head;
+	SAssignNew(Head, SBorder).BorderImage(&GtHead).Padding(FMargin(10.f)).Cursor(EMouseCursor::GrabHand)
+		.ToolTipText(FSmvI18n::T(TEXT("pn.drag")))
+		.OnMouseButtonDown_Lambda([this](const FGeometry& G, const FPointerEvent& E)
+		{
+			if (E.GetEffectingButton() != EKeys::LeftMouseButton) return FReply::Unhandled();
+			PanelDragAbs = FVector2D(E.GetScreenSpacePosition());
+			PanelStart = FVector2D(FSmvUiPrefs::Get().PanelR, FSmvUiPrefs::Get().PanelT);
+			TSharedPtr<SWidget> H = PanelHead.Pin();
+			return H.IsValid() ? FReply::Handled().CaptureMouse(H.ToSharedRef()) : FReply::Handled();
+		})
+		.OnMouseButtonUp_Lambda([this](const FGeometry&, const FPointerEvent&)
+		{
+			TSharedPtr<SWidget> H = PanelHead.Pin();
+			if (!H.IsValid() || !H->HasMouseCapture()) return FReply::Unhandled();
+			FSmvUiPrefs::Get().Save();
+			return FReply::Handled().ReleaseMouseCapture();
+		})
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+			[
+				SNew(SBox).WidthOverride(8.f).HeightOverride(8.f)[SNew(SImage).Image(&CircleBrush).ColorAndOpacity_Lambda([this]() { return FSlateColor(!St.bTele ? Uyari : St.bFresh ? Iyi : Kotu); })]
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+			[
+				SNew(STextBlock).Font(Sans(12, true)).ColorAndOpacity(Metin).OverflowPolicy(ETextOverflowPolicy::Ellipsis).Text_Lambda([this]() { return FText::FromString(St.Title); })
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(8, 0, 0, 0)
+			[
+				SNew(STextBlock).Font(Sans(10, true)).ColorAndOpacity(Metin).Text_Lambda([this, F0]() { return FText::FromString(St.bRover ? F0(St.Gs * 3.6f) + TEXT(" km/h") : (St.bTele ? F0(St.AltRel) + TEXT(" m") : FString())); })
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 0, 0)
+			[
+				SNew(STextBlock).Font(Sans(9, true)).ColorAndOpacity(Soluk).Text_Lambda([this]() { return FText::FromString(St.Mode.ToUpper()); })
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 0, 0)
+			[
+				SNew(SBox).HeightOverride(22.f)
+				[
+					SNew(SBorder).BorderImage(&GtCapsule).Padding(FMargin(8.f, 0.f)).VAlign(VAlign_Center)
+					.BorderBackgroundColor_Lambda([this]() { return FSlateColor(St.bArmed ? FLinearColor(1.f, 0.36f, 0.36f, 1.f) : FLinearColor::White); })
+					[
+						SNew(STextBlock).Font(Mono(11, true)).Text_Lambda([this]() { return FText::FromString(St.bArmed ? TEXT("ARMED") : TEXT("DISARMED")); })
+						.ColorAndOpacity_Lambda([this]() { return FSlateColor(St.bArmed ? Kotu : C(0x8a94a3)); })
+					]
+				]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 0, 0)
+			[
+				SNew(SButton).ButtonStyle(FCoreStyle::Get(), "NoBorder").IsFocusable(false).ContentPadding(FMargin(5.f, 2.f)).ToolTipText(FSmvI18n::T(TEXT("pn.c_reset")))
+				.OnClicked_Lambda([this]() { if (GM.IsValid()) GM->ConfirmUi(FSmvI18n::T(TEXT("pn.c_reset")), FSmvI18n::T(TEXT("flight.reset_confirm")), FSmvI18n::T(TEXT("pn.c_reset")), true, [this]() { if (GM.IsValid()) GM->Command(TEXT("reset")); }); return FReply::Handled(); })
+				[ResetIco]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 0, 0)
+			[
+				SNew(SButton).ButtonStyle(FCoreStyle::Get(), "NoBorder").IsFocusable(false).ContentPadding(FMargin(5.f, 2.f)).ToolTipText(FSmvI18n::T(TEXT("pn.min")))
+				.OnClicked_Lambda([]() { FSmvUiPrefs& P = FSmvUiPrefs::Get(); P.bPanelMin = !P.bPanelMin; P.Save(); return FReply::Handled(); })
+				[MinIco]
+			]
+		];
+	PanelHead = Head;
+	Head->SetOnMouseMove(FPointerEventHandler::CreateLambda([this](const FGeometry& G, const FPointerEvent& E)
+	{
+		TSharedPtr<SWidget> H = PanelHead.Pin();
+		if (!H.IsValid() || !H->HasMouseCapture()) return FReply::Unhandled();
+		const FVector2D D = (FVector2D(E.GetScreenSpacePosition()) - PanelDragAbs) / FMath::Max(0.1f, G.Scale);
+		FSmvUiPrefs& P = FSmvUiPrefs::Get();
+		P.PanelR = FMath::Max(0.f, (float)(PanelStart.X - D.X));
+		P.PanelT = FMath::Max(0.f, (float)(PanelStart.Y + D.Y));
+		return FReply::Handled();
+	}));
+
+	// ---- üst satır: UÇUŞA HAZIR rozeti (tıkla → ARM/DISARM onayı) + İŞLEMLER ----
+	auto HazirCol = [this](int32 Part) -> FLinearColor
+	{
+		// 0 kenar, 1 zemin, 2 yazı — hazir / ucusta / bilinmiyor / kayıt
+		const int32 K = St.bReplay ? 2 : !St.bTele ? 2 : St.bArmed ? 1 : 0;
+		static const FLinearColor Tab[3][3] = {
+			{ FLinearColor::FromSRGBColor(FColor(76, 175, 80, 140)), FLinearColor::FromSRGBColor(FColor(76, 175, 80, 31)), FLinearColor::FromSRGBColor(FColor(0x8f, 0xe3, 0x9a)) },
+			{ FLinearColor::FromSRGBColor(FColor(90, 170, 255, 140)), FLinearColor::FromSRGBColor(FColor(90, 170, 255, 31)), FLinearColor::FromSRGBColor(FColor(0x9f, 0xca, 0xff)) },
+			{ FLinearColor::FromSRGBColor(FColor(140, 150, 160, 89)), FLinearColor::FromSRGBColor(FColor(6, 8, 9, 255)), FLinearColor::FromSRGBColor(FColor(0xc2, 0xcb, 0xd6)) } };
+		return Tab[K][Part];
+	};
+	TSharedRef<SWidget> Ust = SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 3, 0)
+		[
+			SNew(SButton).ButtonStyle(FCoreStyle::Get(), "NoBorder").IsFocusable(false).ContentPadding(0.f)
+			.OnClicked_Lambda([this]() { if (!St.bReplay && St.bTele) ArmToggleConfirm(); return FReply::Handled(); })
+			[
+				SNew(SBorder).BorderImage(&GtTint).Padding(FMargin(10.f, 7.f))
+				.BorderBackgroundColor_Lambda([HazirCol]() { return FSlateColor(HazirCol(1)); })
+				[
+					SNew(STextBlock).Font(Mono(11, true)).OverflowPolicy(ETextOverflowPolicy::Ellipsis)
+					.ColorAndOpacity_Lambda([HazirCol]() { return FSlateColor(HazirCol(2)); })
+					.Text_Lambda([this]()
+					{
+						if (St.bReplay) return FSmvI18n::T(TEXT("pn.replay"));
+						if (!St.bTele) return FSmvI18n::T(TEXT("pn.starting"));
+						if (St.bArmed) return FText::FromString(TEXT("ARMED · ") + FSmvI18n::T(St.bRover ? TEXT("pn.driving") : TEXT("pn.flying")).ToString());
+						return FText::FromString(TEXT("DISARMED · ") + FSmvI18n::T(St.bRover ? TEXT("pn.ready_rover") : TEXT("pn.ready")).ToString());
+					})
+				]
+			]
+		]
+		+ SHorizontalBox::Slot().FillWidth(1.f).Padding(3, 0, 0, 0)
+		[
+			SNew(SButton).ButtonStyle(FCoreStyle::Get(), "NoBorder").IsFocusable(false).ContentPadding(0.f)
+			.OnClicked_Lambda([this]() { SetFolded(TEXT("ops"), !IsFolded(TEXT("ops"))); return FReply::Handled(); })
+			[
+				SNew(SBorder).BorderImage(&GtTint).Padding(FMargin(8.f, 7.f)).HAlign(HAlign_Center)
+				.BorderBackgroundColor_Lambda([this]() { return FSlateColor(FLinearColor::FromSRGBColor(FColor(90, 170, 255, IsFolded(TEXT("ops")) ? 31 : 61))); })
+				[
+					SNew(STextBlock).Font(Mono(11, true)).Text(Tx(TEXT("pn.ops")))
+					.ColorAndOpacity_Lambda([this]() { return FSlateColor(IsFolded(TEXT("ops")) ? FLinearColor::FromSRGBColor(FColor(0x9f, 0xca, 0xff)) : FLinearColor::White); })
+				]
+			]
+		];
+
+	// ---- PFD ----
+	TSharedRef<SSmvPaintBox> Pfd = SNew(SSmvPaintBox).Size(FVector2D(378.f, 178.f)).Visibility(EVisibility::HitTestInvisible);
+	Pfd->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L) { SmvPaintPfd(G, Out, L, St); };
+
+	// ---- TELEMETRİ 4×2 ----
+	auto GpsTxt = [](int32 Fix) { return Fix >= 6 ? FString(TEXT("RTK")) : Fix == 5 ? FString(TEXT("RTK FLT")) : Fix == 4 ? FString(TEXT("DGPS")) : Fix == 3 ? FString(TEXT("3D")) : Fix == 2 ? FString(TEXT("2D")) : FString(TEXT("—")); };
+	TSharedRef<SUniformGridPanel> Tiles = SNew(SUniformGridPanel).SlotPadding(FMargin(3.f));
+	Tiles->AddSlot(0, 0)[GtTile(TEXT("alt"), Tx(TEXT("pn.t_alt")), [this]() { return FString::Printf(TEXT("%.1f m"), St.AltRel); }, [this]() { return FString::Printf(TEXT("MSL %.0f"), St.AltMsl); }, nullptr, nullptr)];
+	Tiles->AddSlot(1, 0)[GtTile(TEXT("spd"), Tx(TEXT("pn.t_spd")), [this]() { return FString::Printf(TEXT("%.1f m/s"), St.bPlane && St.As > 0 ? St.As : St.Gs); }, [this]() { return FString::Printf(TEXT("%.0f km/h"), (St.bPlane && St.As > 0 ? St.As : St.Gs) * 3.6f); }, nullptr, nullptr)];
+	Tiles->AddSlot(2, 0)[GtTile(TEXT("bat"), Tx(TEXT("pn.t_bat")), [this]() { const float P = St.bElec ? St.ElecPct : St.BattPct; return P >= 0 ? FString::Printf(TEXT("%.0f%%"), P) : FString(TEXT("—")); },
+		[this]() { const float V = St.bElec ? St.ElecV : St.BattV; return V > 0 ? FString::Printf(TEXT("%.1f V"), V) : FString(); },
+		[this]() { const float P = St.bElec ? St.ElecPct : St.BattPct; return P < 0 ? Ic : P < 20 ? Kotu : P < 35 ? Uyari : Iyi; }, nullptr)];
+	Tiles->AddSlot(3, 0)[GtTile(TEXT("gps"), Tx(TEXT("pn.t_gps")), [this, GpsTxt]() { return GpsTxt(St.GpsFix); }, [this]() { return St.Sats >= 0 ? FString::Printf(TEXT("%d sat"), St.Sats) : FString(); },
+		[this]() { return St.GpsFix >= 3 ? Iyi : Uyari; }, nullptr)];
+	Tiles->AddSlot(0, 1)[GtTile(TEXT("lock"), Tx(TEXT("pn.t_arm")), [this]() { return FString(St.bArmed ? TEXT("ARMED") : TEXT("DISARMED")); }, nullptr,
+		[this]() { return St.bArmed ? Kotu : Soluk; }, [this]() { ArmToggleConfirm(); })];
+	Tiles->AddSlot(1, 1)[GtTile(TEXT("mode"), Tx(TEXT("pn.t_mode")), [this]() { return St.Mode.IsEmpty() ? FString(TEXT("—")) : St.Mode; }, nullptr, nullptr, [this]() { ToggleModeMenu(); })];
+	Tiles->AddSlot(2, 1)[GtTile(TEXT("fan"), Tx(TEXT("pn.t_type")), [this]() { return St.ModeKind.ToUpper(); }, [this]() { return FString(St.bReplay ? TEXT("REPLAY") : TEXT("SITL")); }, [this]() { return Soluk; }, nullptr)];
+	Tiles->AddSlot(3, 1)[GtTile(TEXT("takeoff"), Tx(TEXT("pn.t_cmd")),
+		[this]() { return St.bRover ? FSmvI18n::T(TEXT("pn.c_hold")).ToString() : (St.bArmed && St.AltRel > 1.f ? FSmvI18n::T(TEXT("pn.c_land")).ToString() : FSmvI18n::T(TEXT("pn.c_takeoff")).ToString()); }, nullptr,
+		[this]() { return St.bArmed && St.AltRel > 1.f ? Uyari : Iyi; },
+		[this]()
+		{
+			if (St.bRover) { Act(TEXT("Mode"), TEXT("HOLD")); return; }
+			if (St.bArmed && St.AltRel > 1.f) { if (GM.IsValid()) GM->Command(TEXT("land")); }
+			else Act(TEXT("Takeoff"));
+		})];
+
+	// ---- İŞLEMLER (3 sütun; grup başlıkları) ----
+	TSharedRef<SVerticalBox> Ops = SNew(SVerticalBox);
+	auto Grup = [&Ops](const TCHAR* K)
+	{
+		Ops->AddSlot().AutoHeight().Padding(2, 6, 2, 1)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)[SNew(STextBlock).Font(SmvGt::Sans(9, true)).ColorAndOpacity(SmvGt::Soluk).Text(TAttribute<FText>::CreateLambda([K]() { return FText::FromString(FSmvI18n::T(K).ToString().ToUpper()); }))]
+			+ SVerticalBox::Slot().AutoHeight()[SNew(SBox).HeightOverride(1.f)[SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(SmvGt::Cizgi)]]
+		];
+	};
+	auto Row3 = [&Ops](TArray<TSharedRef<SWidget>> Cells)
+	{
+		TSharedRef<SUniformGridPanel> Gp = SNew(SUniformGridPanel).SlotPadding(FMargin(3.5f));
+		for (int32 i = 0; i < Cells.Num(); ++i) Gp->AddSlot(i % 3, i / 3)[Cells[i]];
+		Ops->AddSlot().AutoHeight().Padding(0, 4, 0, 0)[Gp];
+	};
+	auto Cmd = [this](const TCHAR* Name) { return [this, Name]() { if (GM.IsValid()) GM->Command(Name); }; };
+	Grup(TEXT("pn.g_flight"));
+	Row3({ GtCell(TEXT("takeoff"), Tx(TEXT("pn.c_takeoff")), [this]() { Act(TEXT("Takeoff")); }), GtCell(TEXT("land"), Tx(TEXT("pn.c_land")), Cmd(TEXT("land"))),
+		GtCell(TEXT("rtl"), Tx(TEXT("pn.c_rtl")), Cmd(TEXT("rtl"))), GtCell(TEXT("home"), Tx(TEXT("pn.c_home")), Cmd(TEXT("set_home"))) });
+	Grup(TEXT("pn.g_target"));
+	Row3({ GtCell(TEXT("alt"), Tx(TEXT("pn.c_alt")), [this]() { TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>(); P->SetNumberField(TEXT("alt"), St.bPlane ? 80.0 : 30.0); if (GM.IsValid()) GM->Command(TEXT("takeoff"), P); }),
+		GtCell(TEXT("goto"), Tx(TEXT("pn.c_goto")), [this]() { Act(TEXT("Mode"), TEXT("GUIDED")); }),
+		GtCell(TEXT("pause"), Tx(TEXT("pn.c_pause")), [this]() { Act(TEXT("Mode"), St.bPlane ? TEXT("LOITER") : TEXT("BRAKE")); }) });
+	Grup(TEXT("pn.g_route"));
+	Row3({ GtCell(TEXT("play"), Tx(TEXT("pn.c_start")), [this]() { Act(TEXT("Mode"), TEXT("AUTO")); }), GtCell(TEXT("resume"), Tx(TEXT("pn.c_resume")), [this]() { Act(TEXT("Mode"), TEXT("AUTO")); }),
+		GtCell(TEXT("cancel"), Tx(TEXT("pn.c_cancel")), [this]() { Act(TEXT("Mode"), St.bPlane ? TEXT("LOITER") : TEXT("LOITER")); }, true) });
+	Grup(TEXT("pn.g_sim"));
+	Row3({ GtCell(TEXT("reset"), Tx(TEXT("pn.c_reset")), [this]() { if (GM.IsValid()) GM->ConfirmUi(FSmvI18n::T(TEXT("pn.c_reset")), FSmvI18n::T(TEXT("flight.reset_confirm")), FSmvI18n::T(TEXT("pn.c_reset")), true, [this]() { if (GM.IsValid()) GM->Command(TEXT("reset")); }); }),
+		GtCell(TEXT("layout"), Tx(TEXT("pn.c_layout")), []() { FSmvUiPrefs& P = FSmvUiPrefs::Get(); P.PanelR = 12.f; P.PanelT = 56.f; P.PipR = 16.f; P.PipB = 80.f; P.PipW = 384.f; P.bPanelMin = false; P.Save(); }) });
+	// simülasyon hızı
+	{
+		TSharedRef<SHorizontalBox> Sp = SNew(SHorizontalBox);
+		Sp->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 8, 0)[SNew(STextBlock).Font(Sans(10)).ColorAndOpacity(Soluk).Text(Tx(TEXT("pn.speed")))];
+		for (float F : { 1.f, 2.f, 4.f, 8.f })
+			Sp->AddSlot().AutoWidth().Padding(2, 0)
+			[
+				Btn(FText::FromString(FString::Printf(TEXT("%.0f×"), F)), [this, F]() { TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>(); P->SetNumberField(TEXT("factor"), F); if (GM.IsValid()) GM->Command(TEXT("speed"), P); },
+					[this, F]() { return FMath::IsNearlyEqual(St.Speedup, F, 0.01f) ? FLinearColor::FromSRGBColor(FColor(90, 170, 255)) : SmvGt::Dugme; }, 38.f)
+			];
+		Ops->AddSlot().AutoHeight().Padding(0, 8, 0, 2)[Sp];
+	}
+
+	// ---- MISSION PLANNER ----
+	TSharedRef<SWidget> MpBadge = SNew(SBox).HeightOverride(18.f)
+		[
+			SNew(SBorder).BorderImage(&GtCapsule).Padding(FMargin(7.f, 0.f)).VAlign(VAlign_Center)
+			[
+				SNew(STextBlock).Font(Mono(10, true)).Text_Lambda([this]() { return FSmvI18n::T(St.bGcs ? TEXT("pn.mp_ok") : TEXT("pn.mp_wait")); })
+				.ColorAndOpacity_Lambda([this]() { return FSlateColor(St.bGcs ? C(0x22c55e) : C(0x8a94a3)); })
+			]
+		];
+	TSharedRef<SWidget> Mp = SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(0, 6, 0, 4)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+			[
+				SNew(SBorder).BorderImage(&GtInput).Padding(FMargin(8.f, 5.f))[SNew(STextBlock).Font(Mono(11)).ColorAndOpacity(Metin).Text_Lambda([this]() { return FText::FromString(St.MpLine.IsEmpty() ? FString(TEXT("UDP 127.0.0.1:14550")) : St.MpLine); })]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 0, 0)
+			[
+				Btn(Tx(TEXT("pn.mp_copy")), [this]() { FPlatformApplicationMisc::ClipboardCopy(*St.MpLine); if (GM.IsValid()) GM->UiEvent(FSmvI18n::T(TEXT("pn.mp_copied")).ToString(), 6); }, []() { return SmvGt::Dugme; })
+			]
+		]
+		+ SVerticalBox::Slot().AutoHeight()
+		[
+			SNew(STextBlock).Font(Sans(10)).ColorAndOpacity(Soluk).AutoWrapText(true)
+			.Text_Lambda([this]()
+			{
+				FString Port = TEXT("14550");
+				int32 Ci;
+				if (St.MpLine.FindLastChar(TEXT(':'), Ci)) Port = St.MpLine.Mid(Ci + 1).Left(5).TrimEnd();
+				return FSmvI18n::Format(TEXT("pn.mp_note"), { { TEXT("p"), Port } });
+			})
+		];
+
+	// ---- HABERLEŞME konsolu (#0b0f14, 10,5 px mono; saat · metin) ----
+	TSharedRef<SVerticalBox> Rows = SNew(SVerticalBox);
+	const int32 N = 9;
+	for (int32 i = 0; i < N; ++i)
+	{
+		auto Line = [this, i, N]() -> const FSmvUiLog* { const int32 Idx = St.Log.Num() - N + i; return St.Log.IsValidIndex(Idx) ? &St.Log[Idx] : nullptr; };
+		Rows->AddSlot().AutoHeight()
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 6, 0)[SNew(STextBlock).Font(Mono(10.5f)).ColorAndOpacity(Soluk).Text_Lambda([Line]() { const FSmvUiLog* E = Line(); return FText::FromString(E ? E->Clock : FString(TEXT(" "))); })]
+			+ SHorizontalBox::Slot().FillWidth(1.f)[SNew(STextBlock).Font(Mono(10.5f)).OverflowPolicy(ETextOverflowPolicy::Ellipsis)
+				.Text_Lambda([Line]() { const FSmvUiLog* E = Line(); return FText::FromString(E ? E->Text : FString()); })
+				.ColorAndOpacity_Lambda([Line]() { const FSmvUiLog* E = Line(); return FSlateColor(!E ? SmvGt::Metin : E->Sev <= 3 ? SmvGt::Kotu : E->Sev == 4 ? SmvGt::Uyari : E->Sev == 5 ? SmvGt::Ic : SmvGt::Metin); })]
+		];
+	}
+	TSharedRef<SWidget> Con = SNew(SBox).Padding(FMargin(0.f, 6.f, 0.f, 0.f))[SNew(SBorder).BorderImage(&GtConsole).Padding(FMargin(8.f, 6.f))[SNew(SBox).HeightOverride(140.f).Clipping(EWidgetClipping::ClipToBounds)[Rows]]];
+
+	// ---- gövde ----
+	TSharedRef<SVerticalBox> Body = SNew(SVerticalBox);
+	Body->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Ust];
+	Body->AddSlot().AutoHeight()[GtSection(TEXT("pfd"), TAttribute<FText>::CreateLambda([this]() { return FSmvI18n::T(St.bRover ? TEXT("pn.pfd_rover") : TEXT("pn.pfd")); }), SNew(SBox).Padding(FMargin(0.f, 4.f, 0.f, 0.f))[Pfd])];
+	Body->AddSlot().AutoHeight()[GtSection(TEXT("tiles"), Tx(TEXT("pn.tele")), SNew(SBox).Padding(FMargin(0.f, 6.f, 0.f, 4.f))[Tiles])];
+	Body->AddSlot().AutoHeight()[GtSection(TEXT("ops"), Tx(TEXT("pn.ops")), Ops)];
+	Body->AddSlot().AutoHeight()[GtSection(TEXT("mp"), Tx(TEXT("pn.mp")), Mp, MpBadge)];
+	Body->AddSlot().AutoHeight()[GtSection(TEXT("con"), Tx(TEXT("pn.comms")), Con)];
+
+	return SNew(SBox).WidthOverride(400.f)
+		[
+			SNew(SBorder).BorderImage(&GtCard).Padding(0.f)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()[Head.ToSharedRef()]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(SBox).Visibility_Lambda([]() { return FSmvUiPrefs::Get().bPanelMin ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })
+					.MaxDesiredHeight_Lambda([]() { return FOptionalSize(FMath::Max(240.f, (float)(GEngine && GEngine->GameViewport ? 900.f : 900.f))); })
+					[
+						SNew(SScrollBox).ScrollBarThickness(FVector2D(6.f, 6.f))
+						+ SScrollBox::Slot().Padding(10.f)[Body]
+					]
+				]
+			]
 		];
 }

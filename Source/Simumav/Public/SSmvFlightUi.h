@@ -144,6 +144,17 @@ private:
 	TSharedRef<SWidget> ReplayBar();
 	TSharedRef<SWidget> RecChip();
 	TSharedRef<SWidget> RadarWindow();
+	/** Dron kartı (web flightsim_panel.js / GÖKTUNGU .dron-kart.ayrik birebir): başlık şeridi, UÇUŞA HAZIR + İŞLEMLER, katlanır bölümler */
+	TSharedRef<SWidget> GtPanel();
+	TSharedRef<SWidget> GtSection(const FString& Key, TAttribute<FText> Title, TSharedRef<SWidget> Body, TSharedPtr<SWidget> Extra = nullptr);
+	TSharedRef<SWidget> GtTile(const FString& Icon, TAttribute<FText> Label, TFunction<FString()> Value, TFunction<FString()> Sub, TFunction<FLinearColor()> IconCol, TFunction<void()> OnClick);
+	TSharedRef<SWidget> GtCell(const FString& Icon, TAttribute<FText> Label, TFunction<void()> OnClick, bool bDanger = false);
+	bool IsFolded(const FString& Key) const;
+	void SetFolded(const FString& Key, bool bFold);
+	void ArmToggleConfirm();
+	FSlateBrush GtTint, GtCard, GtHead, GtTileB, GtCellB, GtCellH, GtInput, GtCapsule, GtSectB, GtConsole;
+	FVector2D PanelDragAbs = FVector2D::ZeroVector, PanelStart = FVector2D::ZeroVector;
+	TWeakPtr<SWidget> PanelHead;
 	TSharedRef<SWidget> EoWindow();
 	FSlateBrush EoBrush;
 	FSlateBrush PipBrush;

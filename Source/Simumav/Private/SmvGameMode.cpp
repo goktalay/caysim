@@ -2057,3 +2057,9 @@ void ASmvGameMode::RadarPick(int32 Id)
 }
 
 void ASmvGameMode::CycleEoType() { EoTypeIdx = (EoTypeIdx + 1) % 3; EoFrame = 1; FSmvUiSound::Play(ESmvSnd::Toggle); }
+
+void ASmvGameMode::ConfirmUi(const FText& Title, const FText& Body, const FText& Yes, bool bDanger, TFunction<void()> OnYes)
+{
+	if (Shell.IsValid()) Shell->Confirm(Title, Body, Yes, bDanger, MoveTemp(OnYes));
+	else if (OnYes) OnYes();
+}

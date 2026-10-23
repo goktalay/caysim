@@ -37,6 +37,10 @@ void FSmvUiPrefs::Load()
 	GConfig->GetBool(GSmvPrefsSection, TEXT("RecordVideo"), bRecordVideo, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("ThermalPalette"), ThermalPalette, Ini);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("PanelR"), PanelR, Ini);
+	GConfig->GetFloat(GSmvPrefsSection, TEXT("PanelT"), PanelT, Ini);
+	GConfig->GetBool(GSmvPrefsSection, TEXT("PanelMin"), bPanelMin, Ini);
+	GConfig->GetString(GSmvPrefsSection, TEXT("PanelFold"), PanelFold, Ini);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipR"), PipR, Ini);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipB"), PipB, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("DialTheme"), DialTheme, Ini);
@@ -81,6 +85,10 @@ void FSmvUiPrefs::Save()
 	GConfig->SetBool(GSmvPrefsSection, TEXT("RecordVideo"), bRecordVideo, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("ThermalPalette"), *ThermalPalette, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("PanelR"), PanelR, Ini);
+	GConfig->SetFloat(GSmvPrefsSection, TEXT("PanelT"), PanelT, Ini);
+	GConfig->SetBool(GSmvPrefsSection, TEXT("PanelMin"), bPanelMin, Ini);
+	GConfig->SetString(GSmvPrefsSection, TEXT("PanelFold"), *PanelFold, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipR"), PipR, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipB"), PipB, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("DialTheme"), *DialTheme, Ini);
