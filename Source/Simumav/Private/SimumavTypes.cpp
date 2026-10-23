@@ -173,7 +173,7 @@ FSmvDrone FSmvDrone::FromJson(const TSharedPtr<FJsonObject>& O)
 TSharedRef<FJsonObject> FSmvAvatar::ToJson() const
 {
 	TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
-	O->SetNumberField(TEXT("v"), 1);
+	O->SetNumberField(TEXT("v"), 2);
 	O->SetStringField(TEXT("helmet"), Helmet);
 	O->SetStringField(TEXT("visor"), Visor);
 	O->SetBoolField(TEXT("mirror"), bMirror);
@@ -182,6 +182,24 @@ TSharedRef<FJsonObject> FSmvAvatar::ToJson() const
 	O->SetStringField(TEXT("patch"), Patch);
 	O->SetStringField(TEXT("patch_color"), PatchColor);
 	O->SetStringField(TEXT("accessory"), Accessory);
+	O->SetStringField(TEXT("body"), Body);
+	O->SetStringField(TEXT("build"), Build);
+	O->SetStringField(TEXT("face"), Face);
+	O->SetStringField(TEXT("eyes"), Eyes);
+	O->SetStringField(TEXT("eye_color"), EyeColor);
+	O->SetStringField(TEXT("brows"), Brows);
+	O->SetStringField(TEXT("brow_w"), BrowW);
+	O->SetStringField(TEXT("nose"), Nose);
+	O->SetStringField(TEXT("mouth"), Mouth);
+	O->SetStringField(TEXT("beard"), Beard);
+	O->SetStringField(TEXT("glasses"), Glasses);
+	O->SetStringField(TEXT("hair"), Hair);
+	O->SetStringField(TEXT("hair_color"), HairColor);
+	O->SetStringField(TEXT("headgear"), Headgear);
+	O->SetStringField(TEXT("outfit"), Outfit);
+	O->SetBoolField(TEXT("freckles"), bFreckles);
+	O->SetBoolField(TEXT("mole"), bMole);
+	O->SetBoolField(TEXT("visor_open"), bVisorOpen);
 	return O;
 }
 
@@ -197,6 +215,24 @@ FSmvAvatar FSmvAvatar::FromJson(const TSharedPtr<FJsonObject>& O)
 	A.Patch = SmvJson::Str(O, TEXT("patch"), A.Patch);
 	A.PatchColor = SmvJson::Str(O, TEXT("patch_color"), A.PatchColor);
 	A.Accessory = SmvJson::Str(O, TEXT("accessory"), A.Accessory);
+	A.Body = SmvJson::Str(O, TEXT("body"), A.Body);
+	A.Build = SmvJson::Str(O, TEXT("build"), A.Build);
+	A.Face = SmvJson::Str(O, TEXT("face"), A.Face);
+	A.Eyes = SmvJson::Str(O, TEXT("eyes"), A.Eyes);
+	A.EyeColor = SmvJson::Str(O, TEXT("eye_color"), A.EyeColor);
+	A.Brows = SmvJson::Str(O, TEXT("brows"), A.Brows);
+	A.BrowW = SmvJson::Str(O, TEXT("brow_w"), A.BrowW);
+	A.Nose = SmvJson::Str(O, TEXT("nose"), A.Nose);
+	A.Mouth = SmvJson::Str(O, TEXT("mouth"), A.Mouth);
+	A.Beard = SmvJson::Str(O, TEXT("beard"), A.Beard);
+	A.Glasses = SmvJson::Str(O, TEXT("glasses"), A.Glasses);
+	A.Hair = SmvJson::Str(O, TEXT("hair"), A.Hair);
+	A.HairColor = SmvJson::Str(O, TEXT("hair_color"), A.HairColor);
+	A.Headgear = SmvJson::Str(O, TEXT("headgear"), A.Headgear);
+	A.Outfit = SmvJson::Str(O, TEXT("outfit"), A.Outfit);
+	A.bFreckles = SmvJson::Bool(O, TEXT("freckles"), A.bFreckles);
+	A.bMole = SmvJson::Bool(O, TEXT("mole"), A.bMole);
+	A.bVisorOpen = SmvJson::Bool(O, TEXT("visor_open"), A.bVisorOpen);
 	return A;
 }
 

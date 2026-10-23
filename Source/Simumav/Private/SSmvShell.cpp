@@ -2156,16 +2156,16 @@ TSharedRef<SWidget> SSmvShell::Summary()
 			];
 		}
 		B->AddSlot().AutoHeight().Padding(6, 16, 0, 0)[Pod];
-		for (int32 i = 0; i < P.Num(); ++i)
+		for (int32 r = 0; r < P.Num(); ++r)
 		{
-			const FSmvPodiumRow& R = P[i];
+			const FSmvPodiumRow& R = P[r];
 			const FString T = R.FinishT >= 0 ? FString::Printf(TEXT("%d:%05.2f"), (int32)(R.FinishT / 60), FMath::Fmod(R.FinishT, 60.0)) : Tx(TEXT("summary.dnf")).ToString();
 			B->AddSlot().AutoHeight().Padding(6, 3, 0, 0)
 			[
 				SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(R.bMe ? Accent().CopyWithNewOpacity(0.15f) : Card()).Padding(FMargin(14.f, 6.f))
 				[
 					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 14, 0)[SmvUi::Text(FText::AsNumber(i + 1), 13, "Bold", Warn(), false)]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 14, 0)[SmvUi::Text(FText::AsNumber(r + 1), 13, "Bold", Warn(), false)]
 					+ SHorizontalBox::Slot().FillWidth(1.f)[SmvUi::Text(FText::FromString(R.Name), 13, R.bMe ? "Bold" : "Regular", Fg(), false)]
 					+ SHorizontalBox::Slot().AutoWidth().Padding(14, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%d / %d"), R.Passed, R.Total)), 12, "Regular", Dim(), false)]
 					+ SHorizontalBox::Slot().AutoWidth()[SmvUi::Text(FText::FromString(T), 13, "Bold", Fg(), false)]
@@ -2200,11 +2200,11 @@ TSharedRef<SWidget> SSmvShell::Summary()
 		Fv->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s %s · %s %d · %s %d · %s +%.1f s · %s %d"),
 			*Tx(TEXT("fpv.best_lap")).ToString(), *Tm(Fr.BestLapS), *Tx(TEXT("fpv.misses")).ToString(), Fr.Misses, *Tx(TEXT("fpv.hits")).ToString(), Fr.Hits,
 			*Tx(TEXT("fpv.penalty")).ToString(), Fr.PenS, *Tx(TEXT("summary.score")).ToString(), Fr.Score)), 12, "Regular", Fg())];
-		for (int32 i = 0; i < Fr.LapTimes.Num(); ++i)
+		for (int32 r = 0; r < Fr.LapTimes.Num(); ++r)
 		{
 			FString Secs;
-			if (Fr.Sectors.IsValidIndex(i)) for (int32 k = 0; k < Fr.Sectors[i].Num(); ++k) Secs += FString::Printf(TEXT("   S%d %.2f"), k + 1, Fr.Sectors[i][k]);
-			Fv->AddSlot().AutoHeight().Padding(0, 3, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s %d   %s%s"), *Tx(TEXT("fpv.lap")).ToString(), i + 1, *Tm(Fr.LapTimes[i]), *Secs)), 12, "Mono", Fg(), false)];
+			if (Fr.Sectors.IsValidIndex(r)) for (int32 k = 0; k < Fr.Sectors[r].Num(); ++k) Secs += FString::Printf(TEXT("   S%d %.2f"), k + 1, Fr.Sectors[r][k]);
+			Fv->AddSlot().AutoHeight().Padding(0, 3, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s %d   %s%s"), *Tx(TEXT("fpv.lap")).ToString(), r + 1, *Tm(Fr.LapTimes[r]), *Secs)), 12, "Mono", Fg(), false)];
 		}
 		B->AddSlot().AutoHeight().Padding(6, 14, 0, 0)[Glass(Fv, FMargin(18.f))];
 	}

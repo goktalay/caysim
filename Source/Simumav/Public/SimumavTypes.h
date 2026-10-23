@@ -72,7 +72,7 @@ struct SIMUMAV_API FSmvDrone
 	static FSmvDrone FromJson(const TSharedPtr<FJsonObject>& O);
 };
 
-/** 3B avatar (`avatar` v1; sunucu ≤ 600 bayt doğrular). */
+/** 3B avatar (`avatar` v2 — §28 karakter yaratma; sunucu app/simumav/avatar.py doğrular, ≤ 1500 bayt). v1 alanları + beden/yüz/saç/kıyafet/başlık. */
 USTRUCT(BlueprintType)
 struct SIMUMAV_API FSmvAvatar
 {
@@ -88,6 +88,28 @@ struct SIMUMAV_API FSmvAvatar
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString PatchColor = TEXT("#ffc107");
 	/** none|mic|crest|antenna|stripe */
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Accessory = TEXT("mic");
+	// §28 — body m|f · build slim|avg|broad · face oval|round|square|long|heart · eyes almond|round|narrow|wide · brows straight|arched|angled|soft
+	//       brow_w thin|medium|thick · nose small|straight|wide|pointed · mouth neutral|smile|grin|serious · beard none|stubble|mustache|goatee|full
+	//       glasses none|aviator|sun · hair short|buzz|spiky|sidepart|curly|mohawk|bald|long|ponytail|bun|bob · headgear helmet|none|cap|headset
+	//       outfit suit|jacket|casual
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Body = TEXT("m");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Build = TEXT("avg");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Face = TEXT("oval");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Eyes = TEXT("almond");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString EyeColor = TEXT("#5b3a1e");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Brows = TEXT("straight");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString BrowW = TEXT("medium");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Nose = TEXT("straight");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Mouth = TEXT("smile");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Beard = TEXT("none");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Glasses = TEXT("none");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Hair = TEXT("short");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString HairColor = TEXT("#3b2a1e");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Headgear = TEXT("helmet");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Outfit = TEXT("suit");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bFreckles = false;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bMole = false;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bVisorOpen = false;
 	TSharedRef<FJsonObject> ToJson() const;
 	static FSmvAvatar FromJson(const TSharedPtr<FJsonObject>& O);
 };
