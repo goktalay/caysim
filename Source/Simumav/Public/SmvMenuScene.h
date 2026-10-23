@@ -39,6 +39,8 @@ public:
 	/** Fareyle sürükleyerek döndürme (derece) — otomatik dönüş bir süre durur */
 	void AddPreviewYaw(float Deg);
 	UTextureRenderTarget2D* GetPreviewTarget() const { return PreviewRT; }
+	/** Avatar anlık görüntüsü (baş-omuz, 160×160; TOP10 / listeler): önbellekte yoksa sıraya alınır, kare başına bir tane çizilir */
+	UTextureRenderTarget2D* AvatarSnap(const FSmvAvatar& A);
 	bool IsLive() const { return bLive; }
 
 protected:
@@ -53,6 +55,9 @@ protected:
 	UPROPERTY() TObjectPtr<ACameraActor> Cam;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Preview;
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> PilotPrev;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> SnapCap;
+	UPROPERTY() TObjectPtr<ASmvPilotFigure> SnapFig;
+	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
 
 private:
 	bool bLive = false;
@@ -70,6 +75,10 @@ private:
 	float FaceK = 0.f;
 	double ManualUntil = 0;
 	FString PilotKey;
+	TArray<TPair<FString, FSmvAvatar>> SnapQueue;
+	FString SnapPending;
+	int32 SnapPhase = 0;
+	void TickSnaps();
 
 	void BuildWorld();
 	FVector EnuToWorld(double E, double N, double Agl) const;

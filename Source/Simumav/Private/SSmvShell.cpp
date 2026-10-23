@@ -40,6 +40,13 @@
 #include "ImageUtils.h"
 #include "Engine/Texture2D.h"
 #include "UObject/StrongObjectPtr.h"
+#include "Widgets/Text/SMultiLineEditableText.h"
+#include "UnrealClient.h"
+#include "Misc/Base64.h"
+#include "Misc/EngineVersion.h"
+#include "HAL/FileManager.h"
+#include "GenericPlatform/GenericPlatformHttp.h"
+#include "Engine/GameViewportClient.h"
 
 #define LOCTEXT_NAMESPACE "SmvShell"
 
@@ -459,6 +466,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 			if (Built == ESmvScreen::Crew && Data()->Pilots().Num()) EditPilot = Data()->DefaultPilot() ? *Data()->DefaultPilot() : Data()->Pilots()[0];
 			if (Built == ESmvScreen::Tracks && Data()->Tracks().Num()) EditTrack = Data()->DefaultTrack() ? *Data()->DefaultTrack() : Data()->Tracks()[0];
 			if (Built == ESmvScreen::Leaderboard) Flow->FetchLeaderboard();
+			if (Built == ESmvScreen::Support) { Sup.OpenId.Empty(); Sup.Detail.Reset(); SupLoad(); }
 			if (Built == ESmvScreen::Wizard) WizStep = 0;
 			FSmvUiSound::Play(ESmvSnd::Open);
 		}
@@ -1128,6 +1136,7 @@ TSharedRef<SWidget> SSmvShell::Menu()
 	Sm(Tx(TEXT("menu.settings")), ESmvIcon::Gear, Go(ESmvScreen::Settings));
 	Sm(Tx(TEXT("menu.account")), ESmvIcon::User, Go(ESmvScreen::Account));
 	Sm(Tx(TEXT("menu.help")), ESmvIcon::Help, [Self]() { Self->ToggleHelp(); });
+	Sm(Tx(TEXT("support.help")), ESmvIcon::Info, Go(ESmvScreen::Support));
 	Sm(Tx(TEXT("menu.quit")), ESmvIcon::Power, [Self = this, G = GameMode]()
 	{
 		Self->Confirm(FSmvI18n::T(TEXT("dlg.quit_title")), FSmvI18n::T(TEXT("dlg.quit_body")), FSmvI18n::T(TEXT("dlg.yes_quit")), true,
@@ -2675,7 +2684,7 @@ TSharedRef<SWidget> SSmvShell::Summary()
 			[
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 6, 0)[Icon(ESmvIcon::Star, 16.f, Warn())]
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SmvUi::Text(FText::FromString(Bd), 12, "Bold", Fg(), false)]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SmvUi::Text(FSmvI18n::T(TEXT("badge.") + Bd).ToString() == TEXT("badge.") + Bd ? FText::FromString(Bd) : FSmvI18n::T(TEXT("badge.") + Bd), 12, "Bold", Fg(), false)]
 			]
 		];
 	}
@@ -2950,6 +2959,38 @@ TSharedRef<SWidget> SSmvShell::Leaderboard()
 			DrBox(Out, L, G, FVector2D::ZeroVector, S, FLinearColor(1, 1, 1, 0.06f), Round(4.f));
 			DrBox(Out, L + 1, G, FVector2D::ZeroVector, FVector2D(S.X * Frac, S.Y), Accent(), Round(4.f));
 		};
+		// 3B avatar (menü sahnesinde baş-omuz anlık görüntüsü; yoksa çizilmiş portre)
+		TSharedRef<SWidget> Avatar = SNullWidget::NullWidget;
+		{
+			UTextureRenderTarget2D* Rt = (R.bHasAvatar && Scene() && FSmvUiPrefs::Get().bPreview3d) ? Scene()->AvatarSnap(R.Avatar) : nullptr;
+			if (Rt)
+			{
+				TSharedPtr<FSlateBrush>& Br = AvatarBrushes.FindOrAdd(Rt->GetName());
+				if (!Br.IsValid()) { Br = MakeShared<FSlateBrush>(); Br->DrawAs = ESlateBrushDrawType::Image; Br->SetResourceObject(Rt); Br->ImageSize = FVector2D(56, 56); }
+				Avatar = SNew(SBox).WidthOverride(56.f).HeightOverride(56.f)
+					[
+						SNew(SOverlay)
+						+ SOverlay::Slot()[SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(Medal.CopyWithNewOpacity(0.22f))]
+						+ SOverlay::Slot()[SNew(SImage).Image(Br.Get())]
+					];
+			}
+			else Avatar = SNew(SBox).WidthOverride(52.f).HeightOverride(56.f)[Portrait(R.bHasAvatar ? &R.Avatar : nullptr, 50.f)];
+		}
+		// puan bileşen çipleri
+		TSharedRef<SHorizontalBox> PartsBox = SNew(SHorizontalBox);
+		for (const TCHAR* K : { TEXT("match"), TEXT("pace"), TEXT("discipline"), TEXT("intercept"), TEXT("fpv") })
+		{
+			const int32* V = R.Parts.Find(K);
+			if (!V) continue;
+			const FLinearColor Pc = FCString::Strcmp(K, TEXT("fpv")) == 0 ? Hex(0xf472b6) : FCString::Strcmp(K, TEXT("intercept")) == 0 ? Danger() : FCString::Strcmp(K, TEXT("pace")) == 0 ? Accent3() : FCString::Strcmp(K, TEXT("discipline")) == 0 ? Warn() : Accent();
+			PartsBox->AddSlot().AutoWidth().Padding(0, 0, 6, 0)
+			[
+				SNew(SBorder).BorderImage(Round(8.f)).BorderBackgroundColor(Pc.CopyWithNewOpacity(0.16f)).Padding(FMargin(8.f, 2.f))
+				[
+					SmvUi::Text(FText::FromString(FSmvI18n::T(FString(TEXT("top10.part_")) + K).ToString() + TEXT(" ") + FText::AsNumber(*V).ToString()), 10, "Bold", Pc, false)
+				]
+			];
+		}
 		B->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
 		[
 			SNew(SBorder).BorderImage(Round(14.f)).BorderBackgroundColor(R.Rank <= 3 ? Medal.CopyWithNewOpacity(0.10f) : Card()).Padding(FMargin(16.f, 10.f))
@@ -2965,11 +3006,14 @@ TSharedRef<SWidget> SSmvShell::Leaderboard()
 						]
 					]
 				]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 14, 0)[Avatar]
 				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 				[
 					SNew(SVerticalBox)
 					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(R.Name + (R.bDemo ? FSmvI18n::T(TEXT("top10.demo")).ToString() : FString())), 14, "Bold", Fg(), false)]
+					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(R.Email), 10, "Regular", Mute(), false)]
 					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FSmvI18n::Format(TEXT("top10.row"), { { TEXT("w"), FString::FromInt(R.Wins) }, { TEXT("m"), FString::FromInt(R.Matches) }, { TEXT("f"), FString::FromInt(R.Flights) } }), 11, "Regular", Dim(), false)]
+					+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 0)[PartsBox]
 				]
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(16, 0)[Bar]
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SBox).MinDesiredWidth(90.f).HAlign(HAlign_Right)[SNew(STextBlock).Text(FText::AsNumber(R.Score)).Font(Font(18, "Bold")).ColorAndOpacity(Accent())]]
@@ -3013,7 +3057,104 @@ TSharedRef<SWidget> SSmvShell::Logbook()
 	}
 	B->AddSlot().AutoHeight().Padding(0, 12, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s: %s"), *FSmvI18n::T(TEXT("logbook.bin")).ToString(),
 		*FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Simumav"), TEXT("Logs"))))), 10, "Regular", Mute())];
-	return Page(Tx(TEXT("menu.logbook")), Tx(TEXT("menu.logbook_sub")), ESmvIcon::Replay, SNew(SBox).HAlign(HAlign_Left)[SNew(SBox).WidthOverride(1020.f)[B]]);
+	TSharedRef<SVerticalBox> Top = SNew(SVerticalBox);
+	Top->AddSlot().AutoHeight().Padding(0, 0, 0, 14)[Tabs({ Tx(TEXT("ach.tab_flights")), Tx(TEXT("ach.tab")) }, { ESmvIcon::Book, ESmvIcon::Trophy }, &LogTab)];
+	Top->AddSlot().AutoHeight()[LogTab == 1 ? Achievements() : AsW<SVerticalBox>(B)];
+	return Page(Tx(TEXT("menu.logbook")), Tx(TEXT("menu.logbook_sub")), ESmvIcon::Replay, SNew(SBox).HAlign(HAlign_Left)[SNew(SBox).WidthOverride(1020.f)[Top]], true, true, true);
+}
+
+TSharedRef<SWidget> SSmvShell::Achievements()
+{
+	USmvGameInstance* GI = GameMode.IsValid() ? USmvGameInstance::GetSmv(GameMode.Get()) : nullptr;
+	const USmvSteamSubsystem* St = GI ? GI->GetSubsystem<USmvSteamSubsystem>() : nullptr;
+	static const TCHAR* Ids[] = { SmvAch::FirstFlight, SmvAch::FirstLanding, SmvAch::RingWin, SmvAch::DogfightWin, SmvAch::DisciplineA, SmvAch::AllRings,
+		SmvAch::Interceptor, SmvAch::Ace, SmvAch::Ramp, SmvAch::Rover, SmvAch::Hours10, SmvAch::CloudFlight };
+	static const ESmvIcon Icons[] = { ESmvIcon::Plane, ESmvIcon::Check, ESmvIcon::Flag, ESmvIcon::Match, ESmvIcon::Shield, ESmvIcon::Route,
+		ESmvIcon::Bolt, ESmvIcon::Star, ESmvIcon::Rocket, ESmvIcon::Rover, ESmvIcon::Sun, ESmvIcon::Cloud };
+	int32 Got = 0;
+	for (const TCHAR* Id : Ids) if (St && St->IsUnlockedLocally(Id)) ++Got;
+	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
+	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[Section(Tx(TEXT("ach.steam")), Warn())]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SmvUi::Text(FSmvI18n::Format(TEXT("ach.progress"), { { TEXT("n"), FString::FromInt(Got) }, { TEXT("t"), TEXT("12") } }), 12, "Bold", Warn(), false)]
+	];
+	TSharedRef<SUniformGridPanel> Grid = SNew(SUniformGridPanel).SlotPadding(FMargin(5.f));
+	for (int32 i = 0; i < 12; ++i)
+	{
+		const bool bOn = St && St->IsUnlockedLocally(Ids[i]);
+		const FLinearColor C = bOn ? Hex(0xfbbf24) : Mute();
+		Grid->AddSlot(i % 3, i / 3)
+		[
+			SNew(SBorder).BorderImage(Round(14.f)).BorderBackgroundColor(bOn ? C.CopyWithNewOpacity(0.12f) : Card()).Padding(FMargin(14.f, 10.f))
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 12, 0)
+				[
+					SNew(SBox).WidthOverride(42.f).HeightOverride(42.f)
+					[
+						SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(C.CopyWithNewOpacity(bOn ? 0.9f : 0.18f)).HAlign(HAlign_Center).VAlign(VAlign_Center)
+						[
+							Icon(Icons[i], 22.f, bOn ? Hex(0x111827) : Mute())
+						]
+					]
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FSmvI18n::T(FString(TEXT("ach.")) + Ids[i]), 13, "Bold", bOn ? Fg() : Dim(), false)]
+					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FSmvI18n::T(FString(TEXT("ach.")) + Ids[i] + TEXT("_d")), 10, "Regular", Mute())]
+				]
+			]
+		];
+	}
+	V->AddSlot().AutoHeight()[Grid];
+	// rozetler: uçuş kayıtlarındaki sayılar
+	TMap<FString, int32> Cnt;
+	if (Data()) for (const FSmvFlightSummary& F : Data()->Flights()) for (const FString& Bd : F.Badges) Cnt.FindOrAdd(Bd)++;
+	V->AddSlot().AutoHeight().Padding(0, 18, 0, 8)[Section(Tx(TEXT("ach.badges")), Accent())];
+	TSharedRef<SUniformGridPanel> BadgeGrid = SNew(SUniformGridPanel).SlotPadding(FMargin(5.f));
+	int32 k = 0;
+	for (const TCHAR* Bd : { TEXT("first"), TEXT("quick"), TEXT("ace"), TEXT("close"), TEXT("hunter"), TEXT("race_win"), TEXT("dogfight_win"), TEXT("fpv_pb") })
+	{
+		const int32 N = Cnt.FindRef(Bd);
+		const FLinearColor C = N > 0 ? Accent() : Mute();
+		BadgeGrid->AddSlot(k % 4, k / 4)
+		[
+			SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(N > 0 ? C.CopyWithNewOpacity(0.12f) : Card()).Padding(FMargin(12.f, 8.f))
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)[Icon(ESmvIcon::Star, 18.f, C)]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(FSmvI18n::T(FString(TEXT("badge.")) + Bd), 11, "Bold", N > 0 ? Fg() : Dim())]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(8, 0, 0, 0)[SmvUi::Text(N > 0 ? FSmvI18n::Format(TEXT("ach.count"), { { TEXT("n"), FString::FromInt(N) } }) : FText::FromString(TEXT("—")), 11, "Bold", C, false)]
+			]
+		];
+		++k;
+	}
+	V->AddSlot().AutoHeight()[BadgeGrid];
+	// savunma rütbeleri merdiveni
+	V->AddSlot().AutoHeight().Padding(0, 18, 0, 6)[Section(Tx(TEXT("ach.ranks")), Danger())];
+	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[SmvUi::Text(Tx(TEXT("ach.ranks_note")), 11, "Regular", Dim())];
+	TSharedRef<SHorizontalBox> Ladder = SNew(SHorizontalBox);
+	static const TCHAR* RankId[] = { TEXT("private"), TEXT("corporal"), TEXT("sergeant"), TEXT("lieutenant"), TEXT("captain"), TEXT("major"), TEXT("colonel") };
+	static const int32 RankPct[] = { 0, 25, 42, 58, 72, 85, 95 };
+	for (int32 r = 0; r < 7; ++r)
+	{
+		const FLinearColor C = FLinearColor::LerpUsingHSV(Hex(0x94a3b8), Hex(0xfbbf24), r / 6.f);
+		Ladder->AddSlot().FillWidth(1.f).Padding(0, 0, 6, 0).VAlign(VAlign_Bottom)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 0, 0, 4)[SmvUi::Text(FSmvI18n::T(FString(TEXT("site.rk_")) + RankId[r]), 11, "Bold", C, false)]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SBox).HeightOverride(18.f + r * 10.f)[SNew(SBorder).BorderImage(Round(6.f)).BorderBackgroundColor(C.CopyWithNewOpacity(0.35f)).HAlign(HAlign_Center).VAlign(VAlign_Center)
+					[SmvUi::Text(FText::FromString(FString::Printf(TEXT("≥ %d%%"), RankPct[r])), 10, "Bold", Fg(), false)]]
+			]
+		];
+	}
+	V->AddSlot().AutoHeight()[Ladder];
+	return V;
 }
 
 // ---------------------------------------------------------------------------
@@ -3612,9 +3753,256 @@ TSharedRef<SWidget> SSmvShell::ReplayScreen()
 	return Page(Tx(TEXT("menu.logbook")), Tx(TEXT("menu.logbook_sub")), ESmvIcon::Replay, SmvUi::Text(Tx(TEXT("logbook.empty")), 13, "Regular", Mute()));
 }
 
+void SSmvShell::SupLoad()
+{
+	if (!Client() || !Client()->IsLoggedIn()) return;
+	Sup.bLoading = true; Sup.Err.Empty();
+	TWeakPtr<SSmvShell> W = StaticCastSharedRef<SSmvShell>(AsShared());
+	Client()->Get(TEXT("/api/support"), FSmvRestDone::CreateLambda([W](int32 Status, const TSharedPtr<FJsonObject>& J, const FString& Code, const FString& Msg)
+	{
+		TSharedPtr<SSmvShell> S = W.Pin();
+		if (!S.IsValid()) return;
+		S->Sup.bLoading = false;
+		const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
+		if (Status >= 200 && Status < 300 && J.IsValid() && J->TryGetArrayField(TEXT("tickets"), Arr)) S->Sup.Tickets = *Arr;
+		else S->Sup.Err = Status == 503 ? FSmvI18n::T(TEXT("support.unavailable")).ToString() : (Msg.IsEmpty() ? Code : Msg);
+		S->Refresh();
+	}));
+}
+
+void SSmvShell::SupOpen(const FString& Id)
+{
+	if (!Client()) return;
+	Sup.OpenId = Id; Sup.Detail.Reset(); Sup.bLoading = true; Sup.Reply.Empty();
+	TWeakPtr<SSmvShell> W = StaticCastSharedRef<SSmvShell>(AsShared());
+	Client()->Get(TEXT("/api/support/") + FGenericPlatformHttp::UrlEncode(Id), FSmvRestDone::CreateLambda([W](int32 Status, const TSharedPtr<FJsonObject>& J, const FString& Code, const FString& Msg)
+	{
+		TSharedPtr<SSmvShell> S = W.Pin();
+		if (!S.IsValid()) return;
+		S->Sup.bLoading = false;
+		if (Status >= 200 && Status < 300 && J.IsValid()) S->Sup.Detail = J;
+		else S->Toast(Status == 503 ? FSmvI18n::T(TEXT("support.unavailable")).ToString() : (Msg.IsEmpty() ? Code : Msg), 3);
+		S->Refresh();
+	}));
+}
+
+void SSmvShell::SupSend()
+{
+	if (!Client() || Sup.bSending) return;
+	const FString Subj = Sup.Subject.TrimStartAndEnd().Left(120), Body = Sup.Body.TrimStartAndEnd().Left(4000);
+	if (Subj.IsEmpty() || Body.IsEmpty()) { Toast(FSmvI18n::T(Subj.IsEmpty() ? TEXT("support.subject_ph") : TEXT("support.body_ph")).ToString(), 4); return; }
+	TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+	O->SetStringField(TEXT("category"), Sup.Cat);
+	O->SetStringField(TEXT("subject"), Subj);
+	O->SetStringField(TEXT("body"), Body);
+	O->SetBoolField(TEXT("include_context"), Sup.bCtx);
+	// ekran görüntüsü (PNG ≤ 3 MB → data URL)
+	TArray<uint8> Png;
+	if (!Sup.ShotPath.IsEmpty() && FFileHelper::LoadFileToArray(Png, *Sup.ShotPath) && Png.Num() > 0)
+	{
+		if (Png.Num() > 3 * 1024 * 1024) { Toast(FSmvI18n::T(TEXT("support.shot_toolarge")).ToString(), 3); return; }
+		O->SetStringField(TEXT("screenshot"), TEXT("data:image/png;base64,") + FBase64::Encode(Png));
+		O->SetStringField(TEXT("attach_name"), TEXT("caysim.png"));
+	}
+	if (Sup.bCtx)
+	{
+		TSharedRef<FJsonObject> C = MakeShared<FJsonObject>();
+		FVector2D Vs(1920, 1080);
+		if (GEngine && GEngine->GameViewport) GEngine->GameViewport->GetViewportSize(Vs);
+		C->SetStringField(TEXT("ua"), FString::Printf(TEXT("CAYSIM (Unreal Engine %s; %s %s)"), *FEngineVersion::Current().ToString(EVersionComponent::Patch), ANSI_TO_TCHAR(FPlatformProperties::IniPlatformName()), *FPlatformMisc::GetOSVersion()).Left(300));
+		C->SetStringField(TEXT("lang"), FSmvI18n::Language());
+		C->SetStringField(TEXT("screen"), FString::Printf(TEXT("%.0fx%.0f@1.0"), Vs.X, Vs.Y));
+		C->SetStringField(TEXT("gl"), FPlatformMisc::GetPrimaryGPUBrand().Left(200));
+		if (Data() && Data()->Flights().Num()) C->SetStringField(TEXT("flight_id"), Data()->Flights()[0].FlightId); else C->SetField(TEXT("flight_id"), MakeShared<FJsonValueNull>());
+		C->SetStringField(TEXT("route"), TEXT("caysim/support"));
+		O->SetObjectField(TEXT("context"), C);
+	}
+	Sup.bSending = true;
+	TWeakPtr<SSmvShell> W = StaticCastSharedRef<SSmvShell>(AsShared());
+	Client()->Post(TEXT("/api/support"), O, FSmvRestDone::CreateLambda([W](int32 Status, const TSharedPtr<FJsonObject>& J, const FString& Code, const FString& Msg)
+	{
+		TSharedPtr<SSmvShell> S = W.Pin();
+		if (!S.IsValid()) return;
+		S->Sup.bSending = false;
+		if (Status >= 200 && Status < 300 && J.IsValid())
+		{
+			const FString Ref = J->HasField(TEXT("code")) ? J->GetStringField(TEXT("code")) : FString::Printf(TEXT("#%d"), (int32)J->GetNumberField(TEXT("id")));
+			S->Toast(FSmvI18n::T(TEXT("support.done_title")).ToString() + TEXT(" — ") + Ref, 6);
+			FSmvUiSound::Play(ESmvSnd::Confirm);
+			S->Sup.Subject.Empty(); S->Sup.Body.Empty(); S->Sup.ShotPath.Empty();
+			S->SupLoad();
+		}
+		else S->Toast(Status == 429 ? FSmvI18n::T(TEXT("support.rate")).ToString() : Status == 503 ? FSmvI18n::T(TEXT("support.unavailable")).ToString() : (Msg.IsEmpty() ? Code : Msg), 3);
+		S->Refresh();
+	}));
+}
+
+void SSmvShell::SupReplySend()
+{
+	if (!Client() || Sup.OpenId.IsEmpty() || Sup.bSending) return;
+	const FString V = Sup.Reply.TrimStartAndEnd().Left(4000);
+	if (V.IsEmpty()) return;
+	TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+	O->SetStringField(TEXT("body"), V);
+	Sup.bSending = true;
+	TWeakPtr<SSmvShell> W = StaticCastSharedRef<SSmvShell>(AsShared());
+	Client()->Post(TEXT("/api/support/") + FGenericPlatformHttp::UrlEncode(Sup.OpenId) + TEXT("/reply"), O, FSmvRestDone::CreateLambda([W](int32 Status, const TSharedPtr<FJsonObject>& J, const FString& Code, const FString& Msg)
+	{
+		TSharedPtr<SSmvShell> S = W.Pin();
+		if (!S.IsValid()) return;
+		S->Sup.bSending = false;
+		if (Status >= 200 && Status < 300 && J.IsValid()) { S->Sup.Detail = J; S->Sup.Reply.Empty(); S->Toast(FSmvI18n::T(TEXT("support.sent")).ToString(), 6); }
+		else S->Toast(Status == 429 ? FSmvI18n::T(TEXT("support.rate")).ToString() : (Msg.IsEmpty() ? Code : Msg), 3);
+		S->Refresh();
+	}));
+}
+
 TSharedRef<SWidget> SSmvShell::Support()
 {
-	return Page(Tx(TEXT("support.title")), Tx(TEXT("support.sub")), ESmvIcon::Help, SmvUi::Text(Tx(TEXT("support.sub")), 13, "Regular", Mute()));
+	SSmvShell* Self = this;
+	const bool bIn = Client() && Client()->IsLoggedIn();
+	if (!bIn)
+	{
+		TWeakObjectPtr<USmvFlow> F = Flow;
+		return Page(Tx(TEXT("support.title")), Tx(TEXT("support.sub")), ESmvIcon::Help, Glass(SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(Tx(TEXT("support.login_needed")), 14, "Regular", Fg())]
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Left).Padding(0, 16, 0, 0)[Btn(Tx(TEXT("welcome.login")), [F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Login); }, true, true, ESmvIcon::User)], FMargin(24.f)));
+	}
+	auto StatusChip = [](const FString& St) -> TSharedRef<SWidget>
+	{
+		const FLinearColor C = St == TEXT("cozuldu") ? Accent3() : St == TEXT("kapali") ? Mute() : St == TEXT("yanit_bekliyor") ? Warn() : Accent();
+		const FText L = FSmvI18n::T(TEXT("support.st_") + St);
+		return SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(C.CopyWithNewOpacity(0.18f)).Padding(FMargin(10.f, 3.f))[SmvUi::Text(L, 11, "Bold", C, false)];
+	};
+	// ---- sol: sorun bildir ----
+	TSharedRef<SVerticalBox> Lf = SNew(SVerticalBox);
+	Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("support.report")), Accent())];
+	Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[SmvUi::Text(Tx(TEXT("support.report_sub")), 11, "Regular", Dim())];
+	Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 4)[SmvUi::Text(Tx(TEXT("support.category")), 11, "Bold", Dim(), false)];
+	{
+		TArray<FString> Cats = { TEXT("flight"), TEXT("account"), TEXT("hangar"), TEXT("track"), TEXT("mp"), TEXT("perf"), TEXT("other") };
+		TArray<FText> Labels;
+		for (const FString& C : Cats) Labels.Add(FSmvI18n::T(TEXT("support.cat_") + C));
+		Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Chips(&Sup.Cat, Cats, Labels, {}, nullptr, 3)];
+	}
+	Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 4)[SmvUi::Text(Tx(TEXT("support.subject")), 11, "Bold", Dim(), false)];
+	Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[TextEdit(&Sup.Subject, false, Tx(TEXT("support.subject_ph")), 440.f)];
+	Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 4)[SmvUi::Text(Tx(TEXT("support.body")), 11, "Bold", Dim(), false)];
+	Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 10)
+	[
+		SNew(SBox).MinDesiredHeight(130.f).WidthOverride(440.f)
+		[
+			SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(Hex(0x0b1222, 0.92f)).Padding(FMargin(10.f, 8.f))
+			[
+				SNew(SMultiLineEditableText).Font(Font(12)).AutoWrapText(true).Text(FText::FromString(Sup.Body)).HintText(Tx(TEXT("support.body_ph")))
+				.OnTextChanged_Lambda([Self](const FText& T) { Self->Sup.Body = T.ToString().Left(4000); })
+			]
+		]
+	];
+	Lf->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("support.ctx")), Toggle(&Sup.bCtx))];
+	Lf->AddSlot().AutoHeight().Padding(0, 6, 0, 0)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)[SmvUi::Text(Tx(TEXT("support.shot")), 11, "Bold", Dim(), false)]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(11).Icon(ESmvIcon::Camera).Text(Tx(TEXT("support.shot_auto")))
+			.OnClick([Self]()
+			{
+				// menü katmanıyla birlikte sahne; dosya bir sonraki karede yazılır
+				Self->Sup.ShotPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Simumav/support_shot.png"));
+				IFileManager::Get().Delete(*Self->Sup.ShotPath, false, true, true);
+				FScreenshotRequest::RequestScreenshot(Self->Sup.ShotPath, true, false);
+				Self->Toast(FSmvI18n::T(TEXT("support.shot_taken")).ToString(), 6);
+				Self->Refresh();
+			})]
+		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(11).Icon(ESmvIcon::Trash).Text(Tx(TEXT("support.shot_remove")))
+			.Visibility(Sup.ShotPath.IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible)
+			.OnClick([Self]() { Self->Sup.ShotPath.Empty(); Self->Refresh(); })]
+	];
+	Lf->AddSlot().AutoHeight().Padding(0, 4, 0, 0)[SmvUi::Text(Sup.ShotPath.IsEmpty() ? Tx(TEXT("support.shot_none")) : FText::FromString(FPaths::GetCleanFilename(Sup.ShotPath)), 10, "Regular", Mute())];
+	TSharedRef<SSmvButton> SendBtn = SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Next).MinWidth(200.f).Text(Tx(TEXT("support.send")))
+		.IsEnabled_Lambda([Self]() { return !Self->Sup.bSending; }).OnClick([Self]() { Self->SupSend(); });
+	Lf->AddSlot().AutoHeight().HAlign(HAlign_Left).Padding(0, 16, 0, 0)[SendBtn];
+
+	// ---- sağ: taleplerim / ayrıntı ----
+	TSharedRef<SVerticalBox> Rt = SNew(SVerticalBox);
+	if (!Sup.OpenId.IsEmpty())
+	{
+		Rt->AddSlot().AutoHeight().HAlign(HAlign_Left).Padding(0, 0, 0, 10)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(11).Text(Tx(TEXT("support.back_list")))
+			.OnClick([Self]() { Self->Sup.OpenId.Empty(); Self->Sup.Detail.Reset(); Self->SupLoad(); Self->Refresh(); })];
+		if (!Sup.Detail.IsValid()) Rt->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("support.loading")), 12, "Regular", Mute())];
+		else
+		{
+			const TSharedPtr<FJsonObject>& D = Sup.Detail;
+			const FString St = SmvJson::Str(D, TEXT("status"));
+			const bool bClosed = St == TEXT("kapali") || St == TEXT("cozuldu");
+			const FString Code = SmvJson::Str(D, TEXT("code"));
+			Rt->AddSlot().AutoHeight().Padding(0, 0, 0, 10)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)[SmvUi::Text(FText::FromString(Code.IsEmpty() ? TEXT("#") + Sup.OpenId : Code), 12, "Bold", Accent(), false)]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(FText::FromString(SmvJson::Str(D, TEXT("subject"))), 14, "Bold", Fg())]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[StatusChip(St)]
+			];
+			const TArray<TSharedPtr<FJsonValue>>* Msgs = nullptr;
+			if (D->TryGetArrayField(TEXT("messages"), Msgs))
+			{
+				for (const TSharedPtr<FJsonValue>& Mv : *Msgs)
+				{
+					const TSharedPtr<FJsonObject> Mo = Mv.IsValid() ? Mv->AsObject() : nullptr;
+					if (!Mo.IsValid()) continue;
+					const FString Kind = SmvJson::Str(Mo, TEXT("author_kind"));
+					const bool bMe = Kind == TEXT("company"), bSys = Kind == TEXT("system");
+					const FString Who = bMe ? FSmvI18n::T(TEXT("support.you")).ToString() : bSys ? FSmvI18n::T(TEXT("support.system")).ToString()
+						: (SmvJson::Str(Mo, TEXT("author_name")).IsEmpty() ? FSmvI18n::T(TEXT("support.team")).ToString() : SmvJson::Str(Mo, TEXT("author_name")));
+					Rt->AddSlot().AutoHeight().HAlign(bMe ? HAlign_Right : HAlign_Left).Padding(bMe ? 60.f : 0.f, 0.f, bMe ? 0.f : 60.f, 8.f)
+					[
+						SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(bMe ? Accent().CopyWithNewOpacity(0.16f) : bSys ? FLinearColor(1, 1, 1, 0.04f) : Accent2().CopyWithNewOpacity(0.14f)).Padding(FMargin(12.f, 8.f))
+						[
+							SNew(SVerticalBox)
+							+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(SmvJson::Str(Mo, TEXT("body"))), 12, "Regular", Fg())]
+							+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 0)[SmvUi::Text(FText::FromString(Who + TEXT(" · ") + SmvJson::Str(Mo, TEXT("created_at")).Left(16).Replace(TEXT("T"), TEXT(" "))), 10, "Regular", Mute(), false)]
+						]
+					];
+				}
+			}
+			if (bClosed) Rt->AddSlot().AutoHeight().Padding(0, 8, 0, 0)[SmvUi::Text(Tx(TEXT("support.closed_note")), 11, "Regular", Mute())];
+			else
+			{
+				Rt->AddSlot().AutoHeight().Padding(0, 8, 0, 6)[TextEdit(&Sup.Reply, false, Tx(TEXT("support.reply_ph")), 420.f)];
+				Rt->AddSlot().AutoHeight().HAlign(HAlign_Left)[SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Next).Text(Tx(TEXT("support.reply_send")))
+					.IsEnabled_Lambda([Self]() { return !Self->Sup.bSending; }).OnClick([Self]() { Self->SupReplySend(); })];
+			}
+		}
+	}
+	else
+	{
+		Rt->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("support.my_tickets")), Accent2())];
+		Rt->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[SmvUi::Text(Tx(TEXT("support.my_sub")), 11, "Regular", Dim())];
+		if (Sup.bLoading && Sup.Tickets.Num() == 0) Rt->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("support.loading")), 12, "Regular", Mute())];
+		else if (!Sup.Err.IsEmpty()) Rt->AddSlot().AutoHeight()[SmvUi::Text(FText::FromString(Sup.Err), 12, "Regular", Danger())];
+		else if (Sup.Tickets.Num() == 0) Rt->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("support.empty")), 12, "Regular", Mute())];
+		for (const TSharedPtr<FJsonValue>& Tv : Sup.Tickets)
+		{
+			const TSharedPtr<FJsonObject> To = Tv.IsValid() ? Tv->AsObject() : nullptr;
+			if (!To.IsValid()) continue;
+			const FString Id = To->HasTypedField<EJson::Number>(TEXT("id")) ? FString::FromInt((int32)To->GetNumberField(TEXT("id"))) : SmvJson::Str(To, TEXT("id"));
+			const FString Code = SmvJson::Str(To, TEXT("code"));
+			bool bUnread = false; To->TryGetBoolField(TEXT("unread"), bUnread);
+			const FString Sub = FSmvI18n::T(TEXT("support.updated")).ToString() + TEXT(": ") + SmvJson::Str(To, TEXT("updated_at")).Left(16).Replace(TEXT("T"), TEXT(" "))
+				+ (bUnread ? TEXT(" · ") + FSmvI18n::T(TEXT("support.unread")).ToString() : FString());
+			Rt->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
+			[
+				SNew(SSmvButton).Kind(ESmvBtn::Normal).LeftAlign(true).Icon(bUnread ? ESmvIcon::Bolt : ESmvIcon::Info)
+				.Text(FText::FromString((Code.IsEmpty() ? TEXT("#") + Id : Code) + TEXT("  ") + SmvJson::Str(To, TEXT("subject"))))
+				.SubText(FText::FromString(Sub + TEXT(" · ") + FSmvI18n::T(TEXT("support.st_") + SmvJson::Str(To, TEXT("status"))).ToString()))
+				.Accent(bUnread ? Warn() : Accent())
+				.OnClick([Self, Id]() { Self->SupOpen(Id); Self->Refresh(); })
+			];
+		}
+	}
+	return Page(Tx(TEXT("support.title")), Tx(TEXT("support.sub")), ESmvIcon::Help, SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 22, 0)[Glass(Lf, FMargin(22.f))]
+		+ SHorizontalBox::Slot().FillWidth(1.f)[Glass(Rt, FMargin(22.f))]);
 }
 
 #undef LOCTEXT_NAMESPACE

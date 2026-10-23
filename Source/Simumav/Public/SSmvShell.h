@@ -49,6 +49,8 @@ private:
 	TSharedPtr<SBox> OverlayBox;
 	TSharedPtr<SWidget> DefaultFocus;
 	FSlateBrush PreviewBrush;
+	/** TOP10 avatar fırçaları (render hedefi adına göre) */
+	TMap<FString, TSharedPtr<FSlateBrush>> AvatarBrushes;
 	FEditableTextBoxStyle TextStyle;
 	ESmvScreen Built = ESmvScreen::Welcome;
 	bool bBuiltPause = false;
@@ -107,9 +109,23 @@ private:
 	TSharedRef<SWidget> FpvGallery();
 	TSharedRef<SWidget> ReplayScreen();
 	TSharedRef<SWidget> Support();
+	/** Destek (web support/): sorun bildir formu + Taleplerim + talep ayrıntısı (yazışma, yanıt) — /api/support */
+	struct FSupport
+	{
+		FString Cat = TEXT("flight"), Subject, Body, Reply, ShotPath, OpenId, Err;
+		bool bCtx = true, bLoading = false, bSending = false;
+		TArray<TSharedPtr<class FJsonValue>> Tickets;
+		TSharedPtr<class FJsonObject> Detail;
+	} Sup;
+	void SupLoad();
+	void SupOpen(const FString& Id);
+	void SupSend();
+	void SupReplySend();
 	double SummaryAt = 0;
 	FString FpvSel, FpvDroneId;
 	int32 CrewTab = 0;
+	int32 LogTab = 0;
+	TSharedRef<SWidget> Achievements();
 	/** Görev haritası düzenleyici durumu (web missions/editor.js eşi): şekil noktaları (enlem, boylam), FPV kapı sırası, parametreler */
 	struct FMPlan
 	{

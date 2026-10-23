@@ -33,7 +33,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Misafir olarak devam / giriş | `site/js/auth.js` | Hoş geldin ekranı: büyük kartlar, dil seçici | ✓ | — |
 | E-posta + şifre girişi (PBKDF2), kayıt bağlantısı | Mastertool | Giriş ekranı (cam kart) | ✓ | — |
 | Misafir verisini hesaba aktarma | — | Hesap ekranı | ✓ | — |
-| Destek: sorun bildir / taleplerim | `support/index.js` | — | ✗ | P2 |
+| Destek: sorun bildir / taleplerim | `support/index.js` | Destek ekranı (ana menü → Sorun bildir): kategori, başlık, açıklama, cihaz/son uçuş bağlamı, sahne ekran görüntüsü (PNG ≤ 3 MB); Taleplerim listesi, talep yazışması ve yanıt — /api/support | ✓ | P2 |
 
 ## 3. Ana menü
 
@@ -146,13 +146,13 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
 | 30 gün / tüm zamanlar, sıra madalyası, puan, galibiyet | `menu/top10.js` | ✓ (madalya daireleri, puan çubuğu) | ✓ | — |
-| 3B avatar, puan bileşen çipleri, maskeli e-posta | `menu/top10.js` | — | ✗ | P2 |
+| 3B avatar, puan bileşen çipleri, maskeli e-posta | `menu/top10.js` | TOP10: menü sahnesinde 3B baş-omuz avatar anlık görüntüsü (yoksa çizilmiş portre), maskeli e-posta, puan bileşen çipleri (karşılaşma/tempo/disiplin/önleme/FPV) | ✓ | P2 |
 
 ## 14. Başarımlar
 
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
-| Hedef rozetleri, savunma rütbeleri, FPV kişisel rekor | `flightsim_targets.puan` | Rozetler özet ekranında; Steam başarımları (12) | ◐ | P2 |
+| Hedef rozetleri, savunma rütbeleri, FPV kişisel rekor | `flightsim_targets.puan` | Seyir defteri → Başarımlar: 12 Steam başarımı (açık/kilitli), rozet kataloğu ve kazanılma sayıları (ilk/hızlı/as/yakın/avcı/yarış/it dalaşı/FPV rekor), savunma rütbe merdiveni; özet rozetleri 7 dilde | ✓ | P2 |
 
 ## 15. Bayram temaları
 

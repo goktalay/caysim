@@ -607,6 +607,18 @@ FSmvLeaderRow FSmvLeaderRow::FromJson(const TSharedPtr<FJsonObject>& O)
 	R.Matches = (int32)SmvJson::Num(O, TEXT("matches"));
 	R.Flights = (int32)SmvJson::Num(O, TEXT("flights"));
 	R.bDemo = SmvJson::Bool(O, TEXT("demo"));
+	R.Email = SmvJson::Str(O, TEXT("email"));
+	const TSharedPtr<FJsonObject>* Av = nullptr;
+	if (O.IsValid() && O->TryGetObjectField(TEXT("avatar"), Av) && Av && Av->IsValid()) { R.Avatar = FSmvAvatar::FromJson(*Av); R.bHasAvatar = true; }
+	const TSharedPtr<FJsonObject>* Pt = nullptr;
+	if (O.IsValid() && O->TryGetObjectField(TEXT("parts"), Pt) && Pt && Pt->IsValid())
+	{
+		for (const TCHAR* K : { TEXT("match"), TEXT("pace"), TEXT("discipline"), TEXT("intercept"), TEXT("fpv") })
+		{
+			double V = 0;
+			if ((*Pt)->TryGetNumberField(K, V) && (V > 0 || FCString::Strcmp(K, TEXT("fpv")) == 0)) R.Parts.Add(K, FMath::RoundToInt(V));
+		}
+	}
 	return R;
 }
 

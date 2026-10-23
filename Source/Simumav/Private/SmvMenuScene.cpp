@@ -62,6 +62,13 @@ ASmvMenuScene::ASmvMenuScene()
 	KeyLight->SetupAttachment(Root);
 	RimLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("RimLight"));
 	RimLight->SetupAttachment(Root);
+	SnapCap = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("SnapCapture"));
+	SnapCap->SetupAttachment(Root);
+	SnapCap->bCaptureEveryFrame = false;
+	SnapCap->bCaptureOnMovement = false;
+	SnapCap->FOVAngle = 26.f;
+	SnapCap->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+	SnapCap->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
 }
 
 void ASmvMenuScene::BeginPlay()
@@ -86,6 +93,9 @@ void ASmvMenuScene::BeginPlay()
 	PP.bOverride_AutoExposureBias = true;
 	PP.AutoExposureBias = SmvCfg(TEXT("PreviewExposure"), 2.f);
 	Capture->PostProcessBlendWeight = 1.f;
+	SnapCap->ShowFlags = Capture->ShowFlags;
+	SnapCap->PostProcessSettings = Capture->PostProcessSettings;
+	SnapCap->PostProcessBlendWeight = 1.f;
 	for (UPointLightComponent* Lt : { KeyLight.Get(), RimLight.Get() })
 	{
 		Lt->SetIntensityUnits(ELightUnits::Candelas);
@@ -176,6 +186,7 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	if (Flyer) Flyer->Destroy();
 	if (Preview) Preview->Destroy();
 	if (PilotPrev) PilotPrev->Destroy();
+	if (SnapFig) SnapFig->Destroy();
 	if (Cam) Cam->Destroy();
 	if (Terrain) Terrain->Destroy();
 	if (WorldSetup) WorldSetup->Destroy();
@@ -345,6 +356,7 @@ void ASmvMenuScene::Tick(float Dt)
 			}
 		}
 	}
+	TickSnaps();
 	if (PilotPrev)
 	{
 		if (FPlatformTime::Seconds() > ManualUntil) PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 14.f, 360.f);
@@ -371,4 +383,63 @@ void ASmvMenuScene::Tick(float Dt)
 		const double Now = FPlatformTime::Seconds();
 		if (Now - LastChannelFix > 1.0) { LastChannelFix = Now; ApplyPreviewChannels(); }
 	}
+}
+
+// ---------------------------------------------------------------------------
+// avatar anlık görüntüleri (TOP10 vb.): kare N'de figür kurulur, N+1'de yakalanır
+// ---------------------------------------------------------------------------
+
+UTextureRenderTarget2D* ASmvMenuScene::AvatarSnap(const FSmvAvatar& A)
+{
+	const FString Key = SmvJson::ToString(A.ToJson());
+	if (TObjectPtr<UTextureRenderTarget2D>* Found = Snaps.Find(Key)) return Found->Get();
+	if (Snaps.Num() > 64) return nullptr;
+	UTextureRenderTarget2D* Rt = NewObject<UTextureRenderTarget2D>(this);
+	Rt->ClearColor = FLinearColor(0.f, 0.f, 0.f, 0.f);
+	Rt->InitAutoFormat(160, 160);
+	Rt->UpdateResourceImmediate(true);
+	Snaps.Add(Key, Rt);
+	SnapQueue.Add(TPair<FString, FSmvAvatar>(Key, A));
+	return Rt;
+}
+
+void ASmvMenuScene::TickSnaps()
+{
+	UWorld* W = GetWorld();
+	if (!W) return;
+	if (SnapPhase == 1 && SnapFig)
+	{
+		if (TObjectPtr<UTextureRenderTarget2D>* Rt = Snaps.Find(SnapPending))
+		{
+			const FVector At = GSmvPreviewAt + FVector(0.0, 0.0, SnapFig->HeadHeightCm() - 14.0);
+			const FVector CamAt = At + FVector(-125.0, 0.0, 6.0);
+			SnapCap->TextureTarget = Rt->Get();
+			SnapCap->SetWorldLocationAndRotation(CamAt, (At - CamAt).Rotation());
+			KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-180, 160, 220));
+			RimLight->SetWorldLocation(GSmvPreviewAt + FVector(160, -120, 200));
+			SnapCap->ShowOnlyActors.Reset();
+			SnapCap->ShowOnlyActors.Add(SnapFig);
+			SnapCap->CaptureScene();
+		}
+		SnapFig->SetActorHiddenInGame(true);
+		SnapPhase = 0;
+		return;
+	}
+	if (SnapQueue.Num() == 0) return;
+	const TPair<FString, FSmvAvatar> Job = SnapQueue[0];
+	SnapQueue.RemoveAt(0);
+	if (!SnapFig)
+	{
+		FActorSpawnParameters P;
+		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SnapFig = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(GSmvPreviewAt), P);
+	}
+	if (!SnapFig) return;
+	SnapFig->Build(Job.Value, false);
+	SnapFig->SetActorHiddenInGame(false);
+	SnapFig->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, 200.f, 0.f));
+	TInlineComponentArray<UPrimitiveComponent*> Prims(SnapFig.Get());
+	for (UPrimitiveComponent* Pc : Prims) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
+	SnapPending = Job.Key;
+	SnapPhase = 1;
 }

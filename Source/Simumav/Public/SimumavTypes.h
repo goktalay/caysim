@@ -404,6 +404,12 @@ struct SIMUMAV_API FSmvLeaderRow
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") int32 Matches = 0;
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") int32 Flights = 0;
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") bool bDemo = false;
+	/** Sunucu maskeli e-posta (ör. a***@g***.com) */
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FString Email;
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FSmvAvatar Avatar;
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") bool bHasAvatar = false;
+	/** Puan bileşenleri: match, pace, discipline, intercept, fpv (fpv varsa 0 da gösterilir) */
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") TMap<FString, int32> Parts;
 	static FSmvLeaderRow FromJson(const TSharedPtr<FJsonObject>& O);
 };
 

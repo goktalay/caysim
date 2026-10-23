@@ -1275,6 +1275,7 @@ void ASmvGameMode::AugmentSummary(FSmvFlightSummary& S)
 		if (MyTracker->Finished()) S.Laps = FMath::Max(S.Laps, 1);
 	}
 	if (!RaceResultBadge.IsEmpty()) S.Badges.AddUnique(RaceResultBadge);
+	if (Flow.IsValid() && Flow->LastFpv.bValid && Flow->LastFpv.bNewPb) S.Badges.AddUnique(TEXT("fpv_pb"));
 	if (Tones && Flow.IsValid() && Flow->Race.Kind != TEXT("none")) Tones->Sfx(RaceResultBadge.IsEmpty() ? 17 : 16);
 	// podyum + oyun puanı (yerel yarış / it dalaşı)
 	if (Flow.IsValid())
