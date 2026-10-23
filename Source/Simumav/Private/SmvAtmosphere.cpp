@@ -202,17 +202,24 @@ namespace
 		return nullptr;
 	}
 
-	void ConfigurePp(APostProcessVolume* V, int32 Q, const FString& Tod)
+	void ConfigurePp(APostProcessVolume* V, int32 Q, const FString& Tod, bool bUds)
 	{
 		if (!V) return;
 		FPostProcessSettings& S = V->Settings;
-		// otomatik pozlama (histogram, EV100 — DefaultEngine.ini ExtendDefaultLuminanceRange): gece biraz aydınlatılır (oynanış)
-		S.bOverride_AutoExposureMethod = true; S.AutoExposureMethod = EAutoExposureMethod::AEM_Histogram;
-		S.bOverride_AutoExposureMinBrightness = true; S.AutoExposureMinBrightness = Tod == TEXT("night") ? -3.f : -1.f;
-		S.bOverride_AutoExposureMaxBrightness = true; S.AutoExposureMaxBrightness = 16.f;
-		S.bOverride_AutoExposureSpeedUp = true; S.AutoExposureSpeedUp = 2.5f;
-		S.bOverride_AutoExposureSpeedDown = true; S.AutoExposureSpeedDown = 1.2f;
-		S.bOverride_AutoExposureBias = true; S.AutoExposureBias = Tod == TEXT("night") ? 1.2f : Tod == TEXT("dusk") ? 0.3f : 0.f;
+		// otomatik pozlama (histogram, EV100 — DefaultEngine.ini ExtendDefaultLuminanceRange): gece biraz aydınlatılır (oynanış).
+		// UDS varken pozlamayı UDS yönetir ("Apply Exposure Settings": gün/gece telafi eğrisi) → burada yazılmaz.
+		S.bOverride_AutoExposureMethod = !bUds;
+		S.bOverride_AutoExposureMinBrightness = !bUds; S.bOverride_AutoExposureMaxBrightness = !bUds; S.bOverride_AutoExposureSpeedUp = !bUds;
+		S.bOverride_AutoExposureSpeedDown = !bUds; S.bOverride_AutoExposureBias = !bUds;
+		if (!bUds)
+		{
+			S.AutoExposureMethod = EAutoExposureMethod::AEM_Histogram;
+			S.AutoExposureMinBrightness = Tod == TEXT("night") ? -3.f : -1.f;
+			S.AutoExposureMaxBrightness = 16.f;
+			S.AutoExposureSpeedUp = 2.5f;
+			S.AutoExposureSpeedDown = 1.2f;
+			S.AutoExposureBias = Tod == TEXT("night") ? 1.2f : Tod == TEXT("dusk") ? 0.3f : 0.f;
+		}
 		// hafif renk düzeltme / sinema dokunuşu
 		S.bOverride_ColorSaturation = true; S.ColorSaturation = FVector4(1.06, 1.06, 1.06, 1.0);
 		S.bOverride_ColorContrast = true; S.ColorContrast = FVector4(1.04, 1.04, 1.04, 1.0);
@@ -247,12 +254,13 @@ namespace
 		SetCVar(TEXT("r.SkyAtmosphere.FastSkyLUT"), Q >= 3 ? 0.f : 1.f);
 	}
 
-	/** UDS / UDW kalite değişkenleri (adlar paket sürümüne göre değişebilir; bulunamayan atlanır). */
+	/** UDS kalite değişkenleri (derleme günlüğündeki UDSPROP dökümüyle doğrulandı). Gök kipini (hacimsel / 2B bulut) UDS kendi
+	 *  "Sky Mode Scalability Map"i ile ölçeklenebilirlik düzeyinden seçer; burada hacimsel sis ve güneş merceği parlaması. */
 	void UdsQuality(FSetter& S, int32 Q)
 	{
-		if (Q >= 1) S.EnumByName({ TEXT("Sky Mode") }, { TEXT("Volumetric") });
-		else S.EnumByName({ TEXT("Sky Mode") }, { TEXT("2D Dynamic"), TEXT("Static") });
-		S.Num({ TEXT("Volumetric Cloud Quality"), TEXT("Cloud Quality"), TEXT("Overall Quality") }, Q >= 3 ? 3 : Q >= 2 ? 2 : 1);
+		S.Bool({ TEXT("Use Volumetric Fog") }, Q >= 2);
+		S.Bool({ TEXT("Enable Sun Lens Flare") }, Q >= 3);
+		S.Bool({ TEXT("Use Cloud Shadows") }, Q >= 1);
 	}
 }
 
@@ -286,7 +294,7 @@ void FSmvAtmosphere::ApplyQuality(UWorld* W, int32 Q)
 	{
 		FString Tod = TEXT("day");
 		for (const FName& T : V->Tags) { const FString S = T.ToString(); if (S.StartsWith(TEXT("tod:"))) Tod = S.Mid(4); }
-		ConfigurePp(V, Q, Tod);
+		ConfigurePp(V, Q, Tod, V->Tags.Contains(FName(TEXT("uds"))));
 	}
 	for (TActorIterator<AActor> It(W); It; ++It)
 	{
@@ -310,6 +318,9 @@ bool FSmvAtmosphere::Apply(UWorld* W, const FSmvAtmosphereCfg& Cfg, TArray<AActo
 	const double TravelYaw = FMath::Fmod(TravelCompass - 90.0 + 360.0, 360.0);
 	const double WindAloft = Cfg.WindMs * 1.6 + Cfg.WindGustMs * 0.5;   // bulut seviyesinde daha hızlı
 
+	bool bOn = true;
+	if (GConfig) GConfig->GetBool(GSec, TEXT("UseUltraDynamicSky"), bOn, GGameIni);
+	UClass* SkyCls = bOn ? UdsClass(TEXT("UdsSkyClass"), TEXT("Ultra_Dynamic_Sky")) : nullptr;
 	// ---- sınırsız post-process hacmi ----
 	FActorSpawnParameters Sp;
 	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -319,15 +330,13 @@ bool FSmvAtmosphere::Apply(UWorld* W, const FSmvAtmosphereCfg& Cfg, TArray<AActo
 		V->Priority = 1.f;
 		V->Tags.Add(GTag);
 		V->Tags.Add(FName(*(FString(TEXT("tod:")) + Cfg.TimeOfDay)));
-		ConfigurePp(V, Q, Cfg.TimeOfDay);
+		if (SkyCls) V->Tags.Add(FName(TEXT("uds")));
+		ConfigurePp(V, Q, Cfg.TimeOfDay, SkyCls != nullptr);
 		OutActors.Add(V);
 	}
 	// ---- prosedürel zemin ıslaklığı / kar ----
 	for (TActorIterator<ASmvProcTerrain> It(W); It; ++It) It->SetSurfaceWeather((float)X.Wet, (float)X.SnowCover);
 
-	bool bOn = true;
-	if (GConfig) GConfig->GetBool(GSec, TEXT("UseUltraDynamicSky"), bOn, GGameIni);
-	UClass* SkyCls = bOn ? UdsClass(TEXT("UdsSkyClass"), TEXT("Ultra_Dynamic_Sky")) : nullptr;
 	if (!SkyCls)
 	{
 		// ---- yerleşik gök: gerçek güneş yönü, yükseklik sisi + hacimsel sis, gök ışığı ----
@@ -399,15 +408,17 @@ bool FSmvAtmosphere::Apply(UWorld* W, const FSmvAtmosphereCfg& Cfg, TArray<AActo
 	S.Num({ TEXT("Latitude") }, Cfg.Lat);
 	S.Num({ TEXT("Longitude") }, Cfg.Lon);
 	S.Num({ TEXT("Time Zone") }, T.Tz);
-	S.Bool({ TEXT("Daylight Savings Time"), TEXT("Daylight Saving Time"), TEXT("DST") }, false);
+	S.Bool({ TEXT("Daylight Savings Time") }, false);
+	S.Bool({ TEXT("Use System Time") }, false);
 	S.Num({ TEXT("Year") }, T.Y); S.Num({ TEXT("Month") }, T.M); S.Num({ TEXT("Day") }, T.D);
 	S.Num({ TEXT("Cloud Coverage") }, X.Cloud);
 	S.Num({ TEXT("Fog") }, X.Fog);
 	S.Num({ TEXT("Dust Amount"), TEXT("Dust") }, X.Dust);
 	S.Num({ TEXT("Cloud Direction") }, TravelYaw);
-	S.Num({ TEXT("Cloud Speed") }, FMath::Clamp(WindAloft * 0.5, 0.3, 10.0));
-	S.Num({ TEXT("Light Pollution") }, 0.25);
-	S.Bool({ TEXT("Volumetric Fog") }, Q >= 1);
+	// UDS bulut hızı birimsiz (varsayılan 0,35 ≈ hafif rüzgâr): irtifa rüzgârıyla orantılı
+	S.Num({ TEXT("Cloud Speed") }, FMath::Clamp(0.1 + WindAloft * 0.07, 0.05, 3.0));
+	S.Num({ TEXT("Light Pollution Intensity") }, Cfg.TimeOfDay == TEXT("night") ? 0.35 : 0.2);
+	S.Bool({ TEXT("Render Exponential Height Fog") }, true);
 	UdsQuality(S, Q);
 	Sky->Tags.Add(GTag);
 	Sky->FinishSpawning(Tr);
@@ -428,20 +439,23 @@ bool FSmvAtmosphere::Apply(UWorld* W, const FSmvAtmosphereCfg& Cfg, TArray<AActo
 			else if (Cfg.Weather == TEXT("cloudy")) Names = { TEXT("cloudy"), TEXT("overcast"), TEXT("partlycloudy") };
 			else Names = { TEXT("clearskies"), TEXT("clear"), TEXT("partlycloudy") };
 			if (UObject* Preset = WeatherPreset(Names)) Wx.Obj_({ TEXT("Weather") }, Preset);
-			if (!Wx.Bool({ TEXT("Random Weather Variation") }, false)) Wx.EnumByName({ TEXT("Random Weather Variation") }, { TEXT("Disabled"), TEXT("Off") });
+			// UDW: her değerin "<ad> - Manual Override" anahtarı açılınca ön ayar / rastgele değişim o değeri ezmez (UDSPROP dökümü)
 			auto Values = [&]()
 			{
-				Wx.Num({ TEXT("Cloud Coverage") }, X.Cloud);
-				Wx.Num({ TEXT("Fog") }, X.Fog);
-				Wx.Num({ TEXT("Rain") }, X.Rain);
-				Wx.Num({ TEXT("Snow") }, X.Snow);
-				Wx.Num({ TEXT("Thunder/Lightning"), TEXT("Thunder Lightning"), TEXT("Lightning") }, X.Lightning);
-				Wx.Num({ TEXT("Dust") }, X.Dust * 0.5);
-				Wx.Num({ TEXT("Wind Intensity") }, FMath::Clamp(Cfg.WindMs / 1.5, 0.0, 10.0));
+				auto Ov = [&](const TCHAR* Name, double V)
+				{
+					if (Wx.Num({ Name }, V)) Wx.Bool({ *FString::Printf(TEXT("%s - Manual Override"), Name) }, true);
+				};
+				Ov(TEXT("Cloud Coverage"), X.Cloud);
+				Ov(TEXT("Fog"), X.Fog);
+				Ov(TEXT("Rain"), X.Rain);
+				Ov(TEXT("Snow"), X.Snow);
+				Ov(TEXT("Thunder/Lightning"), X.Lightning);
+				Ov(TEXT("Dust"), X.Dust * 0.5);
+				Ov(TEXT("Wind Intensity"), FMath::Clamp(Cfg.WindMs / 1.5, 0.0, 10.0));
+				Ov(TEXT("Material Wetness"), X.Wet);
+				Ov(TEXT("Material Snow Coverage"), X.SnowCover);
 				Wx.Num({ TEXT("Wind Direction") }, TravelYaw);
-				Wx.Num({ TEXT("Material Wetness"), TEXT("Wetness") }, X.Wet * 10.0);
-				Wx.Num({ TEXT("Snow Coverage"), TEXT("Material Snow Coverage") }, X.SnowCover * 10.0);
-				Wx.Bool({ TEXT("Enable Puddles"), TEXT("Puddles") }, X.Wet > 0.5);
 			};
 			Values();
 			Weather->Tags.Add(GTag);

@@ -103,22 +103,26 @@ uçak motor döngülerine bağlanır.
 
 Her uçuş sahnesinde (prosedürel, Fab haritası, şehir **ve Cesium gerçek dünya**) kurulur:
 
-- **Ultra Dynamic Sky** (pakette varsa): `Time of Day` = gerçek güneşe göre yerel saat (gündüz: güneş öğlesi + 1 sa; alacakaranlık:
-  gün batımı − 20 dk, altın saat; gece: gün batımı + 2,5 sa; NOAA hesabı `SmvCore::SolarDayEvents`), `Simulate Real Sun/Moon/Stars`,
-  enlem/boylam (parkurun), tarih (bugün), saat dilimi (yaklaşık; Türkiye UTC+3), `Cloud Coverage`, `Fog`, `Dust Amount`,
-  `Cloud Direction` + `Cloud Speed` = SITL rüzgârıyla aynı yön (SIM_WIND_DIR'in tersi = bulutların gittiği yön) ve irtifada 1,6× hız,
-  `Light Pollution`, `Volumetric Fog`, bulut kipi/kalitesi (grafik ön ayarı).
-- **Ultra Dynamic Weather**: hava ön ayarı (Clear Skies / Cloudy / Rain / Foggy / Snow), rastgele değişim kapalı; `Rain`, `Snow`,
-  `Thunder/Lightning` (yağmurda şimşek), `Wind Intensity` + `Wind Direction` (SITL rüzgârı), malzeme ıslaklığı / su birikintisi /
-  kar örtüsü değişkenleri (paket sürümünde varsa).
+- **Ultra Dynamic Sky** (pakette varsa): `Time of Day` (0–2400) = gerçek güneşe göre yerel saat (gündüz: güneş öğlesi + 1 sa;
+  alacakaranlık: gün batımı − 20 dk, altın saat; gece: gün batımı + 2,5 sa; NOAA hesabı `SmvCore::SolarDayEvents`), `Animate Time of Day`
+  kapalı, `Simulate Real Sun / Moon / Stars`, `Latitude` / `Longitude` (parkurun), `Year` / `Month` / `Day` (bugün), `Time Zone`
+  (yaklaşık; Türkiye UTC+3), `Daylight Savings Time` ve `Use System Time` kapalı, `Cloud Coverage`, `Fog`, `Dust Amount`,
+  `Cloud Direction` = SITL rüzgârının gittiği yön (Unreal yaw), `Cloud Speed` irtifa rüzgârıyla orantılı, `Light Pollution Intensity`
+  (gece 0,35), `Render Exponential Height Fog`, `Use Volumetric Fog` (Yüksek+), `Use Cloud Shadows`, `Enable Sun Lens Flare` (Epik+).
+  Gök kipini (hacimsel / 2B bulut) UDS kendi `Sky Mode Scalability Map`'i ile ölçeklenebilirlik düzeyinden seçer; pozlamayı UDS yönetir
+  (`Apply Exposure Settings`).
+- **Ultra Dynamic Weather**: hava ön ayarı (Clear Skies / Cloudy / Rain / Foggy / Snow) + her değer "… - Manual Override" ile sabit:
+  `Cloud Coverage`, `Fog`, `Rain`, `Snow`, `Thunder/Lightning` (yağmurda 2,5), `Dust`, `Wind Intensity` (SITL m/s ÷ 1,5),
+  `Material Wetness` (yağmur 0,9), `Material Snow Coverage` (kar 0,85); `Wind Direction` = SITL rüzgârı.
 - **Yerleşik gök** (UDS yoksa): güneş yönü gerçek konumdan, üstel yükseklik sisi + hacimsel sis (hava ve kaliteye göre), gerçek zamanlı
   gök ışığı; Cesium'da CesiumSunSky tarih/saat dilimi/yerel saat.
-- **Post-process** (sınırsız hacim, her durumda): histogram otomatik pozlama (EV100, gece +1,2 telafi), hafif renk düzeltme
+- **Post-process** (sınırsız hacim, her durumda): histogram otomatik pozlama (yalnız UDS yokken; EV100, gece +1,2 telafi), hafif renk düzeltme
   (doygunluk 1,06, kontrast 1,04), bloom 0,45, vinyet 0,22, AO 0,5; Lumen GI + yansıma (Düşük: ekran uzayı GI/yansıma).
 - **Prosedürel zemin**: `M_SmvTerrainWx` — yağmurda koyulaşma + parlaklık + gürültü maskeli su birikintileri, karda yukarı bakan
   yüzeylerde kar örtüsü.
 - **Grafik ön ayarı** (Düşük, Orta, Yüksek, Epik, Sinematik → 0..4; `USmvGameInstance::ApplyGraphicsQuality`): hacimsel sis ızgarası,
-  hacimsel bulut ışın örnekleri, Lumen sahne/son toplama/yansıma kalitesi, UDS bulut kipi, hareket bulanıklığı (yalnız Sinematik).
+  hacimsel bulut ışın örnekleri, Lumen sahne/son toplama/yansıma kalitesi, UDS hacimsel sis / bulut gölgesi / mercek parlaması,
+  hareket bulanıklığı (yalnız Sinematik).
 
 Günlük: `Atmosfer: …`, `Atmosfer UDS ayarlanan: … | bulunamayan: …`, `Atmosfer UDW …`. UDS/UDW değişken adlarının tam listesi derleme
 günlüğünde (`UDSPROP` satırları; editor Python `uds_dokum()` → `USmvAtmosphereLibrary::DumpUdsProperties`).
