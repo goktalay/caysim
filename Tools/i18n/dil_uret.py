@@ -49,6 +49,16 @@ def main():
                 eslesmedi.append((key, d))
                 continue
             out[d][key] = v
+    # arayüz metinleri (7 dil hazır; metinler.py'de olmayan anahtarlar)
+    try:
+        from arayuz_metinleri import U  # noqa: E402
+    except ImportError:
+        U = {}
+    for key, vals in U.items():
+        if key in M:
+            continue
+        for i, d in enumerate(DILLER):
+            out[d][key] = vals[i]
     hedef = os.path.normpath(os.path.join(KOK, '..', '..', 'Content', 'Simumav', 'Lang'))
     os.makedirs(hedef, exist_ok=True)
     for d in DILLER:

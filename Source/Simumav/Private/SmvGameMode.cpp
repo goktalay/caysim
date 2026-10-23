@@ -14,6 +14,10 @@
 #include "SmvI18n.h"
 #include "SSmvShell.h"
 #include "SSmvFlightUi.h"
+#include "SmvMenuScene.h"
+#include "SmvMusicSynth.h"
+#include "SmvUiPrefs.h"
+#include "SmvUiKit.h"
 #include "CesiumWorldSetup.h"
 #include "HudWidget.h"
 #include "TelemetryBuffer.h"
@@ -93,12 +97,25 @@ void ASmvGameMode::BeginPlay()
 		Tones->SetupAttachment(R);
 		Tones->RegisterComponent();
 		Tones->Start();
+		UiTones = NewObject<USmvToneSynth>(ToneHost, TEXT("UiTones"));
+		UiTones->SetupAttachment(R);
+		UiTones->RegisterComponent();
+		UiTones->Start();
+		Music = NewObject<USmvMusicSynth>(ToneHost, TEXT("Music"));
+		Music->SetupAttachment(R);
+		Music->RegisterComponent();
+		Music->Start();
+		TWeakObjectPtr<USmvToneSynth> WT(UiTones);
+		FSmvUiSound::SetSink([WT](int32 Kind) { if (WT.IsValid()) WT->Blip(Kind); });
 	}
+	ApplyUiPrefs();
 	HandleScreen(Flow->GetScreen());
 }
 
 void ASmvGameMode::EndPlay(const EEndPlayReason::Type Reason)
 {
+	FSmvUiSound::SetSink(nullptr);
+	if (MenuScene) { MenuScene->Destroy(); MenuScene = nullptr; }
 	StopScene();
 	if (Flow.IsValid())
 	{
@@ -120,6 +137,8 @@ void ASmvGameMode::HandleToast(const FString& Text, int32 Severity)
 void ASmvGameMode::HandleScreen(ESmvScreen Screen)
 {
 	const bool bFlightScreens = Screen == ESmvScreen::Loading || Screen == ESmvScreen::Flight;
+	UpdateMenuScene(Screen);
+	UpdateMusic(Screen);
 	if (bFlightScreens && !bScene) BuildScene();
 	if (!bFlightScreens && bScene) StopScene();
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
@@ -287,7 +306,8 @@ void ASmvGameMode::BuildScene()
 		P->SetTarget(Drone, Req.Drone.Type);
 		P->SetMode(ESmvCamMode::Chase);
 		P->InputDevice = Set.InputDevice;
-		P->bStickMode2 = Set.bStickMode2;
+		P->StickMode = Set.StickMode;
+		P->RemapKeys();
 		P->Expo = (float)Set.StickExpo;
 		P->RcAxisMap = Set.RcAxisMap;
 		P->RcInvert = Set.RcInvert;
@@ -600,9 +620,10 @@ void ASmvGameMode::UiAction(const FString& Name, const FString& Arg)
 		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
 		P->SetStringField(TEXT("mode"), Arg);
 		Command(TEXT("mode"), P);
-		PushEvent(FString::Printf(TEXT("Mod isteği: %s"), *Arg), 6);
+		PushEvent(FSmvI18n::Format(TEXT("fui.mode_req"), { { TEXT("mode"), Arg } }).ToString(), 6);
 		return;
 	}
+	if (Name == TEXT("IntroBeep")) { if (Tones) Tones->Blip(Arg == TEXT("go") ? 4 : 3); return; }
 	if (Name == TEXT("CamCycle")) { if (ASmvPilotPawn* P = GetPilot()) P->CycleMode(); return; }
 	HandleAction(FName(*Name));
 }
@@ -619,6 +640,15 @@ void ASmvGameMode::HandleAction(FName A)
 	static double LastReset = 0;
 	const bool bRaceLocked = !bRaceStarted;
 	const bool bMatch = Flow->GetMatch() && Flow->GetMatch()->HasMatch();
+	// radyal mod menüsü açıkken: A / F seçer, B / Esc kapatır
+	if (FlightUi.IsValid() && FlightUi->IsRadialOpen())
+	{
+		if (A == TEXT("Arm") || A == TEXT("ModeMenu")) { FlightUi->ConfirmRadial(); return; }
+		if (A == TEXT("Ack") || A == TEXT("Pause")) { FlightUi->CloseRadial(); return; }
+	}
+	if (A == TEXT("Pause") && Shell.IsValid() && Shell->IsOverlayOpen()) { Shell->ToggleHelp(); return; }
+	if (A == TEXT("Help")) { if (Shell.IsValid()) Shell->ToggleHelp(); return; }
+	if (A == TEXT("Cockpit")) { if (FlightUi.IsValid()) FlightUi->ToggleCockpit(); return; }
 	if (A == TEXT("Pause")) { TogglePause(); return; }
 	if (A == TEXT("Panel")) { if (FlightUi.IsValid()) FlightUi->TogglePanel(); return; }
 	if (A == TEXT("Sticks")) { if (FlightUi.IsValid()) FlightUi->ToggleSticks(); return; }
@@ -643,13 +673,13 @@ void ASmvGameMode::HandleAction(FName A)
 		{
 			P->SetBoolField(TEXT("on"), true);
 			Command(TEXT("motor_cut"), P);
-			PushEvent(TEXT("MOTOR KESİK · SÜZÜLÜYOR — yeniden basınca motor verilir"), 4);
+			PushEvent(FSmvI18n::T(TEXT("fui.motor_cut_glide")).ToString(), 4);
 			return;
 		}
 		if (!bPlaneLike && Tl.AltRel > 1.5 && Now > ArmConfirmUntil)
 		{
 			ArmConfirmUntil = Now + 2.5;
-			HandleToast(TEXT("Havada DISARM aracı düşürür — onaylamak için 2 sn içinde yeniden basın (X)"), 4);
+			HandleToast(FSmvI18n::T(TEXT("fui.disarm_confirm")).ToString(), 4);
 			return;
 		}
 		ArmConfirmUntil = 0;
@@ -739,8 +769,8 @@ void ASmvGameMode::Tick(float Dt)
 		const FVector L = GetPilot() ? GetPilot()->GetActorLocation() : Drone->GetActorLocation();
 		const USmvGameInstance* GI = USmvGameInstance::GetSmv(this);
 		const FSmvSettings& S = GI->GetData()->Settings();
-		Drone->UpdateAudio(L, S.bSound ? (float)S.Volume : 0.f);
-		for (TObjectPtr<ASmvDroneActor>& G : Ghosts) if (G) G->UpdateAudio(L, S.bSound ? (float)S.Volume * 0.6f : 0.f);
+		Drone->UpdateAudio(L, S.bSound ? (float)S.Volume * FSmvUiPrefs::Get().VolMotor : 0.f);
+		for (TObjectPtr<ASmvDroneActor>& G : Ghosts) if (G) G->UpdateAudio(L, S.bSound ? (float)S.Volume * FSmvUiPrefs::Get().VolMotor * 0.6f : 0.f);
 	}
 	// bulut: biten uyarı bölümlerini sunucuya bildir (cmd gpws; ≤ 50 / komut)
 	if (PendingGpws.Num() && Link() && Link()->Backend() == ESmvFlightBackend::Cloud && FPlatformTime::Seconds() - LastGpwsFlush > 2.0)
@@ -839,7 +869,7 @@ void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 	}
 	bAlertUnacked = bAnyUnacked;
 	const FSmvSettings& S = USmvGameInstance::GetSmv(this)->GetData()->Settings();
-	if (Tones) Tones->SetAlarm(S.GpwsMode == TEXT("full") && S.bAlertTones ? Alarm : 0, (float)S.Volume);
+	if (Tones) Tones->SetAlarm(S.GpwsMode == TEXT("full") && S.bAlertTones ? Alarm : 0, (S.bSound ? (float)S.Volume : 0.f) * FSmvUiPrefs::Get().VolAlerts);
 	for (const std::string& F : R.Fresh)
 	{
 		const SmvCore::FGpwsCodeDef* D = SmvCore::GpwsCode(F);
@@ -1130,7 +1160,14 @@ void ASmvGameMode::UpdateHud()
 			U.Ch5 = Pw->GetCh5(); U.bThrUsed = Pw->IsThrottleEngaged();
 			U.bHideGauges = (Pw->GetMode() == ESmvCamMode::Fpv || Pw->GetMode() == ESmvCamMode::Gimbal) && Pw->IsHudOn();
 		}
-		U.bStickMode2 = Set.bStickMode2;
+		U.StickMode = Set.StickMode;
+		U.TrackName = Req.Track.Name;
+		U.bIntroAllowed = Flow->Race.Kind == TEXT("none") && !(Flow->GetMatch() && Flow->GetMatch()->HasMatch());
+		if (Pw)
+		{
+			U.PadRight = Pw->GetPadRight();
+			Pw->bSuppressRightPad = FlightUi->IsRadialOpen();
+		}
 		U.bRcDevice = Set.InputDevice == TEXT("rc");
 		U.FlightS = FPlatformTime::Seconds() - SceneT0;
 		U.bMenuOpen = bPauseMenu;
@@ -1478,4 +1515,58 @@ void ASmvGameMode::ClearFabWorld()
 	bFabSubsRequested = false;
 	bFabPlaced = false;
 	FabMapKey.Reset();
+}
+
+// ---------------------------------------------------------------------------
+// arayüz: menü 3B sahnesi, müzik, tercihler
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::UpdateMenuScene(ESmvScreen Screen)
+{
+	const bool bMenu = Screen != ESmvScreen::Loading && Screen != ESmvScreen::Flight;
+	if (bMenu && !MenuScene)
+	{
+		FActorSpawnParameters P;
+		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		MenuScene = GetWorld()->SpawnActor<ASmvMenuScene>(ASmvMenuScene::StaticClass(), FTransform::Identity, P);
+	}
+	else if (!bMenu && MenuScene)
+	{
+		MenuScene->Destroy();
+		MenuScene = nullptr;
+	}
+}
+
+void ASmvGameMode::UpdateMusic(ESmvScreen Screen)
+{
+	if (!Music) return;
+	USmvGameInstance* GI = USmvGameInstance::GetSmv(this);
+	if (!GI || !GI->GetData()) return;
+	const FSmvSettings& S = GI->GetData()->Settings();
+	const FSmvUiPrefs& P = FSmvUiPrefs::Get();
+	float Ctx = 1.f;
+	if (Screen == ESmvScreen::Loading || Screen == ESmvScreen::Flight) Ctx = 0.f;
+	else if (Screen == ESmvScreen::Wizard || Screen == ESmvScreen::Lobby) Ctx = 0.7f;
+	const float Lv = (S.bSound && S.bMusic && P.bMenuMusic) ? (float)S.Volume * P.VolMusic * Ctx : 0.f;
+	Music->SetLevel(Lv * 0.8f);
+}
+
+void ASmvGameMode::ApplyUiPrefs()
+{
+	USmvGameInstance* GI = USmvGameInstance::GetSmv(this);
+	if (!GI || !GI->GetData()) return;
+	const FSmvSettings& S = GI->GetData()->Settings();
+	const FSmvUiPrefs& P = FSmvUiPrefs::Get();
+	SmvUi::ReducedMotion() = S.bReducedMotion;
+	if (UiTones) UiTones->SetUiGain((S.bSound ? (float)S.Volume : 0.f) * P.VolUi);
+	UpdateMusic(Flow.IsValid() ? Flow->GetScreen() : ESmvScreen::Menu);
+	if (ASmvPilotPawn* Pw = GetPilot())
+	{
+		Pw->StickMode = S.StickMode;
+		Pw->InputDevice = S.InputDevice;
+		Pw->Expo = (float)S.StickExpo;
+		Pw->RcAxisMap = S.RcAxisMap;
+		Pw->RcInvert = S.RcInvert;
+		Pw->RemapKeys();
+	}
 }

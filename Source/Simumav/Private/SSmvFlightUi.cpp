@@ -1,6 +1,9 @@
 #include "SSmvFlightUi.h"
 #include "SmvGameMode.h"
 #include "SmvPilotPawn.h"
+#include "SmvUiKit.h"
+#include "SmvUiPrefs.h"
+#include "SmvI18n.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/SLeafWidget.h"
@@ -20,23 +23,23 @@
 #include "Layout/Clipping.h"
 
 // ---------------------------------------------------------------------------
-// tema (web: #0b0f14 zemin, turuncu vurgu #f59e0b, yeşil #22c55e, kırmızı #ef4444, amber #ffbf47)
+// tema (SIMUMAV web: koyu lacivert cam zemin, neon mavi vurgu #38bdf8, yeşil #22c55e, kırmızı #ef4444, amber #ffbf47)
 // ---------------------------------------------------------------------------
 
 namespace SmvFuiTheme
 {
-	const FLinearColor Bg(0.043f, 0.059f, 0.078f, 0.82f);
-	const FLinearColor HeadBg(0.085f, 0.11f, 0.14f, 0.94f);
-	const FLinearColor Edge(1.f, 1.f, 1.f, 0.10f);
+	const FLinearColor Bg(0.028f, 0.042f, 0.075f, 0.80f);
+	const FLinearColor HeadBg(0.055f, 0.085f, 0.15f, 0.94f);
+	const FLinearColor Edge(0.56f, 0.67f, 0.9f, 0.20f);
 	const FLinearColor Txt(0.90f, 0.93f, 0.95f, 1.f);
 	const FLinearColor Dim(0.56f, 0.62f, 0.69f, 1.f);
-	const FLinearColor Accent(0.96f, 0.62f, 0.04f, 1.f);
+	const FLinearColor Accent(0.22f, 0.74f, 0.97f, 1.f);
 	const FLinearColor Green(0.13f, 0.77f, 0.37f, 1.f);
 	const FLinearColor Red(0.94f, 0.27f, 0.27f, 1.f);
 	const FLinearColor Amber(1.f, 0.75f, 0.28f, 1.f);
 	const FLinearColor Blue(0.23f, 0.51f, 0.96f, 1.f);
 	const FLinearColor Cyan(0.37f, 0.78f, 1.f, 1.f);
-	const FLinearColor BtnGrey(0.20f, 0.25f, 0.32f, 1.f);
+	const FLinearColor BtnGrey(0.16f, 0.21f, 0.30f, 1.f);
 
 	FLinearColor Sev(int32 S)
 	{
@@ -48,6 +51,8 @@ namespace SmvFuiTheme
 	}
 	FSlateFontInfo Font(int32 Size, bool bBold = false) { return FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", Size); }
 	FSlateFontInfo Mono(int32 Size) { return FCoreStyle::GetDefaultFontStyle("Mono", Size); }
+	/** Dil anahtarı → metin (fui.*) */
+	FString Loc(const TCHAR* Key) { return FSmvI18n::T(Key).ToString(); }
 }
 
 // ---------------------------------------------------------------------------
@@ -321,7 +326,7 @@ static void SmvPaintPfd(const FGeometry& G, FSlateWindowElementList& Out, int32 
 	if (!S.bTele)
 	{
 		DrRect(Out, L + 11, G, FVector2D::ZeroVector, Sz, FLinearColor(0.02f, 0.03f, 0.04f, 0.72f));
-		DrText(Out, L + 12, G, TEXT("Telemetri bekleniyor…"), FVector2D(W * 0.5f, H * 0.5f), Font(10, true), Dim, 0);
+		DrText(Out, L + 12, G, SmvFuiTheme::Loc(TEXT("fui.waiting_tele")), FVector2D(W * 0.5f, H * 0.5f), Font(10, true), Dim, 0);
 	}
 	Out.PopClip();
 }
@@ -460,7 +465,7 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0.f, 0.f, 0.f, 70.f)
 		[
 			SNew(SBox)
-			.Visibility_Lambda([this]() { return St.bHideGauges || St.bMenuOpen ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
+			.Visibility_Lambda([this]() { return St.bHideGauges || St.bMenuOpen || (St.bPlane && FSmvUiPrefs::Get().bCockpit) ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
 			[
 				Gauges()
 			]
@@ -474,8 +479,27 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 				BottomBar()
 			]
 		]
-		// uçuş modu seçici (alt bandın üstünde)
+		// kokpit gösterge paneli (sabit kanat / VTOL; kadranların yerine)
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0.f, 0.f, 0.f, 70.f)
+		[
+			SNew(SBox)
+			.Visibility_Lambda([this]() { return St.bPlane && FSmvUiPrefs::Get().bCockpit && !St.bMenuOpen && !St.bHideGauges ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+			[
+				Cockpit()
+			]
+		]
+		// giriş sekansı 3-2-1
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 110.f, 0.f, 0.f)
+		[
+			Intro()
+		]
+		// ilk uçuş ipuçları
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 14.f, 0.f, 0.f)
+		[
+			Tips()
+		]
+		// uçuş modu radyal tekerleği (ortada)
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
 		[
 			SNew(SBox)
 			.Visibility_Lambda([this]() { return bModeMenu && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })
@@ -494,7 +518,25 @@ void SSmvFlightUi::Act(const FString& Name, const FString& Arg)
 void SSmvFlightUi::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
 {
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
-	if (BuiltModeKind != St.ModeKind || BuiltModeNum != St.Modes.Num()) RebuildModeGrid();
+	// dönüş hızı (derece/sn; kokpit dönüş göstergesi) — yön farkından, yumuşatılmış
+	if (InDeltaTime > 0.f)
+	{
+		if (!bHdgInit) { PrevHdg = St.Heading; bHdgInit = true; }
+		float D = St.Heading - PrevHdg;
+		if (D > 180.f) D -= 360.f; else if (D < -180.f) D += 360.f;
+		PrevHdg = St.Heading;
+		TurnRate = FMath::Lerp(TurnRate, FMath::Clamp(D / InDeltaTime, -30.f, 30.f), FMath::Clamp(InDeltaTime * 3.f, 0.f, 1.f));
+	}
+	// giriş sekansı bipleri (3, 2, 1, BAŞLA)
+	if (St.bIntroAllowed && St.bTele && St.FlightS < 4.5)
+	{
+		const int32 Sec = St.FlightS < 1.0 ? 3 : St.FlightS < 2.0 ? 2 : St.FlightS < 3.0 ? 1 : St.FlightS < 3.7 ? 0 : -1;
+		if (Sec != LastIntroSec && Sec >= 0) Act(TEXT("IntroBeep"), Sec == 0 ? TEXT("go") : TEXT("count"));
+		LastIntroSec = Sec;
+	}
+	// ilk uçuş ipuçları (bir kez; 22 sn ya da kapatınca)
+	if (!bTips && !FSmvUiPrefs::Get().bFlightTipsDone && St.FlightS > 4.0) { bTips = true; TipsUntil = FPlatformTime::Seconds() + 22.0; }
+	if (bTips && FPlatformTime::Seconds() > TipsUntil) { bTips = false; FSmvUiPrefs::Get().bFlightTipsDone = true; FSmvUiPrefs::Get().Save(); }
 }
 
 TSharedRef<SWidget> SSmvFlightUi::Btn(TAttribute<FText> Label, TFunction<void()> OnClick, TFunction<FLinearColor()> Color, float MinW)
@@ -552,12 +594,12 @@ TSharedRef<SWidget> SSmvFlightUi::InfoCard()
 			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 5, 0)[Chip(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(St.Backend); }), []() { return Dim; })]
 			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 5, 0)[Chip(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(St.Mode.IsEmpty() ? TEXT("—") : St.Mode); }), []() { return Accent; })]
 			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 5, 0)[Chip(TAttribute<FText>::CreateLambda([this]()
-				{ return FText::FromString(St.bMotorCut ? TEXT("MOTOR KESİK") : St.bArmed ? TEXT("ARMED") : TEXT("DISARMED")); }),
+				{ return FText::FromString(St.bMotorCut ? Loc(TEXT("fui.motor_cut")) : St.bArmed ? FString(TEXT("ARMED")) : FString(TEXT("DISARMED"))); }),
 				[this]() { return St.bMotorCut ? Amber : St.bArmed ? Green : Dim; })]
 			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 5, 0)[Chip(TAttribute<FText>::CreateLambda([this]()
 				{
-					const TCHAR* Fx = St.GpsFix >= 6 ? TEXT("RTK") : St.GpsFix >= 3 ? TEXT("3D") : St.GpsFix == 2 ? TEXT("2D") : TEXT("YOK");
-					return FText::FromString(St.Sats >= 0 ? FString::Printf(TEXT("GPS %s · %d"), Fx, St.Sats) : FString::Printf(TEXT("GPS %s"), Fx));
+					const FString Fx = St.GpsFix >= 6 ? FString(TEXT("RTK")) : St.GpsFix >= 3 ? FString(TEXT("3D")) : St.GpsFix == 2 ? FString(TEXT("2D")) : Loc(TEXT("fui.gps_none"));
+					return FText::FromString(St.Sats >= 0 ? FString::Printf(TEXT("GPS %s · %d"), *Fx, St.Sats) : FString::Printf(TEXT("GPS %s"), *Fx));
 				}), [this]() { return St.GpsFix >= 3 ? Green : Amber; })]
 			+ SHorizontalBox::Slot().AutoWidth()[Chip(TAttribute<FText>::CreateLambda([this]()
 				{ const int32 T = (int32)St.FlightS; return FText::FromString(FString::Printf(TEXT("T+ %02d:%02d"), T / 60, T % 60)); }), []() { return Txt; })]
@@ -612,7 +654,7 @@ TSharedRef<SWidget> SSmvFlightUi::ConsoleBox()
 	return SNew(SVerticalBox)
 		+ SVerticalBox::Slot().AutoHeight().Padding(2, 0, 0, 4)
 		[
-			SNew(STextBlock).Text(FText::FromString(TEXT("HABERLEŞME"))).Font(Font(8, true)).ColorAndOpacity(Dim)
+			SNew(STextBlock).Text(FText::FromString(Loc(TEXT("fui.comms")))).Font(Font(8, true)).ColorAndOpacity(Dim)
 		]
 		+ SVerticalBox::Slot().AutoHeight()
 		[
@@ -630,20 +672,20 @@ TSharedRef<SWidget> SSmvFlightUi::DronePanel()
 	Pfd->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L) { SmvPaintPfd(G, Out, L, St); };
 	auto F1 = [](float V, const TCHAR* U) { return FString::Printf(TEXT("%.1f %s"), V, U); };
 	TSharedRef<SUniformGridPanel> Grid = SNew(SUniformGridPanel).SlotPadding(FMargin(2.f));
-	Grid->AddSlot(0, 0)[TeleTile(TEXT("İRTİFA"), [this, F1]() { return F1(St.AltRel, TEXT("m")); })];
-	Grid->AddSlot(1, 0)[TeleTile(TEXT("HIZ"), [this]() { return FString::Printf(TEXT("%.0f km/h"), St.Gs * 3.6f); })];
-	Grid->AddSlot(2, 0)[TeleTile(TEXT("DİKEY"), [this]() { return FString::Printf(TEXT("%+.1f m/s"), St.Climb); },
+	Grid->AddSlot(0, 0)[TeleTile(Loc(TEXT("fui.alt")), [this, F1]() { return F1(St.AltRel, TEXT("m")); })];
+	Grid->AddSlot(1, 0)[TeleTile(Loc(TEXT("fui.speed")), [this]() { return FString::Printf(TEXT("%.0f km/h"), St.Gs * 3.6f); })];
+	Grid->AddSlot(2, 0)[TeleTile(Loc(TEXT("fui.vs")), [this]() { return FString::Printf(TEXT("%+.1f m/s"), St.Climb); },
 		[this]() { return St.Climb < -4.f ? Amber : Txt; })];
-	Grid->AddSlot(3, 0)[TeleTile(TEXT("YÖN"), [this]() { return SmvFuiDraw::Pad3(St.Heading) + TEXT("°"); })];
-	Grid->AddSlot(0, 1)[TeleTile(TEXT("EVE"), [this]() { return St.bHasHome ? (St.DistHome >= 1000.f ? FString::Printf(TEXT("%.2f km"), St.DistHome / 1000.f) : FString::Printf(TEXT("%.0f m"), St.DistHome)) : FString(TEXT("—")); })];
-	Grid->AddSlot(1, 1)[TeleTile(TEXT("GPS"), [this]() { return St.Sats >= 0 ? FString::Printf(TEXT("%d uydu"), St.Sats) : FString(TEXT("—")); },
+	Grid->AddSlot(3, 0)[TeleTile(Loc(TEXT("fui.hdg")), [this]() { return SmvFuiDraw::Pad3(St.Heading) + TEXT("°"); })];
+	Grid->AddSlot(0, 1)[TeleTile(Loc(TEXT("fui.home")), [this]() { return St.bHasHome ? (St.DistHome >= 1000.f ? FString::Printf(TEXT("%.2f km"), St.DistHome / 1000.f) : FString::Printf(TEXT("%.0f m"), St.DistHome)) : FString(TEXT("—")); })];
+	Grid->AddSlot(1, 1)[TeleTile(TEXT("GPS"), [this]() { return St.Sats >= 0 ? FSmvI18n::Format(TEXT("fui.sats"), { { TEXT("n"), FString::FromInt(St.Sats) } }).ToString() : FString(TEXT("—")); },
 		[this]() { return St.GpsFix >= 3 ? Txt : Amber; })];
-	Grid->AddSlot(2, 1)[TeleTile(TEXT("BATARYA"), [this]()
+	Grid->AddSlot(2, 1)[TeleTile(Loc(TEXT("fui.batt")), [this]()
 		{
 			if (St.bElec) return FString::Printf(TEXT("%.0f%% %.1fV"), St.ElecPct, St.ElecV);
 			return St.BattPct >= 0 ? FString::Printf(TEXT("%.0f%% %.1fV"), St.BattPct, St.BattV) : (St.BattV > 0 ? FString::Printf(TEXT("%.1f V"), St.BattV) : FString(TEXT("—")));
 		}, [this]() { const float P = St.bElec ? St.ElecPct : St.BattPct; return P >= 0 && P < 25.f ? Red : Txt; })];
-	Grid->AddSlot(3, 1)[TeleTile(TEXT("GAZ"), [this]() { return FString::Printf(TEXT("%.0f%%"), St.Throttle); })];
+	Grid->AddSlot(3, 1)[TeleTile(Loc(TEXT("fui.thr")), [this]() { return FString::Printf(TEXT("%.0f%%"), St.Throttle); })];
 
 	return SNew(SBox).WidthOverride(372.f)
 	[
@@ -718,7 +760,7 @@ TSharedRef<SWidget> SSmvFlightUi::Gauges()
 		// YAKIT (küçük)
 		{
 			FSmvDial D;
-			D.Title = TEXT("YAKIT");
+			D.Title = Loc(TEXT("fui.fuel"));
 			D.bOn = St.bFuel;
 			D.Frac = St.FuelPct / 100.f;
 			D.RedA = 0.f; D.RedB = 0.2f;
@@ -732,7 +774,7 @@ TSharedRef<SWidget> SSmvFlightUi::Gauges()
 		// HIZ (büyük, km/h)
 		{
 			FSmvDial D;
-			D.Title = TEXT("HIZ");
+			D.Title = Loc(TEXT("fui.speed"));
 			const float Max = FMath::Max(20.f, FMath::CeilToFloat(St.MaxKmh * 1.25f / 20.f) * 20.f);
 			const float V = (St.bPlane && St.As > 0 ? St.As : St.Gs) * 3.6f;
 			D.Frac = V / Max;
@@ -747,27 +789,27 @@ TSharedRef<SWidget> SSmvFlightUi::Gauges()
 		// MOTOR (büyük, gaz %)
 		{
 			FSmvDial D;
-			D.Title = St.bMotorCut ? TEXT("MOTOR KESİK") : TEXT("MOTOR");
+			D.Title = St.bMotorCut ? Loc(TEXT("fui.motor_cut")) : Loc(TEXT("fui.motor"));
 			D.bOn = St.bArmed && !St.bMotorCut;
 			D.Frac = St.Throttle / 100.f;
 			D.RedA = 0.9f; D.RedB = 1.f;
 			D.Labels = Scale(100.f, 4);
 			D.Value = FString::Printf(TEXT("%.0f%%"), St.Throttle);
-			D.Sub = St.bArmed ? TEXT("GAZ") : TEXT("SAFE");
+			D.Sub = St.bArmed ? Loc(TEXT("fui.thr")) : FString(TEXT("SAFE"));
 			SmvPaintDial(G, Out, L, FVector2D(X + Big, Cy), Big, D, &CircleBrush);
 			X += 2 * Big + Gap;
 		}
 		// BATARYA (küçük)
 		{
 			FSmvDial D;
-			D.Title = TEXT("BATARYA");
+			D.Title = Loc(TEXT("fui.batt"));
 			const float P = St.bElec ? St.ElecPct : St.BattPct;
 			D.bOn = P >= 0.f;
 			D.Frac = P / 100.f;
 			D.RedA = 0.f; D.RedB = 0.25f;
 			D.Labels = { TEXT("0"), TEXT(""), TEXT("50"), TEXT(""), TEXT("100") };
 			D.Value = P >= 0.f ? FString::Printf(TEXT("%.0f%%"), P) : FString(TEXT("—"));
-			D.Sub = St.bElec ? (St.ElecMin >= 0 ? FString::Printf(TEXT("%.1fV %.0fdk"), St.ElecV, St.ElecMin) : FString::Printf(TEXT("%.1f V"), St.ElecV))
+			D.Sub = St.bElec ? (St.ElecMin >= 0 ? FString::Printf(TEXT("%.1fV %.0f%s"), St.ElecV, St.ElecMin, *Loc(TEXT("fui.min"))) : FString::Printf(TEXT("%.1f V"), St.ElecV))
 				: (St.BattV > 0 ? FString::Printf(TEXT("%.1f V"), St.BattV) : FString());
 			D.bDanger = P >= 0.f && P < 25.f;
 			SmvPaintDial(G, Out, L, FVector2D(X + Small, Cy + (Big - Small) * 0.4f), Small, D, &CircleBrush);
@@ -786,9 +828,14 @@ TSharedRef<SWidget> SSmvFlightUi::Sticks()
 		B->Painter = [this, Side, Active](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
 		{
 			FString Lx, Ly;
-			if (St.bRover) { Lx = Side == 0 ? FString() : TEXT("DİREKSİYON"); Ly = Side == 0 ? TEXT("GAZ") : FString(); }
-			else if (St.bStickMode2) { Lx = Side == 0 ? TEXT("YAW") : TEXT("ROLL"); Ly = Side == 0 ? TEXT("GAZ") : TEXT("PITCH"); }
-			else { Lx = Side == 0 ? TEXT("YAW") : TEXT("ROLL"); Ly = Side == 0 ? TEXT("PITCH") : TEXT("GAZ"); }
+			if (St.bRover) { Lx = Side == 0 ? FString() : Loc(TEXT("fui.steer")); Ly = Side == 0 ? SmvUi::AxisName(TEXT("thr")).ToString().ToUpper() : FString(); }
+			else
+			{
+				FString A[4];
+				SmvUi::StickMap(St.StickMode, A);
+				Lx = SmvUi::AxisName(A[Side * 2]).ToString().ToUpper();
+				Ly = SmvUi::AxisName(A[Side * 2 + 1]).ToString().ToUpper();
+			}
 			SmvPaintStick(G, Out, L, Side == 0 ? St.StickL : St.StickR, *Active, Lx, Ly, &CardBrush, &CircleBrush);
 		};
 		B->OnDrag = [this, Side, Active](const FGeometry& G, const FVector2D& P, int32 Phase)
@@ -835,7 +882,7 @@ TSharedRef<SWidget> SSmvFlightUi::Sticks()
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 				[
 					SNew(STextBlock).Font(Mono(7)).ColorAndOpacity(Dim)
-					.Text_Lambda([this]() { return FText::FromString(St.bThrUsed ? TEXT("W/S gaz · A/D yaw · oklar · Boşluk orta") : TEXT("gaz: dokunulmadı (W ile başla)")); })
+					.Text_Lambda([this]() { return FText::FromString(St.bThrUsed ? SmvUi::StickKeyHint(St.StickMode) + TEXT(" · ") + Loc(TEXT("fui.space_center")) : Loc(TEXT("fui.thr_untouched"))); })
 				]
 			]
 		];
@@ -896,9 +943,9 @@ TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 		[
 			Btn(TAttribute<FText>::CreateLambda([this]()
 				{
-					if (St.bMotorCut) return FText::FromString(TEXT("MOTOR VER"));
+					if (St.bMotorCut) return FText::FromString(Loc(TEXT("fui.motor_on")));
 					if (!St.bArmed) return FText::FromString(TEXT("ARM"));
-					return FText::FromString(St.bPlane && St.AltRel > 3.f ? TEXT("MOTOR KES") : TEXT("DISARM"));
+					return FText::FromString(St.bPlane && St.AltRel > 3.f ? Loc(TEXT("fui.motor_off")) : FString(TEXT("DISARM")));
 				}),
 				[this]() { Act(TEXT("ArmToggle")); },
 				[this]() { return St.bMotorCut ? Amber * 0.85f : St.bArmed ? Red * 0.85f : Green * 0.8f; }, 96.f)
@@ -907,12 +954,12 @@ TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 		[
 			SNew(SBox).Visibility_Lambda([this]() { return St.bRover ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })
 			[
-				Btn(FText::FromString(TEXT("Kalkış")), [this]() { Act(TEXT("Takeoff")); }, []() { return Blue * 0.8f; })
+				Btn(FText::FromString(Loc(TEXT("fui.takeoff"))), [this]() { Act(TEXT("Takeoff")); }, []() { return Blue * 0.8f; })
 			]
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
 		[
-			Btn(FText::FromString(TEXT("İniş")), [this]() { Act(TEXT("Land")); }, []() { return BtnGrey; })
+			Btn(FText::FromString(Loc(TEXT("fui.land"))), [this]() { Act(TEXT("Land")); }, []() { return BtnGrey; })
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
 		[
@@ -920,65 +967,327 @@ TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
 		[
-			Btn(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("MOD · %s"), St.Mode.IsEmpty() ? TEXT("—") : *St.Mode)); }),
-				[this]() { bModeMenu = !bModeMenu; }, [this]() { return bModeMenu ? Accent * 0.85f : BtnGrey; }, 150.f)
+			Btn(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("%s · %s"), *Loc(TEXT("fui.mode")), St.Mode.IsEmpty() ? TEXT("—") : *St.Mode)); }),
+				[this]() { ToggleModeMenu(); }, [this]() { return bModeMenu ? Accent * 0.85f : BtnGrey; }, 150.f)
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
 		[
-			Btn(FText::FromString(TEXT("Sıfırla")), [this]() { Act(TEXT("Reset")); }, []() { return BtnGrey; })
+			Btn(FText::FromString(Loc(TEXT("fui.reset"))), [this]() { Act(TEXT("Reset")); }, []() { return BtnGrey; })
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(10, 0, 3, 0)
 		[
-			Btn(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("Kamera · %s"), *St.CamLabel)); }),
+			Btn(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("%s · %s"), *Loc(TEXT("fui.camera")), *St.CamLabel)); }),
 				[this]() { Act(TEXT("CamCycle")); }, []() { return BtnGrey; }, 128.f)
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
 		[
-			Btn(FText::FromString(TEXT("Kumanda")), [this]() { bSticks = !bSticks; }, [bS]() { return *bS ? Accent * 0.75f : BtnGrey; })
+			Btn(FText::FromString(Loc(TEXT("fui.sticks"))), [this]() { bSticks = !bSticks; }, [bS]() { return *bS ? Accent * 0.75f : BtnGrey; })
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
 		[
-			Btn(FText::FromString(TEXT("Panel")), [this]() { bPanel = !bPanel; }, [bP]() { return *bP ? Accent * 0.75f : BtnGrey; })
+			Btn(FText::FromString(Loc(TEXT("fui.panel"))), [this]() { bPanel = !bPanel; }, [bP]() { return *bP ? Accent * 0.75f : BtnGrey; })
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
 		[
-			Btn(FText::FromString(TEXT("Menü")), [this]() { Act(TEXT("Pause")); }, []() { return BtnGrey; })
+			Btn(FText::FromString(Loc(TEXT("fui.menu"))), [this]() { Act(TEXT("Pause")); }, []() { return BtnGrey; })
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
+		[
+			SNew(SBox).Visibility_Lambda([this]() { return St.bPlane ? EVisibility::SelfHitTestInvisible : EVisibility::Collapsed; })
+			[
+				Btn(FText::FromString(Loc(TEXT("fui.cockpit"))), [this]() { ToggleCockpit(); }, []() { return FSmvUiPrefs::Get().bCockpit ? Accent * 0.75f : BtnGrey; })
+			]
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(3, 0)
+		[
+			Btn(FText::FromString(TEXT("?")), [this]() { Act(TEXT("Help")); }, []() { return BtnGrey; }, 34.f)
 		]
 	];
 }
 
 TSharedRef<SWidget> SSmvFlightUi::ModeMenu()
 {
-	using namespace SmvFuiTheme;
-	return SNew(SBorder).BorderImage(&CardBrush).Padding(FMargin(10.f, 8.f))
-	[
-		SNew(SVerticalBox)
-		+ SVerticalBox::Slot().AutoHeight().Padding(2, 0, 0, 6)
-		[
-			SNew(STextBlock).Text(FText::FromString(TEXT("UÇUŞ MODU  (F)"))).Font(Font(8, true)).ColorAndOpacity(Dim)
-		]
-		+ SVerticalBox::Slot().AutoHeight()
-		[
-			SAssignNew(ModeBox, SBox)
-		]
-	];
+	return SAssignNew(Radial, SSmvRadial)
+		.Radius(230.f)
+		.Items_Lambda([this]() { return St.Modes; })
+		.Current_Lambda([this]() { return St.Mode; })
+		.Title(FText::FromString(SmvFuiTheme::Loc(TEXT("fui.flight_mode"))))
+		.Stick([this]() { return St.PadRight; })
+		.OnPick([this](int32 I) { if (St.Modes.IsValidIndex(I)) Act(TEXT("Mode"), St.Modes[I]); bModeMenu = false; });
 }
 
-void SSmvFlightUi::RebuildModeGrid()
+void SSmvFlightUi::ToggleModeMenu()
+{
+	bModeMenu = !bModeMenu;
+	if (bModeMenu && Radial.IsValid()) Radial->ResetAnim();
+	FSmvUiSound::Play(bModeMenu ? ESmvSnd::Open : ESmvSnd::Back);
+}
+
+void SSmvFlightUi::ConfirmRadial()
+{
+	if (!bModeMenu) return;
+	if (!Radial.IsValid() || !Radial->Confirm()) { bModeMenu = false; FSmvUiSound::Play(ESmvSnd::Back); }
+}
+
+void SSmvFlightUi::ToggleCockpit()
+{
+	FSmvUiPrefs& P = FSmvUiPrefs::Get();
+	P.bCockpit = !P.bCockpit;
+	P.Save();
+	FSmvUiSound::Play(ESmvSnd::Toggle);
+}
+
+// ---------------------------------------------------------------------------
+// kokpit gösterge paneli — klasik "altılı" (hız · yapay ufuk · irtifa / dönüş · yön · dikey hız)
+// ---------------------------------------------------------------------------
+
+namespace
+{
+	void SmvBezel(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& C, float R, const FSlateBrush* Circle)
+	{
+		using namespace SmvFuiDraw;
+		DrRect(Out, L, G, C - FVector2D(R + 6.f, R + 6.f), FVector2D(2 * R + 12.f, 2 * R + 12.f), FLinearColor(0.10f, 0.11f, 0.13f, 0.95f), Circle);
+		DrRect(Out, L, G, C - FVector2D(R, R), FVector2D(2 * R, 2 * R), FLinearColor(0.015f, 0.017f, 0.02f, 1.f), Circle);
+		DrArc(Out, L + 1, G, C, R + 3.f, 0.f, 360.f, FLinearColor(0.55f, 0.58f, 0.62f, 0.8f), 1.5f);
+		for (const FVector2D& S : { FVector2D(-1, -1), FVector2D(1, -1), FVector2D(-1, 1), FVector2D(1, 1) })
+			DrRect(Out, L + 1, G, C + S * (R + 1.f) * 0.92f - FVector2D(2.5f, 2.5f), FVector2D(5.f, 5.f), FLinearColor(0.35f, 0.37f, 0.4f, 1.f), Circle);   // vida
+	}
+
+	void SmvNeedle(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& C, float AngDeg, float Len, float W, const FLinearColor& Col, const FSlateBrush* Circle)
+	{
+		using namespace SmvFuiDraw;
+		const float A = FMath::DegreesToRadians(AngDeg);
+		const FVector2D U(FMath::Cos(A), FMath::Sin(A));
+		DrSeg(Out, L, G, C - U * Len * 0.18f, C + U * Len, FLinearColor(0, 0, 0, 0.5f), W + 2.f);
+		DrSeg(Out, L + 1, G, C - U * Len * 0.18f, C + U * Len, Col, W);
+		DrRect(Out, L + 2, G, C - FVector2D(5, 5), FVector2D(10, 10), FLinearColor(0.2f, 0.2f, 0.22f, 1.f), Circle);
+	}
+
+	/** Kadran ölçeği: Ang0 başlangıç, Sweep süpürme (derece), N ana çentik, etiketler */
+	void SmvScale(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& C, float R, float Ang0, float Sweep, int32 N, int32 Minor, const TArray<FString>& Labels)
+	{
+		using namespace SmvFuiDraw;
+		using namespace SmvFuiTheme;
+		const FLinearColor W(0.95f, 0.95f, 0.95f, 1.f);
+		for (int32 i = 0; i <= N * Minor; ++i)
+		{
+			const float A = FMath::DegreesToRadians(Ang0 + Sweep * i / (N * Minor));
+			const FVector2D U(FMath::Cos(A), FMath::Sin(A));
+			const bool bMaj = i % Minor == 0;
+			DrSeg(Out, L, G, C + U * (R - 2.f), C + U * (R - (bMaj ? 11.f : 6.f)), W, bMaj ? 2.f : 1.f);
+			if (bMaj && Labels.IsValidIndex(i / Minor)) DrText(Out, L, G, Labels[i / Minor], C + U * (R - 21.f), Font(8, true), W, 0);
+		}
+	}
+}
+
+TSharedRef<SWidget> SSmvFlightUi::Cockpit()
+{
+	const float R = 60.f, Gap = 16.f;
+	const float W = 6 * (2 * R + 12.f) + 5 * Gap + 24.f, H = 2 * R + 12.f + 34.f;
+	TSharedRef<SSmvPaintBox> Box = SNew(SSmvPaintBox).Size(FVector2D(W, H));
+	Box->Painter = [this, R, Gap](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		using namespace SmvFuiDraw;
+		using namespace SmvFuiTheme;
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		DrRect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor(0.035f, 0.04f, 0.05f, 0.88f), &CardBrush);
+		const FLinearColor Wt(0.95f, 0.95f, 0.95f, 1.f), Org(1.f, 0.55f, 0.1f, 1.f);
+		const float Cy = R + 6.f + 10.f;
+		float X = 12.f + R + 6.f;
+		auto Next = [&X, R, Gap]() { const float C = X; X += 2 * R + 12.f + Gap; return C; };
+		auto Caption = [&](float Cx, const FString& T) { DrText(Out, L + 9, G, T, FVector2D(Cx, Sz.Y - 12.f), Font(7, true), Dim, 0); };
+		// 1) hava hızı (km/h)
+		{
+			const FVector2D C(Next(), Cy);
+			SmvBezel(Out, L + 1, G, C, R, &CircleBrush);
+			const float Max = FMath::Max(60.f, FMath::CeilToFloat(St.MaxKmh * 1.3f / 20.f) * 20.f);
+			const float A0 = -90.f, Sw = 320.f;
+			auto Ang = [A0, Sw, Max](float V) { return A0 + Sw * FMath::Clamp(V / Max, 0.f, 1.f); };
+			DrArc(Out, L + 2, G, C, R - 4.f, Ang(Max * 0.25f), Ang(St.MaxKmh * 0.85f), Green, 4.f);
+			DrArc(Out, L + 2, G, C, R - 4.f, Ang(St.MaxKmh * 0.85f), Ang(St.MaxKmh), Amber, 4.f);
+			const float Ra = FMath::DegreesToRadians(Ang(St.MaxKmh));
+			DrSeg(Out, L + 2, G, C + FVector2D(FMath::Cos(Ra), FMath::Sin(Ra)) * (R - 2.f), C + FVector2D(FMath::Cos(Ra), FMath::Sin(Ra)) * (R - 14.f), Red, 3.f);
+			TArray<FString> Lb;
+			for (int32 i = 0; i <= 8; ++i) Lb.Add(FString::Printf(TEXT("%.0f"), Max * i / 8));
+			SmvScale(Out, L + 3, G, C, R, A0, Sw, 8, 2, Lb);
+			DrText(Out, L + 3, G, TEXT("KM/H"), C + FVector2D(0, R * 0.35f), Font(7, true), Dim, 0);
+			SmvNeedle(Out, L + 4, G, C, Ang((St.As > 0 ? St.As : St.Gs) * 3.6f), R - 8.f, 3.f, Wt, &CircleBrush);
+			Caption((float)C.X, Loc(TEXT("fui.ck_asi")));
+		}
+		// 2) yapay ufuk
+		{
+			const FVector2D C(Next(), Cy);
+			SmvBezel(Out, L + 1, G, C, R, &CircleBrush);
+			const float Ri = R - 3.f;
+			const FLinearColor Sky(0.16f, 0.45f, 0.82f, 1.f), Gnd(0.47f, 0.30f, 0.14f, 1.f);
+			DrRect(Out, L + 2, G, C - FVector2D(Ri, Ri), FVector2D(2 * Ri, 2 * Ri), Sky, &CircleBrush);
+			const float Ppd = Ri / 30.f;
+			const FVector2D N = DrRot(FVector2D(0, 1), -St.Roll);
+			const FVector2D H0 = C + DrRot(FVector2D(0, FMath::RadiansToDegrees(St.Pitch) * Ppd), -St.Roll);
+			for (float y = -Ri; y < Ri; y += 2.f)
+			{
+				const float Yc = (float)C.Y + y + 1.f;
+				const float Hw = FMath::Sqrt(FMath::Max(0.f, Ri * Ri - (y + 1.f) * (y + 1.f)));
+				float X0 = (float)C.X - Hw, X1 = (float)C.X + Hw;
+				if (FMath::Abs(N.X) < 1e-4) { if ((Yc - H0.Y) * N.Y <= 0.f) continue; }
+				else
+				{
+					const float Xs = (float)(H0.X - (Yc - H0.Y) * N.Y / N.X);
+					if (N.X > 0) X0 = FMath::Max(X0, Xs); else X1 = FMath::Min(X1, Xs);
+					if (X1 <= X0) continue;
+				}
+				DrSeg(Out, L + 3, G, FVector2D(X0, Yc), FVector2D(X1, Yc), Gnd, 2.6f);
+			}
+			const FVector2D Dir = DrRot(FVector2D(1, 0), -St.Roll);
+			const float Hl = FMath::Sqrt(FMath::Max(0.f, Ri * Ri - (float)(H0 - C).SizeSquared()));
+			if (Hl > 0.f) DrSeg(Out, L + 4, G, H0 - Dir * Hl, H0 + Dir * Hl, Wt, 1.5f);
+			for (int32 Deg : { -20, -10, 10, 20 })
+			{
+				const float Off = (FMath::RadiansToDegrees(St.Pitch) - Deg) * Ppd;
+				if (FMath::Abs(Off) > Ri * 0.7f) continue;
+				const float Hw = Deg % 20 == 0 ? 16.f : 9.f;
+				DrSeg(Out, L + 4, G, C + DrRot(FVector2D(-Hw, Off), -St.Roll), C + DrRot(FVector2D(Hw, Off), -St.Roll), Wt, 1.2f);
+			}
+			DrArc(Out, L + 4, G, C, Ri - 6.f, -150.f, -30.f, Wt, 1.2f);
+			const float Pa = FMath::DegreesToRadians(-90.f) - St.Roll;
+			const FVector2D Up(FMath::Cos(Pa), FMath::Sin(Pa)), Tn(-Up.Y, Up.X);
+			const FVector2D Tip = C + Up * (Ri - 7.f);
+			DrPoly(Out, L + 5, G, { Tip, Tip - Up * 8.f + Tn * 5.f, Tip - Up * 8.f - Tn * 5.f, Tip }, Org, 2.f);
+			DrPoly(Out, L + 6, G, { C + FVector2D(-34, 0), C + FVector2D(-12, 0), C + FVector2D(-6, 6), C + FVector2D(0, 0), C + FVector2D(6, 6), C + FVector2D(12, 0), C + FVector2D(34, 0) }, Org, 3.f);
+			Caption((float)C.X, Loc(TEXT("fui.ck_att")));
+		}
+		// 3) altimetre (m; büyük ibre 100 m, küçük ibre 1000 m)
+		{
+			const FVector2D C(Next(), Cy);
+			SmvBezel(Out, L + 1, G, C, R, &CircleBrush);
+			TArray<FString> Lb;
+			for (int32 i = 0; i < 10; ++i) Lb.Add(FString::FromInt(i));
+			Lb.Add(FString());
+			SmvScale(Out, L + 3, G, C, R, -90.f, 360.f, 10, 5, Lb);
+			const float A = FMath::Max(0.f, St.AltRel);
+			DrRect(Out, L + 3, G, C + FVector2D(-22.f, R * 0.22f), FVector2D(44.f, 15.f), FLinearColor(0, 0, 0, 1), nullptr);
+			DrText(Out, L + 4, G, FString::Printf(TEXT("%05.0f"), A), C + FVector2D(0, R * 0.22f + 7.5f), Mono(8), Wt, 0);
+			SmvNeedle(Out, L + 5, G, C, -90.f + 360.f * FMath::Fmod(A / 1000.f, 1.f), R * 0.48f, 4.f, Wt, &CircleBrush);
+			SmvNeedle(Out, L + 6, G, C, -90.f + 360.f * FMath::Fmod(A / 100.f, 1.f), R - 9.f, 2.5f, Wt, &CircleBrush);
+			Caption((float)C.X, Loc(TEXT("fui.ck_alt")));
+		}
+		// 4) dönüş göstergesi (standart dönüş 3°/s → 15° yatış simgesi)
+		{
+			const FVector2D C(Next(), Cy);
+			SmvBezel(Out, L + 1, G, C, R, &CircleBrush);
+			for (float M : { -15.f, 0.f, 15.f })
+			{
+				const float A = FMath::DegreesToRadians(180.f + M), B = FMath::DegreesToRadians(-M);
+				DrSeg(Out, L + 3, G, C + FVector2D(FMath::Cos(A), FMath::Sin(A)) * (R - 4.f), C + FVector2D(FMath::Cos(A), FMath::Sin(A)) * (R - 14.f), Wt, 2.f);
+				DrSeg(Out, L + 3, G, C + FVector2D(FMath::Cos(B), FMath::Sin(B)) * (R - 4.f), C + FVector2D(FMath::Cos(B), FMath::Sin(B)) * (R - 14.f), Wt, 2.f);
+			}
+			DrText(Out, L + 3, G, TEXT("L"), C + FVector2D(-R + 18.f, 18.f), Font(8, true), Wt, 0);
+			DrText(Out, L + 3, G, TEXT("R"), C + FVector2D(R - 18.f, 18.f), Font(8, true), Wt, 0);
+			const float Bank = FMath::DegreesToRadians(FMath::Clamp(TurnRate / 3.f * 15.f, -40.f, 40.f));
+			auto P = [&C, Bank](float x, float y) { return C + DrRot(FVector2D(x, y), Bank); };
+			DrPoly(Out, L + 4, G, { P(-R + 16.f, 0), P(R - 16.f, 0) }, Wt, 3.f);
+			DrPoly(Out, L + 4, G, { P(0, -10), P(0, 8) }, Wt, 3.f);
+			DrPoly(Out, L + 4, G, { P(-10, 8), P(10, 8) }, Wt, 2.f);
+			DrRect(Out, L + 3, G, C + FVector2D(-26.f, R * 0.45f), FVector2D(52.f, 12.f), FLinearColor(0.15f, 0.15f, 0.12f, 1.f), &ChipBrush);
+			DrRect(Out, L + 4, G, C + FVector2D(-6.f, R * 0.45f), FVector2D(12.f, 12.f), FLinearColor(0.05f, 0.05f, 0.05f, 1.f), &CircleBrush);
+			DrText(Out, L + 4, G, FString::Printf(TEXT("%+.1f°/s"), TurnRate), C + FVector2D(0, -R * 0.42f), Mono(7), Dim, 0);
+			Caption((float)C.X, Loc(TEXT("fui.ck_turn")));
+		}
+		// 5) yön göstergesi (dönen pusula kartı)
+		{
+			const FVector2D C(Next(), Cy);
+			SmvBezel(Out, L + 1, G, C, R, &CircleBrush);
+			for (int32 d = 0; d < 360; d += 5)
+			{
+				const float A = FMath::DegreesToRadians(-90.f + d - St.Heading);
+				const FVector2D U(FMath::Cos(A), FMath::Sin(A));
+				const bool bMaj = d % 10 == 0;
+				DrSeg(Out, L + 3, G, C + U * (R - 3.f), C + U * (R - (bMaj ? 11.f : 6.f)), Wt, bMaj ? 1.6f : 1.f);
+				if (d % 30 == 0)
+				{
+					const FString Lb = d == 0 ? TEXT("N") : d == 90 ? TEXT("E") : d == 180 ? TEXT("S") : d == 270 ? TEXT("W") : FString::FromInt(d / 10);
+					DrText(Out, L + 3, G, Lb, C + U * (R - 21.f), Font(d % 90 == 0 ? 9 : 7, true), d == 0 ? Org : Wt, 0);
+				}
+			}
+			DrPoly(Out, L + 5, G, { C + FVector2D(0, -R + 2.f), C + FVector2D(-5, -R + 12.f), C + FVector2D(5, -R + 12.f), C + FVector2D(0, -R + 2.f) }, Org, 2.f);
+			DrPoly(Out, L + 5, G, { C + FVector2D(0, -16), C + FVector2D(0, 16) }, Org, 3.f);
+			DrPoly(Out, L + 5, G, { C + FVector2D(-15, -2), C + FVector2D(15, -2) }, Org, 3.f);
+			DrPoly(Out, L + 5, G, { C + FVector2D(-7, 13), C + FVector2D(7, 13) }, Org, 2.f);
+			Caption((float)C.X, Loc(TEXT("fui.ck_hdg")));
+		}
+		// 6) dikey hız (m/s; 0 sol yatay)
+		{
+			const FVector2D C(Next(), Cy);
+			SmvBezel(Out, L + 1, G, C, R, &CircleBrush);
+			auto Ang = [](float V) { return 180.f + FMath::Clamp(V / 10.f, -1.f, 1.f) * 170.f; };
+			for (int32 v = -10; v <= 10; ++v)
+			{
+				const float A = FMath::DegreesToRadians(Ang((float)v));
+				const FVector2D U(FMath::Cos(A), FMath::Sin(A));
+				const bool bMaj = v % 5 == 0;
+				DrSeg(Out, L + 3, G, C + U * (R - 3.f), C + U * (R - (bMaj ? 11.f : 6.f)), Wt, bMaj ? 2.f : 1.f);
+				if (bMaj) DrText(Out, L + 3, G, FString::FromInt(FMath::Abs(v)), C + U * (R - 21.f), Font(8, true), Wt, 0);
+			}
+			DrText(Out, L + 3, G, TEXT("UP"), C + FVector2D(-R * 0.35f, -R * 0.3f), Font(6, true), Dim, 0);
+			DrText(Out, L + 3, G, TEXT("DN"), C + FVector2D(-R * 0.35f, R * 0.3f), Font(6, true), Dim, 0);
+			DrText(Out, L + 3, G, TEXT("M/S"), C + FVector2D(R * 0.3f, 0), Font(7, true), Dim, 0);
+			SmvNeedle(Out, L + 4, G, C, Ang(-St.Climb), R - 8.f, 3.f, Wt, &CircleBrush);
+			Caption((float)C.X, Loc(TEXT("fui.ck_vsi")));
+		}
+	};
+	return Box;
+}
+
+// ---------------------------------------------------------------------------
+// giriş sekansı 3-2-1-BAŞLA ve ilk uçuş ipuçları
+// ---------------------------------------------------------------------------
+
+TSharedRef<SWidget> SSmvFlightUi::Intro()
+{
+	TSharedRef<SSmvPaintBox> Box = SNew(SSmvPaintBox).Size(FVector2D(360.f, 230.f)).Visibility(EVisibility::HitTestInvisible);
+	Box->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		using namespace SmvFuiDraw;
+		using namespace SmvFuiTheme;
+		if (!St.bIntroAllowed || !St.bTele || St.FlightS > 3.7 || St.bMenuOpen) return;
+		const float T = (float)St.FlightS;
+		const int32 Sec = T < 1.f ? 3 : T < 2.f ? 2 : T < 3.f ? 1 : 0;
+		const float K = Sec > 0 ? FMath::Fmod(T, 1.f) : (T - 3.f) / 0.7f;
+		const FVector2D C(G.GetLocalSize().X * 0.5f, 92.f);
+		const float Pop = 1.f - FMath::Pow(1.f - FMath::Clamp(K * 4.f, 0.f, 1.f), 3.f);
+		const float A = Sec > 0 ? 1.f - FMath::Max(0.f, K - 0.75f) * 4.f : 1.f - K;
+		SmvUi::DrGlow(Out, L, G, C, 90.f * Pop, Accent.CopyWithNewOpacity(0.35f * A));
+		DrArc(Out, L + 1, G, C, 70.f, 0.f, 360.f, FLinearColor(1, 1, 1, 0.15f * A), 3.f);
+		DrArc(Out, L + 2, G, C, 70.f, -90.f, -90.f + 360.f * FMath::Clamp(T / 3.f, 0.f, 1.f), Accent.CopyWithNewOpacity(A), 4.f);
+		const FString S = Sec > 0 ? FString::FromInt(Sec) : Loc(TEXT("fui.go"));
+		DrText(Out, L + 3, G, S, C, Font(Sec > 0 ? 64 : 34, true), (Sec > 0 ? FLinearColor::White : Green).CopyWithNewOpacity(A * Pop), 0);
+		DrText(Out, L + 3, G, St.TrackName, C + FVector2D(0, 100.f), Font(12, true), Dim.CopyWithNewOpacity(A), 0);
+	};
+	return Box;
+}
+
+TSharedRef<SWidget> SSmvFlightUi::Tips()
 {
 	using namespace SmvFuiTheme;
-	BuiltModeKind = St.ModeKind;
-	BuiltModeNum = St.Modes.Num();
-	if (!ModeBox.IsValid()) return;
-	TSharedRef<SUniformGridPanel> G = SNew(SUniformGridPanel).SlotPadding(FMargin(3.f)).MinDesiredSlotWidth(108.f);
-	for (int32 i = 0; i < St.Modes.Num(); ++i)
-	{
-		const FString M = St.Modes[i];
-		G->AddSlot(i % 4, i / 4)
+	auto K = [](const TCHAR* Action) { return SmvUi::KeyLabel(FSmvUiPrefs::Get().KeyFor(FName(Action), false)); };
+	const FString Line = FSmvI18n::Format(TEXT("fui.tips"), {
+		{ TEXT("arm"), K(TEXT("ArmToggle")) }, { TEXT("takeoff"), K(TEXT("Takeoff")) }, { TEXT("mode"), K(TEXT("ModeMenu")) },
+		{ TEXT("cam"), K(TEXT("CamCycle")) }, { TEXT("help"), K(TEXT("Help")) } }).ToString();
+	return SNew(SBorder).BorderImage(&CardBrush).Padding(FMargin(16.f, 10.f))
+		.Visibility_Lambda([this]() { return bTips && !St.bMenuOpen ? EVisibility::SelfHitTestInvisible : EVisibility::Collapsed; })
 		[
-			Btn(FText::FromString(M), [this, M]() { Act(TEXT("Mode"), M); bModeMenu = false; },
-				[this, M]() { return St.Mode == M ? Accent * 0.85f : BtnGrey; })
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 12, 0)[SmvUi::Icon(ESmvIcon::Info, 22.f, Accent)]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(Loc(TEXT("fui.tips_title")))).Font(Font(10, true)).ColorAndOpacity(Accent)]
+				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(Line)).Font(Font(10)).ColorAndOpacity(Txt)]
+				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(SmvUi::StickKeyHint(St.StickMode))).Font(Mono(8)).ColorAndOpacity(Dim)]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0, 0, 0)
+			[
+				Btn(FText::FromString(TEXT("×")), [this]() { bTips = false; FSmvUiPrefs::Get().bFlightTipsDone = true; FSmvUiPrefs::Get().Save(); }, []() { return BtnGrey; }, 30.f)
+			]
 		];
-	}
-	ModeBox->SetContent(G);
 }

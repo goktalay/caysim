@@ -23,6 +23,8 @@ class USmvHudOverlay;
 class USmvFlow;
 class USmvFlightLink;
 class USmvToneSynth;
+class USmvMusicSynth;
+class ASmvMenuScene;
 class SSmvShell;
 class SWidget;
 namespace SmvCore { class FGpws; class FRingTracker; class FDogfight; class FBotPilot; struct FRing; }
@@ -44,8 +46,12 @@ public:
 	void Command(const FString& Name, TSharedPtr<FJsonObject> Params = nullptr);
 	ASmvPilotPawn* GetPilot() const;
 	FString MissionPlannerLine() const;
-	/** Uçuş arayüzü düğmeleri (SSmvFlightUi): Mode{arg}, CamCycle ya da pilot eylem adları (ArmToggle, Takeoff, Rtl, Land, Reset, Pause …). */
+	/** Uçuş arayüzü düğmeleri (SSmvFlightUi): Mode{arg}, CamCycle, IntroBeep{count|go}, Help ya da pilot eylem adları (ArmToggle, Takeoff, Rtl, Land, Reset, Pause …). */
 	void UiAction(const FString& Name, const FString& Arg = FString());
+	/** Menü 3B sahnesi (uçuşta yok) */
+	ASmvMenuScene* GetMenuScene() const { return MenuScene; }
+	/** Arayüz tercihlerini uygula: ses mikseri (arayüz / müzik / uyarı / motor), kumanda modu, tuş atamaları, hareket azaltma */
+	void ApplyUiPrefs();
 
 protected:
 	UPROPERTY() TObjectPtr<ACaySimWorldSetup> WorldSetup;
@@ -78,6 +84,12 @@ protected:
 	UPROPERTY() TObjectPtr<USmvHudOverlay> Overlay;
 	UPROPERTY() TObjectPtr<USmvToneSynth> Tones;
 	UPROPERTY() TObjectPtr<AActor> ToneHost;
+	/** Arayüz sesleri (ayrı kazanç) ve menü müziği (sentez) */
+	UPROPERTY() TObjectPtr<USmvToneSynth> UiTones;
+	UPROPERTY() TObjectPtr<USmvMusicSynth> Music;
+	UPROPERTY() TObjectPtr<ASmvMenuScene> MenuScene;
+	void UpdateMenuScene(ESmvScreen Screen);
+	void UpdateMusic(ESmvScreen Screen);
 
 private:
 	TWeakObjectPtr<USmvFlow> Flow;

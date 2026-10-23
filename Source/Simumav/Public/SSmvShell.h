@@ -1,12 +1,19 @@
-// Simumav arayüz kabuğu — tüm menü ekranları KODLA kurulur (Slate; UMG/.uasset gerekmez). USmvFlow ekranına göre içerik yeniden kurulur;
+// Simumav arayüz kabuğu — tüm menü ekranları KODLA kurulur (Slate; UMG/.uasset gerekmez), görsel dil SmvUiKit (SIMUMAV web teması:
+// koyu cam kartlar, neon mavi vurgular, animasyonlu arka plan + arkada canlı 3B menü sahnesi). USmvFlow ekranına göre içerik yeniden kurulur;
 // düzenleme alanları yerel tampon yapılara yazar (yazarken yeniden kurulmaz → odak kaybolmaz).
+// Gezinme: fare, klavye (oklar / Enter / Esc / Q-E sekme), gamepad (sol çubuk-yön tuşları / A / B / LB-RB); F1 kısayol yardımı.
+// Ekranlar: Hoş geldin · Giriş · Ana menü · Hangar (3B önizleme) · Mürettebat (pilot oluşturucu) · Parkurlar · Görevler · Uç (adımlı:
+// araç → harita → ortam → kumanda → görev/kurallar → gelişmiş → özet) · Yükleniyor · Duraklatma · Uçuş özeti · Karşılaşma · TOP 10 ·
+// Kayıtlar · Ayarlar (sekmeli: genel, görüntü, ses, kumanda, tuşlar, uyarılar, bağlantı) · Hesap. İlk açılışta kısa tanıtım.
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 #include "SimumavTypes.h"
 #include "SmvFlow.h"
+#include "SmvUiKit.h"
 #include "Styling/SlateBrush.h"
+#include "Styling/SlateTypes.h"
 
 class ASmvGameMode;
 class SBox;
@@ -24,19 +31,36 @@ public:
 	/** Ekran değişti / veri değişti: içerik yeniden kurulur. */
 	void Refresh();
 	void ShowToast(const FString& Text, int32 Severity);
+	/** Kısayol yardımı (F1) aç/kapa */
+	void ToggleHelp();
+	bool IsOverlayOpen() const { return bOverlay; }
 
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
+	virtual FReply OnKeyDown(const FGeometry& G, const FKeyEvent& E) override;
+	virtual FNavigationReply OnNavigation(const FGeometry& G, const FNavigationEvent& E) override;
+	virtual FReply OnMouseMove(const FGeometry& G, const FPointerEvent& E) override;
 
 private:
 	TWeakObjectPtr<USmvFlow> Flow;
 	TWeakObjectPtr<ASmvGameMode> GameMode;
 	TSharedPtr<SBox> Content;
-	TSharedPtr<SBox> ToastBox;
-	FSlateBrush ToastBrush;
-	FString ToastText; int32 ToastSev = 6; double ToastUntil = 0;
+	TSharedPtr<SBox> BackdropBox;
+	TSharedPtr<SVerticalBox> ToastStack;
+	TSharedPtr<SBox> OverlayBox;
+	TSharedPtr<SWidget> DefaultFocus;
+	FSlateBrush PreviewBrush;
+	FEditableTextBoxStyle TextStyle;
 	ESmvScreen Built = ESmvScreen::Welcome;
 	bool bBuiltPause = false;
 	bool bDirty = true;
+	bool bOverlay = false;
+	bool bWantFocus = true;
+	bool bPreviewVisible = false;
+
+	struct FToast { FString Text; int32 Sev = 6; double At = 0; };
+	TArray<FToast> Toasts;
+	int32 ToastsBuilt = -1;
+	void RebuildToasts();
 
 	// düzenleme tamponları
 	FString LoginEmail, LoginPassword;
@@ -46,8 +70,13 @@ private:
 	int32 MatchBots = 3, MatchMax = 4;
 	int32 ServoCh = 9, ServoPwm = 1900, ServoDelay = 0; FString ServoCmp = TEXT("ge");
 	int32 TargetCount = 0; FString TargetModel = TEXT("tgt:sw300"); float TargetAlt = 120, TargetDia = 800, TargetSpeed = 28;
-	TArray<TSharedPtr<TArray<TSharedPtr<FString>>>> ComboStores;
-	TArray<TSharedPtr<TArray<TSharedPtr<FString>>>> PrevStores;
+	int32 WizStep = 0;
+	int32 SetTab = 0;
+	bool bPauseAdvanced = false;
+	/** Sekme / adım değiştirme (Q/E, LB/RB) — o ekran tanımlar */
+	TFunction<void(int32)> TabStep;
+	// seçici tamponları (sihirbaz)
+	FString WizDroneId, WizPilotId, WizTrackId, WizMissionId, WizBackend, WizSpeed, WizStickMode, WizDevice;
 
 	// ekranlar
 	TSharedRef<SWidget> BuildScreen(ESmvScreen S);
@@ -68,21 +97,63 @@ private:
 	TSharedRef<SWidget> Settings();
 	TSharedRef<SWidget> Account();
 
+	// sihirbaz adımları
+	TSharedRef<SWidget> WizVehicle();
+	TSharedRef<SWidget> WizMap();
+	TSharedRef<SWidget> WizEnv();
+	TSharedRef<SWidget> WizControl();
+	TSharedRef<SWidget> WizRules();
+	TSharedRef<SWidget> WizAdvanced();
+	TSharedRef<SWidget> WizSummary();
+	void StartFromWizard();
+
+	// ayar sekmeleri
+	TSharedRef<SWidget> SetGeneral();
+	TSharedRef<SWidget> SetDisplay();
+	TSharedRef<SWidget> SetAudio();
+	TSharedRef<SWidget> SetControls();
+	TSharedRef<SWidget> SetKeys();
+	TSharedRef<SWidget> SetAlerts();
+	TSharedRef<SWidget> SetLink();
+
 	// yardımcılar
-	TSharedRef<SWidget> Page(const FText& Title, TSharedRef<SWidget> Body, bool bBack = true);
-	TSharedRef<SWidget> Panel(TSharedRef<SWidget> Inner, float Padding = 16.f);
-	TSharedRef<SWidget> Btn(const FText& InLabel, TFunction<void()> OnClick, bool bPrimary = false, TAttribute<bool> Enabled = true);
-	TSharedRef<SWidget> Label(const FText& T, int32 Size = 12, bool bBold = false, const FLinearColor& Color = FLinearColor(0.85f, 0.9f, 0.95f));
-	TSharedRef<SWidget> Field(const FText& Name, TSharedRef<SWidget> Editor);
-	TSharedRef<SWidget> TextEdit(FString* Target, bool bPassword = false, const FText& Hint = FText::GetEmpty());
-	TSharedRef<SWidget> NumEdit(double* Target, double Min, double Max, double Step = 1.0);
-	TSharedRef<SWidget> IntEdit(int32* Target, int32 Min, int32 Max);
-	TSharedRef<SWidget> Check(bool* Target);
-	/** Seçenek kutusu: değerler + görünen etiketler; Target'a değer yazar, OnPick (isteğe bağlı) sonra çağrılır. */
-	TSharedRef<SWidget> Combo(FString* Target, const TArray<FString>& Values, const TArray<FText>& Labels, TFunction<void()> OnPick = nullptr);
-	TSharedRef<SWidget> ColorEdit(FString* Hex);
+	TSharedRef<SWidget> Page(const FText& Title, const FText& Sub, ESmvIcon Icon, TSharedRef<SWidget> Body, bool bBack = true, bool bScroll = true, bool bTabs = false);
+	TSharedRef<SWidget> Btn(const FText& InLabel, TFunction<void()> OnClick, bool bPrimary = false, TAttribute<bool> Enabled = true, ESmvIcon Icon = ESmvIcon::None);
+	TSharedRef<SWidget> TextEdit(FString* Target, bool bPassword = false, const FText& Hint = FText::GetEmpty(), float MinW = 300.f);
+	TSharedRef<SWidget> Spin(double* Target, double Min, double Max, double Step = 1.0);
+	TSharedRef<SWidget> Slider(double* Target, double Min, double Max, double Step, TFunction<FString(double)> Fmt = nullptr, TFunction<void()> After = nullptr);
+	TSharedRef<SWidget> SliderF(float* Target, float Min, float Max, float Step, TFunction<FString(double)> Fmt = nullptr, TFunction<void()> After = nullptr);
+	TSharedRef<SWidget> SliderI(int32* Target, int32 Min, int32 Max, int32 Step = 1, TFunction<FString(double)> Fmt = nullptr, TFunction<void()> After = nullptr);
+	TSharedRef<SWidget> Toggle(bool* Target, TFunction<void()> After = nullptr);
+	/** Seçici: değerler + görünen etiketler (‹ › döngü) */
+	TSharedRef<SWidget> Cycle(FString* Target, const TArray<FString>& Values, const TArray<FText>& Labels, TFunction<void()> OnPick = nullptr, float Width = 300.f);
+	/** Çip grubu (tek seçim; simgeli) */
+	TSharedRef<SWidget> Chips(FString* Target, const TArray<FString>& Values, const TArray<FText>& Labels, const TArray<ESmvIcon>& Icons, TFunction<void()> OnPick = nullptr, int32 PerRow = 6);
+	TSharedRef<SWidget> ColorPick(FString* Hex, TFunction<void()> After = nullptr);
+	/** Kart listesi öğesi (sol sütun) */
+	TSharedRef<SWidget> ListItem(const FText& Title, const FText& Sub, ESmvIcon Icon, bool bSelected, bool bDefault, TFunction<void()> OnClick, const FLinearColor& Accent);
+	/** Sekme şeridi */
+	TSharedRef<SWidget> Tabs(const TArray<FText>& Labels, const TArray<ESmvIcon>& Icons, int32* Index);
+	/** 3B önizleme kartı (yoksa çizilmiş siluet) */
+	TSharedRef<SWidget> PreviewCard(const FString& Type, const FString& Model, const FString& Color, float W, float H);
+	/** Pilot portresi (avatar renkleri) */
+	TSharedRef<SWidget> Portrait(const FSmvAvatar* Av, float Size);
+	/** Harita önizleme çizimi (tohumlu topoğrafya) */
+	TSharedRef<SWidget> MapThumb(const FString& Seed, const FString& Mode, float W, float H);
+	TSharedRef<SWidget> StatBar(const FText& Label, float V01, const FLinearColor& C);
+	TSharedRef<SWidget> HintFooter(bool bBack = true, bool bTabs = false);
+	TSharedRef<SWidget> AccountChip();
 	void Toast(const FString& T, int32 Sev = 6);
+	void SaveSettingsQuiet();
+	void OpenTutorial();
+	void CloseOverlay();
+	void FocusDefault();
 	class USmvDataService* Data() const;
 	class USimumavClient* Client() const;
+	class ASmvMenuScene* Scene() const;
 	static FText Tx(const TCHAR* Key);
+public:
+	/** Bayram / mevsim teması (tarih tabanlı TR takvimi; yoksa boş) */
+	static FString SeasonId();
+	static FLinearColor SeasonColor(const FString& Id);
 };

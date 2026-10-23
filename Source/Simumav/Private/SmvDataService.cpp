@@ -278,6 +278,7 @@ void USmvDataService::LoadSettingsLocal()
 	S.MpUdpPort = (int32)SmvJson::Num(O, TEXT("mp_udp_port"), S.MpUdpPort);
 	S.InputDevice = SmvJson::Str(O, TEXT("input_device"), S.InputDevice);
 	S.bStickMode2 = SmvJson::Bool(O, TEXT("stick_mode2"), S.bStickMode2);
+	S.StickMode = FMath::Clamp((int32)SmvJson::Num(O, TEXT("stick_mode"), S.bStickMode2 ? 2 : 1), 1, 4);
 	S.StickExpo = SmvJson::Num(O, TEXT("stick_expo"), S.StickExpo);
 	FSmvSecrets::Load(TEXT("cesium_token"), S.CesiumToken);   // belirteç düz dosyada tutulmaz
 	S.bAlertTones = SmvJson::Bool(O, TEXT("alert_tones"), S.bAlertTones);
@@ -303,6 +304,7 @@ void USmvDataService::SaveSettingsLocalOnly() const
 	O->SetNumberField(TEXT("mp_udp_port"), S.MpUdpPort);
 	O->SetStringField(TEXT("input_device"), S.InputDevice);
 	O->SetBoolField(TEXT("stick_mode2"), S.bStickMode2);
+	O->SetNumberField(TEXT("stick_mode"), S.StickMode);
 	O->SetNumberField(TEXT("stick_expo"), S.StickExpo);
 	if (S.CesiumToken.IsEmpty()) FSmvSecrets::Delete(TEXT("cesium_token")); else FSmvSecrets::Save(TEXT("cesium_token"), S.CesiumToken);
 	O->SetBoolField(TEXT("alert_tones"), S.bAlertTones);

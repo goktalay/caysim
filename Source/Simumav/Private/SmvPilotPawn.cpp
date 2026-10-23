@@ -15,6 +15,8 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/World.h"
 #include "CollisionQueryParams.h"
+#include "SmvUiPrefs.h"
+#include "SmvI18n.h"
 
 ASmvPilotPawn::ASmvPilotPawn()
 {
@@ -78,7 +80,10 @@ void ASmvPilotPawn::MapKey(FName Action, const FKey& Key, bool bNegate, bool bSw
 {
 	UInputAction* A = Actions.FindRef(Action);
 	if (!A || !Imc) return;
-	FEnhancedActionKeyMapping& M = Imc->MapKey(A, Key);
+	// kullanıcı tuş ataması (Ayarlar → Tuşlar): varsayılan tuş yerine atanmış olanı
+	const FKey Bound = FSmvUiPrefs::Get().Resolve(Action, Key);
+	if (!Bound.IsValid()) return;
+	FEnhancedActionKeyMapping& M = Imc->MapKey(A, Bound);
 	if (bSwizzle)
 	{
 		UInputModifierSwizzleAxis* S = NewObject<UInputModifierSwizzleAxis>(Imc);
@@ -100,8 +105,31 @@ void ASmvPilotPawn::BuildInput()
 	const FName Btn[] = { TEXT("Arm"), TEXT("ArmToggle"), TEXT("Takeoff"), TEXT("Rtl"), TEXT("Land"), TEXT("Lock"), TEXT("Ack"), TEXT("Pause"), TEXT("Reset"),
 		TEXT("CamCycle"), TEXT("CamType"), TEXT("Hud"), TEXT("Pip"), TEXT("Panel"), TEXT("Sticks"), TEXT("ModeMenu"), TEXT("SpeedUp"), TEXT("SpeedDown"),
 		TEXT("Mode1"), TEXT("Mode2"), TEXT("Mode3"), TEXT("MotorCut"), TEXT("GimbalUp"), TEXT("GimbalDown"),
-		TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7"), TEXT("Ch5Up"), TEXT("Ch5Down"), TEXT("ThrCenter") };
+		TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7"), TEXT("Ch5Up"), TEXT("Ch5Down"), TEXT("ThrCenter"),
+		TEXT("Help"), TEXT("Cockpit") };
 	for (const FName& B : Btn) MakeAction(B, 0);
+	MapAllKeys();
+}
+
+void ASmvPilotPawn::RemapKeys()
+{
+	if (!Imc) return;
+	Imc->UnmapAll();
+	MapAllKeys();
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (ULocalPlayer* LP = PC->GetLocalPlayer())
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* Sub = LP->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+			{
+				Sub->RequestRebuildControlMappings();
+			}
+		}
+	}
+}
+
+void ASmvPilotPawn::MapAllKeys()
+{
 
 	// gamepad (XInput): sol çubuk gaz/yaw, sağ çubuk pitch/roll
 	MapKey(TEXT("Left"), EKeys::Gamepad_Left2D);
@@ -120,7 +148,9 @@ void ASmvPilotPawn::BuildInput()
 	MapKey(TEXT("Takeoff"), EKeys::T);           MapKey(TEXT("Takeoff"), EKeys::Gamepad_FaceButton_Left);
 	MapKey(TEXT("Rtl"), EKeys::R);               MapKey(TEXT("Rtl"), EKeys::Gamepad_FaceButton_Top);
 	MapKey(TEXT("Land"), EKeys::L);
-	MapKey(TEXT("ModeMenu"), EKeys::F);
+	MapKey(TEXT("ModeMenu"), EKeys::F);          MapKey(TEXT("ModeMenu"), EKeys::Gamepad_Special_Left);
+	MapKey(TEXT("Help"), EKeys::F1);
+	MapKey(TEXT("Cockpit"), EKeys::G);
 	MapKey(TEXT("Lock"), EKeys::Tab);            MapKey(TEXT("Lock"), EKeys::Gamepad_RightTrigger);
 	MapKey(TEXT("Ack"), EKeys::B);               MapKey(TEXT("Ack"), EKeys::Gamepad_FaceButton_Right);
 	MapKey(TEXT("Pause"), EKeys::Escape);        MapKey(TEXT("Pause"), EKeys::Gamepad_Special_Right);
@@ -250,8 +280,14 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 		const float M = Ax(4, 5);
 		if (RcAxisMap.IsValidIndex(4) && RcAxisMap[4] > 0) ModePwm = M < -0.33f ? 1000 : M > 0.33f ? 2000 : 1500;
 		AxRoll = Roll; AxPitch = Pitch; AxThr = Thr; AxYaw = Yaw; bThrUsed = true;
-		StickL = bStickMode2 ? FVector2D(Yaw, Thr) : FVector2D(Yaw, Pitch);
-		StickR = bStickMode2 ? FVector2D(Roll, Pitch) : FVector2D(Roll, Thr);
+		{
+			// eksen sırası: 0 roll, 1 pitch, 2 gaz, 3 yaw; mod eşlemesi [solX, solY, sağX, sağY]
+			static const int32 Map[5][4] = { { 3, 2, 0, 1 }, { 3, 1, 0, 2 }, { 3, 2, 0, 1 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 } };
+			const int32* M = Map[FMath::Clamp(StickMode, 0, 4)];
+			const float V[4] = { Roll, Pitch, Thr, Yaw };
+			StickL = FVector2D(V[M[0]], V[M[1]]);
+			StickR = FVector2D(V[M[2]], V[M[3]]);
+		}
 	}
 	else
 	{
@@ -259,10 +295,8 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 		const bool bKeys = bFlying && Mode != ESmvCamMode::Free;
 		auto Kx = [this, bKeys](const FKey& Neg, const FKey& Pos) { return bKeys ? (KeyDown(Pos) ? 1.f : 0.f) - (KeyDown(Neg) ? 1.f : 0.f) : 0.f; };
 		const float KLx = Kx(EKeys::A, EKeys::D), KLy = Kx(EKeys::S, EKeys::W), KRx = Kx(EKeys::Left, EKeys::Right), KRy = Kx(EKeys::Down, EKeys::Up);
-		// eksen → çubuk eşlemesi (Mode 2: sol yaw/gaz, sağ roll/pitch; Mode 1: sol yaw/pitch, sağ roll/gaz)
-		const bool bM2 = bStickMode2;
-		// mutlak kaynak (sanal çubuk > gamepad): o tarafın eksenlerini yazar
-		const bool bPadL = LeftStick.SizeSquared() > 0.0025, bPadR = RightStick.SizeSquared() > 0.0025;
+		// mutlak kaynak (sanal çubuk > gamepad): o tarafın eksenlerini yazar; radyal menü açıkken sağ çubuk menüye gider
+		const bool bPadL = LeftStick.SizeSquared() > 0.0025, bPadR = !bSuppressRightPad && RightStick.SizeSquared() > 0.0025;
 		const bool bAbsL = bVStick[0] || bPadL, bAbsR = bVStick[1] || bPadR;
 		const FVector2D AbsL = bVStick[0] ? VStick[0] : LeftStick, AbsR = bVStick[1] ? VStick[1] : RightStick;
 		const float KeyRate = 3.5f, Decay = FMath::Exp(-9.f * Dt);
@@ -282,13 +316,24 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 			Rc = { SmvPwm(AxRoll), 0, SmvPwm(AxThr), 0, ModePwm, 0, 0, 0 };
 			return;
 		}
-		const float KYaw = KLx, KRoll = KRx, KThr = bM2 ? KLy : KRy, KPitch = bM2 ? KRy : KLy;
-		if (bAbsL) AxYaw = (float)AbsL.X; else Spring(AxYaw, KYaw);
-		if (bAbsR) AxRoll = (float)AbsR.X; else Spring(AxRoll, KRoll);
-		const bool bAbsPitch = bM2 ? bAbsR : bAbsL, bAbsThr = bM2 ? bAbsL : bAbsR;
-		const float AbsPitch = (float)(bM2 ? AbsR.Y : AbsL.Y), AbsThr = (float)(bM2 ? AbsL.Y : AbsR.Y);
-		if (bAbsPitch) AxPitch = AbsPitch; else Spring(AxPitch, KPitch);
-		const bool bThrVirtual = bM2 ? bVStick[0] : bVStick[1];
+		// kumanda modu (1–4): yuva [solX, solY, sağX, sağY] → eksen (0 roll, 1 pitch, 2 gaz, 3 yaw)
+		static const int32 Map[5][4] = { { 3, 2, 0, 1 }, { 3, 1, 0, 2 }, { 3, 2, 0, 1 }, { 0, 1, 3, 2 }, { 0, 2, 3, 1 } };
+		const int32* M = Map[FMath::Clamp(StickMode, 0, 4)];
+		float* Ax[4] = { &AxRoll, &AxPitch, &AxThr, &AxYaw };
+		const float KeySlot[4] = { KLx, KLy, KRx, KRy };
+		const bool AbsSlot[4] = { bAbsL, bAbsL, bAbsR, bAbsR };
+		const float AbsVal[4] = { (float)AbsL.X, (float)AbsL.Y, (float)AbsR.X, (float)AbsR.Y };
+		const bool VirtSlot[4] = { bVStick[0], bVStick[0], bVStick[1], bVStick[1] };
+		int32 ThrSlot = 1;
+		for (int32 k = 0; k < 4; ++k)
+		{
+			if (M[k] == 2) { ThrSlot = k; continue; }   // gaz aşağıda (uçakta tutmalı)
+			if (AbsSlot[k]) *Ax[M[k]] = AbsVal[k]; else Spring(*Ax[M[k]], KeySlot[k]);
+		}
+		const float KThr = KeySlot[ThrSlot];
+		const bool bAbsThr = AbsSlot[ThrSlot];
+		const float AbsThr = AbsVal[ThrSlot];
+		const bool bThrVirtual = VirtSlot[ThrSlot];
 		if (IsPlaneLike())
 		{
 			// uçak: tutmalı gaz (W/S ve gamepad kolu hızla kaydırır; sanal çubuk mutlak)
@@ -301,8 +346,8 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 			if (bAbsThr) AxThr = AbsThr; else Spring(AxThr, KThr);
 		}
 		if (KThr != 0.f || (bAbsThr && FMath::Abs(AbsThr) > 0.05f)) bThrUsed = true;
-		StickL = bM2 ? FVector2D(AxYaw, AxThr) : FVector2D(AxYaw, AxPitch);
-		StickR = bM2 ? FVector2D(AxRoll, AxPitch) : FVector2D(AxRoll, AxThr);
+		StickL = FVector2D(*Ax[M[0]], *Ax[M[1]]);
+		StickR = FVector2D(*Ax[M[2]], *Ax[M[3]]);
 		Roll = SmvExpo(AxRoll, Expo); Pitch = SmvExpo(AxPitch, Expo); Yaw = SmvExpo(AxYaw, Expo); Thr = AxThr;
 	}
 	Rc.SetNum(8);
@@ -360,13 +405,13 @@ FString ASmvPilotPawn::ModeLabel(ESmvCamMode M)
 {
 	switch (M)
 	{
-	case ESmvCamMode::Chase: return TEXT("Takip");
+	case ESmvCamMode::Chase: return FSmvI18n::T(TEXT("cammode.chase")).ToString();
 	case ESmvCamMode::Fpv: return TEXT("FPV");
 	case ESmvCamMode::Gimbal: return TEXT("Gimbal");
-	case ESmvCamMode::Free: return TEXT("Serbest");
-	case ESmvCamMode::Ground: return TEXT("Yer");
-	case ESmvCamMode::Orbit: return TEXT("Yörünge");
-	case ESmvCamMode::Top: return TEXT("Tepeden");
+	case ESmvCamMode::Free: return FSmvI18n::T(TEXT("cammode.free")).ToString();
+	case ESmvCamMode::Ground: return FSmvI18n::T(TEXT("cammode.ground")).ToString();
+	case ESmvCamMode::Orbit: return FSmvI18n::T(TEXT("cammode.orbit")).ToString();
+	case ESmvCamMode::Top: return FSmvI18n::T(TEXT("cammode.top")).ToString();
 	default: return TEXT("?");
 	}
 }

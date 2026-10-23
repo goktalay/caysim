@@ -5,7 +5,10 @@
 //   alt orta : güç kadranları (YAKIT küçük · HIZ büyük · MOTOR büyük · BATARYA küçük; 240° süpürme, kırmızı bölge, dijital değer) + ALT BANT
 //              (ARM/DISARM · Kalkış · İniş · RTL · uçuş modu seçici · Sıfırla · kamera kipi · Kumanda · Panel)
 //   sol alt  : sanal kumanda (iki çubuk; fare ile sürüklenir, klavye/gamepad konumunu gösterir; ch5 anahtarı) + solup kaybolan ileti akışı
-// Tema: koyu yarı saydam kartlar, 8 px köşe, ince kenar; renkler web (#0b0f14 zemin, turuncu vurgu, yeşil ARM, kırmızı uyarı).
+//   orta     : uçuş modu RADYAL TEKERLEĞİ (F / gamepad View; fare açısı ya da sağ çubuk vurgular, tık / A / F seçer)
+//   alt orta : (sabit kanat / VTOL, isteğe bağlı) klasik KOKPİT gösterge paneli — altılı: hız, yapay ufuk, irtifa, dönüş, yön, dikey hız (G)
+//   üst orta : giriş sekansı 3-2-1-BAŞLA (yarış dışı), ilk uçuşta kısa ipucu kartı
+// Tema: SIMUMAV web — koyu cam kartlar, neon mavi vurgu (#38bdf8), yeşil ARM, kırmızı uyarı; tüm metinler 7 dil (fui.*).
 // Veri: GameMode her kare SetState() çağırır; düğmeler ASmvGameMode::UiAction(ad, arg) ile aynı eylem yoluna gider (klavye kısayollarıyla ortak).
 #pragma once
 
@@ -44,7 +47,14 @@ struct FSmvFlightUiState
 	TArray<FSmvUiLog> Log;
 	FVector2D StickL = FVector2D::ZeroVector, StickR = FVector2D::ZeroVector;
 	int32 Ch5 = 1000;
-	bool bThrUsed = true, bStickMode2 = true, bRcDevice = false;
+	bool bThrUsed = true, bRcDevice = false;
+	/** Kumanda modu 1–4 (çubuk etiketleri / klavye ipucu) */
+	int32 StickMode = 2;
+	/** Gamepad sağ çubuk (radyal menü seçimi; −1..1, yukarı +) */
+	FVector2D PadRight = FVector2D::ZeroVector;
+	/** Giriş sekansı (3-2-1) gösterilsin mi (yarış/karşılaşmada sunucu/HUD geri sayımı var) */
+	bool bIntroAllowed = true;
+	FString TrackName;
 	TArray<FString> Modes;
 	double FlightS = 0;
 	bool bHideGauges = false;       // FPV / gimbal HUD açıkken kadranlar gizli (web)
@@ -64,7 +74,12 @@ public:
 
 	void TogglePanel() { bPanel = !bPanel; }
 	void ToggleSticks() { bSticks = !bSticks; }
-	void ToggleModeMenu() { bModeMenu = !bModeMenu; }
+	void ToggleModeMenu();
+	bool IsRadialOpen() const { return bModeMenu; }
+	/** Radyal menüde vurgulananı seç (yoksa kapat) */
+	void ConfirmRadial();
+	void CloseRadial() { bModeMenu = false; }
+	void ToggleCockpit();
 	bool IsPanelOn() const { return bPanel; }
 	bool AreSticksOn() const { return bSticks; }
 
@@ -76,9 +91,12 @@ private:
 	// tema
 	FSlateBrush CardBrush, HeadBrush, ChipBrush, TileBrush, ConsoleBrush, BarBrush, CircleBrush;
 	FButtonStyle BtnStyle;   // beyaz yuvarlak köşeli; renk ButtonColorAndOpacity ile (durumla değişir)
-	TSharedPtr<SBox> ModeBox;
-	FString BuiltModeKind;
-	int32 BuiltModeNum = -1;
+	TSharedPtr<class SSmvRadial> Radial;
+	float PrevHdg = 0.f, TurnRate = 0.f;
+	bool bHdgInit = false;
+	int32 LastIntroSec = 99;
+	bool bTips = false;
+	double TipsUntil = 0;
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 
 	void Act(const FString& Name, const FString& Arg = FString());
@@ -88,8 +106,10 @@ private:
 	TSharedRef<SWidget> ConsoleBox();
 	TSharedRef<SWidget> BottomBar();
 	TSharedRef<SWidget> ModeMenu();
-	void RebuildModeGrid();
 	TSharedRef<SWidget> Gauges();
+	TSharedRef<SWidget> Cockpit();
+	TSharedRef<SWidget> Intro();
+	TSharedRef<SWidget> Tips();
 	TSharedRef<SWidget> Sticks();
 	TSharedRef<SWidget> Feed();
 	TSharedRef<SWidget> Btn(TAttribute<FText> Label, TFunction<void()> OnClick, TFunction<FLinearColor()> Color, float MinW = 0.f);

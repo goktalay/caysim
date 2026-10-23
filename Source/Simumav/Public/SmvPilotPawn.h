@@ -52,7 +52,7 @@ public:
 	void SetMode(ESmvCamMode M);
 	void CycleMode();
 	ESmvCamMode GetMode() const { return Mode; }
-	/** Kamera kipinin Türkçe adı (alt bant düğmesi). */
+	/** Kamera kipinin adı (arayüz dilinde; alt bant düğmesi). */
 	static FString ModeLabel(ESmvCamMode M);
 	/** Ekrandaki sanal çubuk (Side 0 sol, 1 sağ; V −1..1, yukarı +). bActive=false → bırakıldı (yaylı döner). */
 	void SetVirtualStick(int32 Side, const FVector2D& V, bool bActive);
@@ -82,7 +82,14 @@ public:
 
 	// ayarlar (Ayarlar ekranından)
 	FString InputDevice = TEXT("keyboard");
-	bool bStickMode2 = true;
+	/** Kumanda modu 1–4 (HEPGO §27.1.1): [sol X, sol Y, sağ X, sağ Y] = 1 yaw/pitch/roll/gaz · 2 yaw/gaz/roll/pitch ·
+	 *  3 roll/pitch/yaw/gaz · 4 roll/gaz/yaw/pitch. Klavye WASD = sol, oklar = sağ; sanal çubuk ve gamepad aynı eşlemeyi izler. */
+	int32 StickMode = 2;
+	/** Radyal menü açıkken sağ çubuk uçuşa gitmez (menü seçimine gider) */
+	bool bSuppressRightPad = false;
+	FVector2D GetPadRight() const { return RightStick; }
+	/** Tuş atamalarını yeniden kur (Ayarlar → Tuşlar; FSmvUiPrefs) */
+	void RemapKeys();
 	float Expo = 0.3f;
 	TArray<int32> RcAxisMap;   // [roll, pitch, throttle, yaw, mode] → RawInput eksen numarası (1..8), 0 = yok
 	TArray<bool> RcInvert;
@@ -132,6 +139,7 @@ private:
 	FVector2D Look = FVector2D::ZeroVector;
 
 	void BuildInput();
+	void MapAllKeys();
 	UInputAction* MakeAction(FName Name, int32 ValueType);
 	void MapKey(FName Action, const FKey& Key, bool bNegate = false, bool bSwizzle = false);
 	void OnLeft(const FInputActionValue& V);

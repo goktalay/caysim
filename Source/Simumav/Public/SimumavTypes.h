@@ -224,6 +224,8 @@ struct SIMUMAV_API FSmvSettings
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") TArray<bool> RcInvert;
 	/** Mod-2 (sol çubuk gaz/yön) — false: Mod-1 */
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bStickMode2 = true;
+	/** Kumanda modu 1–4 (HEPGO §27.1.1; web `fs.rc.mode`) — bStickMode2 eski alanla uyumlu tutulur (Mode 2 ↔ true) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int32 StickMode = 2;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double StickExpo = 0.3;
 	/** Cesium ion erişim belirteci (gerçek arazi). Boşsa paketteki yapılandırma (Config/UserSecrets.ini) kullanılır; o da yoksa prosedürel dünya. */
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString CesiumToken;
