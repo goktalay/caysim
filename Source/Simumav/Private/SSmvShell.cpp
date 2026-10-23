@@ -45,6 +45,9 @@ using namespace SmvUi;
 
 namespace
 {
+	/** Slate bildirimini (SNew …) SWidget başvurusuna çevirir — üçlü işleçte iki dalın türü eşit olsun */
+	template<typename T> TSharedRef<SWidget> AsW(TSharedRef<T> W) { return W; }
+
 	/** Ayarlar → Görüntü düzenleme tamponu (GameUserSettings) */
 	struct FSmvDisplayEdit
 	{
@@ -631,7 +634,7 @@ TSharedRef<SWidget> SSmvShell::PreviewCard(const FString& Type, const FString& M
 			+ SOverlay::Slot()[Bg]
 			+ SOverlay::Slot()
 			[
-				b3d ? (TSharedRef<SWidget>)SNew(SImage).Image(&PreviewBrush) : SNullWidget::NullWidget
+				b3d ? AsW<SImage>(SNew(SImage).Image(&PreviewBrush)) : SNullWidget::NullWidget
 			]
 		]
 	];
@@ -760,7 +763,7 @@ TSharedRef<SWidget> SSmvShell::Page(const FText& InTitle, const FText& Sub, ESmv
 {
 	TWeakObjectPtr<USmvFlow> F = Flow;
 	TSharedRef<SWidget> BackW = bBack
-		? (TSharedRef<SWidget>)SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).Text(Tx(TEXT("common.back"))).OnClick([F]() { if (F.IsValid()) F->Back(); })
+		? AsW<SSmvButton>(SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).Text(Tx(TEXT("common.back"))).OnClick([F]() { if (F.IsValid()) F->Back(); }))
 		: SNullWidget::NullWidget;
 	return SNew(SVerticalBox)
 		+ SVerticalBox::Slot().AutoHeight().Padding(56, 28, 56, 14)
@@ -778,7 +781,7 @@ TSharedRef<SWidget> SSmvShell::Page(const FText& InTitle, const FText& Sub, ESmv
 		]
 		+ SVerticalBox::Slot().FillHeight(1.f).Padding(56, 0, 56, 0)
 		[
-			bScroll ? (TSharedRef<SWidget>)(SNew(SScrollBox).ScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll) + SScrollBox::Slot()[Body]) : Body
+			bScroll ? AsW<SScrollBox>(SNew(SScrollBox).ScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll) + SScrollBox::Slot()[Body]) : Body
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(56, 12, 56, 20)
 		[
@@ -1517,7 +1520,7 @@ TSharedRef<SWidget> SSmvShell::Wizard()
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 10, 0)
 		[
-			WizStep < N - 1 ? (TSharedRef<SWidget>)SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Play).Text(Tx(TEXT("wiz.quick"))).OnClick([Self]() { Self->StartFromWizard(); }) : SNullWidget::NullWidget
+			WizStep < N - 1 ? AsW<SSmvButton>(SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Play).Text(Tx(TEXT("wiz.quick"))).OnClick([Self]() { Self->StartFromWizard(); })) : SNullWidget::NullWidget
 		]
 		+ SHorizontalBox::Slot().AutoWidth()[Next];
 	return Page(Tx(TEXT("wizard.title")), Tx(TEXT("wizard.sub")), ESmvIcon::Play,
@@ -1587,7 +1590,7 @@ TSharedRef<SWidget> SSmvShell::WizMap()
 		const FSlateBrush* Img = nullptr, bool bAvail = true) -> TSharedRef<SWidget>
 	{
 		TSharedRef<SWidget> Pic = Img
-			? (TSharedRef<SWidget>)SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(FLinearColor::White).Padding(0)[SNew(SImage).Image(Img)]
+			? AsW<SBorder>(SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(FLinearColor::White).Padding(0)[SNew(SImage).Image(Img)])
 			: Self->MapThumb(Seed, Mode, 250.f, 120.f);
 		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Tile).Selected(bSel).Accent(Accent3()).Text(Name).MinHeight(230.f).OnClick(Pick).IsEnabled(bAvail)
 			.SubText(bAvail ? Desc : FText::FromString(Desc.ToString() + TEXT("  ·  ") + FSmvI18n::T(TEXT("wiz.map_missing")).ToString()))
