@@ -172,8 +172,14 @@ try {
 		$kok = Join-Path $content $p
 		$umaps = @(Get-ChildItem -LiteralPath $kok -Filter *.umap -Recurse -File -ErrorAction SilentlyContinue)
 		if ($umaps.Count -eq 0) { Bilgi "paket: $p (harita yok)"; continue }
-		$tercih = $umaps | Where-Object { $_.BaseName -match '(?i)demo|showcase|overview|example|preview|level|map' -and $_.BaseName -notmatch '(?i)test|template|empty|_BuiltData' } | Sort-Object Length -Descending | Select-Object -First 1
-		if (-not $tercih) { $tercih = $umaps | Where-Object { $_.BaseName -notmatch '_BuiltData' } | Sort-Object Length -Descending | Select-Object -First 1 }
+		# tercih: 1) adinda paket adi gecen (asil ortam, ör. P_Ruined_Construction) 2) demo/overview/example/level/map
+		#         3) showcase (varlik galerisi) 4) en buyugu; test/template/empty/_BuiltData haric
+		$pk = ($p -replace '[^A-Za-z0-9]', '').ToLower()
+		$adaylar = @($umaps | Where-Object { $_.BaseName -notmatch '(?i)test|template|empty|_BuiltData' })
+		$tercih = $adaylar | Where-Object { ($_.BaseName -replace '[^A-Za-z0-9]', '').ToLower().Contains($pk) } | Sort-Object Length -Descending | Select-Object -First 1
+		if (-not $tercih) { $tercih = $adaylar | Where-Object { $_.BaseName -match '(?i)demo|overview|example|preview|level|map' } | Sort-Object Length -Descending | Select-Object -First 1 }
+		if (-not $tercih) { $tercih = $adaylar | Where-Object { $_.BaseName -match '(?i)showcase' } | Sort-Object Length -Descending | Select-Object -First 1 }
+		if (-not $tercih) { $tercih = $adaylar | Sort-Object Length -Descending | Select-Object -First 1 }
 		if (-not $tercih) { continue }
 		$umaps | ForEach-Object { Write-Host ("    harita: " + $_.FullName.Substring($content.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
 		$rel = $tercih.FullName.Substring($content.Length).TrimStart('\') -replace '\.umap$', ''

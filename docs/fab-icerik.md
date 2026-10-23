@@ -15,7 +15,8 @@ gövdeleri ve prosedürel dünya ile çalışır.
 
 Paket klasör adları korunur (`/Game/<paket>/...`): paketler birbirine bu yollarla başvurur, başka klasöre
 taşımak başvuruları kırar. Kopyalanan klasörler runner'da `.git/info/exclude` ile git dışında tutulur.
-Her paketten bir gösterim haritası (adı Demo/Showcase/Overview/Map içeren, yoksa en büyüğü) pakete pişirilir ve
+Her paketten bir harita (önce adında paket adı geçen asıl ortam haritası, sonra Demo/Overview/Map, sonra Showcase,
+yoksa en büyüğü; aynı klasördeki haritalar da) pakete pişirilir ve
 uç sihirbazında **Parkur** listesinde "<ad> · Fab haritası" olarak görünür (yalnız yerel SITL ile; harita merkezi
 SITL ev konumuna oturtulur). Ruined Construction "Yıkık İnşaat" adıyla listelenir.
 
