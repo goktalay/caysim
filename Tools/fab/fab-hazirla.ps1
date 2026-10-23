@@ -144,7 +144,7 @@ try {
 			$env:SIMUMAV_EDITOR_ACIK = '0'
 			$betik = Join-Path $Proje 'Scripts\Python\fab_import.py'
 			Bilgi "Editor Python ile ice aktariliyor ($($isler.Count) is)"
-			$ddc = @(); if ($env:UE_DDC_ARG) { $ddc = @($env:UE_DDC_ARG) }
+			$ddc = @($env:UE_ZEN_ARGS -split ' ' | Where-Object { $_ })   # CI'nin kendi Zen DDC sunucusu (build-windows.yml)
 			& $editor $uproject "-ExecutePythonScript=$betik" -unattended -nop4 -nosplash -NullRHI -stdout -FullStdOutLogOutput @ddc 2>&1 | ForEach-Object {
 				$l = "$_"
 				if ($l -match 'fab_import|LogInterchange.*(Error|Warning)|LogFbx.*(Error|Warning)') { Write-Host "    $l" }
