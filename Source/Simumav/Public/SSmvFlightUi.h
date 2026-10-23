@@ -143,6 +143,10 @@ private:
 	TSharedRef<SWidget> PipWindow();
 	TSharedRef<SWidget> ReplayBar();
 	TSharedRef<SWidget> RecChip();
+	/** Grafik ▾ açılır menüsü (web flightsim_gfx_ui): ön ayar, canlı FPS, kare hızı sınırı, köşe FPS sayacı */
+	TSharedRef<SWidget> GfxPopup();
+	bool bGfx = false, bFpsCounter = false;
+	float FpsAvg = 60.f;
 	TSharedRef<SWidget> RadarWindow();
 	/** Dron kartı (web flightsim_panel.js / GÖKTUNGU .dron-kart.ayrik birebir): başlık şeridi, UÇUŞA HAZIR + İŞLEMLER, katlanır bölümler */
 	TSharedRef<SWidget> GtPanel();

@@ -20,6 +20,10 @@
 #include "Rendering/SlateRenderer.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "SmvSvgIcon.h"
+#include "GameFramework/GameUserSettings.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/Engine.h"
+#include "UnrealClient.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "HAL/PlatformApplicationMisc.h"
 #include "Fonts/FontMeasure.h"
@@ -598,6 +602,17 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(0, 0, 10, 0)[RadarWindow()]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom)[EoWindow()]
 		]
+		// grafik menüsü (alt bandın üstünde, solda) + köşe FPS sayacı
+		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(150.f, 0.f, 0.f, 56.f)
+		[
+			SNew(SBox).Visibility_Lambda([this]() { return bGfx && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })[GfxPopup()]
+		]
+		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0.f, 0.f, 10.f, 54.f)
+		[
+			SNew(STextBlock).Visibility_Lambda([this]() { return bFpsCounter ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+			.Font(FCoreStyle::GetDefaultFontStyle("Mono", 9)).ColorAndOpacity(FLinearColor(0.6f, 1.f, 0.6f, 0.9f))
+			.Text_Lambda([this]() { return FText::FromString(FString::Printf(TEXT("%.0f FPS"), FpsAvg)); })
+		]
 		// kayıttan oynatma şeridi
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 14.f, 0.f, 0.f)
 		[
@@ -628,6 +643,7 @@ void SSmvFlightUi::Act(const FString& Name, const FString& Arg)
 void SSmvFlightUi::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
 {
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
+	if (InDeltaTime > 0.f) FpsAvg = FMath::Lerp(FpsAvg, 1.f / InDeltaTime, FMath::Clamp(InDeltaTime * 2.f, 0.f, 1.f));
 	// dönüş hızı (derece/sn; kokpit dönüş göstergesi) — yön farkından, yumuşatılmış
 	if (InDeltaTime > 0.f)
 	{
@@ -1076,6 +1092,10 @@ TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
 	[
 		PB(Tx(TEXT("bar.panel")), [this]() { bPanel = !bPanel; }, [this]() { return bPanel ? SmvGt::C(0x3b82f6) : FLinearColor(1, 1, 1, 0.06f); })
+	];
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
+	[
+		PB(TAttribute<FText>::CreateLambda([]() { return FText::FromString(FSmvI18n::T(TEXT("gfx.btn")).ToString() + TEXT(" ▾")); }), [this]() { bGfx = !bGfx; }, [this]() { return bGfx ? SmvGt::C(0x3b82f6) : FLinearColor(1, 1, 1, 0.06f); })
 	];
 	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
 	[
@@ -2139,4 +2159,65 @@ TSharedRef<SWidget> SSmvFlightUi::GtPanel()
 				]
 			]
 		];
+}
+
+TSharedRef<SWidget> SSmvFlightUi::GfxPopup()
+{
+	using namespace SmvGt;
+	auto Lv = []() { UGameUserSettings* G = GEngine ? GEngine->GetGameUserSettings() : nullptr; return G ? G->GetOverallScalabilityLevel() : -1; };
+	auto SetLv = [](int32 L)
+	{
+		if (UGameUserSettings* G = GEngine ? GEngine->GetGameUserSettings() : nullptr)
+		{
+			if (L < 0) G->RunHardwareBenchmark();
+			if (L < 0) G->ApplyHardwareBenchmarkResults(); else G->SetOverallScalabilityLevel(L);
+			G->ApplySettings(false);
+			G->SaveSettings();
+		}
+	};
+	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
+	V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[SNew(STextBlock).Font(Sans(12, true)).ColorAndOpacity(Metin).Text_Lambda([]() { return FSmvI18n::T(TEXT("gfx.btn_title")); }).AutoWrapText(true)];
+	TSharedRef<SHorizontalBox> Pr = SNew(SHorizontalBox);
+	static const TCHAR* Keys[] = { TEXT("gfx.auto"), TEXT("gfx.low"), TEXT("gfx.medium"), TEXT("gfx.high"), TEXT("gfx.ultra") };
+	for (int32 i = 0; i < 5; ++i)
+	{
+		const int32 L = i - 1;   // −1 otomatik (donanım ölçümü), 0 düşük … 3 ultra (epik)
+		Pr->AddSlot().AutoWidth().Padding(0, 0, 4, 0)
+		[
+			Btn(TAttribute<FText>::CreateLambda([i]() { return FSmvI18n::T(Keys[i]); }), [SetLv, L]() { SetLv(L); },
+				[Lv, L]() { return (L >= 0 && Lv() == L) ? FLinearColor::FromSRGBColor(FColor(59, 130, 246)) : SmvGt::Dugme; })
+		];
+	}
+	V->AddSlot().AutoHeight()[Pr];
+	V->AddSlot().AutoHeight().Padding(0, 8, 0, 0)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)[SNew(STextBlock).Font(Sans(11)).ColorAndOpacity(Soluk).Text_Lambda([]() { return FSmvI18n::T(TEXT("gfx.fps_cap")); })]
+		+ SHorizontalBox::Slot().AutoWidth()
+		[
+			Btn(TAttribute<FText>::CreateLambda([]() { UGameUserSettings* G = GEngine ? GEngine->GetGameUserSettings() : nullptr; const float F = G ? G->GetFrameRateLimit() : 0.f; return FText::FromString(F <= 0.f ? FString(TEXT("∞")) : FString::Printf(TEXT("%.0f"), F)); }),
+				[]()
+				{
+					UGameUserSettings* G = GEngine ? GEngine->GetGameUserSettings() : nullptr;
+					if (!G) return;
+					const float Cur = G->GetFrameRateLimit();
+					const float Next = Cur <= 0.f ? 30.f : Cur < 45.f ? 60.f : Cur < 90.f ? 120.f : 0.f;
+					G->SetFrameRateLimit(Next); G->ApplySettings(false); G->SaveSettings();
+				}, []() { return SmvGt::Dugme; }, 54.f)
+		]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0, 8, 0)[SNew(STextBlock).Font(Sans(11)).ColorAndOpacity(Soluk).Text_Lambda([]() { return FSmvI18n::T(TEXT("gfx.counter")); })]
+		+ SHorizontalBox::Slot().AutoWidth()[Btn(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(bFpsCounter ? TEXT("✓") : TEXT("—")); }), [this]() { bFpsCounter = !bFpsCounter; },
+			[this]() { return bFpsCounter ? FLinearColor::FromSRGBColor(FColor(59, 130, 246)) : SmvGt::Dugme; }, 34.f)]
+	];
+	V->AddSlot().AutoHeight().Padding(0, 8, 0, 0)
+	[
+		SNew(STextBlock).Font(Mono(11)).ColorAndOpacity(Metin)
+		.Text_Lambda([this, Lv]()
+		{
+			FIntPoint Res(0, 0);
+			if (GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport) Res = GEngine->GameViewport->Viewport->GetSizeXY();
+			return FText::FromString(FString::Printf(TEXT("%s %.0f · %d×%d · Q%d"), *FSmvI18n::T(TEXT("gfx.fps")).ToString(), FpsAvg, Res.X, Res.Y, Lv()));
+		})
+	];
+	return SNew(SBox).WidthOverride(460.f)[SNew(SBorder).BorderImage(&GtCard).Padding(12.f)[V]];
 }
