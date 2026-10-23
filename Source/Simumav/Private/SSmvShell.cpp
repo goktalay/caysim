@@ -3838,7 +3838,7 @@ void SSmvShell::SupSend()
 		{
 			const FString Ref = J->HasField(TEXT("code")) ? J->GetStringField(TEXT("code")) : FString::Printf(TEXT("#%d"), (int32)J->GetNumberField(TEXT("id")));
 			S->Toast(FSmvI18n::T(TEXT("support.done_title")).ToString() + TEXT(" — ") + Ref, 6);
-			FSmvUiSound::Play(ESmvSnd::Confirm);
+			FSmvUiSound::Play(ESmvSnd::Open);
 			S->Sup.Subject.Empty(); S->Sup.Body.Empty(); S->Sup.ShotPath.Empty();
 			S->SupLoad();
 		}
