@@ -9,10 +9,14 @@
 #include "GameFramework/GameUserSettings.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
+#include "Misc/CommandLine.h"
 
 void USmvGameInstance::Init()
 {
 	Super::Init();
+	// motorun ekran üstü hata ayıklama iletileri (ör. "Runtime Virtual Texture ... needs to be rebuilt") oyuncuya gösterilmez
+	// (Development paketinde de; günlükte kalır). -SmvScreenMessages ile açılabilir.
+	if (GEngine && !FParse::Param(FCommandLine::Get(), TEXT("SmvScreenMessages"))) GEngine->bEnableOnScreenDebugMessages = false;
 	Client = NewObject<USimumavClient>(this, TEXT("SimumavClient"));
 	Data = NewObject<USmvDataService>(this, TEXT("SmvData"));
 	Flow = NewObject<USmvFlow>(this, TEXT("SmvFlow"));

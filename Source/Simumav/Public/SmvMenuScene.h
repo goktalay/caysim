@@ -78,7 +78,7 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<class UStaticMeshComponent> StudioFloor;
 	void PlaceStudio(float FloorZ);
 	/** Anahtar / kenar ışığını konumlar; şiddet hedefe uzaklığın karesiyle ölçeklenir (uzak ışık figürü karartmasın) */
-	void PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt);
+	void PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt, float Scale = 1.f);
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> SnapFig;
 	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> DSnapActor;

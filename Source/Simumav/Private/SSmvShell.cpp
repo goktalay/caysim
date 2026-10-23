@@ -1044,7 +1044,10 @@ static TSharedRef<SWidget> SmvLogo(int32 Size)
 		const float X = -0.2f * (float)Sz.X + U * 1.4f * (float)Sz.X;
 		DrSeg(Out, L + 1, G, FVector2D(X, -6.0), FVector2D(X - Sz.Y * 0.45f, Sz.Y + 6.0), FLinearColor(1.f, 1.f, 1.f, 0.07f * FMath::Sin(U * PI)), 16.f);
 	};
-	return SNew(SOverlay)
+	// sola yaslı kutu: ışıltı yazının boyutuna göre çizilsin (sütun genişliğine yayılıp yazının sağında kalıyordu)
+	return SNew(SBox).HAlign(HAlign_Left)
+		[
+		SNew(SOverlay)
 		+ SOverlay::Slot()[Glow]
 		+ SOverlay::Slot()
 		[
@@ -1057,9 +1060,10 @@ static TSharedRef<SWidget> SmvLogo(int32 Size)
 		+ SHorizontalBox::Slot().AutoWidth()
 		[
 			SNew(STextBlock).Text(FText::FromString(TEXT("MAV"))).Font(Font(Size, "Black", 120)).ColorAndOpacity(Accent())
-			.ShadowOffset(FVector2D(0, 3)).ShadowColorAndOpacity(Accent2().CopyWithNewOpacity(0.55f))
-		]
-		];
+						.ShadowOffset(FVector2D(0, 3)).ShadowColorAndOpacity(Accent2().CopyWithNewOpacity(0.55f))
+					]
+					]
+					];
 			}
 
 TSharedRef<SWidget> SSmvShell::Welcome()
@@ -2227,6 +2231,12 @@ TSharedRef<SWidget> SSmvShell::Missions()
 	}, false, true, ESmvIcon::Plus)];
 	TArray<FString> TrackIds; TArray<FText> TrackL;
 	for (const FSmvTrack& T : D->Tracks()) { TrackIds.Add(T.Id); TrackL.Add(FText::FromString(T.Name)); }
+	// görev parkuru boş / silinmişse varsayılan parkur (seçici ilk parkuru gösterirken harita boş kalıyordu: uydu görüntüsü + ev işareti yok)
+	if (!TrackIds.Contains(EditMission.TrackId))
+	{
+		if (const FSmvTrack* Dt = D->DefaultTrack()) EditMission.TrackId = Dt->Id;
+		else if (TrackIds.Num()) EditMission.TrackId = TrackIds[0];
+	}
 	TArray<FText> KindL; for (const FString& K : Kinds) KindL.Add(FSmvI18n::T(FString(TEXT("mission.")) + K));
 	auto Mf = [](double V) { return FString::Printf(TEXT("%.0f m"), V); };
 	auto Df = [](double V) { return FString::Printf(TEXT("%.0f°"), V); };
@@ -3123,7 +3133,7 @@ TSharedRef<SWidget> SSmvShell::Summary()
 		[
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot().AutoWidth()[RouteMap(&Flow->LastPath, 420.f, 260.f)]
-			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(14, 0, 0, 0)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top).Padding(14, 0, 0, 0)
 			[
 				SNew(SVerticalBox)
 				+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)[SNew(SSmvButton).Icon(ESmvIcon::Book).Text(Tx(TEXT("report.open")))
@@ -3908,15 +3918,37 @@ TSharedRef<SWidget> SSmvShell::FlyMode()
 	TWeakObjectPtr<USmvFlow> F = Flow;
 	SSmvShell* Self = this;
 	const bool bIn = Client() && Client()->IsLoggedIn();
-	TSharedRef<SSmvButton> Solo = SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Plane).Accent(Hex(0xfbbf24)).MinHeight(340.f)
+	// kart görselleri (kartlar boş görünüyordu): hazır harita önizlemesi / ilk FPV parkurunun planı; simge görselin üstünde
+	auto Pic = [](const TCHAR* MapKey, ESmvIcon I, const FLinearColor& C) -> TSharedRef<SWidget>
+	{
+		const FSlateBrush* Img = nullptr;
+		for (const FSmvFabMap& M : FSmvFabContent::AllMaps()) if (M.Key == MapKey) Img = SmvMapPreview(M);
+		TSharedRef<SOverlay> O = SNew(SOverlay);
+		if (Img) O->AddSlot()[SNew(SBorder).BorderImage(Round(14.f)).BorderBackgroundColor(FLinearColor(1, 1, 1, 0.9f)).Padding(0)[SNew(SImage).Image(Img)]];
+		O->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(12.f)
+		[
+			SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Hex(0x0b1222, 0.85f)).Padding(FMargin(8.f))[Icon(I, 34.f, C)]
+		];
+		return SNew(SBox).WidthOverride(380.f).HeightOverride(170.f)[O];
+	};
+	TSharedRef<SSmvButton> Solo = SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Plane).Accent(Hex(0xfbbf24)).MinHeight(340.f).IntroDelay(0.05f)
+		.Extra()[Pic(TEXT("orman"), ESmvIcon::Plane, Hex(0xfbbf24))]
 		.Text(Tx(TEXT("fly.solo"))).SubText(Tx(TEXT("fly.solo_sub")))
 		.OnClick([F]() { if (F.IsValid()) { F->NewDraft(); F->Race.Kind = TEXT("none"); F->SetScreen(ESmvScreen::Wizard); } });
 	DefaultFocus = Solo;
 	TSharedRef<SUniformGridPanel> G = SNew(SUniformGridPanel).SlotPadding(FMargin(8.f)).MinDesiredSlotHeight(220.f);
 	G->AddSlot(0, 0)[Solo];
-	G->AddSlot(1, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Fpv).Accent(Hex(0xf472b6)).MinHeight(340.f)
+	TSharedRef<SWidget> FpvPic = SmvFpv::Courses().Num()
+		? AsW<SBox>(SNew(SBox).WidthOverride(380.f).HeightOverride(170.f)
+			[
+				SNew(SBorder).BorderImage(Round(14.f)).BorderBackgroundColor(Hex(0x0b1222, 0.9f)).Padding(FMargin(10.f)).HAlign(HAlign_Center)[FpvMap(SmvFpv::Courses()[0].Id, 300.f, 150.f)]
+			])
+		: Icon(ESmvIcon::Fpv, 40.f, Hex(0xf472b6));
+	G->AddSlot(1, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Fpv).Accent(Hex(0xf472b6)).MinHeight(340.f).IntroDelay(0.12f)
+		.Extra()[FpvPic]
 		.Text(Tx(TEXT("fly.fpv"))).SubText(Tx(TEXT("fly.fpv_sub"))).OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::FpvGallery); })];
-	G->AddSlot(2, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Match).Accent(Hex(0x34d399)).MinHeight(340.f)
+	G->AddSlot(2, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Match).Accent(Hex(0x34d399)).MinHeight(340.f).IntroDelay(0.19f)
+		.Extra()[Pic(TEXT("sehir"), ESmvIcon::Match, Hex(0x34d399))]
 		.Text(Tx(TEXT("fly.multi"))).SubText(Tx(bIn ? TEXT("fly.multi_sub") : TEXT("fly.multi_login"))).OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Lobby); })];
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight()[G];

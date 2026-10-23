@@ -144,7 +144,7 @@ void ASmvMenuScene::BeginPlay()
 	}
 	WallLight->SetLightColor(FLinearColor(0.35f, 0.62f, 1.f));
 	WallLight->SetAttenuationRadius(1600.f);
-	WallLight->SetIntensity(SmvCfg(TEXT("PreviewWallLight"), 70.f));
+	WallLight->SetIntensity(SmvCfg(TEXT("PreviewWallLight"), 22.f));
 	PlaceStudio(0.f);
 	KeyLight->SetLightColor(FLinearColor(1.f, 0.96f, 0.9f));
 	RimLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 40.f) * 0.7f);
@@ -256,7 +256,11 @@ void ASmvMenuScene::BuildWorld()
 		Cc->PostProcessBlendWeight = 1.f;
 	}
 	// Niagara ışık zerreleri: derlemede motor şablonundan kopyalanan sistem (Scripts/Python/simumav_varliklar.py niagara_sablonu)
-	if (Cam)
+	// Motorla gelen tek uygun şablon "FountainLightweight" (fıskiye): kamera önünde iri beyaz küreler olarak göründü (duman testi) →
+	// varsayılan kapalı; [/Script/Simumav.SmvMenuScene] MenuNiagara=True ile açılır. Uygun varlık için Epic "Niagara Examples Pack" önerilir.
+	bool bNiagara = false;
+	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("MenuNiagara"), bNiagara, GGameIni);
+	if (Cam && bNiagara)
 	{
 		if (UNiagaraSystem* Fx = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Simumav/FX/NS_SmvMotes.NS_SmvMotes"), nullptr, LOAD_NoWarn | LOAD_Quiet))
 		{
@@ -517,7 +521,8 @@ void ASmvMenuScene::Tick(float Dt)
 		Capture->FOVAngle = 28.f;
 		Capture->SetWorldLocationAndRotation(CamAt, (Target - CamAt).Rotation());
 		// tam boy figür: ışıklar 4–5 m uzakta (yakın ışık yüzü ve zemini patlatıyordu)
-		PlaceLights(GSmvPreviewAt + FVector(0, 0, 110), GSmvPreviewAt + FVector(-420, 300, 380), GSmvPreviewAt + FVector(380, -320, 340));
+		// tam ters kare telafisi tam boy figürü aşırı pozluyordu (duman testi): %35
+		PlaceLights(GSmvPreviewAt + FVector(0, 0, 110), GSmvPreviewAt + FVector(-420, 300, 380), GSmvPreviewAt + FVector(380, -320, 340), 0.35f);
 		const double Now = FPlatformTime::Seconds();
 		if (Now - LastChannelFix > 1.0) { LastChannelFix = Now; ApplyPreviewChannels(); }
 	}
@@ -774,10 +779,10 @@ void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
 	Capture->bCaptureEveryFrame = bPreviewOn;
 }
 
-void ASmvMenuScene::PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt)
+void ASmvMenuScene::PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt, float Scale)
 {
 	// temel şiddet 1,71 m uzaklık için ayarlıydı (Iris önizlemesi); uzak ışıkta ters kare telafisi
-	const float Base = SmvCfg(TEXT("PreviewLight"), 40.f);
+	const float Base = SmvCfg(TEXT("PreviewLight"), 40.f) * Scale;
 	auto K = [](const FVector& A, const FVector& B) { const float D = (float)FVector::Dist(A, B) / 171.f; return FMath::Clamp(D * D, 0.3f, 60.f); };
 	KeyLight->SetWorldLocation(KeyAt);
 	RimLight->SetWorldLocation(RimAt);

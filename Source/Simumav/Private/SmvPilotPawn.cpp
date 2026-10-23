@@ -525,7 +525,10 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 		CamPos = Aim + ChaseOffSm;
 		// kamera yerin / binanın içine girmesin
 		FHitResult Hit;
-		if (W && W->LineTraceSingleByChannel(Hit, Aim, CamPos, ECC_Visibility, Q)) CamPos = Hit.Location + Hit.ImpactNormal * 40.f;
+		// başlangıçta içinde kalınan hacimler (Fab haritalarındaki görünmez sınır / bitki hacimleri) yok sayılır: kamera dronun içine
+		// çekiliyordu (orman haritasında takip kamerası gövdenin içinden bakıyordu)
+		if (W && W->LineTraceSingleByChannel(Hit, Aim, CamPos, ECC_Camera, Q) && !Hit.bStartPenetrating && Hit.Distance > 60.f)
+			CamPos = Hit.Location + Hit.ImpactNormal * 40.f;
 		CamRot = (Aim - CamPos).Rotation();
 		break;
 	}
