@@ -4447,8 +4447,9 @@ void SSmvShell::TickSmoke()
 	case 1: Shot(TEXT("20_flight_a")); if (GameMode.IsValid()) GameMode->UiAction(TEXT("Takeoff"), FString()); SmokeAt = Now + 12.0; break;
 	case 2: Shot(TEXT("21_flight_b")); if (GameMode.IsValid()) GameMode->UiAction(TEXT("CamCycle"), FString()); SmokeAt = Now + 4.0; break;
 	case 3: Shot(TEXT("22_flight_cam")); if (GameMode.IsValid()) GameMode->TogglePause(); SmokeAt = Now + 2.5; break;
-	case 4: Shot(TEXT("23_pause")); if (GameMode.IsValid()) GameMode->TogglePause(); Flow->EndFlight(TEXT("user")); SmokeAt = Now + 8.0; break;
-	case 5: Shot(TEXT("24_summary")); SmokeAt = Now + 2.0; break;
+	case 4: Shot(TEXT("23_pause")); SmokeAt = Now + 1.5; break;
+	case 5: if (GameMode.IsValid()) GameMode->TogglePause(); Flow->EndFlight(TEXT("user")); SmokeAt = Now + 8.0; break;
+	case 6: Shot(TEXT("24_summary")); SmokeAt = Now + 2.0; break;
 	default: UE_LOG(LogTemp, Display, TEXT("SMOKE done")); FPlatformMisc::RequestExit(false); SmokeAt = Now + 100.0; break;
 	}
 	++SmokeStep;
