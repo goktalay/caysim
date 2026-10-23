@@ -690,7 +690,7 @@ namespace
 
 	void SmvDroneSil(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& C, float S, float Tilt, float A, double T, int32 Seed)
 	{
-		const FLinearColor Body = Hex(0xcfe7ff, 0.55f * A), Edge = Accent().CopyWithNewOpacity(0.55f * A);
+		const FLinearColor Body = Hex(0xcfe7ff, 0.55f * A), EdgeC = Accent().CopyWithNewOpacity(0.55f * A);
 		const float Sy = 0.45f;   // perspektif basıklığı
 		auto P = [&C, S, Sy, Tilt](float x, float y)
 		{
@@ -710,7 +710,7 @@ namespace
 				const float a = j * UE_TWO_PI / 16.f;
 				E.Add(Rc + FVector2D(FMath::Cos(a) * S * 0.55f, FMath::Sin(a) * S * 0.55f * Sy));
 			}
-			DrLine(Out, L, G, E, Edge, 1.f);
+			DrLine(Out, L, G, E, EdgeC, 1.f);
 			const float Ph = (float)(T * 40.0 + k * 1.3 + Seed);
 			const FVector2D Bl(FMath::Cos(Ph) * S * 0.5f, FMath::Sin(Ph) * S * 0.5f * Sy);
 			DrSeg(Out, L, G, Rc - Bl, Rc + Bl, Body.CopyWithNewOpacity(0.35f * A), 1.f);

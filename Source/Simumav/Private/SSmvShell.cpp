@@ -1315,7 +1315,7 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 	List->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[Btn(Tx(TEXT("tracks.new")), [Self]() { FSmvTrack T; T.Name = FSmvI18n::T(TEXT("tracks.new_name")).ToString(); Self->EditTrack = T; Self->Refresh(); }, false, true, ESmvIcon::Plus)];
 	const bool bNew = EditTrack.Id.IsEmpty();
 	auto Re = [Self]() { Self->Refresh(); };
-	auto M = [](double V) { return FString::Printf(TEXT("%.0f m"), V); };
+	auto Mfmt = [](double V) { return FString::Printf(TEXT("%.0f m"), V); };
 	auto Ms = [](double V) { return FString::Printf(TEXT("%.1f m/s"), V); };
 	auto Deg = [](double V) { return FString::Printf(TEXT("%.0f°"), V); };
 	auto Pct = [](double V) { return FString::Printf(TEXT("%.0f%%"), V * 100.0); };
@@ -1325,7 +1325,7 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.lat")), Spin(&EditTrack.Lat, -85, 85, 0.0001))];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.lon")), Spin(&EditTrack.Lon, -180, 180, 0.0001))];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.ground")), Spin(&EditTrack.GroundMsl, -10000, 8000, 1))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.radius")), Slider(&EditTrack.RadiusM, 200, 5000, 50, M))];
+	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.radius")), Slider(&EditTrack.RadiusM, 200, 5000, 50, Mfmt))];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.world")), Chips(&EditTrack.WorldMode, { TEXT("procedural"), TEXT("real"), TEXT("google3d") },
 		{ Tx(TEXT("world.procedural")), Tx(TEXT("world.real")), Tx(TEXT("world.google3d")) }, { ESmvIcon::Map, ESmvIcon::Globe, ESmvIcon::Globe }, Re))];
 	Ed->AddSlot().AutoHeight().Padding(0, 14, 0, 6)[Section(Tx(TEXT("tracks.env")), Warn())];
@@ -1341,9 +1341,9 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 	{
 		Ed->AddSlot().AutoHeight().Padding(0, 14, 0, 6)[Section(Tx(TEXT("tracks.proc")), Accent2())];
 		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.seed")), SliderI(&EditTrack.World.Seed, 1, 999999, 1))];
-		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.size")), Slider(&EditTrack.World.SizeM, 1000, 12000, 500, M))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.size")), Slider(&EditTrack.World.SizeM, 1000, 12000, 500, Mfmt))];
 		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.mountains")), SliderI(&EditTrack.World.MountainCount, 0, 12))];
-		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.mountain_h")), Slider(&EditTrack.World.MountainHeight, 0, 1500, 10, M))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.mountain_h")), Slider(&EditTrack.World.MountainHeight, 0, 1500, 10, Mfmt))];
 		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.trees")), Slider(&EditTrack.World.TreeDensity, 0, 1, 0.05, Pct))];
 		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.buildings")), SliderI(&EditTrack.World.BuildingCount, 0, 400, 5))];
 		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.runway")), Toggle(&EditTrack.World.bRunway))];
@@ -1698,7 +1698,7 @@ TSharedRef<SWidget> SSmvShell::WizControl()
 {
 	SSmvShell* Self = this;
 	USmvDataService* D = Data();
-	TSharedRef<SUniformGridPanel> G = SNew(SUniformGridPanel).SlotPadding(FMargin(6.f)).MinDesiredSlotWidth(260.f);
+	TSharedRef<SUniformGridPanel> ModeGrid = SNew(SUniformGridPanel).SlotPadding(FMargin(6.f)).MinDesiredSlotWidth(260.f);
 	for (int32 m = 1; m <= 4; ++m)
 	{
 		TSharedRef<SSmvCanvas> Dia = SNew(SSmvCanvas).Size(FVector2D(240, 110));
@@ -1717,11 +1717,11 @@ TSharedRef<SWidget> SSmvShell::WizControl()
 			})
 			.Extra()[Dia];
 		if (bSel) DefaultFocus = B;
-		G->AddSlot(m - 1, 0)[B];
+		ModeGrid->AddSlot(m - 1, 0)[B];
 	}
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("stickmode.title")))];
-	V->AddSlot().AutoHeight()[G];
+	V->AddSlot().AutoHeight()[ModeGrid];
 	V->AddSlot().AutoHeight().Padding(6, 10, 0, 14)[SmvUi::Text(FText::FromString(StickKeyHint(D->Settings().StickMode)), 14, "Bold", Accent(), false)];
 	V->AddSlot().AutoHeight().Padding(6, 0, 0, 14)[SmvUi::Text(Tx(TEXT("stickmode.hint")), 11, "Regular", Mute())];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("settings.input")), Accent2())];
@@ -2494,12 +2494,12 @@ TSharedRef<SWidget> SSmvShell::SetControls()
 	TArray<FString> Axes = { TEXT("0"), TEXT("1"), TEXT("2"), TEXT("3"), TEXT("4"), TEXT("5"), TEXT("6"), TEXT("7"), TEXT("8") };
 	TArray<FText> AxesL = { Tx(TEXT("settings.axis_none")) };
 	for (int32 i = 1; i <= 8; ++i) AxesL.Add(FText::FromString(FString::Printf(TEXT("Axis %d"), i)));
-	TSharedRef<SUniformGridPanel> G = SNew(SUniformGridPanel).SlotPadding(FMargin(5.f)).MinDesiredSlotWidth(230.f);
+	TSharedRef<SUniformGridPanel> ModeGrid = SNew(SUniformGridPanel).SlotPadding(FMargin(5.f)).MinDesiredSlotWidth(230.f);
 	for (int32 m = 1; m <= 4; ++m)
 	{
 		TSharedRef<SSmvCanvas> Dia = SNew(SSmvCanvas).Size(FVector2D(220, 100));
 		Dia->Painter = [m](const FGeometry& Gm, FSlateWindowElementList& Out, int32 L) { DrStickMode(Out, L, Gm, FVector2D::ZeroVector, FVector2D(Gm.GetLocalSize()), m, Accent()); };
-		G->AddSlot(m - 1, 0)
+		ModeGrid->AddSlot(m - 1, 0)
 		[
 			SNew(SSmvButton).Kind(ESmvBtn::Tile).Selected(S.StickMode == m).Text(FText::FromString(FString::Printf(TEXT("Mode %d"), m))).SubText(FSmvI18n::T(FString::Printf(TEXT("stickmode.m%d"), m)))
 			.OnClick([Self, m]() { Self->EditSettings.StickMode = m; Self->EditSettings.bStickMode2 = m == 2; Self->Refresh(); })
@@ -2508,7 +2508,7 @@ TSharedRef<SWidget> SSmvShell::SetControls()
 	}
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("stickmode.title")))];
-	V->AddSlot().AutoHeight()[G];
+	V->AddSlot().AutoHeight()[ModeGrid];
 	V->AddSlot().AutoHeight().Padding(5, 8, 0, 4)[SmvUi::Text(FText::FromString(StickKeyHint(S.StickMode)), 13, "Bold", Accent(), false)];
 	V->AddSlot().AutoHeight().Padding(5, 0, 0, 10)[SmvUi::Text(Tx(TEXT("stickmode.hint")), 10, "Regular", Mute())];
 	V->AddSlot().AutoHeight().Padding(0, 6, 0, 8)[Section(Tx(TEXT("settings.input")), Accent2())];
