@@ -114,7 +114,7 @@ void ASmvMenuScene::BeginPlay()
 	PP.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
 	PP.AutoExposureApplyPhysicalCameraExposure = false;
 	PP.bOverride_AutoExposureBias = true;
-	PP.AutoExposureBias = SmvCfg(TEXT("PreviewExposure"), 2.f);
+	PP.AutoExposureBias = SmvCfg(TEXT("PreviewExposure"), 0.0f);
 	Capture->PostProcessBlendWeight = 1.f;
 	SnapCap->ShowFlags = Capture->ShowFlags;
 	SnapCap->PostProcessSettings = Capture->PostProcessSettings;
@@ -122,11 +122,11 @@ void ASmvMenuScene::BeginPlay()
 	for (UPointLightComponent* Lt : { KeyLight.Get(), RimLight.Get() })
 	{
 		Lt->SetIntensityUnits(ELightUnits::Candelas);
-		Lt->SetAttenuationRadius(2500.f);
+		Lt->SetAttenuationRadius(4000.f);
 		Lt->SetCastShadows(false);
 		Lt->SetLightingChannels(false, true, false);
 	}
-	KeyLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 60.f));
+	KeyLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 40.f));
 	// stüdyo malzemeleri (koyu lacivert duvar, biraz açık zemin)
 	if (UMaterialInterface* Sm = SmvSolidMat(StudioWall->GetMaterial(0)))
 	{
@@ -135,7 +135,7 @@ void ASmvMenuScene::BeginPlay()
 	}
 	PlaceStudio(0.f);
 	KeyLight->SetLightColor(FLinearColor(1.f, 0.96f, 0.9f));
-	RimLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 60.f) * 0.7f);
+	RimLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 40.f) * 0.7f);
 	RimLight->SetLightColor(FLinearColor(0.35f, 0.75f, 1.f));
 
 	// ---- canlı dünya ----
@@ -480,8 +480,9 @@ void ASmvMenuScene::Tick(float Dt)
 		const FVector CamAt = Target + FVector(-Dist, 0.0, FMath::Lerp(20.f, 4.f, FaceK));
 		Capture->FOVAngle = 28.f;
 		Capture->SetWorldLocationAndRotation(CamAt, (Target - CamAt).Rotation());
-		KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-180, 160, 220));
-		RimLight->SetWorldLocation(GSmvPreviewAt + FVector(160, -120, 200));
+		// tam boy figür: ışıklar 4–5 m uzakta (yakın ışık yüzü ve zemini patlatıyordu)
+		KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-420, 300, 380));
+		RimLight->SetWorldLocation(GSmvPreviewAt + FVector(380, -320, 340));
 		const double Now = FPlatformTime::Seconds();
 		if (Now - LastChannelFix > 1.0) { LastChannelFix = Now; ApplyPreviewChannels(); }
 	}
@@ -590,7 +591,7 @@ void ASmvMenuScene::TickDroneSnaps()
 	{
 		++DFrames;
 		// 20. karede (model gelmeden siluet) ve 150. karede (GLB yüklendiyse model) çekilir
-		if (DFrames == 20 || DFrames == 150)
+		if (DFrames == 12 || DFrames == 90)
 		{
 			if (TObjectPtr<UTextureRenderTarget2D>* Rt = Snaps.Find(DPending))
 			{
@@ -608,7 +609,7 @@ void ASmvMenuScene::TickDroneSnaps()
 				SnapCap->CaptureScene();
 			}
 		}
-		if (DFrames >= 150) { DSnapActor->Destroy(); DSnapActor = nullptr; }
+		if (DFrames >= 90) { DSnapActor->Destroy(); DSnapActor = nullptr; }
 		return;
 	}
 	if (DQueue.Num() == 0) return;

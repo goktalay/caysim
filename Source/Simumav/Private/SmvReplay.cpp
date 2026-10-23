@@ -121,6 +121,7 @@ namespace SmvReplay
 				F.Thr = FCString::Atof(*P[15]); F.Batt = FCString::Atof(*P[16]); F.bArmed = FCString::Atoi(*P[17]) != 0;
 				const int32 Mi = FCString::Atoi(*P[18]);
 				F.Mode = Modes.IsValidIndex(Mi) ? Modes[Mi] : FString();
+				if (FMath::Abs(F.Lat) < 1e-4 && FMath::Abs(F.Lon) < 1e-4) continue;   // GPS'siz ilk kareler (eski kayıtlar)
 				OutFrames.Add(F);
 			}
 		}
