@@ -1,4 +1,5 @@
 #include "SmvGameInstance.h"
+#include "SmvAtmosphere.h"
 #include "SimumavModule.h"
 #include "SimumavClient.h"
 #include "SmvDataService.h"
@@ -56,4 +57,6 @@ void USmvGameInstance::ApplyGraphicsQuality(int32 Q) const
 		S->SetOverallScalabilityLevel(FMath::Clamp(Q, 0, 4));
 		S->ApplySettings(false);
 	}
+	// atmosfer kalitesi (hacimsel sis/bulut örnekleri, Lumen kalitesi, UDS bulut kipi) aynı ön ayara bağlı
+	FSmvAtmosphere::ApplyQuality(GetWorld(), FMath::Clamp(Q, 0, 4));
 }

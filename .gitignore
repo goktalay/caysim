@@ -30,3 +30,6 @@ ThirdParty/ArduPilotSITL/Win64/
 # Fab içerikleri (lisanslı) — derleme anında runner diskinden alınır, depoya girmez (Tools/fab/fab-hazirla.ps1)
 Content/Fab/
 Content/.fab-kopyalar.txt
+
+# Editor Python'un GLB içe aktarma çıktısı (Content/Simumav/ModelsSrc → /Game/Simumav/Models; derlemede üretilir)
+Content/Simumav/Models/

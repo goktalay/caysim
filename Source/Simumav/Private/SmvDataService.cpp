@@ -5,10 +5,14 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
+#include "SmvVehicles.h"
+#include "SmvSitlConfig.h"
 
 // ---------------------------------------------------------------------------
-// katalog — app/simumav/bridge.py GLB_MODELS + PROC_MODELS (anahtarlar birebir; GLB'ler simumav.com'dan çalışma anında indirilir,
-// oyun paketine GÖMÜLMEZ — lisanslar sunucudaki static/simumav/models/LICENSES.md'de)
+// katalog — app/simumav/bridge.py GLB_MODELS + PROC_MODELS (glb:/proc: anahtarlar birebir) + Simumav'a özgü çeşitler (smv:*, yalnız yerel SITL)
+// + Fab gövde seçenekleri (fab:*). GLB'ler pakete gömülüdür (Content/Simumav/ModelsSrc, UFS; kaynak/lisans: aynı klasörde LICENSES.md);
+// paket dışı modelde simumav.com'dan indirilir. Fizik (SITL ikilisi/çerçeve/JSON/parametre seti) ve istatistikler çekirdek tablodan:
+// Source/Simumav/Private/Core/SmvVehicles.cpp (tek kaynak). Belge: docs/arac-katalogu.md
 // ---------------------------------------------------------------------------
 
 static TMap<FString, double> SmvQuad250()
@@ -43,24 +47,82 @@ const TArray<FSmvCatalogModel>& USmvDataService::Catalog()
 		M.Airframe = Airframe; M.Drive = Drive; M.Desc = Desc; M.Defaults = MoveTemp(Defaults); M.bHasProp = bProp;
 		C.Add(M);
 	};
+	// ---- FPV ----
 	Add(TEXT("glb:iris_fpv"), TEXT("Iris FPV"), TEXT("fpv"), TEXT("iris_fpv"), TEXT(""), TEXT(""), TEXT("3DR Iris + FPV kamera; akro/hız ağırlıklı oran döngüleri"), SmvQuad250());
 	Add(TEXT("proc:quad250"), TEXT("FPV Quad 250"), TEXT("fpv"), TEXT(""), TEXT(""), TEXT(""), TEXT("5\" FPV yarış quad (250 mm, 4S)"), SmvQuad250());
+	Add(TEXT("fab:fpv"), TEXT("FPV Interceptor (Fab gövdesi)"), TEXT("fpv"), TEXT(""), TEXT(""), TEXT(""), TEXT("Fab FPV Interceptor gövdesi; 6S 0,9 kg yarışçı fiziği"));
+	// ---- çok rotor ----
 	Add(TEXT("glb:iris"), TEXT("3DR Iris"), TEXT("multirotor"), TEXT("iris"), TEXT(""), TEXT(""), TEXT("3DR Iris quadrotor (0,5 m)"));
 	Add(TEXT("glb:x500"), TEXT("X500"), TEXT("multirotor"), TEXT("x500"), TEXT(""), TEXT(""), TEXT("Karbon çerçeve quad (0,6 m)"));
+	Add(TEXT("fab:quad"), TEXT("Quadcopter (Fab gövdesi)"), TEXT("multirotor"), TEXT(""), TEXT(""), TEXT(""), TEXT("Fab Quadcopter gövdesi (pervane kemikleri döner); 1,8 kg X quad fiziği"));
 	Add(TEXT("glb:typhoon_h480"), TEXT("Typhoon H480 (hexa)"), TEXT("multirotor"), TEXT("typhoon_h480"), TEXT(""), TEXT(""), TEXT("Altı rotor + gimbal kamera (0,7 m)"));
+	Add(TEXT("smv:octa"), TEXT("Octa 8 (sinema/haritalama)"), TEXT("multirotor"), TEXT("smv_octa"), TEXT(""), TEXT(""), TEXT("Sekiz kollu düz octa (1,3 m, 5 kg): yedekli, sakin ve ağır uçuş; 3 kg faydalı yük"));
+	Add(TEXT("smv:y6"), TEXT("Y6 koaksiyel"), TEXT("multirotor"), TEXT("smv_y6"), TEXT(""), TEXT(""), TEXT("Üç kol, kol başına üst/alt karşıt dönen pervane (0,9 m, 2,5 kg)"));
+	Add(TEXT("smv:cargo_x8"), TEXT("Kargo X8 (ağır yük)"), TEXT("multirotor"), TEXT("smv_cargo_x8"), TEXT(""), TEXT(""), TEXT("Koaksiyel X8, 30\" pervaneler, 32,5 kg, 10 kg yük kutusu; ArduPilot Callisto modeli"));
+	// ---- sabit kanat ----
+	Add(TEXT("smv:caymaz"), TEXT("CAYMAZ V3"), TEXT("plane"), TEXT("caymaz"), TEXT("elevon"), TEXT(""), TEXT("Ürettiğimiz uçak (3,03 m açıklık, arkadan itişli delta); iki elevon hem yunuslama hem yatış — HEPGO ile aynı SITL modeli"));
 	Add(TEXT("glb:rc_cessna"), TEXT("RC Cessna"), TEXT("plane"), TEXT("rc_cessna"), TEXT("classic"), TEXT(""), TEXT("RC Cessna 172 (1,1 m); aileron + elevatör + rudder"));
+	Add(TEXT("smv:trainer"), TEXT("Eğitim uçağı"), TEXT("plane"), TEXT("smv_trainer"), TEXT("classic"), TEXT(""), TEXT("Yüksek kanatlı eğitim uçağı (1,6 m): yavaş (≈50 km/h), affedici, yumuşak yatış/yunuslama sınırları"));
 	Add(TEXT("glb:believer"), TEXT("Believer"), TEXT("plane"), TEXT("believer"), TEXT("classic"), TEXT(""), TEXT("Çift motorlu haritalama uçağı (1,9 m)"));
 	Add(TEXT("glb:talon_vtail"), TEXT("Talon V-kuyruk"), TEXT("plane"), TEXT("talon_vtail"), TEXT("vtail"), TEXT(""), TEXT("Tek itici pervane, V-kuyruk (1,72 m)"));
 	Add(TEXT("glb:jet"), TEXT("Jet (yüksek hız)"), TEXT("plane"), TEXT("jet"), TEXT("classic"), TEXT(""), TEXT("170 m/s (~610 km/h), sert manevra"), SmvJetParams());
 	Add(TEXT("glb:zephyr"), TEXT("Zephyr (delta kanat)"), TEXT("plane"), TEXT("zephyr"), TEXT("elevon"), TEXT(""), TEXT("Delta uçan kanat (1,5 m)"), SmvJetParams());
+	// ---- VTOL ----
 	Add(TEXT("glb:standard_vtol"), TEXT("Standard VTOL"), TEXT("vtol"), TEXT("standard_vtol"), TEXT(""), TEXT(""), TEXT("X8 kanat + 4 dikey rotor + itici (2,2 m)"));
+	Add(TEXT("smv:caymaz_vtol"), TEXT("VTOL-CAYMAZ V3"), TEXT("vtol"), TEXT("caymaz"), TEXT(""), TEXT(""), TEXT("Caymaz V3 + dört dikey kaldırma rotoru (quadplane-elevon, 8,5 kg)"));
+	Add(TEXT("smv:tailsitter"), TEXT("Tailsitter (kanatlı)"), TEXT("vtol"), TEXT("smv_tailsitter"), TEXT(""), TEXT(""), TEXT("Kuyruğu üstünde kalkan dört rotorlu uçan kanat (1,2 m); askıdan yatay seyre geçiş"));
+	// ---- INTERCEPTOR ----
 	Add(TEXT("glb:icept_x4"), TEXT("INTERCEPTOR X4"), TEXT("interceptor"), TEXT("icept_x4"), TEXT(""), TEXT(""), TEXT("Kuyruk üstünde dikey kalkış, yatayda ~400 km/h"));
 	Add(TEXT("glb:p1sun"), TEXT("P1-SUN"), TEXT("interceptor"), TEXT("p1sun"), TEXT(""), TEXT(""), TEXT("Önleyici (~0,44 m), 4 pervane"));
 	Add(TEXT("glb:sting"), TEXT("Sting"), TEXT("interceptor"), TEXT("sting"), TEXT(""), TEXT(""), TEXT("Önleyici (~0,45 m), 4 pervane"));
+	// ---- helikopter ----
 	Add(TEXT("glb:heli"), TEXT("Tek rotorlu heli"), TEXT("heli"), TEXT("heli"), TEXT(""), TEXT(""), TEXT("Ana rotor + kuyruk rotoru (1,75 m)"));
+	Add(TEXT("smv:heli_tandem"), TEXT("Tandem kargo heli"), TEXT("heli"), TEXT("smv_heli_tandem"), TEXT(""), TEXT(""), TEXT("Chinook düzeni iki ana rotor (2,6 m, 9 kg): kuyruk rotoru yok, yük taşıma"));
+	Add(TEXT("smv:coax"), TEXT("Koaksiyel mini heli"), TEXT("heli"), TEXT("smv_coax"), TEXT(""), TEXT(""), TEXT("İki karşıt dönen rotorlu küçük elektrikli helikopter (0,9 m, 2 kg)"));
+	// ---- kara aracı ----
 	Add(TEXT("glb:rover_4x4"), TEXT("Keşif 4×4"), TEXT("rover"), TEXT("rover_4x4"), TEXT(""), TEXT("ackermann"), TEXT("Ackermann 4×4 keşif aracı (2,2 m)"), TMap<FString, double>(), false);
 	Add(TEXT("glb:rover_ugv"), TEXT("Paletli UGV"), TEXT("rover"), TEXT("rover_ugv"), TEXT(""), TEXT("skid"), TEXT("Paletli kara aracı (2,5 m), yerinde döner"), TMap<FString, double>(), false);
 	Add(TEXT("glb:rover_bot"), TEXT("Teslimat robotu"), TEXT("rover"), TEXT("rover_bot"), TEXT(""), TEXT("skid"), TEXT("6 tekerli teslimat robotu (0,78 m)"), TMap<FString, double>(), false);
+	// ---- gövde dosyası / Fab / yalnız-yerel / ses / fizik + istatistik (SmvVehicles tek kaynak) ----
+	for (FSmvCatalogModel& M : C)
+	{
+		const bool bSmv = M.Key.StartsWith(TEXT("smv:")), bFab = M.Key.StartsWith(TEXT("fab:"));
+		M.bLocalOnly = bSmv || bFab;
+		if (!M.GlbPath.IsEmpty()) M.GlbFile = FPaths::GetCleanFilename(M.GlbPath);
+		if (bSmv) M.GlbPath.Reset();   // sunucuda yok: yalnız gömülü dosya
+		if (M.Key == TEXT("fab:quad")) M.FabDir = TEXT("/Game/Fab/Drone");
+		if (M.Key == TEXT("fab:fpv")) M.FabDir = TEXT("/Game/Fab/DroneFpv");
+		if (M.GlbFile == TEXT("caymaz.glb")) M.GlbYawDeg = 90.f;   // caymaz-sim.glb burun +Z
+		M.bAddLiftRotors = M.Key == TEXT("smv:caymaz_vtol");
+		M.Sound = M.Type == TEXT("plane") ? (M.Key == TEXT("glb:jet") || M.Key == TEXT("proc:interceptor") ? TEXT("jet") : TEXT("prop"))
+			: M.Type == TEXT("vtol") ? TEXT("pusher") : M.Type == TEXT("rover") ? TEXT("rover")
+			: M.Type == TEXT("heli") ? (M.Key == TEXT("smv:coax") ? TEXT("electric_heli") : TEXT("heli")) : TEXT("multi");
+		if (const SmvCore::FVehicleSpec* V = SmvCore::FindVehicleSpec(std::string(TCHAR_TO_UTF8(*M.Key))))
+		{
+			SmvCore::FSitlSession S;
+			S.SitlType = SmvCore::SitlTypeFromSmv(V->SmvType);
+			S.Vehicle = V->Key;
+			S.Airframe = V->Airframe.empty() ? std::string(TCHAR_TO_UTF8(*(M.Airframe.IsEmpty() ? FString(TEXT("classic")) : M.Airframe))) : V->Airframe;
+			M.SitlBinary = UTF8_TO_TCHAR(SmvCore::SessionBinary(S).c_str());
+			M.SitlModel = UTF8_TO_TCHAR(SmvCore::SessionModel(S).c_str());
+			M.Physics = UTF8_TO_TCHAR(V->Physics.c_str());
+			M.MassKg = (float)V->MassKg; M.SpanM = (float)V->SpanM; M.LengthM = (float)V->LengthM; M.CruiseKmh = (float)V->CruiseKmh;
+			M.MaxKmh = (float)V->MaxKmh; M.EnduranceMin = (float)V->EnduranceMin; M.PayloadKg = (float)V->PayloadKg; M.Motors = V->Motors;
+			M.Battery = UTF8_TO_TCHAR(V->Battery.c_str());
+		}
+		else
+		{
+			// çeşit tablosunda olmayan (INTERCEPTOR, kara aracı): tipin SITL eşlemesi
+			SmvCore::FSitlSession S;
+			S.SitlType = SmvCore::SitlTypeFromSmv(std::string(TCHAR_TO_UTF8(*M.Type)));
+			S.Drive = M.Drive == TEXT("skid") ? "skid" : "ackermann";
+			M.SitlBinary = UTF8_TO_TCHAR(SmvCore::SessionBinary(S).c_str());
+			M.SitlModel = UTF8_TO_TCHAR(SmvCore::SessionModel(S).c_str());
+			M.Physics = M.Type == TEXT("interceptor") ? TEXT("ArduPlane · quadplane-copter_tailsitter + INTERCEPTOR seti (HEPGO flightsim_icept)")
+				: TEXT("ArduRover · ") + M.SitlModel;
+			M.Motors = M.Type == TEXT("interceptor") ? 4 : 0;
+		}
+	}
 	return C;
 }
 
@@ -80,6 +142,52 @@ FString USmvDataService::DefaultModelFor(const FString& Type)
 	if (Type == TEXT("vtol")) return TEXT("glb:standard_vtol");
 	if (Type == TEXT("rover")) return TEXT("glb:rover_4x4");
 	return TEXT("glb:iris");
+}
+
+TArray<const FSmvCatalogModel*> USmvDataService::ModelsForType(const FString& Type, bool bOnlineOnly)
+{
+	TArray<const FSmvCatalogModel*> Out;
+	for (const FSmvCatalogModel& M : Catalog()) if (M.Type == Type && !(bOnlineOnly && M.bLocalOnly)) Out.Add(&M);
+	return Out;
+}
+
+const TArray<FSmvCatalogModel>& USmvDataService::TargetModels()
+{
+	// Hedef / dekor GLB'leri (static/simumav/models tgt_*): YALNIZ görsel hedef nesnesi (atış, güdüm, otonom angajman davranışı yok)
+	static TArray<FSmvCatalogModel> T;
+	if (T.Num()) return T;
+	auto Add = [](const TCHAR* Key, const TCHAR* Label, const TCHAR* File, float LenM, float CruiseKmh, float MaxKmh)
+	{
+		FSmvCatalogModel M;
+		M.Key = Key; M.Label = Label; M.Type = TEXT("target"); M.GlbFile = File; M.bHasProp = true; M.bLocalOnly = true;
+		M.LengthM = LenM; M.CruiseKmh = CruiseKmh; M.MaxKmh = MaxKmh;
+		M.Desc = TEXT("Hedef / dekor modeli (yalnız görsel)");
+		T.Add(M);
+	};
+	Add(TEXT("tgt:lancet"), TEXT("Lancet (hedef)"), TEXT("tgt_lancet.glb"), 1.65f, 80.f, 110.f);
+	Add(TEXT("tgt:octopus"), TEXT("Octopus-100 (hedef)"), TEXT("tgt_octopus.glb"), 0.75f, 150.f, 250.f);
+	Add(TEXT("tgt:sw300"), TEXT("Switchblade 300 (hedef)"), TEXT("tgt_sw300.glb"), 0.5f, 100.f, 160.f);
+	Add(TEXT("tgt:altius"), TEXT("Altius-600 (hedef)"), TEXT("tgt_altius.glb"), 1.02f, 120.f, 200.f);
+	return T;
+}
+
+bool USmvDataService::LoadBundledGlb(const FString& File, TArray<uint8>& Out)
+{
+	static TMap<FString, TArray<uint8>> Cache;
+	if (File.IsEmpty()) return false;
+	if (const TArray<uint8>* F = Cache.Find(File)) { Out = *F; return Out.Num() > 12; }
+	// UFS (pak) içindeki dosya: göreli proje yolu korunur (tam yola çevrilmez)
+	const FString Path = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Simumav"), TEXT("ModelsSrc"), File);
+	TArray<uint8> B;
+	if (!FFileHelper::LoadFileToArray(B, *Path, FILEREAD_Silent) || B.Num() <= 12)
+	{
+		UE_LOG(LogSimumav, Log, TEXT("Gömülü GLB yok: %s"), *Path);
+		Cache.Add(File, TArray<uint8>());
+		return false;
+	}
+	Cache.Add(File, B);
+	Out = MoveTemp(B);
+	return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -607,6 +715,11 @@ void USmvDataService::ImportGuestToAccount(FSmvDone Done)
 void USmvDataService::FetchModelGlb(const FString& ModelKey, TFunction<void(bool, const TArray<uint8>&)> Done)
 {
 	const FSmvCatalogModel* M = FindModel(ModelKey);
+	if (M && !M->GlbFile.IsEmpty())
+	{
+		TArray<uint8> Local;
+		if (LoadBundledGlb(M->GlbFile, Local)) { Done(true, Local); return; }
+	}
 	if (!M || M->GlbPath.IsEmpty() || !Client) { Done(false, TArray<uint8>()); return; }
 	const FString File = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Simumav"), TEXT("ModelCache"), FPaths::GetCleanFilename(M->GlbPath));
 	TArray<uint8> Bytes;

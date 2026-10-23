@@ -52,6 +52,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Dron şeridi (mini 3B kartlar) | `hangar/index.js` | Hangar üstünde yatay dron şeridi: mini 3B kartlar (menü sahnesinde çekilen anlık görüntü; model yüklenince yenilenir), ★ varsayılan, seçili vurgulu | ✓ | P2 |
 | Tür seçimi + 4 stat çubuğu (hız/menzil/dayanıklılık/çeviklik) | `hangar/index.js` | Aynı değerler, animasyonlu çubuklar | ✓ | — |
 | Model kartları (GLB / PROC), kontrol düzeni, sürüş | `bridge.py GLB_MODELS` | Seçici + çipler (katalog sunucuyla aynı anahtarlar) | ✓ | — |
+| Araç kataloğu: gerçek GLB gövdeler + Simumav çeşitleri (CAYMAZ V3 / VTOL-CAYMAZ, octa, Y6, kargo X8, tailsitter, eğitim uçağı, tandem ve koaksiyel heli; Fab Quadcopter / FPV Interceptor seçenekleri) | `bridge.py GLB_MODELS`, `flightsim_models.BUILTIN` | `USmvDataService::Catalog()` (+ `bLocalOnly`, istatistik, SITL özeti); gövde `USmvGlbBody` (gömülü GLB); fizik `SmvVehicles` — bkz. `docs/arac-katalogu.md` | ✓ | — |
 | 10 renk örneği + ad | `hangar/index.js` | ✓ (+ #rrggbb) | ✓ | — |
 | "Hangara indi" animasyonu | `hangar/index.js` | Yeni dron kaydedilince önizlemede yukarıdan dönerek süzülüp iner + "Hangara indi" bildirimi | ✓ | P2 |
 | Güç ve yakıt düzenleyici (aralıklar) | `fly/power.js` | Kaydırıcılar (−1 = varsayılan) | ✓ | — |
@@ -124,7 +125,9 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Gamepad profili / eksen algıla | `flightsim_gamepad.js` | XInput sabit eşleme + tuş atama (Ayarlar → Tuşlar) + RC verici eksen eşlemesi ve "Algıla" (kolu oynat → eksen + ters yön otomatik) | ✓ | P2 |
 | Kamera kipleri 1–7, PiP, FPV FOV | `flightsim_camera.js` | ✓ — PiP (gimbal) penceresi sürükleyerek taşınır, sağ alt köşeden boyutlandırılır (16:9), konum/boyut kalıcı | ✓ | P2 |
 | Rüzgâr göstergesi (pusula, bileşenler) | `flightsim_wind.js` | Sol üstte kart: dönen pusula, akış oku, hız/yön, esinti, baş-kuyruk / yan bileşeni (yan > 6 m/s amber) + sahnede 3B rüzgâr tulumu (şişkinlik/sarkma/dalgalanma rüzgâra göre) | ✓ | P2 |
-| Hava efektleri (yağmur/kar/şimşek) | `flightsim3d.js` | Ultra Dynamic Weather (pakette varsa; içerik ajanı) | ◐ | — |
+| Hava efektleri (yağmur/kar/şimşek) | `flightsim3d.js` | `FSmvAtmosphere`: Ultra Dynamic Weather (yağmur, kar, şimşek, ıslaklık; rüzgâr SITL ile aynı yön/hız) + prosedürel zeminde ıslak/su birikintisi/kar malzemesi; UDW yoksa yalnız sis/ıslak zemin | ✓ | — |
+| Gök: gerçek güneş/ay konumu, gün doğumu/batımı, gece, sis, Lumen, pozlama | `flightsim3d.js` (sky) | Ultra Dynamic Sky (Simulate Real Sun/Moon/Stars, enlem/boylam/tarih, bulut yönü = SITL rüzgârı) ya da yerleşik gök (gerçek güneş yönü, yükseklik + hacimsel sis); post-process (histogram pozlama, renk, Lumen GI/yansıma); grafik ön ayarına bağlı; Cesium dünyasında da | ✓ | — |
+| Pervane / rotor / kontrol yüzeyi / teker animasyonu, seyir ışıkları | `flightsim3d.js` (PROP_RE, CTRL_RE) | `USmvGlbBody`: SERVO_OUTPUT_RAW motor/gaz çıkışlarına göre devir, SITL kanal yorumuyla yüzey sapması, heli ana + kuyruk rotoru, VTOL kaldırma + itici, bulanık disk, nav/çakar ışıklar | ✓ | — |
 | GPWS uyarıları + MASTER lambaları + ton | `flightsim_gpws*.js` | ✓ + sesli uyarı (Windows SAPI konuşma; havacılık İngilizcesi ya da arayüz dili, onaylayınca susar; Ayarlar → Uyarılar) | ✓ | P2 |
 | Grafik ▾ (ön ayarlar, FPS, kare sınırı, özel kaydırıcılar) | `flightsim_gfx.js` | Ayarlar → Görüntü: 5 ön ayar kartı + otomatik algılama + çözünürlük, pencere kipi, VSync, kare sınırı, ölçek, 8 ayrıntı kaydırıcısı | ✓ | — |
 | Servo tetik "Dinle" | `flightsim_servotrig.js` | Duraklatma → Gelişmiş | ✓ | — |

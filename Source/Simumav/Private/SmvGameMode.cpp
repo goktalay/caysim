@@ -284,13 +284,13 @@ void ASmvGameMode::BuildScene()
 			if (Terrain) Terrain->Build(Req.Track, GroundMsl, WorldSetup);
 			SpawnFabDecor();
 		}
-		// Fab Ultra Dynamic Sky (varsa) yerleşik güneş/gök/sis/bulut yerine; saat ve hava parkurdan
+	}
+	// atmosfer (düz dünya ve Cesium gerçek dünya; SmvAtmosphere): Ultra Dynamic Sky + Weather varsa yerleşik güneş/gök/sis/bulut yerine;
+	// saat (gerçek güneş konumu), hava, rüzgâr parkurdan; post-process hacmi (Lumen, pozlama, renk) her durumda
+	{
 		TArray<AActor*> SkyActors;
-		if (FSmvFabContent::SpawnSky(W, Req.Track, SkyActors))
-		{
-			WorldSetup->DisableBuiltinSky();
-			for (AActor* A : SkyActors) FabSkyActors.Add(A);
-		}
+		if (FSmvFabContent::SpawnSky(W, Req.Track, SkyActors)) WorldSetup->DisableBuiltinSky();
+		for (AActor* A : SkyActors) FabSkyActors.Add(A);
 	}
 
 	// ---- dron ----
@@ -636,6 +636,7 @@ void ASmvGameMode::HandleTele(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 {
 	if (!bScene || !Drone) return;
 	Drone->PushTelemetry(T);
+	Drone->SetServoOutputs(X.Servo, X.ServoFn);   // GLB gövdesi: motor/gaz → pervane devri, kanal 1/2/4 → kontrol yüzeyleri
 	UpdateGpws(T, X);
 	// 5 Hz iz (kayıt / rota haritası / rapor) — kayıttan oynatmada yazılmaz
 	if (Flow.IsValid() && !Flow->IsReplay())

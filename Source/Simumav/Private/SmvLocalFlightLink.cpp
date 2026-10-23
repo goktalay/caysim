@@ -118,8 +118,8 @@ int32 USmvLocalFlightLink::FindFreePortBlock() const
 
 bool USmvLocalFlightLink::LaunchSitl(bool bClean)
 {
-	std::string BinA, ModelA;
-	SmvCore::BinaryAndModel(Session->SitlType, BinA, ModelA);
+	// ikili çeşit çerçevesinden (ör. heli → ArduHeli, coaxcopter → ArduCopter; SmvVehicles)
+	const std::string BinA = SmvCore::SessionBinary(*Session);
 	const FString Exe = FPaths::Combine(SitlDir(), FString(UTF8_TO_TCHAR(BinA.c_str())) + TEXT(".exe"));
 	if (!FPaths::FileExists(Exe))
 	{
@@ -150,6 +150,12 @@ bool USmvLocalFlightLink::LaunchSitl(bool bClean)
 		}
 	}
 	FFileHelper::SaveStringToFile(FString(UTF8_TO_TCHAR(Text.c_str())), *Parm, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	// çeşidin çerçeve / kanat JSON'u: --model "<çerçeve>:<ad>.json" GÖRELİ yolla okunur (süreç çalışma dizini = WorkDir)
+	std::string JName, JText;
+	if (SmvCore::SessionJson(*Session, JName, JText))
+	{
+		FFileHelper::SaveStringToFile(FString(UTF8_TO_TCHAR(JText.c_str())), *FPaths::Combine(WorkDir, FString(UTF8_TO_TCHAR(JName.c_str()))), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	}
 	// cygwin ikilisi ileri eğik çizgili Windows yolunu kabul eder
 	FString ParmArg = Parm;
 	ParmArg.ReplaceInline(TEXT("\\"), TEXT("/"));
@@ -297,6 +303,10 @@ void USmvLocalFlightLink::Start(const FSmvFlightRequest& Request)
 	Session->Launch.ReleaseKmh = Req.Launch.ReleaseKmh;
 	Session->Launch.AzimuthDeg = Req.Launch.AimAzDeg;
 	for (const TPair<FString, double>& Kv : Req.Drone.Params) Session->UserParams.push_back({ std::string(TCHAR_TO_UTF8(*Kv.Key)), Kv.Value });
+	// araç çeşidi (katalog anahtarı → SITL çerçevesi/JSON/parametre seti; SmvVehicles). Tip uyuşmazsa çekirdek eski eşlemeye düşer.
+	Session->Vehicle = std::string(TCHAR_TO_UTF8(*Req.Drone.ModelKey));
+	bHeliInterlock = SmvCore::SessionBinary(*Session) == "ArduHeli";
+	NextInterlockAt = 0;
 	ModeVehicle = UTF8_TO_TCHAR(SmvCore::ModeVehicle(Type).c_str());
 	{
 		bool bSens = true;
@@ -470,6 +480,8 @@ bool USmvLocalFlightLink::OnTick(float /*Dt*/)
 		}
 		if (Tcp) bResetting = false;
 	}
+
+	if (bHeliInterlock && Tcp && bHeartbeatSeen) PumpHeliInterlock(W);
 
 	// okuma
 	if (Tcp)
@@ -845,6 +857,8 @@ void USmvLocalFlightLink::SendRc(const TArray<int32>& Ch)
 		C[i] = Ch[i] == 0 ? (uint16)0 : (uint16)FMath::Clamp(Ch[i], 1000, 2000);
 		if (Ch[i] != 0) bAllZero = false;
 	}
+	// helikopter: RC8 motor kilidi her zaman ARM durumundan (pilot kanalı ezmez)
+	if (bHeliInterlock) { C[7] = Tele.bArmed ? 2000 : 1000; bAllZero = false; }
 	// sunucu sözleşmesi: 0 = "o kanala dokunma" (MAVLink'te 1–8 için 65535); 8×0 = override'ı bırak (MAVLink'te 0)
 	if (!bAllZero) for (int32 i = 0; i < 8; ++i) if (C[i] == 0) C[i] = 65535;
 	const std::vector<uint8_t> P = SmvMav::PackRcOverride(TargetSys, TargetComp, C);
@@ -862,6 +876,7 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	if (Name == TEXT("arm") || Name == TEXT("disarm"))
 	{
 		if (Name == TEXT("arm") && bMotorCut) { CommandLong(218, 31.f, 0.f); bMotorCut = false; }
+		if (bHeliInterlock) PumpHeliInterlock(FPlatformTime::Seconds(), true);   // ARM öncesi kilit düşük (ARM'sız durumda 1000)
 		CommandLong(SmvMav::CMD_COMPONENT_ARM_DISARM, Name == TEXT("arm") ? 1.f : 0.f, SmvMav::ARM_FORCE_MAGIC);
 	}
 	else if (Name == TEXT("mode"))
@@ -1038,7 +1053,33 @@ void USmvLocalFlightLink::StartTakeoff(float AltM)
 	SetMode(TEXT("GUIDED"));
 	const bool bArmed = Tele.bArmed;
 	After(0.3, [Weak, bArmed]() { if (USmvLocalFlightLink* S = Weak.Get()) if (!bArmed) S->CommandLong(SmvMav::CMD_COMPONENT_ARM_DISARM, 1.f, SmvMav::ARM_FORCE_MAGIC); });
+	if (bHeliInterlock)
+	{
+		// ArduHeli: ARM → RC8 yüksek → rotor devre girer (H_RSC_RUNUP_TIME ~10 sn); o bitene dek NAV_TAKEOFF reddedilir → 2 sn'de bir, 1 m'yi geçene dek
+		for (int32 Try = 0; Try < 14; ++Try)
+		{
+			After(1.3 + Try * 2.0, [Weak, AltM, Try]()
+			{
+				USmvLocalFlightLink* S = Weak.Get();
+				if (!S || (Try > 0 && S->Tele.AltRel > 1.0)) return;
+				S->CommandLong(SmvMav::CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0, AltM);
+			});
+		}
+		return;
+	}
 	After(bArmed ? 0.4 : 1.3, [Weak, AltM]() { if (USmvLocalFlightLink* S = Weak.Get()) S->CommandLong(SmvMav::CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0, AltM); });
+}
+
+void USmvLocalFlightLink::PumpHeliInterlock(double Wall, bool bForce)
+{
+	if (!bHeliInterlock || !Tcp || bCrashed) return;
+	if (!bForce && Wall < NextInterlockAt) return;
+	NextInterlockAt = Wall + 0.25;
+	uint16 C[18];
+	for (int32 i = 0; i < 18; ++i) C[i] = i < 8 ? 65535 : 0;   // 65535 = "bu kanala dokunma" (pilot kanalları korunur)
+	C[7] = Tele.bArmed ? 2000 : 1000;
+	const std::vector<uint8_t> P = SmvMav::PackRcOverride(TargetSys, TargetComp, C);
+	SendFrame(SmvMav::MSG_RC_CHANNELS_OVERRIDE, P.data(), (int32)P.size());
 }
 
 void USmvLocalFlightLink::TickLaunch()

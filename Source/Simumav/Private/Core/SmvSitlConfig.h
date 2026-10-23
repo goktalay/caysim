@@ -40,7 +40,16 @@ namespace SmvCore
 		double MaxSpeedMs = -1;            // uçak tipleri
 		FSitlLaunch Launch;
 		FParamList UserParams;             // dron kaydının kalıcı parametreleri (beyaz liste dışı adlar ayıklanmış olmalı)
+		/** Katalog model anahtarı (SmvVehicles çeşidi: çerçeve, JSON, parametre seti). Boş ya da çeşit yoksa tipin eski eşlemesi. */
+		std::string Vehicle;
 	};
+
+	/** Oturumun ikilisi (çeşit çerçevesinden; yoksa BinaryAndModel). */
+	std::string SessionBinary(const FSitlSession& S);
+	/** Oturumun --model değeri (çeşit çerçevesi + sabit kanat düzen/fırlatma eki + ":<json>"; yoksa tipin eski değeri). */
+	std::string SessionModel(const FSitlSession& S);
+	/** Çeşidin SITL çalışma dizinine yazılacak JSON'u (çerçeve / uçak katsayıları); yoksa false. */
+	bool SessionJson(const FSitlSession& S, std::string& OutName, std::string& OutText);
 
 	/** SITL komut satırı argümanları (ikili hariç): --model … --home lat,lon,alt,yön --base-port P --defaults <parm> --sysid N */
 	std::vector<std::string> CommandLine(const FSitlSession& S, const std::string& DefaultsPath);

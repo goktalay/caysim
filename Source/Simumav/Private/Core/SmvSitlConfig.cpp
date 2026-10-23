@@ -2,6 +2,7 @@
 #include "SmvSitlConfig.h"
 #include "SmvRace.h"   // RoundN
 #include "SmvPower.h"  // SpeedParams
+#include "SmvVehicles.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -62,12 +63,46 @@ namespace SmvCore
 		return S;
 	}
 
-	std::vector<std::string> CommandLine(const FSitlSession& S, const std::string& DefaultsPath)
+	static const FVehicleSpec* SpecOf(const FSitlSession& S)
+	{
+		if (S.Vehicle.empty()) return nullptr;
+		const FVehicleSpec* V = FindVehicleSpec(S.Vehicle);
+		// çeşit yalnız aynı SITL tipinde geçerli (kayıt tipi değiştiyse eski eşleme)
+		return (V && !V->Frame.empty() && SitlTypeFromSmv(V->SmvType) == S.SitlType) ? V : nullptr;
+	}
+
+	std::string SessionBinary(const FSitlSession& S)
+	{
+		if (const FVehicleSpec* V = SpecOf(S)) return BinaryForFrame(V->Frame);
+		std::string Bin, Model;
+		BinaryAndModel(S.SitlType, Bin, Model);
+		return Bin;
+	}
+
+	std::string SessionModel(const FSitlSession& S)
 	{
 		std::string Bin, Model;
 		BinaryAndModel(S.SitlType, Bin, Model);
+		const FVehicleSpec* V = SpecOf(S);
+		if (V) Model = V->Frame;
 		if (S.SitlType == "sabit_kanat") Model += PlaneModelSuffix(S.Airframe, S.Launch.Method == "ramp");
 		if (S.SitlType == "rover" && S.Drive == "skid") Model = "rover-skid";
+		if (V && !V->Json.empty()) Model += ":" + VehicleJsonName(*V);
+		return Model;
+	}
+
+	bool SessionJson(const FSitlSession& S, std::string& OutName, std::string& OutText)
+	{
+		const FVehicleSpec* V = SpecOf(S);
+		if (!V || V->Json.empty()) return false;
+		OutName = VehicleJsonName(*V);
+		OutText = V->Json;
+		return true;
+	}
+
+	std::vector<std::string> CommandLine(const FSitlSession& S, const std::string& DefaultsPath)
+	{
+		const std::string Model = SessionModel(S);
 		char Home[160];
 		double Yaw = std::fmod(S.HomeHeading, 360.0);
 		if (Yaw < 0) Yaw += 360.0;
@@ -203,6 +238,12 @@ namespace SmvCore
 			O << "# SIMUMAV kara araci (rover.parm ozu)\n";
 			for (auto& P : RoverParams(S.Drive == "skid")) O << P.first << " " << Num(P.second) << "\n";
 		}
+		const FVehicleSpec* Spec = SpecOf(S);
+		if (Spec && !Spec->Params.empty())
+		{
+			O << "# SIMUMAV arac cesidi " << Spec->Key << " (" << Spec->Frame << ")\n";
+			for (auto& P : Spec->Params) O << P.first << " " << Num(P.second) << "\n";
+		}
 		if (!S.UserParams.empty())
 		{
 			O << "# SIMUMAV kayitli parametreler\n";
@@ -216,7 +257,12 @@ namespace SmvCore
 		// Çerçeve eşlemesi (HEPGO drone_sitl.CERCEVE_PARM, 2026-10-23): SITL "--model +" fiziği motorları ARTI dizer; FRAME_TYPE yazılmazsa
 		// ArduCopter varsayılanı X (1) kalır → kontrolcü 45° kaymış motorlara karıştırır, askıda ~16 Hz ±2° salınım. Kayıtlı parametrelerden
 		// SONRA yazılır (gerçek X dronun kaydı sanal fiziği bozmasın). hexa modeli altılı artı → FRAME_CLASS 2.
-		if (S.SitlType == "multirotor") O << "# SIMUMAV cerceve (--model +)\nFRAME_CLASS 1\nFRAME_TYPE 0\n";
+		if (Spec && !Spec->FrameParams.empty())
+		{
+			O << "# SIMUMAV cerceve (--model " << Spec->Frame << ")\n";
+			for (auto& P : Spec->FrameParams) O << P.first << " " << Num(P.second) << "\n";
+		}
+		else if (S.SitlType == "multirotor") O << "# SIMUMAV cerceve (--model +)\nFRAME_CLASS 1\nFRAME_TYPE 0\n";
 		else if (S.SitlType == "hexarotor") O << "# SIMUMAV cerceve (--model hexa)\nFRAME_CLASS 2\nFRAME_TYPE 0\n";
 		return O.str();
 	}
@@ -238,7 +284,14 @@ namespace SmvCore
 		const std::set<std::string> U = UserNames(S);
 		// 4. kayıtlı parametreler (sensör adları hariç)
 		const bool bCok = (S.SitlType == "multirotor" || S.SitlType == "hexarotor");
-		for (auto& Kv : S.UserParams) if (!IsSensorName(Kv.first) && !(bCok && (Kv.first == "FRAME_CLASS" || Kv.first == "FRAME_TYPE"))) P.push_back(Kv);
+		std::set<std::string> FrameNames;
+		if (const FVehicleSpec* Spec = SpecOf(S)) for (auto& F : Spec->FrameParams) FrameNames.insert(F.first);
+		for (auto& Kv : S.UserParams)
+		{
+			if (IsSensorName(Kv.first) || FrameNames.count(Kv.first)) continue;
+			if (bCok && (Kv.first == "FRAME_CLASS" || Kv.first == "FRAME_TYPE")) continue;
+			P.push_back(Kv);
+		}
 		// 5. rüzgâr
 		P.push_back({ "SIM_WIND_SPD", GustWindSpeed(S.WindMs, S.WindGust, 0) });
 		P.push_back({ "SIM_WIND_DIR", S.WindDir });

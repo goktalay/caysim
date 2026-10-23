@@ -138,6 +138,11 @@ private:
 	void StartTakeoff(float AltM);
 	void TickLaunch();
 	void BeginReset();
+	// ---- helikopter motor kilidi (ArduHeli her zaman RC8 MOTOR_INTERLOCK kullanır: ARM için düşük, rotor için yüksek) ----
+	bool bHeliInterlock = false;
+	double NextInterlockAt = 0;
+	/** RC8 = ARM'lı ? 2000 : 1000 (yalnız ArduHeli; RC_OVERRIDE_TIME dolmasın diye 0,25 sn'de bir). */
+	void PumpHeliInterlock(double Wall, bool bForce = false);
 
 	// ---- zamanlanmış işler (kalkış dizileri) ----
 	struct FTimed { double At; TFunction<void()> Fn; };

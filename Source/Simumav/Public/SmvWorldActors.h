@@ -22,6 +22,8 @@ class USmvMotorSynth;
 class UAudioComponent;
 class ICaySimGeoTransform;
 class FSmvContactSolver;
+class USmvGlbBody;
+struct FSmvCatalogModel;
 
 UCLASS()
 class SIMUMAV_API ASmvDroneActor : public ACaySimDroneActor
@@ -50,6 +52,10 @@ public:
 	/** Görünürlük ölçeği (gövde ×2,5; kara aracı ×1). */
 	float GetVisScale() const { return VisScale; }
 	virtual void BeginDestroy() override;
+	/** Katalog GLB gövdesi (Content/Simumav/ModelsSrc) kullanılıyor mu. */
+	bool IsUsingGlbBody() const { return bGlbBody; }
+	/** SERVO_OUTPUT_RAW (PWM) ve SERVOn_FUNCTION — pervane devri ve kontrol yüzeyleri (oyun modu telemetriden besler). */
+	void SetServoOutputs(const TArray<int32>& Pwm, const TArray<int32>& Fn) { ServoPwm = Pwm; ServoFn = Fn; }
 
 protected:
 	virtual void BuildPlaceholder() override;
@@ -59,6 +65,8 @@ protected:
 	/** Fab gövdesi iskeletsizse (statik ağ) */
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> FabStatic;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USmvMotorSynth> Motor;
+	/** Katalog GLB gövdesi (pervane/yüzey/ışık hareketi bileşenin içinde) */
+	UPROPERTY() TObjectPtr<USmvGlbBody> GlbBody;
 	/** Uçak/VTOL motor sesi (Fab Aircraft Engine Sounds döngüsü; gaz → perde/ses düzeyi). Yoksa yalnız prosedürel ses. */
 	UPROPERTY() TObjectPtr<UAudioComponent> EngineAudio;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
@@ -93,6 +101,11 @@ private:
 	/** Dönüş yönü (+1/−1; çapraz çiftler aynı) */
 	TArray<float> FabPropDir;
 	float FabPropPhase = 0.f;
+	bool bGlbBody = false;
+	TArray<int32> ServoPwm;
+	TArray<int32> ServoFn;
+	/** Katalog modelinin GLB'sinden gövde (yoksa false → Fab / BasicShapes gövdesi). */
+	bool BuildGlbModel(const FSmvCatalogModel& M);
 	/** Fab motor sesi etkin mi; prosedürel sesin bu durumdaki payı (uçak 0: motor sesi tek başına; VTOL: dikey rotorlar için) */
 	bool bFabEngineSound = false;
 	float SynthShare = 1.f;
@@ -132,6 +145,8 @@ public:
 	void Build(const FSmvTrack& Track, double GroundMsl, AActor* GeoActor);
 	/** Yerel ENU (m) noktasında arazi yüksekliği (merkez zeminine göre). */
 	double HeightAt(double E, double N) const;
+	/** Hava: ıslaklık (koyulaşma, parlaklık, su birikintisi) ve kar örtüsü 0..1 — M_SmvTerrainWx varsa (FSmvAtmosphere çağırır). */
+	void SetSurfaceWeather(float Wetness, float Snow);
 
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UProceduralMeshComponent> Ground;
@@ -141,9 +156,11 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Runway;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> WaterPlane;
 	UPROPERTY() TObjectPtr<UMaterialInterface> BaseMaterial;
+	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> TerrainMid;
 
 private:
 	FSmvTrackWorld W;
+	float PendingWet = 0.f, PendingSnow = 0.f;
 	double FlatR = 300.0;
 	int32 Seed = 1;
 	struct FMountain { double E, N, H, R; };

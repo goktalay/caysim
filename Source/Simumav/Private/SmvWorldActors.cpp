@@ -5,6 +5,8 @@
 #include "SmvRace.h"
 #include "SmvPyRandom.h"
 #include "SmvFabContent.h"
+#include "SmvGlbBody.h"
+#include "SmvDataService.h"
 #include "Components/PoseableMeshComponent.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
@@ -30,6 +32,8 @@ namespace
 	const TCHAR* GSmvMat = TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial");
 	/** Editor Python betiğinin ürettiği malzemeler (varsa) — yoksa BasicShapeMaterial */
 	const TCHAR* GSmvTerrainMat = TEXT("/Game/Simumav/Materials/M_SmvTerrain.M_SmvTerrain");
+	/** Hava duyarlı arazi (Wetness / Snow parametreleri; editor Python üretir) — yoksa M_SmvTerrain */
+	const TCHAR* GSmvTerrainWxMat = TEXT("/Game/Simumav/Materials/M_SmvTerrainWx.M_SmvTerrainWx");
 	const TCHAR* GSmvGlowMat = TEXT("/Game/Simumav/Materials/M_SmvGlow.M_SmvGlow");
 }
 
@@ -108,6 +112,36 @@ void ASmvDroneActor::ClearParts()
 	FabPropBones.Reset();
 	FabPropRef.Reset();
 	FabPropDir.Reset();
+	if (GlbBody) GlbBody->Clear();
+	bGlbBody = false;
+}
+
+bool ASmvDroneActor::BuildGlbModel(const FSmvCatalogModel& M)
+{
+	TArray<uint8> Bytes;
+	if (M.GlbFile.IsEmpty() || !USmvDataService::LoadBundledGlb(M.GlbFile, Bytes)) return false;
+	if (!GlbBody)
+	{
+		GlbBody = NewObject<USmvGlbBody>(this, TEXT("GlbBody"));
+		GlbBody->SetupAttachment(Body);
+		GlbBody->RegisterComponent();
+	}
+	FSmvGlbBuildOptions O;
+	O.YawDeg = M.GlbYawDeg;
+	O.Type = SmvType;
+	O.Airframe = M.Airframe;
+	O.bAddLiftRotors = M.bAddLiftRotors;
+	if (!GlbBody->Build(Bytes, O, M.Key)) return false;
+	bGlbBody = true;
+	const FBox B = GlbBody->GetLocalBounds();
+	// görünürlük ölçeği (web MODEL_SCALE 2,5): küçük dronlar büyütülür, ≥ 1,6 m açıklıklı uçaklar gerçek boyutta; kara aracı gerçek boyut
+	const float SpanM = (float)FMath::Max(B.GetSize().X, B.GetSize().Y) / 100.f;
+	VisScale = SmvType == TEXT("rover") ? 1.f : FMath::Clamp(1.6f / FMath::Max(0.1f, SpanM), 1.f, 2.5f);
+	Body->SetRelativeScale3D(FVector(VisScale));
+	GroundOffsetM = (float)B.Min.Z / 100.f * VisScale;
+	VisRadiusM = FMath::Max(0.3f, (float)FVector2D(FMath::Max(FMath::Abs(B.Min.X), FMath::Abs(B.Max.X)), FMath::Max(FMath::Abs(B.Min.Y), FMath::Abs(B.Max.Y))).Size() / 100.f * VisScale);
+	VisNoseM = (float)B.Max.X / 100.f * VisScale;
+	return true;
 }
 
 bool ASmvDroneActor::BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, float DefaultSpanM)
@@ -217,6 +251,18 @@ bool ASmvDroneActor::PlaceFabBody(USceneComponent* C, const FBoxSphereBounds& B,
 void ASmvDroneActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bGlbBody && GlbBody)
+	{
+		const FCaySimTelemetry& Tg = GetLatestTelemetry();
+		FSmvGlbInputs In;
+		In.bArmed = Tg.bArmed;
+		In.ThrottlePct = Tg.Throttle;
+		In.GroundspeedMs = Tg.Groundspeed;
+		In.Servo = &ServoPwm;
+		In.ServoFn = &ServoFn;
+		GlbBody->Animate(DeltaSeconds, In);
+		return;
+	}
 	if (!FabMesh || FabPropBones.Num() == 0) return;
 	const FCaySimTelemetry& T = GetLatestTelemetry();
 	const float Target = T.bArmed ? FMath::Max(0.15f, T.Throttle / 100.f) : 0.f;
@@ -243,6 +289,12 @@ void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& Model
 		else if (InType == TEXT("interceptor")) K = ESmvEngineKind::ElectricProp;
 		else if (InType == TEXT("rover")) K = ESmvEngineKind::Rover;
 		else if (InType == TEXT("heli")) { K = ESmvEngineKind::Combustion; Rotors = 2; }
+		// katalog: motor sayısı (hexa/octa/Y6 → daha çok rotor sesi) ve elektrikli heli (koaksiyel) ayrımı
+		if (const FSmvCatalogModel* Cm = USmvDataService::FindModel(ModelKey))
+		{
+			if (K == ESmvEngineKind::ElectricMulti && Cm->Motors > 0) Rotors = Cm->Motors;
+			if (Cm->Sound == TEXT("electric_heli")) { K = ESmvEngineKind::ElectricMulti; Rotors = 2; }
+		}
 		Motor->SetKind(K, Rotors);
 		Motor->Start();
 	}
@@ -250,6 +302,12 @@ void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& Model
 	const TCHAR* SoundKind = nullptr;
 	if (InType == TEXT("plane")) SoundKind = ModelKey.Contains(TEXT("jet")) ? TEXT("Jet") : TEXT("Prop");
 	else if (InType == TEXT("vtol")) SoundKind = TEXT("Pusher");
+	if (const FSmvCatalogModel* Cm = USmvDataService::FindModel(ModelKey))
+	{
+		if (Cm->Sound == TEXT("jet")) SoundKind = TEXT("Jet");
+		else if (Cm->Sound == TEXT("prop")) SoundKind = TEXT("Prop");
+		else if (Cm->Sound == TEXT("pusher")) SoundKind = TEXT("Pusher");
+	}
 	USoundBase* EngineSnd = SoundKind ? FSmvFabContent::LoadEngineSound(SoundKind) : nullptr;
 	bFabEngineSound = EngineSnd != nullptr;
 	SynthShare = !bFabEngineSound ? 1.f : (InType == TEXT("vtol") ? 0.6f : 0.f);
@@ -372,6 +430,19 @@ void ASmvDroneActor::BuildPlaceholder()
 	float Low = -0.1f;   // gövdenin en alt noktası (m, ölçeksiz)
 	float Radius = 0.4f, Nose = 0.2f;
 	VisScale = 2.5f;
+	// katalog modeli: Fab gövdesi seçeneği (fab:*) ya da pakete gömülü GLB gövdesi (Content/Simumav/ModelsSrc)
+	if (const FSmvCatalogModel* Cm = USmvDataService::FindModel(SmvModelKey))
+	{
+		if (!Cm->FabDir.IsEmpty())
+		{
+			const bool bFpvDir = Cm->FabDir.EndsWith(TEXT("Fpv"));
+			if (BuildFabBody(*Cm->FabDir, bFpvDir ? TEXT("Fpv") : TEXT("Drone"), bFpvDir ? 0.35f : 0.6f)) { Body->SetRelativeScale3D(FVector(VisScale)); return; }
+		}
+		else if (BuildGlbModel(*Cm))
+		{
+			return;
+		}
+	}
 	// FPV yarışçı ve önleyici: Fab FPV_Interceptor_Drone gövdesi varsa onu kullan (yoksa aşağıdaki basit gövdeler)
 	if ((SmvType == TEXT("fpv") || SmvType == TEXT("interceptor")) && BuildFabBody(TEXT("/Game/Fab/DroneFpv"), TEXT("Fpv"), 0.35f))
 	{
@@ -622,6 +693,15 @@ double ASmvProcTerrain::Noise2(double X, double Y) const
 	return Sum / Norm;
 }
 
+void ASmvProcTerrain::SetSurfaceWeather(float Wetness, float Snow)
+{
+	PendingWet = FMath::Clamp(Wetness, 0.f, 1.f);
+	PendingSnow = FMath::Clamp(Snow, 0.f, 1.f);
+	if (!TerrainMid) return;
+	TerrainMid->SetScalarParameterValue(TEXT("Wetness"), PendingWet);
+	TerrainMid->SetScalarParameterValue(TEXT("Snow"), PendingSnow);
+}
+
 double ASmvProcTerrain::HeightAt(double E, double N) const
 {
 	const double Dist = FMath::Sqrt(E * E + N * N);
@@ -688,8 +768,15 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	}
 	for (FVector& X : Nrm) { X = X.GetSafeNormal(); if (X.Z < 0) X = -X; }
 	Ground->CreateMeshSection_LinearColor(0, V, Tri, Nrm, UV, Col, Tan, true);
-	UMaterialInterface* TerrainMat = LoadObject<UMaterialInterface>(nullptr, GSmvTerrainMat);
-	if (TerrainMat) Ground->SetMaterial(0, TerrainMat);
+	UMaterialInterface* TerrainWx = LoadObject<UMaterialInterface>(nullptr, GSmvTerrainWxMat, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	UMaterialInterface* TerrainMat = TerrainWx ? nullptr : LoadObject<UMaterialInterface>(nullptr, GSmvTerrainMat);
+	if (TerrainWx)
+	{
+		TerrainMid = UMaterialInstanceDynamic::Create(TerrainWx, this);
+		Ground->SetMaterial(0, TerrainMid);
+		SetSurfaceWeather(PendingWet, PendingSnow);
+	}
+	else if (TerrainMat) Ground->SetMaterial(0, TerrainMat);
 	else if (BaseMaterial)
 	{
 		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(BaseMaterial, this);
