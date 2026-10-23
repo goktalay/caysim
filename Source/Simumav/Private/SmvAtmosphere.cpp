@@ -250,7 +250,8 @@ namespace
 	/** UDS / UDW kalite değişkenleri (adlar paket sürümüne göre değişebilir; bulunamayan atlanır). */
 	void UdsQuality(FSetter& S, int32 Q)
 	{
-		S.EnumByName({ TEXT("Sky Mode") }, Q >= 1 ? std::initializer_list<const TCHAR*>{ TEXT("Volumetric") } : std::initializer_list<const TCHAR*>{ TEXT("2D Dynamic"), TEXT("Static") });
+		if (Q >= 1) S.EnumByName({ TEXT("Sky Mode") }, { TEXT("Volumetric") });
+		else S.EnumByName({ TEXT("Sky Mode") }, { TEXT("2D Dynamic"), TEXT("Static") });
 		S.Num({ TEXT("Volumetric Cloud Quality"), TEXT("Cloud Quality"), TEXT("Overall Quality") }, Q >= 3 ? 3 : Q >= 2 ? 2 : 1);
 	}
 }

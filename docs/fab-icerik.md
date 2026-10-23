@@ -51,11 +51,10 @@ denetlenir (zemin, üstü açık, araç boyutunda boşluk). SITL yine düz zemin
 
 ## Gök, hava, ses
 
-**Ultra Dynamic Sky** (`Content\UltraDynamicSky`) varsa her düz dünyada (prosedürel, Fab haritaları, şehir) yerleşik
-güneş/gök/sis/bulut yerine kullanılır; parkurun saat (gündüz/alacakaranlık/gece → *Time of Day* 1300/1845/2300) ve hava
-(açık/bulutlu/yağmur/sis/kar → *Cloud Coverage*, *Fog* ve Ultra Dynamic Weather ön ayarı Clear_Skies / Cloudy / Rain /
-Foggy / Snow; rastgele hava değişimi kapalı) ayarları UDS'ye bağlıdır. Cesium gerçek arazide Cesium güneş-gök sistemi kalır.
-Kapatmak: `UseUltraDynamicSky=False`.
+**Ultra Dynamic Sky** (`Content\UltraDynamicSky`) varsa her uçuş sahnesinde (prosedürel, Fab haritaları, şehir ve Cesium gerçek
+dünya) yerleşik güneş/gök/sis/bulut yerine kullanılır; saat gerçek güneş konumundan (parkur enlem/boylamı, bugünün tarihi), hava ön ayarı
+(Clear_Skies / Cloudy / Rain / Foggy / Snow; rastgele değişim kapalı), yağmur/kar/şimşek ve bulut/rüzgâr yönü SITL rüzgârıyla aynı —
+ayrıntı: `docs/arac-katalogu.md` → Atmosfer (`FSmvAtmosphere`). Kapatmak: `UseUltraDynamicSky=False`.
 
 **Aircraft Engine Sounds** (`cplomedia_AircraftEngineSounds`) varsa CI seçilen motor döngülerini `/Game/Fab/Sounds/`
 altına kopyalar (`SC_Engine_Prop` uçak, `SC_Engine_Pusher` VTOL itici motoru, `SC_Engine_Jet` jet modeli; döngü açık).

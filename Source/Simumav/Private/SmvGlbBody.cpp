@@ -259,6 +259,19 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 			int32 Ax = 0;
 			if (E.Y < E[Ax]) Ax = 1;
 			if (E.Z < E[Ax]) Ax = 2;
+			// iki palalı pervanede iki boyut da küçüktür (veter ≈ kalınlık) → belirsiz: ada ve tipe göre ileri (X) ya da dikey (Z) eksen seçilir
+			int32 Big = 0;
+			if (E.Y > E[Big]) Big = 1;
+			if (E.Z > E[Big]) Big = 2;
+			const int32 S1 = (Big + 1) % 3, S2 = (Big + 2) % 3;
+			if (E[S1] < E[Big] * 0.35 && E[S2] < E[Big] * 0.35)
+			{
+				const bool bLiftName = L.StartsWith(TEXT("rotor_")) && L.Len() > 6 && FChar::IsDigit(L[6]);
+				const bool bForwardName = L.Contains(TEXT("puller")) || L.Contains(TEXT("pusher")) || L.StartsWith(TEXT("propeller")) || L == TEXT("prop")
+					|| L.Contains(TEXT("left")) || L.Contains(TEXT("right")) || Opt.Type == TEXT("plane") || Opt.Type == TEXT("interceptor");
+				if (bForwardName && !bLiftName && (S1 == 0 || S2 == 0)) Ax = 0;
+				else if (bLiftName && (S1 == 2 || S2 == 2)) Ax = 2;
+			}
 			P.Axis = Ax == 0 ? FVector::ForwardVector : Ax == 1 ? FVector::RightVector : FVector::UpVector;
 			P.RadiusCm = (float)FMath::Max(E[(Ax + 1) % 3], E[(Ax + 2) % 3]);
 			const bool bHeli = Opt.Type == TEXT("heli");
