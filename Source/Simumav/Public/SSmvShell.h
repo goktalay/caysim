@@ -102,6 +102,22 @@ private:
 	TSharedRef<SWidget> Support();
 	double SummaryAt = 0;
 	FString FpvSel, FpvDroneId;
+	int32 CrewTab = 0;
+	/** Görev haritası düzenleyici durumu (web missions/editor.js eşi): şekil noktaları (enlem, boylam), FPV kapı sırası, parametreler */
+	struct FMPlan
+	{
+		FString Kind = TEXT("free");
+		TArray<FVector2D> Shape;   // X enlem, Y boylam
+		TArray<int32> Order;
+		double Alt = 50, Width = 40, Spacing = 20, Angle = 0; int32 Laps = 1;
+		int32 Waves = 5, Interceptors = 10, Seed = 1; double RadiusM = 30, PrepS = 45; FString Difficulty = TEXT("normal");
+		FString LoadedFor;
+	} MPlan;
+	double MZoom = 1.0; FVector2D MPan = FVector2D::ZeroVector; int32 MDrag = -1, MHover = -1;
+	void MPlanLoad();
+	FString MPlanSave() const;
+	TSharedRef<SWidget> MissionMap(float W, float H);
+	bool bFaceZoom = false, bKeepBody = false;
 	FSmvFpvCfg FpvEdit;
 	/** FPV parkuru kuş bakışı çizimi */
 	TSharedRef<SWidget> FpvMap(const FString& CourseId, float W, float H);

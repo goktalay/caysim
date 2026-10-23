@@ -50,7 +50,7 @@ def main():
                 continue
             out[d][key] = v
     # SIMUMAV web çevirilerinden doğrudan alınan önekler (anahtar adı web ile aynı; metinler.py / arayüz metinleri önceliklidir)
-    WEB_ONEK = ('fpv.', 'avatar.', 'support.', 'gtheme.', 'gfx.', 'df.', 'ops.', 'wfx.', 'rcfeel.', 'pad.', 'camera.', 'eng.', 'intro.', 'top10.', 'match.')
+    WEB_ONEK = ('fpv.', 'avatar.', 'support.', 'gtheme.', 'gfx.', 'df.', 'ops.', 'wfx.', 'rcfeel.', 'pad.', 'camera.', 'eng.', 'intro.', 'top10.', 'match.', 'missions.', 'kinds.', 'site.')
     for d in DILLER:
         for k, v in web.get(d, {}).items():
             if k.startswith(WEB_ONEK) and k not in M and isinstance(v, str):

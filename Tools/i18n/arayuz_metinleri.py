@@ -321,4 +321,10 @@ U = {
  'summary.score': ('OYUN PUANI', 'GAME SCORE', 'SPIELPUNKTE', 'SCORE', 'PUNTUACIÓN', 'ОЧКИ', 'النقاط'),
  'support.sub': ('Sorun bildir ve taleplerini izle', 'Report a problem and follow your tickets', 'Problem melden und Anfragen verfolgen', 'Signaler un problème et suivre tes demandes', 'Informa de un problema y sigue tus tickets', 'Сообщить о проблеме и следить за обращениями', 'أبلغ عن مشكلة وتابع طلباتك'),
  'support.title': ('Destek', 'Support', 'Support', 'Assistance', 'Soporte', 'Поддержка', 'الدعم'),
+ 'missions.clear': ('Temizle', 'Clear', 'Leeren', 'Effacer', 'Borrar', 'Очистить', 'مسح'),
+ 'missions.def_radius': ('Önleme yarıçapı', 'Intercept radius', 'Abfangradius', "Rayon d'interception", 'Radio de intercepción', 'Радиус перехвата', 'نصف قطر الاعتراض'),
+ 'missions.interceptors': ('Önleyici sayısı', 'Interceptors', 'Abfangjäger', 'Intercepteurs', 'Interceptores', 'Перехватчики', 'المعترضات'),
+ 'missions.map_help': ('Tıkla: nokta ekle · sürükle: taşı · sağ tık: sil · Shift+sürükle: kaydır · +/−: yakınlaştır', 'Click: add point · drag: move · right-click: delete · Shift+drag: pan · +/−: zoom', 'Klick: Punkt · Ziehen: verschieben · Rechtsklick: löschen · Umschalt+Ziehen: schwenken · +/−: Zoom', 'Clic : ajouter · glisser : déplacer · clic droit : supprimer · Maj+glisser : défiler · +/− : zoom', 'Clic: añadir · arrastrar: mover · clic derecho: borrar · Mayús+arrastrar: desplazar · +/−: zoom', 'Клик: точка · перетащить: сдвиг · ПКМ: удалить · Shift+перетащить: панорама · +/−: масштаб', 'انقر: إضافة نقطة · اسحب: تحريك · نقرة يمنى: حذف · Shift+سحب: تمرير · +/−: تكبير'),
+ 'missions.prep': ('Hazırlık süresi', 'Preparation time', 'Vorbereitungszeit', 'Temps de préparation', 'Tiempo de preparación', 'Время подготовки', 'وقت التحضير'),
+ 'missions.waves': ('Dalga sayısı', 'Waves', 'Wellen', 'Vagues', 'Oleadas', 'Волны', 'الموجات'),
 }

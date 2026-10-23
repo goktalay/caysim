@@ -1223,68 +1223,181 @@ TSharedRef<SWidget> SSmvShell::Crew()
 			ESmvIcon::Pilot, X.Id == EditPilot.Id, X.bIsDefault, [Self, Copy]() { Self->EditPilot = Copy; Self->Refresh(); }, SmvHex(X.Avatar.Helmet, Accent()))];
 	}
 	List->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[Btn(Tx(TEXT("crew.new")), [Self]() { FSmvPilot P; P.Name = FSmvI18n::T(TEXT("crew.new_name")).ToString(); Self->EditPilot = P; Self->Refresh(); }, false, true, ESmvIcon::Plus)];
-	TArray<FString> Chars; TArray<FText> CharL;
-	for (int32 i = 1; i <= 10; ++i) { Chars.Add(FString::Printf(TEXT("p%02d"), i)); CharL.Add(FText::FromString(FString::Printf(TEXT("P%02d"), i))); }
-	TArray<FString> Skins; TArray<FText> SkinL;
-	for (int32 i = 1; i <= 8; ++i) { Skins.Add(FString::Printf(TEXT("s%d"), i)); SkinL.Add(FText::FromString(FString::Printf(TEXT("%d"), i))); }
-	const TArray<FString> Patches = { TEXT("none"), TEXT("star"), TEXT("wing"), TEXT("bolt"), TEXT("chevron"), TEXT("target"), TEXT("shield"), TEXT("cross") };
-	const TArray<FString> Acc = { TEXT("none"), TEXT("mic"), TEXT("crest"), TEXT("antenna"), TEXT("stripe") };
-	TArray<FText> PatchL, AccL;
-	for (const FString& P : Patches) PatchL.Add(FSmvI18n::T(FString(TEXT("avatar.patch_")) + P));
-	for (const FString& A : Acc) AccL.Add(FSmvI18n::T(FString(TEXT("avatar.acc_")) + A));
 	const bool bNew = EditPilot.Id.IsEmpty();
 	auto Re = [Self]() { Self->Refresh(); };
-
-	TSharedRef<SVerticalBox> Mid = SNew(SVerticalBox);
-	Mid->AddSlot().AutoHeight()
-	[
-		SNew(SBox).WidthOverride(380.f).HeightOverride(420.f)
-		[
-			SNew(SBorder).BorderImage(GlassCard()).HAlign(HAlign_Center).VAlign(VAlign_Center)[Portrait(&EditPilot.Avatar, 300.f)]
-		]
-	];
-	Mid->AddSlot().AutoHeight().Padding(4, 14, 0, 0)[Title(FText::FromString(EditPilot.Name.IsEmpty() ? FString(TEXT("—")) : EditPilot.Name), 22)];
-	if (!bNew) Mid->AddSlot().AutoHeight().Padding(4, 4, 0, 0)[SmvUi::Text(FSmvI18n::Format(TEXT("crew.stats"), { { TEXT("n"), FString::FromInt(EditPilot.Flights) }, { TEXT("h"), FString::Printf(TEXT("%.1f"), EditPilot.Hours) } }), 12, "Regular", Dim(), false)];
-	Mid->AddSlot().AutoHeight().Padding(0, 12, 0, 0)[Btn(Tx(TEXT("crew.random")), [Self]()
+	FSmvAvatar& A = EditPilot.Avatar;
+	auto En = [](const TCHAR* Field, std::initializer_list<const TCHAR*> Vals, TArray<FString>& V, TArray<FText>& L)
 	{
-		FSmvAvatar& A = Self->EditPilot.Avatar;
-		const TArray<FString>& Pal = SmvPalette();
-		A.Helmet = Pal[FMath::RandRange(0, Pal.Num() - 1)]; A.Suit = Pal[FMath::RandRange(0, Pal.Num() - 1)]; A.Visor = Pal[FMath::RandRange(0, Pal.Num() - 1)];
-		A.PatchColor = Pal[FMath::RandRange(0, Pal.Num() - 1)]; A.bMirror = FMath::RandBool();
-		A.Skin = FString::Printf(TEXT("s%d"), FMath::RandRange(1, 8));
-		static const TCHAR* Pt[] = { TEXT("none"), TEXT("star"), TEXT("wing"), TEXT("bolt"), TEXT("chevron"), TEXT("target"), TEXT("shield"), TEXT("cross") };
-		static const TCHAR* Ac[] = { TEXT("none"), TEXT("mic"), TEXT("crest"), TEXT("antenna"), TEXT("stripe") };
-		A.Patch = Pt[FMath::RandRange(0, 7)]; A.Accessory = Ac[FMath::RandRange(0, 4)];
-		Self->Refresh();
-	}, false, true, ESmvIcon::Star)];
-
-	TSharedRef<SVerticalBox> Ed = SNew(SVerticalBox);
-	Ed->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("crew.identity")))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("crew.name")), TextEdit(&EditPilot.Name, false, FText::GetEmpty(), 260.f))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("crew.character")), Cycle(&EditPilot.Character, Chars, CharL, nullptr, 200.f))];
-	Ed->AddSlot().AutoHeight().Padding(0, 14, 0, 6)[Section(Tx(TEXT("crew.avatar")), Hex(0xf472b6))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.helmet")), ColorPick(&EditPilot.Avatar.Helmet, Re))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.visor")), ColorPick(&EditPilot.Avatar.Visor, Re))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.mirror")), Toggle(&EditPilot.Avatar.bMirror, Re))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.suit")), ColorPick(&EditPilot.Avatar.Suit, Re))];
+		for (const TCHAR* X : Vals) { V.Add(X); L.Add(FSmvI18n::T(FString::Printf(TEXT("avatar.%s_%s"), Field, X))); }
+	};
+	auto Pick = [this, Re, En](FString* Target, const TCHAR* Field, std::initializer_list<const TCHAR*> Vals, int32 PerRow) -> TSharedRef<SWidget>
 	{
-		TSharedRef<SHorizontalBox> Sk = SNew(SHorizontalBox);
-		for (int32 i = 0; i < 8; ++i)
+		TArray<FString> V; TArray<FText> L;
+		En(Field, Vals, V, L);
+		return Row(FSmvI18n::T(FString(TEXT("avatar.")) + Field), Chips(Target, V, L, {}, Re, PerRow));
+	};
+	// 3B önizleme (sürükle: döndür) ya da çizilmiş portre
+	ASmvMenuScene* Sc = Scene();
+	const bool b3d = Sc && FSmvUiPrefs::Get().bPreview3d && Sc->GetPreviewTarget();
+	TSharedRef<SWidget> Prev = SNullWidget::NullWidget;
+	if (b3d)
+	{
+		Sc->SetPilotPreview(A, bFaceZoom);
+		PreviewBrush.SetResourceObject(Sc->GetPreviewTarget());
+		PreviewBrush.ImageSize = FVector2D(960, 600);
+		bPreviewVisible = true;
+		TSharedRef<SSmvCanvas> Drag = SNew(SSmvCanvas).Size(FVector2D(400, 460));
+		TSharedPtr<FVector2D> LastP = MakeShared<FVector2D>(FVector2D::ZeroVector);
+		TWeakObjectPtr<ASmvMenuScene> WS(Sc);
+		Drag->OnDrag = [WS, LastP](const FGeometry&, const FVector2D& P, int32 Phase)
 		{
-			const FString V = Skins[i];
-			Sk->AddSlot().AutoWidth().Padding(0, 0, 4, 0)
+			if (Phase == 0) { *LastP = P; return; }
+			if (Phase == 1 && WS.IsValid()) { WS->AddPreviewYaw((float)(P.X - LastP->X) * 0.6f); *LastP = P; }
+		};
+		Prev = SNew(SOverlay)
+			+ SOverlay::Slot()[SNew(SImage).Image(&PreviewBrush)]
+			+ SOverlay::Slot()[Drag];
+	}
+	else Prev = SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)[Portrait(&A, 300.f)];
+	TSharedRef<SVerticalBox> Mid = SNew(SVerticalBox);
+	Mid->AddSlot().AutoHeight()[SNew(SBox).WidthOverride(400.f).HeightOverride(460.f)[SNew(SBorder).BorderImage(GlassCard()).Padding(0)[Prev]]];
+	Mid->AddSlot().AutoHeight().Padding(0, 8, 0, 0)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 6, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12).Selected(!bFaceZoom).Text(Tx(TEXT("avatar.view_body"))).OnClick([Self]() { Self->bFaceZoom = false; Self->Refresh(); })]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 14, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12).Selected(bFaceZoom).Text(Tx(TEXT("avatar.view_face"))).OnClick([Self]() { Self->bFaceZoom = true; Self->Refresh(); })]
+		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(Tx(TEXT("avatar.drag")), 10, "Regular", Mute(), false)]
+	];
+	Mid->AddSlot().AutoHeight().Padding(4, 10, 0, 0)[Title(FText::FromString(EditPilot.Name.IsEmpty() ? FString(TEXT("—")) : EditPilot.Name), 22)];
+	if (!bNew) Mid->AddSlot().AutoHeight().Padding(4, 4, 0, 0)[SmvUi::Text(FSmvI18n::Format(TEXT("crew.stats"), { { TEXT("n"), FString::FromInt(EditPilot.Flights) }, { TEXT("h"), FString::Printf(TEXT("%.1f"), EditPilot.Hours) } }), 12, "Regular", Dim(), false)];
+	Mid->AddSlot().AutoHeight().Padding(0, 10, 0, 0)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(Tx(TEXT("avatar.random")), [Self]()
+		{
+			FSmvAvatar& Av = Self->EditPilot.Avatar;
+			auto R = [](std::initializer_list<const TCHAR*> L) { const int32 N = (int32)L.size(); return FString(*(L.begin() + FMath::RandRange(0, N - 1))); };
+			const TArray<FString>& Pal = SmvPalette();
+			auto C = [&Pal]() { return Pal[FMath::RandRange(0, Pal.Num() - 1)]; };
+			if (!Self->bKeepBody) Av.Body = R({ TEXT("m"), TEXT("f") });
+			Av.Build = R({ TEXT("slim"), TEXT("avg"), TEXT("broad") }); Av.Face = R({ TEXT("oval"), TEXT("round"), TEXT("square"), TEXT("long"), TEXT("heart") });
+			Av.Eyes = R({ TEXT("almond"), TEXT("round"), TEXT("narrow"), TEXT("wide") }); Av.Brows = R({ TEXT("straight"), TEXT("arched"), TEXT("angled"), TEXT("soft") });
+			Av.BrowW = R({ TEXT("thin"), TEXT("medium"), TEXT("thick") }); Av.Nose = R({ TEXT("small"), TEXT("straight"), TEXT("wide"), TEXT("pointed") });
+			Av.Mouth = R({ TEXT("neutral"), TEXT("smile"), TEXT("grin"), TEXT("serious") });
+			Av.Beard = Av.Body == TEXT("f") ? FString(TEXT("none")) : R({ TEXT("none"), TEXT("none"), TEXT("stubble"), TEXT("mustache"), TEXT("goatee"), TEXT("full") });
+			Av.Hair = Av.Body == TEXT("f") ? R({ TEXT("long"), TEXT("ponytail"), TEXT("bun"), TEXT("bob"), TEXT("curly"), TEXT("short") }) : R({ TEXT("short"), TEXT("buzz"), TEXT("spiky"), TEXT("sidepart"), TEXT("curly"), TEXT("mohawk"), TEXT("bald") });
+			Av.HairColor = R({ TEXT("#1c1410"), TEXT("#3b2a1e"), TEXT("#5a3b22"), TEXT("#8a5a2b"), TEXT("#c48a3f"), TEXT("#e1c27a"), TEXT("#9a9a9a"), TEXT("#b23a2e") });
+			Av.EyeColor = R({ TEXT("#5b3a1e"), TEXT("#2f5d8a"), TEXT("#3f7a33"), TEXT("#6b4f2a"), TEXT("#444444") });
+			Av.Glasses = R({ TEXT("none"), TEXT("none"), TEXT("none"), TEXT("aviator"), TEXT("sun") });
+			Av.Headgear = R({ TEXT("helmet"), TEXT("helmet"), TEXT("none"), TEXT("cap"), TEXT("headset") });
+			Av.Outfit = R({ TEXT("suit"), TEXT("jacket"), TEXT("casual") });
+			Av.bFreckles = FMath::RandRange(0, 5) == 0; Av.bMole = FMath::RandRange(0, 6) == 0; Av.bVisorOpen = FMath::RandBool();
+			Av.Helmet = C(); Av.Suit = C(); Av.Visor = C(); Av.PatchColor = C(); Av.bMirror = FMath::RandBool();
+			Av.Skin = FString::Printf(TEXT("s%d"), FMath::RandRange(1, 8));
+			Av.Patch = R({ TEXT("none"), TEXT("star"), TEXT("wing"), TEXT("bolt"), TEXT("chevron"), TEXT("target"), TEXT("shield"), TEXT("cross") });
+			Av.Accessory = R({ TEXT("none"), TEXT("mic"), TEXT("crest"), TEXT("antenna"), TEXT("stripe") });
+			Self->Refresh();
+		}, false, true, ESmvIcon::Star)]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)[Toggle(&bKeepBody)]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SmvUi::Text(Tx(TEXT("avatar.keep_body")), 11, "Regular", Dim(), false)]
+	];
+	// hazır pilotlar (eski 2B karakterlerin 3B karşılığı — sunucu LEGACY tablosu)
+	{
+		struct FLeg { const TCHAR* H; const TCHAR* S; const TCHAR* Sk; const TCHAR* V; bool bM; const TCHAR* P; const TCHAR* Pc; const TCHAR* Ac; };
+		static const FLeg Leg[10] = {
+			{ TEXT("#1e3a5f"), TEXT("#1e3a5f"), TEXT("s4"), TEXT("#f5c542"), true, TEXT("wing"), TEXT("#f5c542"), TEXT("mic") },
+			{ TEXT("#f8fafc"), TEXT("#7c3aed"), TEXT("s3"), TEXT("#f08080"), false, TEXT("bolt"), TEXT("#f5c542"), TEXT("none") },
+			{ TEXT("#111111"), TEXT("#0f766e"), TEXT("s8"), TEXT("#9fd3ff"), true, TEXT("chevron"), TEXT("#9fd3ff"), TEXT("stripe") },
+			{ TEXT("#b91c1c"), TEXT("#b91c1c"), TEXT("s6"), TEXT("#1a1a1a"), true, TEXT("star"), TEXT("#f5c542"), TEXT("crest") },
+			{ TEXT("#d9a441"), TEXT("#374151"), TEXT("s2"), TEXT("#374151"), true, TEXT("wing"), TEXT("#d9a441"), TEXT("mic") },
+			{ TEXT("#0369a1"), TEXT("#0369a1"), TEXT("s7"), TEXT("#f08080"), false, TEXT("target"), TEXT("#f5c542"), TEXT("antenna") },
+			{ TEXT("#8c8c8c"), TEXT("#4d7c0f"), TEXT("s1"), TEXT("#9fd3ff"), false, TEXT("shield"), TEXT("#f5c542"), TEXT("none") },
+			{ TEXT("#f0f0f0"), TEXT("#be185d"), TEXT("s2"), TEXT("#f08080"), true, TEXT("star"), TEXT("#f0f0f0"), TEXT("mic") },
+			{ TEXT("#ea580c"), TEXT("#ea580c"), TEXT("s6"), TEXT("#1a1a1a"), true, TEXT("cross"), TEXT("#ffffff"), TEXT("stripe") },
+			{ TEXT("#0e7490"), TEXT("#0e7490"), TEXT("s5"), TEXT("#f5c542"), true, TEXT("chevron"), TEXT("#f5c542"), TEXT("mic") } };
+		TSharedRef<SHorizontalBox> Pr = SNew(SHorizontalBox);
+		for (int32 k = 0; k < 10; ++k)
+		{
+			const FLeg L = Leg[k];
+			Pr->AddSlot().AutoWidth().Padding(0, 0, 4, 0)
 			[
-				SNew(SSmvButton).Kind(ESmvBtn::Ghost).MinHeight(36.f).Selected_Lambda([Self, V]() { return Self->EditPilot.Avatar.Skin == V; })
-				.OnClick([Self, V]() { Self->EditPilot.Avatar.Skin = V; Self->Refresh(); })
-				.Extra()[SNew(SBox).WidthOverride(18.f).HeightOverride(18.f)[SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(SmvHex(SmvSkins()[i]))]]
+				SNew(SSmvButton).Kind(ESmvBtn::Ghost).MinHeight(34.f).OnClick([Self, L, k]()
+				{
+					FSmvAvatar& Av = Self->EditPilot.Avatar;
+					Av.Helmet = L.H; Av.Suit = L.S; Av.Skin = L.Sk; Av.Visor = L.V; Av.bMirror = L.bM; Av.Patch = L.P; Av.PatchColor = L.Pc; Av.Accessory = L.Ac;
+					Self->EditPilot.Character = FString::Printf(TEXT("p%02d"), k + 1);
+					Self->Refresh();
+				})
+				.Extra()[SNew(SBox).WidthOverride(18.f).HeightOverride(18.f)[SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(SmvHex(L.H))]]
 			];
 		}
-		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.skin")), Sk)];
+		Mid->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[SmvUi::Text(Tx(TEXT("avatar.presets")), 11, "Bold", Dim(), false)];
+		Mid->AddSlot().AutoHeight().Padding(0, 4, 0, 0)[Pr];
 	}
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.patch")), Cycle(&EditPilot.Avatar.Patch, Patches, PatchL, Re, 240.f))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.patch_color")), ColorPick(&EditPilot.Avatar.PatchColor, Re))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.accessory")), Cycle(&EditPilot.Avatar.Accessory, Acc, AccL, Re, 240.f))];
-	Ed->AddSlot().AutoHeight().Padding(0, 4, 0, 0)[SmvUi::Text(Tx(TEXT("crew.avatar_note")), 10, "Regular", Mute())];
+
+	// sağ: kimlik + sekmeler
+	TSharedRef<SVerticalBox> Ed = SNew(SVerticalBox);
+	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.name")), TextEdit(&EditPilot.Name, false, FText::GetEmpty(), 260.f))];
+	Ed->AddSlot().AutoHeight().Padding(0, 10, 0, 10)[Tabs({ Tx(TEXT("avatar.tab_body")), Tx(TEXT("avatar.tab_face")), Tx(TEXT("avatar.tab_hair")), Tx(TEXT("avatar.tab_outfit")), Tx(TEXT("avatar.tab_acc")) },
+		{ ESmvIcon::Pilot, ESmvIcon::User, ESmvIcon::Star, ESmvIcon::Shield, ESmvIcon::Gear }, &CrewTab)];
+	switch (CrewTab)
+	{
+	case 0:
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Body, TEXT("body"), { TEXT("m"), TEXT("f") }, 2)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Build, TEXT("build"), { TEXT("slim"), TEXT("avg"), TEXT("broad") }, 3)];
+		{
+			TSharedRef<SHorizontalBox> Sk = SNew(SHorizontalBox);
+			for (int32 k = 0; k < 8; ++k)
+			{
+				const FString V = FString::Printf(TEXT("s%d"), k + 1);
+				Sk->AddSlot().AutoWidth().Padding(0, 0, 4, 0)
+				[
+					SNew(SSmvButton).Kind(ESmvBtn::Ghost).MinHeight(36.f).Selected_Lambda([Self, V]() { return Self->EditPilot.Avatar.Skin == V; })
+					.OnClick([Self, V]() { Self->EditPilot.Avatar.Skin = V; Self->Refresh(); })
+					.Extra()[SNew(SBox).WidthOverride(18.f).HeightOverride(18.f)[SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(SmvHex(SmvSkins()[k]))]]
+				];
+			}
+			Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.skin")), Sk)];
+		}
+		break;
+	case 1:
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Face, TEXT("face"), { TEXT("oval"), TEXT("round"), TEXT("square"), TEXT("long"), TEXT("heart") }, 5)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Eyes, TEXT("eyes"), { TEXT("almond"), TEXT("round"), TEXT("narrow"), TEXT("wide") }, 4)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.eye_color")), ColorPick(&A.EyeColor, Re))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Brows, TEXT("brows"), { TEXT("straight"), TEXT("arched"), TEXT("angled"), TEXT("soft") }, 4)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.BrowW, TEXT("brow_w"), { TEXT("thin"), TEXT("medium"), TEXT("thick") }, 3)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Nose, TEXT("nose"), { TEXT("small"), TEXT("straight"), TEXT("wide"), TEXT("pointed") }, 4)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Mouth, TEXT("mouth"), { TEXT("neutral"), TEXT("smile"), TEXT("grin"), TEXT("serious") }, 4)];
+		if (A.Body != TEXT("f")) Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Beard, TEXT("beard"), { TEXT("none"), TEXT("stubble"), TEXT("mustache"), TEXT("goatee"), TEXT("full") }, 3)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.freckles")), Toggle(&A.bFreckles, Re))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.mole")), Toggle(&A.bMole, Re))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Glasses, TEXT("glasses"), { TEXT("none"), TEXT("aviator"), TEXT("sun") }, 3)];
+		break;
+	case 2:
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Hair, TEXT("hair"), { TEXT("short"), TEXT("buzz"), TEXT("spiky"), TEXT("sidepart"), TEXT("curly"), TEXT("mohawk"), TEXT("bald"), TEXT("long"), TEXT("ponytail"), TEXT("bun"), TEXT("bob") }, 4)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.hair_color")), ColorPick(&A.HairColor, Re))];
+		if (A.Headgear == TEXT("helmet")) Ed->AddSlot().AutoHeight().Padding(0, 3)[SmvUi::Text(Tx(TEXT("avatar.visor_open")), 10, "Regular", Mute())];
+		break;
+	case 3:
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Outfit, TEXT("outfit"), { TEXT("suit"), TEXT("jacket"), TEXT("casual") }, 3)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.suit")), ColorPick(&A.Suit, Re))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.patch")), Cycle(&A.Patch, { TEXT("none"), TEXT("star"), TEXT("wing"), TEXT("bolt"), TEXT("chevron"), TEXT("target"), TEXT("shield"), TEXT("cross") },
+			{ Tx(TEXT("avatar.patch_none")), Tx(TEXT("avatar.patch_star")), Tx(TEXT("avatar.patch_wing")), Tx(TEXT("avatar.patch_bolt")), Tx(TEXT("avatar.patch_chevron")), Tx(TEXT("avatar.patch_target")), Tx(TEXT("avatar.patch_shield")), Tx(TEXT("avatar.patch_cross")) }, Re, 240.f))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.patch_color")), ColorPick(&A.PatchColor, Re))];
+		break;
+	default:
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Headgear, TEXT("headgear"), { TEXT("helmet"), TEXT("none"), TEXT("cap"), TEXT("headset") }, 4)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.gear_color")), ColorPick(&A.Helmet, Re))];
+		if (A.Headgear == TEXT("helmet") || A.Headgear.IsEmpty())
+		{
+			Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.visor")), ColorPick(&A.Visor, Re))];
+			Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.mirror")), Toggle(&A.bMirror, Re))];
+			Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.visor_open")), Toggle(&A.bVisorOpen, Re))];
+		}
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.accessory")), Cycle(&A.Accessory, { TEXT("none"), TEXT("mic"), TEXT("crest"), TEXT("antenna"), TEXT("stripe") },
+			{ Tx(TEXT("avatar.acc_none")), Tx(TEXT("avatar.acc_mic")), Tx(TEXT("avatar.acc_crest")), Tx(TEXT("avatar.acc_antenna")), Tx(TEXT("avatar.acc_stripe")) }, Re, 240.f))];
+		break;
+	}
 	Ed->AddSlot().AutoHeight().Padding(0, 16, 0, 0)
 	[
 		SNew(SHorizontalBox)
@@ -1303,7 +1416,7 @@ TSharedRef<SWidget> SSmvShell::Crew()
 		})]
 	];
 	return Page(Tx(TEXT("menu.crew")), Tx(TEXT("menu.crew_sub")), ESmvIcon::Pilot, SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 22, 0)[SNew(SBox).WidthOverride(300.f)[List]]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 22, 0)[SNew(SBox).WidthOverride(280.f)[List]]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 22, 0)[Mid]
 		+ SHorizontalBox::Slot().FillWidth(1.f)[Glass(Ed, FMargin(20.f))]);
 }
@@ -1413,63 +1526,378 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 // görevler
 // ---------------------------------------------------------------------------
 
+namespace
+{
+	// görev geometri yardımcıları (web missions/geo.js)
+	FVector2D MLocal(const FVector2D& C, const FVector2D& P) { const double Ml = 111320.0, Mo = 111320.0 * FMath::Cos(FMath::DegreesToRadians(C.X)); return FVector2D((P.Y - C.Y) * Mo, (P.X - C.X) * Ml); }
+	FVector2D MGeo(const FVector2D& C, const FVector2D& L) { const double Ml = 111320.0, Mo = 111320.0 * FMath::Cos(FMath::DegreesToRadians(C.X)); return FVector2D(C.X + L.Y / Ml, C.Y + L.X / Mo); }
+
+	TArray<FVector2D> MSweep(const FVector2D& C, const TArray<FVector2D>& Poly, double Spacing, double AngleDeg)
+	{
+		TArray<FVector2D> Out;
+		if (Poly.Num() < 3) return Out;
+		const double A = FMath::DegreesToRadians(AngleDeg), Ca = FMath::Cos(A), Sa = FMath::Sin(A);
+		auto Rot = [Ca, Sa](const FVector2D& P) { return FVector2D(P.X * Ca + P.Y * Sa, -P.X * Sa + P.Y * Ca); };
+		auto Unrot = [Ca, Sa](const FVector2D& P) { return FVector2D(P.X * Ca - P.Y * Sa, P.X * Sa + P.Y * Ca); };
+		TArray<FVector2D> R;
+		for (const FVector2D& P : Poly) R.Add(Rot(MLocal(C, P)));
+		double MinY = 1e18, MaxY = -1e18;
+		for (const FVector2D& P : R) { MinY = FMath::Min(MinY, P.Y); MaxY = FMath::Max(MaxY, P.Y); }
+		bool bFlip = false;
+		for (double Y = MinY + Spacing / 2; Y < MaxY; Y += Spacing)
+		{
+			TArray<double> Xs;
+			for (int32 k = 0; k < R.Num(); ++k)
+			{
+				const FVector2D& P = R[k]; const FVector2D& Q = R[(k + 1) % R.Num()];
+				if ((P.Y <= Y && Q.Y > Y) || (Q.Y <= Y && P.Y > Y)) Xs.Add(P.X + (Y - P.Y) * (Q.X - P.X) / (Q.Y - P.Y));
+			}
+			Xs.Sort();
+			for (int32 k = 0; k + 1 < Xs.Num(); k += 2)
+			{
+				FVector2D S0(Xs[k], Y), S1(Xs[k + 1], Y);
+				if (bFlip) Swap(S0, S1);
+				Out.Add(MGeo(C, Unrot(S0))); Out.Add(MGeo(C, Unrot(S1)));
+			}
+			bFlip = !bFlip;
+			if (Out.Num() > 480) break;
+		}
+		return Out;
+	}
+
+	TArray<FVector2D> MCorridor(const FVector2D& C, const TArray<FVector2D>& Line, double Width)
+	{
+		TArray<FVector2D> L, Lf, Rt, Out;
+		if (Line.Num() < 2) return Out;
+		for (const FVector2D& P : Line) L.Add(MLocal(C, P));
+		for (int32 k = 0; k < L.Num(); ++k)
+		{
+			const FVector2D Q = L[FMath::Min(k + 1, L.Num() - 1)], O = L[FMath::Max(k - 1, 0)];
+			FVector2D D = Q - O; const double Len = FMath::Max(D.Size(), 1e-6); const FVector2D N(-D.Y / Len, D.X / Len);
+			Lf.Add(L[k] + N * Width * 0.5); Rt.Add(L[k] - N * Width * 0.5);
+		}
+		for (const FVector2D& P : Lf) Out.Add(MGeo(C, P));
+		for (int32 k = Rt.Num() - 1; k >= 0; --k) Out.Add(MGeo(C, Rt[k]));
+		return Out;
+	}
+
+	TSharedPtr<FJsonObject> MRoute(const FVector2D& Home, const TArray<FVector2D>& Pts, double Alt, const TArray<double>* AltPer = nullptr)
+	{
+		TArray<TSharedPtr<FJsonValue>> Arr;
+		int32 Seq = 0;
+		auto Add = [&Arr, &Seq](int32 Cmd, double La, double Lo, double A)
+		{
+			TSharedRef<FJsonObject> P = MakeShared<FJsonObject>();
+			P->SetNumberField(TEXT("seq"), Seq++); P->SetNumberField(TEXT("cmd"), Cmd);
+			P->SetNumberField(TEXT("lat"), FMath::RoundToDouble(La * 1e7) / 1e7); P->SetNumberField(TEXT("lon"), FMath::RoundToDouble(Lo * 1e7) / 1e7);
+			P->SetNumberField(TEXT("alt_rel"), A); P->SetNumberField(TEXT("frame"), 3);
+			Arr.Add(MakeShared<FJsonValueObject>(P));
+		};
+		Add(22, Home.X, Home.Y, Alt);
+		for (int32 k = 0; k < Pts.Num(); ++k) Add(16, Pts[k].X, Pts[k].Y, AltPer && AltPer->IsValidIndex(k) ? (*AltPer)[k] : Alt);
+		Add(21, Home.X, Home.Y, 0);
+		TSharedRef<FJsonObject> R = MakeShared<FJsonObject>();
+		R->SetArrayField(TEXT("points"), Arr);
+		return R;
+	}
+}
+
+void SSmvShell::MPlanLoad()
+{
+	FMPlan P;
+	P.LoadedFor = EditMission.Id + TEXT("|") + EditMission.Name;
+	P.Kind = EditMission.Kind;
+	P.Seed = FMath::RandRange(1, 2147483646);
+	if (const TSharedPtr<FJsonObject> O = SmvJson::Parse(EditMission.PlanJson))
+	{
+		const TArray<TSharedPtr<FJsonValue>>* A = nullptr;
+		if (O->TryGetArrayField(TEXT("shape"), A) && A)
+			for (const TSharedPtr<FJsonValue>& V : *A) if (const TSharedPtr<FJsonObject> Q = V->AsObject()) P.Shape.Add(FVector2D(SmvJson::Num(Q, TEXT("lat")), SmvJson::Num(Q, TEXT("lon"))));
+		if (O->TryGetArrayField(TEXT("order"), A) && A) for (const TSharedPtr<FJsonValue>& V : *A) P.Order.Add((int32)V->AsNumber());
+		if (const TSharedPtr<FJsonObject> Pr = SmvJson::Obj(O, TEXT("params")))
+		{
+			P.Alt = SmvJson::Num(Pr, TEXT("alt"), 50); P.Width = SmvJson::Num(Pr, TEXT("width"), 40); P.Spacing = SmvJson::Num(Pr, TEXT("spacing"), 20);
+			P.Angle = SmvJson::Num(Pr, TEXT("angle"), 0); P.Laps = (int32)SmvJson::Num(Pr, TEXT("laps"), 1);
+		}
+		if (const TSharedPtr<FJsonObject> D = SmvJson::Obj(O, TEXT("defend")))
+		{
+			P.Waves = (int32)SmvJson::Num(D, TEXT("waves"), 5); P.Interceptors = (int32)SmvJson::Num(D, TEXT("interceptors"), 10);
+			P.Difficulty = SmvJson::Str(D, TEXT("difficulty"), TEXT("normal")); P.RadiusM = SmvJson::Num(D, TEXT("radius_m"), 30);
+			P.PrepS = SmvJson::Num(D, TEXT("prep_s"), 45); P.Seed = (int32)SmvJson::Num(D, TEXT("seed"), P.Seed);
+		}
+	}
+	MPlan = P;
+	MZoom = 1.0; MPan = FVector2D::ZeroVector;
+}
+
+FString SSmvShell::MPlanSave() const
+{
+	const FMPlan& P = MPlan;
+	TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+	O->SetStringField(TEXT("kind"), P.Kind);
+	if (P.Kind == TEXT("defend"))
+	{
+		TSharedRef<FJsonObject> D = MakeShared<FJsonObject>();
+		D->SetNumberField(TEXT("waves"), P.Waves); D->SetNumberField(TEXT("interceptors"), P.Interceptors); D->SetStringField(TEXT("difficulty"), P.Difficulty);
+		D->SetNumberField(TEXT("radius_m"), P.RadiusM); D->SetNumberField(TEXT("prep_s"), P.PrepS); D->SetNumberField(TEXT("seed"), P.Seed);
+		O->SetObjectField(TEXT("defend"), D);
+		return SmvJson::ToString(O);
+	}
+	const FSmvTrack* Tr = nullptr;
+	if (Data()) for (const FSmvTrack& T : Data()->Tracks()) if (T.Id == EditMission.TrackId) Tr = &T;
+	const FVector2D Home = Tr ? FVector2D(Tr->Lat, Tr->Lon) : (P.Shape.Num() ? P.Shape[0] : FVector2D::ZeroVector);
+	TSharedPtr<FJsonObject> Route;
+	if (P.Kind == TEXT("corridor") && P.Shape.Num() >= 2) Route = MRoute(Home, P.Shape, P.Alt);
+	else if (P.Kind == TEXT("free") && P.Shape.Num()) Route = MRoute(Home, P.Shape, P.Alt);
+	else if ((P.Kind == TEXT("spray") || P.Kind == TEXT("survey")) && P.Shape.Num() > 2)
+	{
+		const TArray<FVector2D> L = MSweep(Home, P.Shape, FMath::Max(2.0, P.Spacing), P.Angle);
+		if (L.Num()) Route = MRoute(Home, L, P.Kind == TEXT("spray") ? FMath::Min(P.Alt, 15.0) : P.Alt);
+	}
+	else if (P.Kind == TEXT("fpv_flags") && P.Shape.Num()) Route = MRoute(Home, P.Shape, P.Alt);
+	else if (P.Kind == TEXT("fpv_gates") && Tr && Tr->Gates.Num())
+	{
+		TArray<FVector2D> Pts; TArray<double> Alts;
+		TArray<int32> Ord = P.Order;
+		if (Ord.Num() == 0) for (const FSmvGate& G : Tr->Gates) Ord.Add(G.I);
+		for (int32 l = 0; l < FMath::Max(1, P.Laps); ++l)
+			for (int32 I : Ord) for (const FSmvGate& G : Tr->Gates) if (G.I == I) { Pts.Add(FVector2D(G.Lat, G.Lon)); Alts.Add(G.AglM); }
+		if (Pts.Num()) Route = MRoute(Home, Pts, P.Alt, &Alts);
+	}
+	if (Route.IsValid()) O->SetObjectField(TEXT("route"), Route);
+	TArray<TSharedPtr<FJsonValue>> Sh;
+	if (P.Kind != TEXT("fpv_gates"))
+		for (const FVector2D& Q : P.Shape)
+		{
+			TSharedRef<FJsonObject> J = MakeShared<FJsonObject>();
+			J->SetNumberField(TEXT("lat"), Q.X); J->SetNumberField(TEXT("lon"), Q.Y);
+			Sh.Add(MakeShared<FJsonValueObject>(J));
+		}
+	O->SetArrayField(TEXT("shape"), Sh);
+	TSharedRef<FJsonObject> Pr = MakeShared<FJsonObject>();
+	Pr->SetNumberField(TEXT("alt"), P.Alt); Pr->SetNumberField(TEXT("width"), P.Width); Pr->SetNumberField(TEXT("spacing"), P.Spacing);
+	Pr->SetNumberField(TEXT("angle"), P.Angle); Pr->SetNumberField(TEXT("laps"), P.Laps);
+	O->SetObjectField(TEXT("params"), Pr);
+	TArray<TSharedPtr<FJsonValue>> Od;
+	for (int32 I : P.Order) Od.Add(MakeShared<FJsonValueNumber>(I));
+	O->SetArrayField(TEXT("order"), Od);
+	O->SetNumberField(TEXT("laps"), P.Laps);
+	return SmvJson::ToString(O);
+}
+
+TSharedRef<SWidget> SSmvShell::MissionMap(float Wd, float Ht)
+{
+	SSmvShell* Self = this;
+	TSharedRef<SSmvCanvas> C = SNew(SSmvCanvas).Size(FVector2D(Wd, Ht));
+	auto Track = [Self]() -> const FSmvTrack*
+	{
+		if (Self->Data()) for (const FSmvTrack& T : Self->Data()->Tracks()) if (T.Id == Self->EditMission.TrackId) return &T;
+		return nullptr;
+	};
+	// ölçek: piksel / metre (pist yarıçapı ekrana sığar), kaydırma ve yakınlaştırma
+	auto Scale = [Self, Track, Wd, Ht]() { const FSmvTrack* T = Track(); const double R = T ? FMath::Max(T->RadiusM, 200.0) : 1000.0; return FMath::Min(Wd, Ht) * 0.45 / R * Self->MZoom; };
+	auto ToScr = [Self, Track, Scale, Wd, Ht](const FVector2D& LatLon) { const FSmvTrack* T = Track(); const FVector2D Ctr = T ? FVector2D(T->Lat, T->Lon) : LatLon; const FVector2D L = MLocal(Ctr, LatLon); const double K = Scale(); return FVector2D(Wd * 0.5 + (L.X + Self->MPan.X) * K, Ht * 0.5 - (L.Y + Self->MPan.Y) * K); };
+	auto FromScr = [Self, Track, Scale, Wd, Ht](const FVector2D& S) { const FSmvTrack* T = Track(); const FVector2D Ctr = T ? FVector2D(T->Lat, T->Lon) : FVector2D::ZeroVector; const double K = Scale(); return MGeo(Ctr, FVector2D((S.X - Wd * 0.5) / K - Self->MPan.X, -(S.Y - Ht * 0.5) / K - Self->MPan.Y)); };
+	C->Painter = [Self, Track, ToScr, Scale](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		DrBox(Out, L, G, FVector2D::ZeroVector, Sz, Hex(0x0b1424, 0.96f), Round(12.f));
+		Out.PushClip(FSlateClippingZone(G));
+		const FSmvTrack* T = Track();
+		const double K = Scale();
+		// ızgara (100 m)
+		const FVector2D O = T ? ToScr(FVector2D(T->Lat, T->Lon)) : Sz * 0.5;
+		const double Step = 100.0 * K;
+		if (Step > 6.0)
+		{
+			for (double X = FMath::Fmod(O.X, Step); X < Sz.X; X += Step) DrSeg(Out, L + 1, G, FVector2D(X, 0), FVector2D(X, Sz.Y), FLinearColor(1, 1, 1, 0.05f), 1.f);
+			for (double Y = FMath::Fmod(O.Y, Step); Y < Sz.Y; Y += Step) DrSeg(Out, L + 1, G, FVector2D(0, Y), FVector2D(Sz.X, Y), FLinearColor(1, 1, 1, 0.05f), 1.f);
+		}
+		if (T)
+		{
+			DrArc(Out, L + 1, G, O, (float)(T->RadiusM * K), 0.f, 360.f, Warn().CopyWithNewOpacity(0.5f), 1.5f);
+			DrBox(Out, L + 3, G, O - FVector2D(6, 6), FVector2D(12, 12), Accent3(), Circle());
+			DrText(Out, L + 3, G, TEXT("H"), O, Font(8, "Bold"), Hex(0x0b1424), 0);
+			for (const FSmvGate& Gt : T->Gates)
+			{
+				const FVector2D S = ToScr(FVector2D(Gt.Lat, Gt.Lon));
+				const int32 Oi = Self->MPlan.Order.IndexOfByKey(Gt.I);
+				const bool bOn = Self->MPlan.Kind == TEXT("fpv_gates") && (Self->MPlan.Order.Num() == 0 || Oi >= 0);
+				DrArc(Out, L + 3, G, S, 10.f, 0.f, 360.f, bOn ? Accent() : FLinearColor(0.58f, 0.64f, 0.72f, 0.5f), 3.f);
+				DrText(Out, L + 4, G, Self->MPlan.Kind == TEXT("fpv_gates") && Self->MPlan.Order.Num() ? (Oi >= 0 ? FString::FromInt(Oi + 1) : FString(TEXT("·"))) : FString::FromInt(Gt.I + 1), S, Font(9, "Bold"), Fg(), 0);
+			}
+		}
+		const FMPlan& P = Self->MPlan;
+		// poligon / koridor
+		TArray<FVector2D> Poly;
+		const FVector2D Home = T ? FVector2D(T->Lat, T->Lon) : FVector2D::ZeroVector;
+		if (P.Kind == TEXT("corridor")) Poly = MCorridor(Home, P.Shape, P.Width);
+		else if ((P.Kind == TEXT("spray") || P.Kind == TEXT("survey")) && P.Shape.Num() > 2) Poly = P.Shape;
+		if (Poly.Num() > 2)
+		{
+			TArray<FVector2D> S; for (const FVector2D& Q : Poly) S.Add(ToScr(Q)); S.Add(S[0]);
+			DrLine(Out, L + 2, G, S, Accent2(), 2.f);
+		}
+		// rota önizlemesi
+		TArray<FVector2D> Rt;
+		if (P.Kind == TEXT("spray") || P.Kind == TEXT("survey")) Rt = MSweep(Home, P.Shape, FMath::Max(2.0, P.Spacing), P.Angle);
+		else if (P.Kind != TEXT("defend") && P.Kind != TEXT("fpv_gates")) Rt = P.Shape;
+		if (Rt.Num())
+		{
+			TArray<FVector2D> S; S.Add(ToScr(Home)); for (const FVector2D& Q : Rt) S.Add(ToScr(Q)); S.Add(ToScr(Home));
+			DrLine(Out, L + 3, G, S, Accent().CopyWithNewOpacity(0.85f), 2.f);
+		}
+		for (int32 k = 0; k < P.Shape.Num(); ++k)
+		{
+			const FVector2D S = ToScr(P.Shape[k]);
+			const float R = k == Self->MHover ? 8.f : 6.f;
+			DrBox(Out, L + 4, G, S - FVector2D(R, R), FVector2D(2 * R, 2 * R), P.Kind == TEXT("fpv_flags") ? Warn() : FLinearColor::White, Circle());
+			if (P.Kind == TEXT("fpv_flags") || P.Kind == TEXT("free")) DrText(Out, L + 5, G, FString::FromInt(k + 1), S - FVector2D(0, 14), Font(9, "Bold"), Fg(), 0);
+		}
+		if (P.Kind == TEXT("defend"))
+		{
+			for (int32 k = 1; k <= 3; ++k) DrArc(Out, L + 3, G, O, (float)(k * 1000.0 / 3.0 * K), 0.f, 360.f, Hex(0x3dff8a, 0.5f), 1.f);
+			uint32 A = (uint32)FMath::Abs(P.Seed) % 360;
+			for (int32 k = 0; k < FMath::Min(8, 2 + P.Waves); ++k)
+			{
+				A = (uint32)FMath::Fmod(A * 137.508 + 61.0, 360.0);
+				const double Ra = FMath::DegreesToRadians((double)A);
+				const FVector2D D(FMath::Sin(Ra), -FMath::Cos(Ra));
+				DrSeg(Out, L + 3, G, O + D * Sz.Y * 0.42, O + D * Sz.Y * 0.1, Hex(0xff5a46), 2.f);
+			}
+		}
+		DrText(Out, L + 5, G, FSmvI18n::T(FString(TEXT("missions.hint_")) + P.Kind).ToString(), FVector2D(12.f, Sz.Y - 14.f), Font(10), Dim(), -1);
+		Out.PopClip();
+	};
+	C->OnHover = [Self, ToScr](const FVector2D& P)
+	{
+		int32 Best = -1; double Bd = 14.0;
+		for (int32 k = 0; k < Self->MPlan.Shape.Num(); ++k) { const double D = (ToScr(Self->MPlan.Shape[k]) - P).Size(); if (D < Bd) { Bd = D; Best = k; } }
+		Self->MHover = Best;
+	};
+	C->OnDrag = [Self, ToScr, FromScr, Track](const FGeometry& G, const FVector2D& P, int32 Phase)
+	{
+		FMPlan& M = Self->MPlan;
+		const bool bRight = FSlateApplication::Get().GetPressedMouseButtons().Contains(EKeys::RightMouseButton);
+		const bool bShift = FSlateApplication::Get().GetModifierKeys().IsShiftDown();
+		static FVector2D Last;
+		if (Phase == 0)
+		{
+			Last = P;
+			if (bShift) { Self->MDrag = -2; return; }   // kaydır
+			int32 Hit = -1; double Bd = 14.0;
+			for (int32 k = 0; k < M.Shape.Num(); ++k) { const double D = (ToScr(M.Shape[k]) - P).Size(); if (D < Bd) { Bd = D; Hit = k; } }
+			if (bRight) { if (Hit >= 0) M.Shape.RemoveAt(Hit); Self->MDrag = -1; return; }
+			if (M.Kind == TEXT("fpv_gates"))
+			{
+				if (const FSmvTrack* T = Track())
+					for (const FSmvGate& Gt : T->Gates)
+						if ((ToScr(FVector2D(Gt.Lat, Gt.Lon)) - P).Size() < 16.0) { const int32 Oi = M.Order.IndexOfByKey(Gt.I); if (Oi >= 0) M.Order.RemoveAt(Oi); else M.Order.Add(Gt.I); }
+				Self->MDrag = -1;
+				return;
+			}
+			if (M.Kind == TEXT("defend")) return;
+			if (Hit >= 0) { Self->MDrag = Hit; return; }
+			if (M.Shape.Num() < 200) { M.Shape.Add(FromScr(P)); FSmvUiSound::Play(ESmvSnd::Toggle); }
+			Self->MDrag = -1;
+			return;
+		}
+		if (Phase == 1)
+		{
+			if (Self->MDrag == -2) { const FVector2D D = P - Last; Last = P;
+				const FSmvTrack* T = Track(); const double R = T ? FMath::Max(T->RadiusM, 200.0) : 1000.0; const double Kp = FMath::Min(G.GetLocalSize().X, G.GetLocalSize().Y) * 0.45 / R * Self->MZoom;
+				Self->MPan += FVector2D(D.X / Kp, -D.Y / Kp); return; }
+			if (M.Shape.IsValidIndex(Self->MDrag)) M.Shape[Self->MDrag] = FromScr(P);
+			return;
+		}
+		Self->MDrag = -1;
+	};
+	return SNew(SBox).WidthOverride(Wd).HeightOverride(Ht)[C];
+}
+
 TSharedRef<SWidget> SSmvShell::Missions()
 {
 	USmvDataService* D = Data();
 	if (!D) return SNullWidget::NullWidget;
 	SSmvShell* Self = this;
-	const TArray<FString> Kinds = { TEXT("free"), TEXT("corridor"), TEXT("spray"), TEXT("survey"), TEXT("fpv_flags"), TEXT("fpv_gates"), TEXT("defend") };
-	const TArray<ESmvIcon> KindI = { ESmvIcon::Route, ESmvIcon::Map, ESmvIcon::Rain, ESmvIcon::Camera, ESmvIcon::Flag, ESmvIcon::Fpv, ESmvIcon::Shield };
+	const TArray<FString> Kinds = { TEXT("corridor"), TEXT("free"), TEXT("spray"), TEXT("fpv_flags"), TEXT("survey"), TEXT("fpv_gates"), TEXT("defend") };
+	const TArray<ESmvIcon> KindI = { ESmvIcon::Map, ESmvIcon::Route, ESmvIcon::Rain, ESmvIcon::Flag, ESmvIcon::Camera, ESmvIcon::Fpv, ESmvIcon::Shield };
+	if (MPlan.LoadedFor != EditMission.Id + TEXT("|") + EditMission.Name) MPlanLoad();
 	TSharedRef<SVerticalBox> List = SNew(SVerticalBox);
 	for (const FSmvMission& X : D->Missions())
 	{
 		const FSmvMission Copy = X;
 		const int32 Ki = Kinds.IndexOfByKey(X.Kind);
 		List->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[ListItem(FText::FromString(X.Name), FSmvI18n::T(FString(TEXT("mission.")) + X.Kind),
-			KindI.IsValidIndex(Ki) ? KindI[Ki] : ESmvIcon::Mission, X.Id == EditMission.Id, false, [Self, Copy]() { Self->EditMission = Copy; Self->Refresh(); }, Accent2())];
+			KindI.IsValidIndex(Ki) ? KindI[Ki] : ESmvIcon::Mission, X.Id == EditMission.Id, false, [Self, Copy]() { Self->EditMission = Copy; Self->MPlanLoad(); Self->Refresh(); }, Accent2())];
 	}
 	List->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[Btn(Tx(TEXT("missions.new")), [Self]()
 	{
 		FSmvMission M; M.Name = FSmvI18n::T(TEXT("missions.new_name")).ToString();
 		if (const FSmvTrack* T = Self->Data()->DefaultTrack()) M.TrackId = T->Id;
-		Self->EditMission = M; Self->Refresh();
+		Self->EditMission = M; Self->MPlanLoad(); Self->Refresh();
 	}, false, true, ESmvIcon::Plus)];
 	TArray<FString> TrackIds; TArray<FText> TrackL;
 	for (const FSmvTrack& T : D->Tracks()) { TrackIds.Add(T.Id); TrackL.Add(FText::FromString(T.Name)); }
 	TArray<FText> KindL; for (const FString& K : Kinds) KindL.Add(FSmvI18n::T(FString(TEXT("mission.")) + K));
+	auto Mf = [](double V) { return FString::Printf(TEXT("%.0f m"), V); };
+	auto Df = [](double V) { return FString::Printf(TEXT("%.0f°"), V); };
 	TSharedRef<SVerticalBox> Ed = SNew(SVerticalBox);
-	Ed->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("missions.design")), Accent2())];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.name")), TextEdit(&EditMission.Name, false, FText::GetEmpty(), 260.f))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.track")), Cycle(&EditMission.TrackId, TrackIds, TrackL, nullptr, 280.f))];
-	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.kind")), Chips(&EditMission.Kind, Kinds, KindL, KindI, nullptr, 4))];
-	Ed->AddSlot().AutoHeight().Padding(0, 10, 0, 4)[SmvUi::Text(Tx(TEXT("missions.plan")), 12, "Bold", Fg())];
-	Ed->AddSlot().AutoHeight()
-	[
-		SNew(SBox).HeightOverride(240)
-		[
-			SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(Hex(0x0b1222, 0.92f)).Padding(6)
-			[
-				SNew(SMultiLineEditableTextBox).Text(FText::FromString(EditMission.PlanJson)).Font(Font(11, "Mono"))
-				.OnTextChanged_Lambda([Self](const FText& T) { Self->EditMission.PlanJson = T.ToString(); })
-			]
-		]
-	];
-	Ed->AddSlot().AutoHeight().Padding(0, 4, 0, 0)[SmvUi::Text(Tx(TEXT("missions.plan_hint")), 10, "Regular", Mute())];
-	Ed->AddSlot().AutoHeight().Padding(0, 16, 0, 0)
+	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.name")), TextEdit(&EditMission.Name, false, FText::GetEmpty(), 240.f))];
+	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.track")), Cycle(&EditMission.TrackId, TrackIds, TrackL, [Self]() { Self->Refresh(); }, 260.f))];
+	Ed->AddSlot().AutoHeight().Padding(0, 3)[Chips(&MPlan.Kind, Kinds, KindL, KindI, [Self]()
+	{
+		Self->EditMission.Kind = Self->MPlan.Kind;
+		Self->Refresh();
+	}, 4)];
+	FMPlan& P = MPlan;
+	EditMission.Kind = P.Kind;
+	if (P.Kind != TEXT("spray") && P.Kind != TEXT("defend")) Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.alt")), Slider(&P.Alt, 5, 300, 5, Mf))];
+	if (P.Kind == TEXT("corridor")) Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.width")), Slider(&P.Width, 5, 300, 5, Mf))];
+	if (P.Kind == TEXT("spray"))
+	{
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.spacing")), Slider(&P.Spacing, 2, 50, 1, Mf))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.angle")), Slider(&P.Angle, 0, 179, 1, Df))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.alt")), Slider(&P.Alt, 2, 15, 1, Mf))];
+	}
+	if (P.Kind == TEXT("survey"))
+	{
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.spacing")), Slider(&P.Spacing, 10, 200, 5, Mf))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.angle")), Slider(&P.Angle, 0, 179, 1, Df))];
+	}
+	if (P.Kind == TEXT("fpv_gates")) Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.laps")), SliderI(&P.Laps, 1, 10))];
+	if (P.Kind == TEXT("defend"))
+	{
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("race.level")), Chips(&P.Difficulty, { TEXT("easy"), TEXT("normal"), TEXT("hard") }, { Tx(TEXT("level.easy")), Tx(TEXT("level.normal")), Tx(TEXT("level.hard")) }, {}))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.waves")), SliderI(&P.Waves, 1, 10))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.interceptors")), SliderI(&P.Interceptors, 1, 20))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.def_radius")), Slider(&P.RadiusM, 10, 100, 5, Mf))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("missions.prep")), Slider(&P.PrepS, 15, 300, 5, [](double V) { return FString::Printf(TEXT("%.0f s"), V); }))];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("race.seed")), SliderI(&P.Seed, 1, 999999))];
+	}
+	Ed->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s: %d"), *Tx(TEXT("missions.points")).ToString(), P.Shape.Num())), 11, "Regular", Dim())];
+	Ed->AddSlot().AutoHeight().Padding(0, 4, 0, 0)[SmvUi::Text(Tx(TEXT("missions.map_help")), 10, "Regular", Mute())];
+	Ed->AddSlot().AutoHeight().Padding(0, 14, 0, 0)
 	[
 		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(Tx(TEXT("common.save")), [Self]()
 		{
-			Self->Data()->SaveMission(Self->EditMission, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.saved")).ToString() : M, bOk ? 6 : 3); Self->Refresh(); }));
+			Self->EditMission.Kind = Self->MPlan.Kind;
+			Self->EditMission.PlanJson = Self->MPlanSave();
+			Self->Data()->SaveMission(Self->EditMission, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.saved")).ToString() : M, bOk ? 6 : 3); Self->MPlan.LoadedFor.Empty(); Self->Refresh(); }));
 		}, true, true, ESmvIcon::Save)]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(Tx(TEXT("missions.clear")), [Self]() { Self->MPlan.Shape.Reset(); Self->MPlan.Order.Reset(); Self->Refresh(); }, false, true, ESmvIcon::Trash)]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(FText::FromString(TEXT("+")), [Self]() { Self->MZoom = FMath::Min(Self->MZoom * 1.4, 20.0); }, false, true)]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(FText::FromString(TEXT("−")), [Self]() { Self->MZoom = FMath::Max(Self->MZoom / 1.4, 0.2); }, false, true)]
 		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Danger).Icon(ESmvIcon::Trash).Text(Tx(TEXT("common.delete"))).IsEnabled(!EditMission.Id.IsEmpty()).OnClick([Self]()
 		{
-			Self->Data()->DeleteMission(Self->EditMission.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); Self->EditMission = FSmvMission(); Self->Refresh(); }));
+			Self->Data()->DeleteMission(Self->EditMission.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); Self->EditMission = FSmvMission(); Self->MPlanLoad(); Self->Refresh(); }));
 		})]
 	];
 	return Page(Tx(TEXT("menu.missions")), Tx(TEXT("menu.missions_sub")), ESmvIcon::Mission, SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 22, 0)[SNew(SBox).WidthOverride(320.f)[List]]
-		+ SHorizontalBox::Slot().FillWidth(1.f)[Glass(Ed, FMargin(20.f))]);
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 18, 0)[SNew(SBox).WidthOverride(280.f)[List]]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 18, 0)[MissionMap(760.f, 560.f)]
+		+ SHorizontalBox::Slot().FillWidth(1.f)[Glass(Ed, FMargin(18.f))]);
 }
 
 // ---------------------------------------------------------------------------

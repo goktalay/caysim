@@ -5,6 +5,7 @@
 #include "SmvDataService.h"
 #include "SmvMotorSynth.h"
 #include "SmvUiPrefs.h"
+#include "SmvPilotFigure.h"
 #include "CesiumWorldSetup.h"
 #include "CaySimTypes.h"
 #include "Camera/CameraActor.h"
@@ -174,6 +175,7 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	}
 	if (Flyer) Flyer->Destroy();
 	if (Preview) Preview->Destroy();
+	if (PilotPrev) PilotPrev->Destroy();
 	if (Cam) Cam->Destroy();
 	if (Terrain) Terrain->Destroy();
 	if (WorldSetup) WorldSetup->Destroy();
@@ -197,6 +199,7 @@ void ASmvMenuScene::SetPreview(const FString& Type, const FString& ModelKey, con
 	UWorld* W = GetWorld();
 	if (!W) return;
 	if (Preview) { Preview->Destroy(); Preview = nullptr; }
+	if (PilotPrev) { PilotPrev->Destroy(); PilotPrev = nullptr; PilotKey.Empty(); }
 	PrevType = Type; PrevModel = ModelKey; PrevColor = ColorHex;
 	FActorSpawnParameters P;
 	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -233,15 +236,47 @@ void ASmvMenuScene::SetPreview(const FString& Type, const FString& ModelKey, con
 
 void ASmvMenuScene::ApplyPreviewChannels()
 {
-	if (!Preview) return;
-	TInlineComponentArray<UPrimitiveComponent*> Prims(Preview);
-	for (UPrimitiveComponent* P : Prims) if (P) { P->SetLightingChannels(false, true, false); P->SetCastShadow(false); }
+	for (AActor* A : { (AActor*)Preview.Get(), (AActor*)PilotPrev.Get() })
+	{
+		if (!A) continue;
+		TInlineComponentArray<UPrimitiveComponent*> Prims(A);
+		for (UPrimitiveComponent* P : Prims) if (P) { P->SetLightingChannels(false, true, false); P->SetCastShadow(false); }
+	}
+}
+
+void ASmvMenuScene::SetPilotPreview(const FSmvAvatar& A, bool bFace)
+{
+	if (!FSmvUiPrefs::Get().bPreview3d) return;
+	bFaceZoom = bFace;
+	UWorld* W = GetWorld();
+	if (!W) return;
+	const FString Key = SmvJson::ToString(A.ToJson());
+	if (PilotPrev && Key == PilotKey) return;
+	if (Preview) { Preview->Destroy(); Preview = nullptr; PrevType.Empty(); }
+	if (!PilotPrev)
+	{
+		FActorSpawnParameters P;
+		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		PilotPrev = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(GSmvPreviewAt), P);
+	}
+	if (!PilotPrev) return;
+	PilotKey = Key;
+	PilotPrev->Build(A, false);
+	Capture->ShowOnlyActors.Reset();
+	Capture->ShowOnlyActors.Add(PilotPrev);
+	ApplyPreviewChannels();
+}
+
+void ASmvMenuScene::AddPreviewYaw(float Deg)
+{
+	PreviewYaw = FMath::Fmod(PreviewYaw + Deg + 360.f, 360.f);
+	ManualUntil = FPlatformTime::Seconds() + 4.0;
 }
 
 void ASmvMenuScene::SetPreviewActive(bool bOn)
 {
 	bPreviewOn = bOn && FSmvUiPrefs::Get().bPreview3d;
-	Capture->bCaptureEveryFrame = bPreviewOn && Preview != nullptr;
+	Capture->bCaptureEveryFrame = bPreviewOn && (Preview != nullptr || PilotPrev != nullptr);
 }
 
 void ASmvMenuScene::UpdateCamera(float Dt, const FVector& D, const FVector& Fwd)
@@ -310,9 +345,24 @@ void ASmvMenuScene::Tick(float Dt)
 			}
 		}
 	}
+	if (PilotPrev)
+	{
+		if (FPlatformTime::Seconds() > ManualUntil) PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 14.f, 360.f);
+		FaceK = FMath::FInterpTo(FaceK, bFaceZoom ? 1.f : 0.f, Dt, 4.f);
+		PilotPrev->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, 180.f + PreviewYaw, 0.f));
+		const FVector Target = GSmvPreviewAt + FVector(0, 0, FMath::Lerp(95.f, PilotPrev->HeadHeightCm(), FaceK));
+		const float Dist = FMath::Lerp(330.f, 75.f, FaceK);
+		const FVector CamAt = Target + FVector(-Dist, 0.0, FMath::Lerp(20.f, 4.f, FaceK));
+		Capture->FOVAngle = 28.f;
+		Capture->SetWorldLocationAndRotation(CamAt, (Target - CamAt).Rotation());
+		KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-180, 160, 220));
+		RimLight->SetWorldLocation(GSmvPreviewAt + FVector(160, -120, 200));
+		const double Now = FPlatformTime::Seconds();
+		if (Now - LastChannelFix > 1.0) { LastChannelFix = Now; ApplyPreviewChannels(); }
+	}
 	if (Preview)
 	{
-		PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 24.f, 360.f);
+		if (FPlatformTime::Seconds() > ManualUntil) PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 24.f, 360.f);
 		Preview->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, PreviewYaw, 0.f));
 		const FVector CamAt = GSmvPreviewAt + FVector(-PreviewDistCm, 0.0, PreviewDistCm * 0.32);
 		Capture->SetWorldLocationAndRotation(CamAt, (GSmvPreviewAt - CamAt).Rotation());

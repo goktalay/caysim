@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "SimumavTypes.h"
 #include "SmvMenuScene.generated.h"
 
 class ACaySimWorldSetup;
@@ -16,6 +17,7 @@ class ACameraActor;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class UPointLightComponent;
+class ASmvPilotFigure;
 
 UCLASS()
 class SIMUMAV_API ASmvMenuScene : public AActor
@@ -32,6 +34,10 @@ public:
 	void SetPreview(const FString& Type, const FString& ModelKey, const FString& ColorHex);
 	/** Önizleme görünür mü (görünmüyorsa yakalama durur) */
 	void SetPreviewActive(bool bOn);
+	/** Pilot önizlemesi (tam boy 3B figür); bFace: yüze yakın çerçeve */
+	void SetPilotPreview(const FSmvAvatar& A, bool bFace);
+	/** Fareyle sürükleyerek döndürme (derece) — otomatik dönüş bir süre durur */
+	void AddPreviewYaw(float Deg);
 	UTextureRenderTarget2D* GetPreviewTarget() const { return PreviewRT; }
 	bool IsLive() const { return bLive; }
 
@@ -46,6 +52,7 @@ protected:
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Flyer;
 	UPROPERTY() TObjectPtr<ACameraActor> Cam;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Preview;
+	UPROPERTY() TObjectPtr<ASmvPilotFigure> PilotPrev;
 
 private:
 	bool bLive = false;
@@ -59,6 +66,10 @@ private:
 	FVector CamPos = FVector::ZeroVector;
 	FRotator CamRot = FRotator::ZeroRotator;
 	bool bCamInit = false;
+	bool bFaceZoom = false;
+	float FaceK = 0.f;
+	double ManualUntil = 0;
+	FString PilotKey;
 
 	void BuildWorld();
 	FVector EnuToWorld(double E, double N, double Agl) const;
