@@ -1,4 +1,5 @@
 #include "SimumavClient.h"
+#include "SmvI18n.h"
 #include "SimumavModule.h"
 #include "SimumavSecrets.h"
 #include "SimumavSocket.h"
@@ -88,7 +89,7 @@ void USimumavClient::ParseError(int32 Status, const FString& Body, FString& Code
 		default: Code = FString::Printf(TEXT("http_%d"), Status); break;
 		}
 	}
-	if (Msg.IsEmpty()) Msg = Status == 0 ? TEXT("Sunucuya ulaşılamadı (ağ / DNS / TLS).") : FString::Printf(TEXT("HTTP %d"), Status);
+	if (Msg.IsEmpty()) Msg = Status == 0 ? FSmvI18n::T(TEXT("net.unreachable")).ToString() : FString::Printf(TEXT("HTTP %d"), Status);
 }
 
 // ---------------------------------------------------------------------------

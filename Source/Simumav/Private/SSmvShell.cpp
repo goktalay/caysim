@@ -4032,7 +4032,7 @@ TSharedRef<SWidget> SSmvShell::FpvGallery()
 		{ Tx(TEXT("fpv.rule_penalty")), Tx(TEXT("fpv.rule_reset")), Tx(TEXT("fpv.rule_continue")) }, {}, nullptr, 3))];
 	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.crash_pen")), Slider(&FpvEdit.CrashPenS, 0, 30, 0.5, Sec))];
 	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.miss_pen")), Slider(&FpvEdit.MissPenS, 0, 30, 0.5, Sec))];
-	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.time_limit")), SliderI(&FpvEdit.TimeLimitMin, 2, 30, 1, [](double V) { return FString::Printf(TEXT("%d dk"), (int32)V); }))];
+	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.time_limit")), SliderI(&FpvEdit.TimeLimitMin, 2, 30, 1, [](double V) { return FString::Printf(TEXT("%d %s"), (int32)V, *FSmvI18n::T(TEXT("unit.min")).ToString()); }))];
 	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.ghost")), Toggle(&FpvEdit.bGhost), Tx(TEXT("fpv.ghost_d")))];
 	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.vehicle")), Ids.Num() ? Cycle(&FpvDroneId, Ids, Ls, nullptr, 280.f) : SmvUi::Text(Tx(TEXT("fpv.type_warn")), 11, "Regular", Warn()))];
 	R->AddSlot().AutoHeight().Padding(0, 14, 0, 0)

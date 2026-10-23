@@ -552,4 +552,6 @@ U = {
  'spec.physics': ('SITL fiziği', 'SITL physics', 'SITL-Physik', 'Physique SITL', 'Física SITL', 'Физика SITL', 'فيزياء SITL'),
  'spec.span': ('Açıklık', 'Span', 'Spannweite', 'Envergure', 'Envergadura', 'Размах', 'الباع'),
  'menu.recent': ('Son uçuşlar', 'Recent flights', 'Letzte Flüge', 'Vols récents', 'Vuelos recientes', 'Последние полёты', 'الرحلات الأخيرة'),
+ 'net.unreachable': ('Sunucuya ulaşılamadı (ağ / DNS / TLS).', 'Server unreachable (network / DNS / TLS).', 'Server nicht erreichbar (Netzwerk / DNS / TLS).', 'Serveur injoignable (réseau / DNS / TLS).', 'Servidor inaccesible (red / DNS / TLS).', 'Сервер недоступен (сеть / DNS / TLS).', 'تعذّر الوصول إلى الخادم (الشبكة / DNS / TLS).'),
+ 'unit.min': ('dk', 'min', 'Min.', 'min', 'min', 'мин', 'د'),
 }
