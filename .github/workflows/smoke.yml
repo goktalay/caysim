@@ -39,7 +39,7 @@ jobs:
           $shots = Join-Path $base 'Simumav\Saved\Screenshots'
           if (Test-Path $shots) { Remove-Item $shots -Recurse -Force -ErrorAction SilentlyContinue }
           Write-Host ("Oturum: " + [Environment]::UserInteractive + " / " + $env:USERNAME + " / session " + (Get-Process -Id $PID).SessionId)
-          $p = Start-Process -FilePath $exe.FullName -ArgumentList '-SmvSmoke','-windowed','-ResX=1600','-ResY=900','-log','-unattended' -PassThru
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList '-SmvSmoke','-RenderOffScreen','-ResX=1600','-ResY=900','-log','-unattended' -PassThru
           $deadline = (Get-Date).AddSeconds([int]$env:WAIT)
           while (-not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
           if (-not $p.HasExited) { Write-Host "Zaman asimi: kapatiliyor"; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
