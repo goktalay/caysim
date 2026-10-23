@@ -56,6 +56,10 @@ protected:
 	bool bFabSubsRequested = false;
 	bool bFabPlaced = false;
 	UFUNCTION() void HandleFabLevelShown();
+	/** Fab Ultra Dynamic Sky aktörleri (düz dünyada yerleşik gök yerine) ve sahne dekoru (yalnız görsel statik ağlar) */
+	UPROPERTY() TArray<TObjectPtr<AActor>> FabSkyActors;
+	UPROPERTY() TArray<TObjectPtr<AActor>> FabDecor;
+	void SpawnFabDecor();
 	void PlaceFabLevels();
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Drone;
 	UPROPERTY() TArray<TObjectPtr<ASmvGateActor>> Gates;

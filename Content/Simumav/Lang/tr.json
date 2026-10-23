@@ -56,6 +56,7 @@
  "device.rc": "RC verici (USB)",
  "drive.ackermann": "Ackermann (ön tekerden dönüş)",
  "drive.skid": "Paletli / diferansiyel",
+ "fabmap.forest": "Orman",
  "fabmap.ruined": "Yıkık İnşaat",
  "flight.fab_missing": "Fab haritası bu pakette yok — prosedürel dünyaya geçildi.",
  "flight.no_cesium": "Gerçek arazi için Cesium ion belirteci yok — prosedürel dünyaya geçildi (Ayarlar → Cesium).",

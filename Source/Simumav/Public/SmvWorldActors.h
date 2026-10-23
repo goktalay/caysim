@@ -40,12 +40,14 @@ public:
 	void UpdateAudio(const FVector& Listener, float Volume);
 	virtual void Tick(float DeltaSeconds) override;
 	/** Fab dron gövdesi (skeletal) kullanılıyor mu. */
-	bool IsUsingFabBody() const { return FabMesh != nullptr; }
+	bool IsUsingFabBody() const { return FabMesh != nullptr || FabStatic != nullptr; }
 
 protected:
 	virtual void BuildPlaceholder() override;
 	/** Fab quad gövdesi (SmvFabContent::LoadDroneMesh); pervane kemikleri ARM'lıyken döner. */
 	UPROPERTY() TObjectPtr<UPoseableMeshComponent> FabMesh;
+	/** Fab gövdesi iskeletsizse (statik ağ) */
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> FabStatic;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USmvMotorSynth> Motor;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 	/** Pervane göbekleri (dönen düğüm; kanatlar alt bileşen). */
@@ -69,8 +71,10 @@ private:
 	/** Dönen pervane: göbek + iki kanatlı pala (bForward: disk ileri bakar, X ekseni çevresinde döner). */
 	void AddRotor(const FVector& PosM, float DiaM, bool bForward, const FLinearColor& Color);
 	void ClearParts();
-	/** Fab gövdesini kurar (yoksa false → BasicShapes gövdesi). */
-	bool BuildFabBody();
+	/** Fab gövdesini kurar (Dir: /Game/Fab/Drone | /Game/Fab/DroneFpv; ayar öneki Drone|Fpv; yoksa false → BasicShapes gövdesi). */
+	bool BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, float DefaultSpanM);
+	/** Ölçek/yön/yer ofseti (bileşen uzayı sınırları, dönüş merkezi, burun ipucu). */
+	bool PlaceFabBody(USceneComponent* C, const FBoxSphereBounds& B, const FVector& Ctr, const FVector& Fwd, const TCHAR* SpanKey, const TCHAR* YawKey, float DefaultSpanM);
 	TArray<FName> FabPropBones;
 	/** Pervane kemiklerinin bileşen uzayındaki başlangıç (referans) dönüşleri */
 	TArray<FQuat> FabPropRef;

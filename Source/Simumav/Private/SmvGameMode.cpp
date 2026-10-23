@@ -31,6 +31,9 @@
 #include "Components/SkyAtmosphereComponent.h"
 #include "Components/VolumetricCloudComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMeshActor.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Engine/StaticMesh.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/Engine.h"
@@ -221,6 +224,10 @@ void ASmvGameMode::BuildScene()
 			{
 				bool bOk = false;
 				FabLevels.Reset();
+	for (TObjectPtr<AActor>& A : FabSkyActors) if (A) A->Destroy();
+	for (TObjectPtr<AActor>& A : FabDecor) if (A) A->Destroy();
+	FabSkyActors.Reset();
+	FabDecor.Reset();
 				bFabSubsRequested = false;
 				bFabPlaced = false;
 				ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, FM->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
@@ -238,6 +245,14 @@ void ASmvGameMode::BuildScene()
 		{
 			Terrain = W->SpawnActor<ASmvProcTerrain>();
 			if (Terrain) Terrain->Build(Req.Track, GroundMsl, WorldSetup);
+			SpawnFabDecor();
+		}
+		// Fab Ultra Dynamic Sky (varsa) yerleşik güneş/gök/sis/bulut yerine; saat ve hava parkurdan
+		TArray<AActor*> SkyActors;
+		if (FSmvFabContent::SpawnSky(W, Req.Track, SkyActors))
+		{
+			WorldSetup->DisableBuiltinSky();
+			for (AActor* A : SkyActors) FabSkyActors.Add(A);
 		}
 	}
 
@@ -1238,4 +1253,32 @@ void ASmvGameMode::PlaceFabLevels()
 	for (ULevel* L : Levels) L->ApplyWorldOffset(Off, false);
 	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi: %d seviye, kutu %s, merkez (%.0f, %.0f), zemin %.0f cm, %d gök/ışık aktörü kaldırıldı"),
 		Levels.Num(), *Box.GetSize().ToString(), Ctr.X, Ctr.Y, Zg, Drop.Num());
+}
+
+// Sahne dekoru: Fab statik modelleri (ör. tank, hava savunma, anti-dron sistemi) ev konumunun doğusunda düz alanda
+// park hâlinde durur. Yalnız görsel — davranış, hedef mantığı ya da etkileşim yoktur. Ayar: [/Script/Simumav.SmvFabContent] PropsEnabled
+void ASmvGameMode::SpawnFabDecor()
+{
+	UWorld* W = GetWorld();
+	bool bOn = true;
+	if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvFabContent"), TEXT("PropsEnabled"), bOn, GGameIni);
+	if (!W || !bOn) return;
+	const TArray<UStaticMesh*>& Props = FSmvFabContent::Props();
+	for (int32 i = 0; i < Props.Num() && i < 8; ++i)
+	{
+		UStaticMesh* M = Props[i];
+		const FBoxSphereBounds B = M->GetBounds();
+		const double L = 2.0 * FMath::Max3(B.BoxExtent.X, B.BoxExtent.Y, B.BoxExtent.Z);
+		// gerçekçi araç boyu 2–30 m değilse 8 m'ye ölçekle (birim farkı)
+		const double S = (L < 200.0 || L > 3000.0) ? 800.0 / FMath::Max(L, 1.0) : 1.0;
+		const double E = 110.0 + 25.0 * i, N = 70.0;   // m (doğu, kuzey); düz ev alanı 300 m içinde
+		const FVector Loc(E * 100.0, -N * 100.0, -(B.Origin.Z - B.BoxExtent.Z) * S);
+		AStaticMeshActor* A = W->SpawnActor<AStaticMeshActor>(Loc, FRotator(0.0, 90.0 + 20.0 * i, 0.0));
+		if (!A || !A->GetStaticMeshComponent()) continue;
+		A->SetMobility(EComponentMobility::Movable);
+		A->GetStaticMeshComponent()->SetStaticMesh(M);
+		A->SetActorScale3D(FVector(S));
+		FabDecor.Add(A);
+	}
+	if (FabDecor.Num()) UE_LOG(LogSimumav, Log, TEXT("Fab sahne dekoru: %d model"), FabDecor.Num());
 }

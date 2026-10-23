@@ -56,6 +56,7 @@
  "device.rc": "Emisora RC (USB)",
  "drive.ackermann": "Ackermann (dirección delantera)",
  "drive.skid": "Orugas / diferencial",
+ "fabmap.forest": "Bosque",
  "fabmap.ruined": "Construcción en ruinas",
  "flight.fab_missing": "El mapa de Fab no está en esta compilación — se usa el mundo procedural.",
  "flight.no_cesium": "Sin token de Cesium ion para terreno real — se usa mundo procedural (Ajustes → Cesium).",

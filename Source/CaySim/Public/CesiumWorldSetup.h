@@ -55,6 +55,9 @@ public:
 	/** Saat/sis/rüzgâr değişikliklerini canlı uygular. */
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Dünya")
 	void ApplyWorldSettings(const FCaySimWorld& InWorld);
+	/** Yerleşik gök/ışık aktörlerini (güneş, gök ışığı, atmosfer, sis, bulut; Cesium güneş-gök) kaldırır —
+	 *  dışarıdan bir gök sistemi (ör. Simumav'da Fab Ultra Dynamic Sky) kurulduğunda. */
+	void DisableBuiltinSky();
 
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dünya") bool IsReady() const { return bReady; }
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dünya") ECaySimWorldSource GetSource() const { return ActiveSource; }

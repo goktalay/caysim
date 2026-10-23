@@ -156,6 +156,18 @@ void ACaySimWorldSetup::SetupLighting()
 	ApplyWorldSettings(World);
 }
 
+void ACaySimWorldSetup::DisableBuiltinSky()
+{
+	if (Sun) { Sun->Destroy(); Sun = nullptr; }
+	if (Sky) { Sky->Destroy(); Sky = nullptr; }
+	if (Atmosphere) { Atmosphere->Destroy(); Atmosphere = nullptr; }
+	if (Fog) { Fog->Destroy(); Fog = nullptr; }
+	if (Clouds) { Clouds->Destroy(); Clouds = nullptr; }
+#if CAYSIM_WITH_CESIUM
+	if (SunSky.IsValid()) { SunSky->Destroy(); SunSky.Reset(); }
+#endif
+}
+
 void ACaySimWorldSetup::ApplyWorldSettings(const FCaySimWorld& InWorld)
 {
 	World = InWorld;

@@ -63,6 +63,11 @@ def gorev(kaynak, hedef, ad, iskelet):
         o.set_editor_property("import_textures", True)
         o.set_editor_property("import_animations", False)
         o.set_editor_property("create_physics_asset", False)
+        if not iskelet:
+            try:
+                o.static_mesh_import_data.set_editor_property("combine_meshes", True)
+            except Exception:  # noqa: BLE001
+                pass
         t.set_editor_property("options", o)
     return t
 
@@ -104,8 +109,12 @@ def bir_is(j):
         return {"hedef": hedef, "ok": False}
     if eal.does_directory_exist(hedef):
         eal.delete_directory(hedef)
-    denemeler = [(True, None)]
-    if kaynak.lower().endswith(".fbx"):
+    if j.get("statik"):
+        # sahne dekoru: yalnız statik ağ (birleştirilmiş), iskelet/animasyon yok
+        denemeler = [(False, None)]
+    else:
+        denemeler = [(True, None)]
+    if kaynak.lower().endswith(".fbx") and not j.get("statik"):
         # Interchange FBX çevirmeni FbxImportUI seçeneklerini yok sayarsa eski FBX içe aktarıcıyla bir daha dene
         denemeler.append((True, "Interchange.FeatureFlags.Import.FBX 0"))
         denemeler.append((False, None))
@@ -146,12 +155,52 @@ def bir_is(j):
             break
         if sms and not iskelet:
             sonuc.update(ok=True, iskelet=False, varliklar=[p for p, _ in v])
-            uyar("yalniz statik ag olustu (iskelet yok) - oyun BasicShapes govdesinde kalir")
+            try:
+                sm = unreal.load_asset(sms[0])
+                e = sm.get_bounds().box_extent
+                log(f"statik ag: {sms[0]} ({len(sms)} ag), sinir (cm): {2 * e.x:.0f} x {2 * e.y:.0f} x {2 * e.z:.0f}")
+            except Exception as ex:  # noqa: BLE001
+                uyar(f"sinir alinamadi: {ex}")
+            log(f"doku sayisi: {len([p for p, c in v if c.startswith('Texture')])}")
+            if not j.get("statik"):
+                uyar("yalniz statik ag olustu (iskelet yok) - govde statik, pervaneler donmez")
             break
         uyar(f"deneme basarisiz (iskelet={iskelet}, cvar={cvar}); {len(v)} varlik")
         if eal.does_directory_exist(hedef):
             eal.delete_directory(hedef)
     eal.save_directory(hedef, only_if_is_dirty=True, recursive=True)
+    return sonuc
+
+
+def uds_incele():
+    """Ultra Dynamic Sky: oyunun adla bağladığı değişkenlerin varlığı ve hava ön ayarları (yalnız günlük)."""
+    sonuc = {"hedef": "/Game/UltraDynamicSky", "ok": True}
+    ar = unreal.AssetRegistryHelpers.get_asset_registry()
+    varliklar = ar.get_assets_by_path("/Game/UltraDynamicSky", recursive=True)
+    for ad, adaylar in (("Ultra_Dynamic_Sky", ["Time of Day", "Animate Time of Day", "Cloud Coverage", "Fog"]),
+                        ("Ultra_Dynamic_Weather", ["Weather", "Random Weather Variation"])):
+        bp = [a for a in varliklar if str(a.asset_name) == ad]
+        if not bp:
+            uyar(f"UDS: {ad} bulunamadi")
+            continue
+        yol = str(bp[0].package_name)
+        log(f"UDS: {ad} -> {yol}")
+        try:
+            cls = unreal.load_object(None, f"{yol}.{ad}_C")
+            cdo = unreal.get_default_object(cls)
+            for d in adaylar:
+                bulundu = None
+                for aday in (d, d.replace(" ", "_"), d.replace(" ", ""), d.lower().replace(" ", "_")):
+                    try:
+                        bulundu = (aday, cdo.get_editor_property(aday))
+                        break
+                    except Exception:  # noqa: BLE001
+                        pass
+                log(f"UDS:   {d}: " + (f"VAR ({bulundu[0]} = {str(bulundu[1])[:80]})" if bulundu else "bulunamadi"))
+        except Exception as e:  # noqa: BLE001
+            uyar(f"UDS: {ad} incelenemedi: {e}")
+    hava = sorted({str(a.asset_name) for a in varliklar if "Weather" in str(a.asset_class_path.asset_name) and "Ultra_Dynamic" not in str(a.asset_name)})
+    log(f"UDS hava on ayarlari ({len(hava)}): {', '.join(hava[:40])}")
     return sonuc
 
 
@@ -167,7 +216,7 @@ def main():
     sonuclar = []
     for j in isler:
         try:
-            sonuclar.append(bir_is(j))
+            sonuclar.append(uds_incele() if j.get("tur") == "uds" else bir_is(j))
         except Exception as e:  # noqa: BLE001
             unreal.log_error(f"[fab_import] hata: {j.get('kaynak')}: {e}")
             sonuclar.append({"hedef": j.get("hedef"), "ok": False})

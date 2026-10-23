@@ -254,6 +254,7 @@ _T = {
  "wizard.title": ("Flugassistent", "Assistant de vol", "Asistente de vuelo", "Мастер полёта", "معالج الرحلة"),
  "wizard.vehicle": ("Fahrzeug und Pilot", "Appareil et pilote", "Vehículo y piloto", "Аппарат и пилот", "المركبة والطيار"),
  "world.fab": ("Fab-Karte", "Carte Fab", "Mapa de Fab", "Карта Fab", "خريطة Fab"),
+ "fabmap.forest": ("Wald", "Forêt", "Bosque", "Лес", "غابة"),
  "fabmap.ruined": ("Ruinen-Baustelle", "Chantier en ruine", "Construcción en ruinas", "Разрушенная стройка", "موقع بناء مدمَّر"),
  "flight.fab_missing": ("Fab-Karte ist nicht in diesem Build — prozedurale Welt verwendet.", "La carte Fab n'est pas dans cette version — monde procédural utilisé.",
                         "El mapa de Fab no está en esta compilación — se usa el mundo procedural.", "Карты Fab нет в этой сборке — используется процедурный мир.", "خريطة Fab غير موجودة في هذا الإصدار — تم التبديل إلى العالم الإجرائي."),

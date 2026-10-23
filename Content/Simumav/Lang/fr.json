@@ -56,6 +56,7 @@
  "device.rc": "Radiocommande (USB)",
  "drive.ackermann": "Ackermann (direction roues avant)",
  "drive.skid": "Chenilles / différentiel",
+ "fabmap.forest": "Forêt",
  "fabmap.ruined": "Chantier en ruine",
  "flight.fab_missing": "La carte Fab n'est pas dans cette version — monde procédural utilisé.",
  "flight.no_cesium": "Pas de jeton Cesium ion pour le relief réel — monde procédural utilisé (Réglages → Cesium).",

@@ -11,7 +11,7 @@ gövdeleri ve prosedürel dünya ile çalışır.
 |---|---|
 | `D:\SimumavFab\Content\<paket>` (hazırlama projesi) | `Content\<paket>` altına kopyalanır (robocopy /MIR; yalnız değişenler) |
 | `C:\ProgramData\Epic\EpicGamesLauncher\VaultCache\<paket>\data\Content` | aynı şekilde `Content\<paket>` altına kopyalanır |
-| `VaultCache\FabLibrary\<ürün>\fbx\*.fbx` (ya da `obj`) | Editor Python (`Scripts/Python/fab_import.py`) ile `/Game/Fab/<ad>` altına içe aktarılır; dron ürünleri `/Game/Fab/Drone` |
+| `VaultCache\FabLibrary\<ürün>\fbx\*.fbx` (ya da `obj`) | Editor Python (`Scripts/Python/fab_import.py`) ile içe aktarılır: quad dron → `/Game/Fab/Drone` (multirotor gövdesi), FPV/önleyici dron → `/Game/Fab/DroneFpv` (fpv ve interceptor tipleri), tank / hava savunma / anti-dron sistemi → `/Game/Fab/Props/<ad>` (statik **sahne dekoru**, yalnız görsel) |
 
 Paket klasör adları korunur (`/Game/<paket>/...`): paketler birbirine bu yollarla başvurur, başka klasöre
 taşımak başvuruları kırar. Kopyalanan klasörler runner'da `.git/info/exclude` ile git dışında tutulur.
@@ -19,6 +19,11 @@ Her paketten bir harita (önce adında paket adı geçen asıl ortam haritası, 
 yoksa en büyüğü; aynı klasördeki haritalar da) pakete pişirilir ve
 uç sihirbazında **Parkur** listesinde "<ad> · Fab haritası" olarak görünür (yalnız yerel SITL ile; harita merkezi
 SITL ev konumuna oturtulur). Ruined Construction "Yıkık İnşaat" adıyla listelenir.
+
+**Ultra Dynamic Sky** (`Content\UltraDynamicSky`) varsa düz dünyada (prosedürel ve Fab haritaları) yerleşik
+güneş/gök/sis/bulut yerine kullanılır; parkurun saat (gündüz/alacakaranlık/gece) ve hava (açık/bulutlu/yağmur/sis/kar)
+ayarları UDS *Time of Day*, *Cloud Coverage*, *Fog* ve Ultra Dynamic Weather ön ayarına bağlanır. Cesium gerçek arazide
+Cesium güneş-gök sistemi kalır. Brushify Forest haritası "Orman", Ruined Construction "Yıkık İnşaat" adıyla listelenir.
 
 ## Adım adım (şirket bilgisayarı)
 

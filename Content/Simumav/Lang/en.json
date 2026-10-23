@@ -56,6 +56,7 @@
  "device.rc": "RC transmitter (USB)",
  "drive.ackermann": "Ackermann (front-wheel steering)",
  "drive.skid": "Skid / differential",
+ "fabmap.forest": "Forest",
  "fabmap.ruined": "Ruined Construction",
  "flight.fab_missing": "Fab map is not in this build — switched to procedural world.",
  "flight.no_cesium": "No Cesium ion token for real terrain — switched to procedural world (Settings → Cesium).",

@@ -60,7 +60,7 @@ M = {
  "tracks.mountain_h": ("Dağ yüksekliği (m)", "Mountain height (m)"), "tracks.trees": ("Ağaç yoğunluğu", "Tree density"), "tracks.buildings": ("Bina sayısı", "Buildings"),
  "tracks.runway": ("Pist", "Runway"), "tracks.runway_hdg": ("Pist yönü (°)", "Runway heading (°)"), "tracks.water": ("Su oranı", "Water"),
  "tracks.gates_n": ("Kapılar / halkalar: {n}", "Gates / rings: {n}"), "tracks.gates_ring": ("8 halkalık tur oluştur", "Create an 8-ring lap"), "tracks.gates_clear": ("Kapıları temizle", "Clear gates"),
- "world.fab": ("Fab haritası", "Fab map"), "fabmap.ruined": ("Yıkık İnşaat", "Ruined Construction"),
+ "world.fab": ("Fab haritası", "Fab map"), "fabmap.ruined": ("Yıkık İnşaat", "Ruined Construction"), "fabmap.forest": ("Orman", "Forest"),
  "flight.fab_missing": ("Fab haritası bu pakette yok — prosedürel dünyaya geçildi.", "Fab map is not in this build — switched to procedural world."),
  "wizard.err_fab_cloud": ("Fab haritaları yalnız yerel SITL ile uçulur (Simülasyon → Yerel).", "Fab maps can only be flown with local SITL (Simulation → Local)."),
  "world.procedural": ("Prosedürel (çevrim dışı)", "Procedural (offline)"), "world.real": ("Gerçek arazi (Cesium)", "Real terrain (Cesium)"), "world.google3d": ("Google 3B (fotogerçekçi)", "Google 3D (photorealistic)"),

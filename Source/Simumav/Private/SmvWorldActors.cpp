@@ -100,15 +100,32 @@ void ASmvDroneActor::ClearParts()
 	Hubs.Reset();
 	if (IsValid(FabMesh)) FabMesh->DestroyComponent();
 	FabMesh = nullptr;
+	if (IsValid(FabStatic)) FabStatic->DestroyComponent();
+	FabStatic = nullptr;
 	FabPropBones.Reset();
 	FabPropRef.Reset();
 	FabPropDir.Reset();
 }
 
-bool ASmvDroneActor::BuildFabBody()
+bool ASmvDroneActor::BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, float DefaultSpanM)
 {
-	USkeletalMesh* SK = FSmvFabContent::LoadDroneMesh();
-	if (!SK) return false;
+	UObject* MeshObj = FSmvFabContent::LoadMeshIn(Dir);
+	if (!MeshObj) return false;
+	USkeletalMesh* SK = Cast<USkeletalMesh>(MeshObj);
+	UStaticMesh* SM = Cast<UStaticMesh>(MeshObj);
+	if (!SK && !SM) return false;
+	const FString SpanKey = FString(IniPrefix) + TEXT("SpanM"), YawKey = FString(IniPrefix) + TEXT("YawDeg");
+	if (SM)
+	{
+		// statik gövde (iskeletsiz model): pervaneler dönmez
+		UStaticMeshComponent* SC = NewObject<UStaticMeshComponent>(this);
+		SC->SetStaticMesh(SM);
+		SC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		SC->SetupAttachment(Body);
+		SC->RegisterComponent();
+		FabStatic = SC;
+		return PlaceFabBody(SC, SM->GetBounds(), SM->GetBounds().Origin, FVector::ZeroVector, *SpanKey, *YawKey, DefaultSpanM);
+	}
 	UPoseableMeshComponent* C = NewObject<UPoseableMeshComponent>(this);
 	C->SetSkinnedAssetAndUpdate(SK);
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -157,23 +174,28 @@ bool ASmvDroneActor::BuildFabBody()
 	UE_LOG(LogSimumav, Log, TEXT("Fab dron kemikleri (%d): %s — dönen pervane kemiği %d"), NB, *Names, FabPropBones.Num());
 
 	const FBoxSphereBounds B = SK->GetBounds();
-	const FVector Ext = B.BoxExtent;
 	// dönüş/merkez: pervanelerin ortası (yoksa sınır kutusu merkezi)
 	const FVector Ctr = FabPropBones.Num() >= 3 ? PropSum / FabPropBones.Num() : B.Origin;
-	// ölçek: ayar varsa yatay en büyük boyut DroneSpanM; yoksa model zaten gerçekçi boyuttaysa (25–150 cm) 1, değilse 0,6 m'ye
-	// (Fab Quadcopter_Drone 51,8 × 45,6 cm — motorlar arası çapraz ~0,5 m). Görünürlük büyütmesi ×2,5 gövdeye ayrıca uygulanır (web MODEL_SCALE).
+	// yön ipucu: ön/arka pervane adları, o da yoksa gimbal/kamera kemiği burun (+X) kabul edilir
+	FVector Fwd = FVector::ZeroVector;
+	if (NFront > 0 && NBack > 0) Fwd = FrontSum / NFront - BackSum / NBack;
+	else if (Gimbal != INDEX_NONE) Fwd = Cs[Gimbal].GetLocation() - Ctr;
+	return PlaceFabBody(C, B, Ctr, Fwd, *SpanKey, *YawKey, DefaultSpanM);
+}
+
+bool ASmvDroneActor::PlaceFabBody(USceneComponent* C, const FBoxSphereBounds& B, const FVector& Ctr, const FVector& Fwd, const TCHAR* SpanKey, const TCHAR* YawKey, float DefaultSpanM)
+{
+	const FVector Ext = B.BoxExtent;
+	// ölçek: ayar varsa yatay en büyük boyut <önek>SpanM; yoksa model zaten gerçekçi boyuttaysa (20–150 cm) 1, değilse varsayılana
+	// (Fab Quadcopter_Drone 51,8 × 45,6 cm). Görünürlük büyütmesi ×2,5 gövdeye ayrıca uygulanır (web MODEL_SCALE).
 	const float SpanCm = 2.f * FMath::Max(1.f, (float)FMath::Max(Ext.X, Ext.Y));
 	float SpanM = 0.f;
 	float S = 1.f;
-	if (GConfig && GConfig->GetFloat(TEXT("/Script/Simumav.SmvFabContent"), TEXT("DroneSpanM"), SpanM, GGameIni) && SpanM > 0.05f) S = SpanM * 100.f / SpanCm;
-	else if (SpanCm < 25.f || SpanCm > 150.f) S = 60.f / SpanCm;
-	// yön: ayar varsa o; yoksa ön/arka pervane adları, o da yoksa gimbal/kamera kemiği burun (+X) kabul edilir
+	if (GConfig && GConfig->GetFloat(TEXT("/Script/Simumav.SmvFabContent"), SpanKey, SpanM, GGameIni) && SpanM > 0.05f) S = SpanM * 100.f / SpanCm;
+	else if (SpanCm < 20.f || SpanCm > 150.f) S = DefaultSpanM * 100.f / SpanCm;
 	float Yaw = 0.f;
-	if (!GConfig || !GConfig->GetFloat(TEXT("/Script/Simumav.SmvFabContent"), TEXT("DroneYawDeg"), Yaw, GGameIni))
+	if (!GConfig || !GConfig->GetFloat(TEXT("/Script/Simumav.SmvFabContent"), YawKey, Yaw, GGameIni))
 	{
-		FVector Fwd = FVector::ZeroVector;
-		if (NFront > 0 && NBack > 0) Fwd = FrontSum / NFront - BackSum / NBack;
-		else if (Gimbal != INDEX_NONE) Fwd = Cs[Gimbal].GetLocation() - Ctr;
 		if (FVector2D(Fwd.X, Fwd.Y).Size() > SpanCm * 0.05f) Yaw = -(float)FMath::RadiansToDegrees(FMath::Atan2(Fwd.Y, Fwd.X));
 	}
 	const FRotator Rot(0.f, Yaw, 0.f);
@@ -185,7 +207,7 @@ bool ASmvDroneActor::BuildFabBody()
 	GroundOffsetM = (float)(B.Origin.Z - Ext.Z) * S / 100.f * VisScale;
 	VisRadiusM = FMath::Max(0.3f, (float)FVector2D(Ext.X, Ext.Y).Size() * S / 100.f * VisScale);
 	VisNoseM = (float)FMath::Max(Ext.X, Ext.Y) * S / 100.f * VisScale;
-	UE_LOG(LogSimumav, Log, TEXT("Fab dron: sınır %.1f×%.1f×%.1f cm, ölçek %.3f (×%.1f görünürlük), yön %.0f°"), Ext.X * 2, Ext.Y * 2, Ext.Z * 2, S, VisScale, Yaw);
+	UE_LOG(LogSimumav, Log, TEXT("Fab dron gövdesi: sınır %.1f×%.1f×%.1f cm, ölçek %.3f (×%.1f görünürlük), yön %.0f°"), Ext.X * 2, Ext.Y * 2, Ext.Z * 2, S, VisScale, Yaw);
 	return true;
 }
 
@@ -238,6 +260,12 @@ void ASmvDroneActor::BuildPlaceholder()
 	float Low = -0.1f;   // gövdenin en alt noktası (m, ölçeksiz)
 	float Radius = 0.4f, Nose = 0.2f;
 	VisScale = 2.5f;
+	// FPV yarışçı ve önleyici: Fab FPV_Interceptor_Drone gövdesi varsa onu kullan (yoksa aşağıdaki basit gövdeler)
+	if ((SmvType == TEXT("fpv") || SmvType == TEXT("interceptor")) && BuildFabBody(TEXT("/Game/Fab/DroneFpv"), TEXT("Fpv"), 0.35f))
+	{
+		Body->SetRelativeScale3D(FVector(VisScale));
+		return;
+	}
 	if (SmvType == TEXT("plane") || SmvType == TEXT("vtol") || SmvType == TEXT("interceptor"))
 	{
 		AddPart(CylinderMesh, FVector(0, 0, 0), FVector(0.12f, 0.12f, 1.0f), FRotator(90, 0, 0), BodyColor);   // gövde (X boyunca)
@@ -293,7 +321,7 @@ void ASmvDroneActor::BuildPlaceholder()
 		const FString MK = SmvModelKey.ToLower();
 		const bool bHexa = SmvType == TEXT("hexa") || MK.Contains(TEXT("hexa")) || MK.Contains(TEXT("typhoon")) || MK.Contains(TEXT("h480"));
 		// quad (FPV yarışçı hariç): Fab gövdesi varsa onu kullan; hexa/uçak/heli/kara aracı basit gövdede kalır
-		if (!bFpv && !bHexa && BuildFabBody())
+		if (!bFpv && !bHexa && BuildFabBody(TEXT("/Game/Fab/Drone"), TEXT("Drone"), 0.6f))
 		{
 			Body->SetRelativeScale3D(FVector(VisScale));
 			return;

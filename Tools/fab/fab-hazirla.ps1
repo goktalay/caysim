@@ -112,24 +112,36 @@ try {
 	$droneAlindi = $false
 	if (Test-Path -LiteralPath $lib) {
 		foreach ($u in (Get-ChildItem -LiteralPath $lib -Directory -ErrorAction SilentlyContinue)) {
-			$dosya = Get-ChildItem -LiteralPath (Join-Path $u.FullName 'fbx') -Filter *.fbx -File -ErrorAction SilentlyContinue | Select-Object -First 1
-			if (-not $dosya) { $dosya = Get-ChildItem -LiteralPath (Join-Path $u.FullName 'obj') -Filter *.obj -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
+			$dosya = Get-ChildItem -LiteralPath (Join-Path $u.FullName 'fbx') -Filter *.fbx -File -Recurse -ErrorAction SilentlyContinue | Sort-Object Length -Descending | Select-Object -First 1
+			if (-not $dosya) { $dosya = Get-ChildItem -LiteralPath (Join-Path $u.FullName 'obj') -Filter *.obj -File -Recurse -ErrorAction SilentlyContinue | Sort-Object Length -Descending | Select-Object -First 1 }
 			if (-not $dosya) { continue }
 			$urun = ($u.Name -replace '-[0-9a-f]{6,}$', '')
 			$temiz = ($urun -replace '[^A-Za-z0-9]', '')
-			if (-not $droneAlindi -and $urun -match '(?i)drone|quad|copter|uav') { $hedefAd = 'Drone'; $ad = 'SK_FabDrone'; $droneAlindi = $true }
+			$statik = $false
+			# sahne dekoru (yalniz gorsel statik ag): kara araclari / hava savunma / anti-dron sistemleri — once bunlar ("Anti-Drone" dron degil)
+			if ($urun -match '(?i)tank|patriot|mim-?104|sam_|_sam|anti-?drone|microwave|launcher|truck|vehicle') { $hedefAd = "Props\$temiz"; $ad = "SM_$temiz"; $statik = $true }
+			elseif ($urun -match '(?i)fpv|interceptor|racer') { $hedefAd = 'DroneFpv'; $ad = 'SK_FabDroneFpv' }
+			elseif (-not $droneAlindi -and $urun -match '(?i)drone|quad|copter|uav') { $hedefAd = 'Drone'; $ad = 'SK_FabDrone'; $droneAlindi = $true }
 			else { $hedefAd = $temiz; $ad = "SK_$temiz" }
 			$hedefDisk = Join-Path $content "Fab\$hedefAd"
 			$imza = "$($dosya.FullName)|$($dosya.Length)|$($dosya.LastWriteTimeUtc.Ticks)"
 			$imzaDosya = Join-Path $hedefDisk '.kaynak-imza'
 			$var = (Test-Path -LiteralPath $imzaDosya) -and ((Get-Content -LiteralPath $imzaDosya -Raw).Trim() -eq $imza) -and (Get-ChildItem -LiteralPath $hedefDisk -Filter *.uasset -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
-			Bilgi "FabLibrary urunu: $urun ($($dosya.Name), $([math]::Round($dosya.Length / 1KB)) KB) -> /Game/Fab/$hedefAd"
+			$hedefYol = '/Game/Fab/' + ($hedefAd -replace '\\', '/')
+			Bilgi "FabLibrary urunu: $urun ($($dosya.Name), $([math]::Round($dosya.Length / 1KB)) KB) -> $hedefYol$(if ($statik) { ' (statik dekor)' })"
 			Get-ChildItem -LiteralPath $u.FullName -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("    " + $_.FullName.Substring($u.FullName.Length) + "  " + $_.Length) }
 			if ($var) { Bilgi "  degismemis, ice aktarma atlandi"; continue }
 			$meta = Join-Path $dosya.DirectoryName 'metadata'
-			$isler += [pscustomobject]@{ kaynak = $dosya.FullName; hedef = "/Game/Fab/$hedefAd"; ad = $ad; meta = $meta }
-			$imzalar["/Game/Fab/$hedefAd"] = @($imzaDosya, $imza)
+			$isler += [pscustomobject]@{ kaynak = $dosya.FullName; hedef = $hedefYol; ad = $ad; meta = $meta; statik = $statik }
+			$imzalar[$hedefYol] = @($imzaDosya, $imza)
 		}
+	}
+	# Ultra Dynamic Sky: degisken adlari ve hava on ayarlari bir kez gunluge yazilir (oyun bunlari adla baglar)
+	$udsDir = Join-Path $content 'UltraDynamicSky'
+	$udsDamga = Join-Path $content 'Fab\.uds-incelendi'
+	if ((Test-Path -LiteralPath $udsDir) -and -not (Test-Path -LiteralPath $udsDamga)) {
+		$isler += [pscustomobject]@{ tur = 'uds'; hedef = '/Game/UltraDynamicSky' }
+		$imzalar['/Game/UltraDynamicSky'] = @($udsDamga, 'tamam')
 	}
 	if ($isler.Count -gt 0) {
 		$editor = Join-Path $UeRoot 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
@@ -167,17 +179,22 @@ try {
 	# ---------------- d) paketleme ayarları ----------------
 	$satirlar = @()
 	if (Test-Path -LiteralPath (Join-Path $content 'Fab')) { $satirlar += '+DirectoriesToAlwaysCook=(Path="Fab")' }
+	# Ultra Dynamic Sky calisma aninda yumusak yolla yuklenir (SmvFabContent::SpawnSky) - haritalarina gerek yok
+	if (Test-Path -LiteralPath $udsDir) { $satirlar += '+DirectoriesToAlwaysCook=(Path="UltraDynamicSky")'; Bilgi "Ultra Dynamic Sky bulundu - pakete pisirilecek" }
+	# ucus haritasi olarak listelenmeyen paketler (gok/ses/malzeme kutuphaneleri)
+	$haritasiz = @('UltraDynamicSky')
 	$haritalar = @()
 	foreach ($p in $paketler) {
 		$kok = Join-Path $content $p
 		$umaps = @(Get-ChildItem -LiteralPath $kok -Filter *.umap -Recurse -File -ErrorAction SilentlyContinue)
 		if ($umaps.Count -eq 0) { Bilgi "paket: $p (harita yok)"; continue }
+		if ($haritasiz -contains $p) { Bilgi "paket: $p ($($umaps.Count) harita; ucus haritasi olarak listelenmez)"; continue }
 		# tercih: 1) adinda paket adi gecen (asil ortam, ör. P_Ruined_Construction) 2) demo/overview/example/level/map
 		#         3) showcase (varlik galerisi) 4) en buyugu; test/template/empty/_BuiltData haric
 		$pk = ($p -replace '[^A-Za-z0-9]', '').ToLower()
 		$adaylar = @($umaps | Where-Object { $_.BaseName -notmatch '(?i)test|template|empty|_BuiltData' })
 		$tercih = $adaylar | Where-Object { ($_.BaseName -replace '[^A-Za-z0-9]', '').ToLower().Contains($pk) } | Sort-Object Length -Descending | Select-Object -First 1
-		if (-not $tercih) { $tercih = $adaylar | Where-Object { $_.BaseName -match '(?i)demo|overview|example|preview|level|map' } | Sort-Object Length -Descending | Select-Object -First 1 }
+		if (-not $tercih) { $tercih = $adaylar | Where-Object { $_.BaseName -match '(?i)forest|demo|overview|example|preview|level|map' } | Sort-Object Length -Descending | Select-Object -First 1 }
 		if (-not $tercih) { $tercih = $adaylar | Where-Object { $_.BaseName -match '(?i)showcase' } | Sort-Object Length -Descending | Select-Object -First 1 }
 		if (-not $tercih) { $tercih = $adaylar | Sort-Object Length -Descending | Select-Object -First 1 }
 		if (-not $tercih) { continue }
