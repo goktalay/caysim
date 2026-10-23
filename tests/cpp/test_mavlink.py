@@ -119,8 +119,8 @@ def main():
         satirlar.insert(5, 'GURULTU 00ff55aa')
         girdi = '\n'.join(satirlar) + '\nENC\n'
         cikti = subprocess.run([exe], input=girdi, capture_output=True, text=True, check=True).stdout.splitlines()
-        cozulen = [s for s in cikti if not s.split(' ')[0] in ('HEARTBEAT_ENC',) and not s.startswith(('COMMAND_LONG ', 'PARAM_SET ', 'PARAM_REQUEST_READ ', 'RC_CHANNELS_OVERRIDE ', 'REQUEST_DATA_STREAM ', 'SET_MODE '))]
-        enc = [s for s in cikti if s.startswith(('COMMAND_LONG ', 'PARAM_SET ', 'PARAM_REQUEST_READ ', 'RC_CHANNELS_OVERRIDE ', 'REQUEST_DATA_STREAM ', 'SET_MODE '))]
+        cozulen = [s for s in cikti if not s.split(' ')[0] in ('HEARTBEAT_ENC',) and not s.startswith(('COMMAND_LONG ', 'PARAM_SET ', 'PARAM_REQUEST_READ ', 'RC_CHANNELS_OVERRIDE ', 'REQUEST_DATA_STREAM ', 'SET_MODE ', 'DISTANCE_SENSOR ', 'OBSTACLE_DISTANCE '))]
+        enc = [s for s in cikti if s.startswith(('COMMAND_LONG ', 'PARAM_SET ', 'PARAM_REQUEST_READ ', 'RC_CHANNELS_OVERRIDE ', 'REQUEST_DATA_STREAM ', 'SET_MODE ', 'DISTANCE_SENSOR ', 'OBSTACLE_DISTANCE '))]
         # ENC çıktısındaki HEARTBEAT satırı hex içerir (alan değil) — ayır
         enc_hb = [s for s in cozulen if s.startswith('HEARTBEAT ') and '=' not in s]
         cozulen = [s for s in cozulen if s not in enc_hb and not s.startswith('FAIL GURULTU')]
@@ -142,6 +142,11 @@ def main():
             'RC_CHANNELS_OVERRIDE': dict(chan1_raw=1500, chan2_raw=1400, chan3_raw=1100, chan4_raw=1600, chan7_raw=0, chan8_raw=65535, chan9_raw=1234, chan18_raw=1999),
             'REQUEST_DATA_STREAM': dict(req_stream_id=0, req_message_rate=25, start_stop=1),
             'SET_MODE': dict(custom_mode=5, base_mode=1, target_system=1),
+            'DISTANCE_SENSOR': dict(time_boot_ms=123456, min_distance=20, max_distance=4000, current_distance=1234, type=0, id=1, orientation=25,
+                                    covariance=255, horizontal_fov=0.0, vertical_fov=0.0, quaternion=[0.0, 0.0, 0.0, 0.0], signal_quality=0),
+            'OBSTACLE_DISTANCE': dict(time_usec=9876543210, min_distance=20, max_distance=3000, sensor_type=0, increment=45, increment_f=45.0,
+                                      angle_offset=0.0, frame=12,
+                                      distances=[100, 137, 174, 3001, 248, 285, 322, 359] + [65535] * 64),
         }
         for s in enc:
             ad, hx = s.split(' ', 1)

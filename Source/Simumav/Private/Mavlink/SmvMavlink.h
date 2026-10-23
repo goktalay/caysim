@@ -31,11 +31,13 @@ namespace SmvMav
 		MSG_VFR_HUD = 74,
 		MSG_COMMAND_LONG = 76,
 		MSG_COMMAND_ACK = 77,
+		MSG_DISTANCE_SENSOR = 132,
 		MSG_BATTERY_STATUS = 147,
 		MSG_WIND = 168,
 		MSG_HOME_POSITION = 242,
 		MSG_EXTENDED_SYS_STATE = 245,
 		MSG_STATUSTEXT = 253,
+		MSG_OBSTACLE_DISTANCE = 330,
 	};
 
 	/** Bilinen mesaj için CRC_EXTRA ve azami yük uzunluğu (uzantılar dahil); bilinmiyorsa false. */
@@ -186,4 +188,10 @@ namespace SmvMav
 	std::vector<uint8_t> PackRcOverride(uint8_t TargetSys, uint8_t TargetComp, const uint16_t Chan[18]);
 	std::vector<uint8_t> PackRequestDataStream(uint8_t TargetSys, uint8_t TargetComp, uint8_t StreamId, uint16_t RateHz, bool bStart);
 	std::vector<uint8_t> PackSetMode(uint8_t TargetSys, uint32_t CustomMode);
+	/** DISTANCE_SENSOR (132): Type 0 = lazer, Orientation 25 = aşağı (PITCH_270), 24 = yukarı (PITCH_90); Covariance 255 = bilinmiyor. */
+	std::vector<uint8_t> PackDistanceSensor(uint32_t TimeBootMs, uint16_t MinCm, uint16_t MaxCm, uint16_t CurCm, uint8_t Type, uint8_t Id, uint8_t Orientation,
+		uint8_t Covariance = 255, float HFovRad = 0, float VFovRad = 0, uint8_t SignalQuality = 0);
+	/** OBSTACLE_DISTANCE (330): 72 mesafe (cm; MaxCm + 1 = engel yok, 65535 = kullanılmıyor), IncrementDeg (increment_f), Frame 12 = MAV_FRAME_BODY_FRD. */
+	std::vector<uint8_t> PackObstacleDistance(uint64_t TimeUsec, const uint16_t Distances[72], uint16_t MinCm, uint16_t MaxCm, float IncrementDeg,
+		float AngleOffsetDeg = 0, uint8_t Frame = 12, uint8_t SensorType = 0);
 }

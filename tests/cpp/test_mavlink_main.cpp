@@ -61,6 +61,11 @@ int main()
 			PrintHex("RC_CHANNELS_OVERRIDE", EncodeV2(MSG_RC_CHANNELS_OVERRIDE, PackRcOverride(1, 1, Ch), Seq++, 255, 190));
 			PrintHex("REQUEST_DATA_STREAM", EncodeV2(MSG_REQUEST_DATA_STREAM, PackRequestDataStream(1, 1, 0, 25, true), Seq++, 255, 190));
 			PrintHex("SET_MODE", EncodeV2(MSG_SET_MODE, PackSetMode(1, 5), Seq++, 255, 190));
+			PrintHex("DISTANCE_SENSOR", EncodeV2(MSG_DISTANCE_SENSOR, PackDistanceSensor(123456, 20, 4000, 1234, 0, 1, 25), Seq++, 255, 190));
+			uint16_t D[72];
+			for (int i = 0; i < 72; ++i) D[i] = (uint16_t)(i < 8 ? 100 + i * 37 : 65535);
+			D[3] = 3001;
+			PrintHex("OBSTACLE_DISTANCE", EncodeV2(MSG_OBSTACLE_DISTANCE, PackObstacleDistance(9876543210ULL, D, 20, 3000, 45.f), Seq++, 255, 190));
 			continue;
 		}
 		std::istringstream S(Line);

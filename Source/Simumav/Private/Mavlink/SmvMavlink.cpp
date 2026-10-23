@@ -24,11 +24,13 @@ namespace SmvMav
 		{ MSG_VFR_HUD, 20, 20 },
 		{ MSG_COMMAND_LONG, 152, 33 },
 		{ MSG_COMMAND_ACK, 143, 10 },
+		{ MSG_DISTANCE_SENSOR, 85, 39 },
 		{ MSG_BATTERY_STATUS, 154, 54 },
 		{ MSG_WIND, 1, 12 },
 		{ MSG_HOME_POSITION, 104, 60 },
 		{ MSG_EXTENDED_SYS_STATE, 130, 2 },
 		{ MSG_STATUSTEXT, 83, 54 },
+		{ MSG_OBSTACLE_DISTANCE, 23, 167 },
 	};
 
 	bool MessageInfo(uint32_t MsgId, uint8_t& OutCrcExtra, uint8_t& OutMaxLen)
@@ -314,6 +316,32 @@ namespace SmvMav
 	{
 		FWriter W;
 		W.U32(CustomMode); W.U8(TS); W.U8(MODE_FLAG_CUSTOM);
+		return W.B;
+	}
+
+	std::vector<uint8_t> PackDistanceSensor(uint32_t TimeBootMs, uint16_t MinCm, uint16_t MaxCm, uint16_t CurCm, uint8_t Type, uint8_t Id, uint8_t Orientation,
+		uint8_t Covariance, float HFovRad, float VFovRad, uint8_t SignalQuality)
+	{
+		FWriter W;
+		W.U32(TimeBootMs); W.U16(MinCm); W.U16(MaxCm); W.U16(CurCm); W.U8(Type); W.U8(Id); W.U8(Orientation); W.U8(Covariance);
+		// uzantılar: horizontal_fov, vertical_fov, quaternion[4] (yön PITCH_* iken kullanılmaz → 0), signal_quality
+		W.F32(HFovRad); W.F32(VFovRad);
+		for (int i = 0; i < 4; ++i) W.F32(0.f);
+		W.U8(SignalQuality);
+		return W.B;
+	}
+
+	std::vector<uint8_t> PackObstacleDistance(uint64_t TimeUsec, const uint16_t Distances[72], uint16_t MinCm, uint16_t MaxCm, float IncrementDeg,
+		float AngleOffsetDeg, uint8_t Frame, uint8_t SensorType)
+	{
+		FWriter W(170);
+		W.U64(TimeUsec);
+		for (int i = 0; i < 72; ++i) W.U16(Distances[i]);
+		W.U16(MinCm); W.U16(MaxCm); W.U8(SensorType);
+		// increment (uint8) eski alıcılar için tam sayı; increment_f kesirli değer (ArduPilot increment_f > 0 ise onu kullanır)
+		const float IncR = IncrementDeg + 0.5f;
+		W.U8((uint8_t)(IncR < 1.f ? 1.f : (IncR > 255.f ? 255.f : IncR)));
+		W.F32(IncrementDeg); W.F32(AngleOffsetDeg); W.U8(Frame);
 		return W.B;
 	}
 }
