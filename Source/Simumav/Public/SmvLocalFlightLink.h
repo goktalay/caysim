@@ -99,6 +99,9 @@ private:
 	// ---- tele ----
 	double LastAttWall = 0, LastPublishWall = 0;
 	int64 LastPublishTbm = -1000;
+	// tele.ts: SITL önyükleme saatinden (tbm) türetilir, duvar saatine yavaşça bağlanır — UDP varış titremesi enterpolasyona girmesin
+	double LastTs = 0;
+	int64 LastTsTbm = -1;
 	TArray<int32> Servo16;
 	void Publish(bool bFromAttitude);
 	double HomeAltMsl = 0;

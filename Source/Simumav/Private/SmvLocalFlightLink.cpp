@@ -737,7 +737,24 @@ void USmvLocalFlightLink::Publish(bool bFromAttitude)
 	}
 	LastPublishTbm = Tele.Tbm;
 	LastPublishWall = W;
-	Tele.Ts = Now();
+	{
+		const double Wall = Now();
+		double Ts = Wall;
+		if (LastTs > 0 && LastTsTbm >= 0 && Tele.Tbm >= LastTsTbm && Session)
+		{
+			if (Tele.Tbm == LastTsTbm) Ts = LastTs;   // yeni SITL karesi yok (bekçi yayını): aynı zaman → tampon son kareyi günceller
+			else
+			{
+				const double Pred = LastTs + (double)(Tele.Tbm - LastTsTbm) / 1000.0 / FMath::Max(0.25, Session->Speedup);
+				const double Err = Wall - Pred;
+				if (FMath::Abs(Err) < 0.15) Ts = Pred + Err * 0.05;   // varış titremesini süz, saat kaymasını yavaşça izle
+				Ts = FMath::Max(Ts, LastTs + 1e-4);
+			}
+		}
+		LastTs = Ts;
+		LastTsTbm = Tele.Tbm;
+		Tele.Ts = Ts;
+	}
 	Tele.bGcsConnected = bGcsConnected;
 	Extra.bGcsConnected = bGcsConnected;
 	Extra.bMotorCut = bMotorCut;
@@ -1041,6 +1058,8 @@ void USmvLocalFlightLink::BeginReset()
 	Tele.AltRel = 0;
 	Tele.bHasHome = false;
 	LastPublishTbm = -1000;
+	LastTs = 0;
+	LastTsTbm = -1;
 	if (Power) Power->ResetTime();
 	if (Targets) Targets->Release("reset");
 	if (Parser) { delete Parser; Parser = new SmvMav::FParser(); }
