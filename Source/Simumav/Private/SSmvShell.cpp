@@ -2464,6 +2464,7 @@ TSharedRef<SWidget> SSmvShell::WizAdvanced()
 			[Self, F]() { F->Draft.Backend = Self->WizBackend == TEXT("cloud") ? ESmvFlightBackend::Cloud : ESmvFlightBackend::LocalSitl; })
 		: SmvUi::Text(Tx(TEXT("backend.local_guest")), 12, "Regular", Fg()))];
 	Rt->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("wiz.record")), Toggle(&R.bRecordBin))];
+	Rt->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("video.wizard")), Toggle(&FSmvUiPrefs::Get().bRecordVideo, []() { FSmvUiPrefs::Get().Save(); }), Tx(TEXT("video.hint")))];
 	Rt->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[SmvUi::Text(USmvLocalFlightLink::SitlAvailable() ? Tx(TEXT("wizard.sitl_note")) : Tx(TEXT("menu.sitl_missing")), 10, "Regular", Mute())];
 	return SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 18, 0)[Glass(L, FMargin(20.f))]

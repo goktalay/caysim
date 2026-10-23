@@ -135,6 +135,7 @@ private:
 	TSharedRef<SWidget> FpvBar();
 	TSharedRef<SWidget> PipWindow();
 	TSharedRef<SWidget> ReplayBar();
+	TSharedRef<SWidget> RecChip();
 	FSlateBrush PipBrush;
 	FVector2D PipDragAbs = FVector2D::ZeroVector, PipStart = FVector2D::ZeroVector;
 	int32 PipDragMode = 0;   // 1 taşı, 2 boyutlandır

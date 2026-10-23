@@ -9,6 +9,7 @@
 #include "SimumavTypes.h"
 #include "SmvMatchClient.h"
 #include "SmvFlow.h"
+#include "SmvVideoRec.h"
 #include "SSmvFlightUi.h"
 #include "SmvGameMode.generated.h"
 
@@ -141,6 +142,13 @@ private:
 	double DebrisGroundZ = 0, DebrisUntil = 0;
 	void CrashFx();
 	double PathAt = 0, PathT0 = 0;
+	TUniquePtr<FSmvVideoRec> VideoRec;
+public:
+	/** Video kaydını aç/kapat (uçuş arayüzü düğmesi) */
+	void ToggleVideo();
+	bool IsRecording() const;
+	double RecSeconds() const;
+private:
 	void TickDebris(float Dt);
 	void UpdateFpv(const FCaySimTelemetry& T, double Now);
 	FString RaceResultBadge;

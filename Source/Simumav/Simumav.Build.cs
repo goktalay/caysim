@@ -47,6 +47,8 @@ public class Simumav : ModuleRules
 			"OnlineSubsystemUtils",
 			"ProceduralMeshComponent",
 			"RenderCore",
+			// video kaydı: JPEG kareler (SmvVideoRec)
+			"ImageWrapper",
 			"Projects",
 			// Fab dron gövdesi /Game/Fab/Drone altında adı bilinmeden aranır (SmvFabContent)
 			"AssetRegistry"

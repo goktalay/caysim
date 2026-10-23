@@ -569,6 +569,11 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		[
 			FpvBar()
 		]
+		// video kaydı göstergesi / düğmesi (sağ üst, panelin altında değil: üst orta sağ)
+		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(0.f, 14.f, 300.f, 0.f)
+		[
+			RecChip()
+		]
 		// kayıttan oynatma şeridi
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 14.f, 0.f, 0.f)
 		[
@@ -1559,5 +1564,26 @@ TSharedRef<SWidget> SSmvFlightUi::ReplayBar()
 		.BorderImage(&BarBrush).Padding(FMargin(4.f, 6.f))
 		[
 			H
+		];
+}
+
+TSharedRef<SWidget> SSmvFlightUi::RecChip()
+{
+	using namespace SmvFuiTheme;
+	return SNew(SBox)
+		.Visibility_Lambda([this]() { return St.bMenuOpen ? EVisibility::Collapsed : EVisibility::Visible; })
+		[
+			Btn(TAttribute<FText>::CreateLambda([this]()
+			{
+				if (!GM.IsValid() || !GM->IsRecording()) return FText::FromString(TEXT("● REC"));
+				const int32 S = (int32)GM->RecSeconds();
+				return FText::FromString(FString::Printf(TEXT("■ REC %02d:%02d"), S / 60, S % 60));
+			}), [this]() { if (GM.IsValid()) GM->ToggleVideo(); },
+			[this]()
+			{
+				const bool bOn = GM.IsValid() && GM->IsRecording();
+				const bool bBlink = FMath::Fmod(FPlatformTime::Seconds(), 1.0) < 0.6;
+				return bOn ? (bBlink ? FLinearColor(0.95f, 0.25f, 0.25f, 1.f) : FLinearColor(0.7f, 0.2f, 0.2f, 1.f)) : FLinearColor(0.55f, 0.6f, 0.68f, 0.75f);
+			}, 70.f)
 		];
 }

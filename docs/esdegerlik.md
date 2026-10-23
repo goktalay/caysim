@@ -92,7 +92,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Kalkış yöntemleri + rüzgâr önerisi | `wizard.js` | Yöntemler ve aralıklar + rüzgâra karşı kalkış önerisi (baş/yan/kuyruk bileşeni, uygun değilse amber; "Rüzgâra karşı çevir" pist yönünü ayarlar) | ✓ | P2 |
 | Yer kontrol (radar/EO) adımı | `wizard.js` | — | ✗ | P2 |
 | Kamera türü + termal paleti, gösterge tasarımı, grafik ön ayarı | `wizard.js` | Kamera türü + termal paleti (beyaz-sıcak / siyah-sıcak / ironbow; renk tablosu LUT), gösterge tasarımı ve grafik ön ayarı Ayarlar'da | ✓ | P2 |
-| Video kaydı (WebM) | `wizard.js` | — | ✗ | P2 |
+| Video kaydı (WebM) | `wizard.js` | Video kaydı: sihirbaz anahtarı + uçuşta ● REC düğmesi (süre sayacı); 15 kare/sn, ≤ 1280 px MJPEG AVI → Saved/Simumav/Videos | ✓ | P2 |
 
 ## 9. Karşılaşma / lobi / yapay zekâ
 

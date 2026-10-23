@@ -29,6 +29,8 @@ struct SIMUMAV_API FSmvUiPrefs
 	bool bCockpit = false;
 	/** GPWS sesli uyarı (konuşma; tam kipte) */
 	bool bGpwsSpeech = true;
+	/** Uçuş video kaydı (MJPEG AVI; uçuş başında başlar) */
+	bool bRecordVideo = false;
 	/** Termal paleti: white (beyaz-sıcak) | black (siyah-sıcak) | iron (ironbow) */
 	FString ThermalPalette = TEXT("white");
 	/** PiP penceresi: genişlik (px, 16:9) ve sağ/alt kenara uzaklık */

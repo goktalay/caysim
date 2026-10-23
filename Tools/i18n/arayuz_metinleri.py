@@ -421,4 +421,9 @@ U = {
  'report.route': ('Rota', 'Route', 'Route', 'Itinéraire', 'Ruta', 'Маршрут', 'المسار'),
  'report.title': ('Uçuş raporu', 'Flight report', 'Flugbericht', 'Rapport de vol', 'Informe de vuelo', 'Отчёт о полёте', 'تقرير الرحلة'),
  'report.track': ('Parkur', 'Track', 'Strecke', 'Parcours', 'Circuito', 'Трасса', 'المسار'),
+ 'video.failed': ('Video kaydı başlatılamadı', 'Could not start video recording', 'Videoaufnahme konnte nicht gestartet werden', "Impossible de démarrer l'enregistrement", 'No se pudo iniciar la grabación', 'Не удалось начать запись', 'تعذّر بدء التسجيل'),
+ 'video.hint': ('Uçuş başında başlar; uçuşta ● REC ile aç/kapat. MJPEG AVI → Saved/Simumav/Videos', 'Starts with the flight; toggle with ● REC in flight. MJPEG AVI → Saved/Simumav/Videos', 'Startet mit dem Flug; im Flug mit ● REC umschalten. MJPEG-AVI → Saved/Simumav/Videos', 'Démarre avec le vol ; ● REC en vol pour basculer. MJPEG AVI → Saved/Simumav/Videos', 'Empieza con el vuelo; ● REC en vuelo para alternar. MJPEG AVI → Saved/Simumav/Videos', 'Начинается с полётом; ● REC в полёте — вкл/выкл. MJPEG AVI → Saved/Simumav/Videos', 'يبدأ مع الرحلة؛ ● REC أثناء الطيران للتبديل. MJPEG AVI → Saved/Simumav/Videos'),
+ 'video.saved': ('Video kaydedildi: {p}', 'Video saved: {p}', 'Video gespeichert: {p}', 'Vidéo enregistrée : {p}', 'Vídeo guardado: {p}', 'Видео сохранено: {p}', 'حُفظ الفيديو: {p}'),
+ 'video.started': ('Video kaydı başladı', 'Video recording started', 'Videoaufnahme gestartet', 'Enregistrement vidéo démarré', 'Grabación de vídeo iniciada', 'Запись видео начата', 'بدأ تسجيل الفيديو'),
+ 'video.wizard': ('Video kaydı', 'Video recording', 'Videoaufnahme', 'Enregistrement vidéo', 'Grabación de vídeo', 'Запись видео', 'تسجيل الفيديو'),
 }

@@ -18,6 +18,7 @@
 #include "SmvFpvActor.h"
 #include "SmvPilotFigure.h"
 #include "SmvSpeech.h"
+#include "SmvVideoRec.h"
 #include "Engine/StaticMeshActor.h"
 #include "SmvMusicSynth.h"
 #include "SmvUiPrefs.h"
@@ -325,6 +326,8 @@ void ASmvGameMode::BuildScene()
 		P->OnAction.AddUObject(this, &ASmvGameMode::HandleAction);
 		if (Flow->Race.Kind == TEXT("none") && !(Flow->GetMatch() && Flow->GetMatch()->HasMatch())) P->PlayIntro(3.7f);
 	}
+	// video kaydı (Ayarlar / sihirbaz: uçuş başında başlar)
+	if (FSmvUiPrefs::Get().bRecordVideo) ToggleVideo();
 	// RC kumanda tutan 3B pilot: ev konumunun 8 m gerisinde, 3 m solunda (pist yönüne göre), drona bakar
 	{
 		const double Yaw = Req.Track.World.RunwayHeading;
@@ -525,6 +528,7 @@ void ASmvGameMode::StopScene()
 {
 	if (!bScene) return;
 	bScene = false;
+	if (VideoRec.IsValid() && VideoRec->IsOn()) { const FString P = VideoRec->Stop(); if (!P.IsEmpty() && Flow.IsValid()) Flow->Toast(FSmvI18n::Format(TEXT("video.saved"), { { TEXT("p"), P } }).ToString(), 6); }
 	if (USmvFlightLink* L = Link()) { L->OnTele.RemoveAll(this); L->OnMessage.RemoveAll(this); }
 	if (Flow.IsValid() && Flow->GetMatch()) Flow->GetMatch()->OnPositions.RemoveAll(this);
 	if (ASmvPilotPawn* P = GetPilot()) { P->OnRc.Clear(); P->OnAction.RemoveAll(this); P->SetFlying(false); P->SetTarget(nullptr, TEXT("multirotor")); }
@@ -826,6 +830,7 @@ void ASmvGameMode::Tick(float Dt)
 	Super::Tick(Dt);
 	if (!bScene) return;
 	if (EndAt > 0 && FPlatformTime::Seconds() >= EndAt) { EndAt = 0; if (Flow.IsValid()) Flow->EndFlight(EndReasonPending); }
+	if (VideoRec.IsValid() && VideoRec->IsOn()) VideoRec->Tick(Dt);
 	DetectCollision();
 	TickDebris(Dt);
 	UpdateRace(Dt);
@@ -1901,3 +1906,23 @@ void ASmvGameMode::TickDebris(float Dt)
 		A->SetActorLocationAndRotation(P, A->GetActorRotation() + FRotator(200.0 * Dt, 140.0 * Dt, 0.0));
 	}
 }
+
+// ---------------------------------------------------------------------------
+// video kaydı
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::ToggleVideo()
+{
+	if (!VideoRec.IsValid()) VideoRec = MakeUnique<FSmvVideoRec>();
+	if (VideoRec->IsOn())
+	{
+		const FString P = VideoRec->Stop();
+		if (!P.IsEmpty()) PushEvent(FSmvI18n::Format(TEXT("video.saved"), { { TEXT("p"), FPaths::GetCleanFilename(P) } }).ToString(), 6);
+		return;
+	}
+	if (VideoRec->Start(15, 1280)) PushEvent(FSmvI18n::T(TEXT("video.started")).ToString(), 6);
+	else PushEvent(FSmvI18n::T(TEXT("video.failed")).ToString(), 4);
+}
+
+bool ASmvGameMode::IsRecording() const { return VideoRec.IsValid() && VideoRec->IsOn(); }
+double ASmvGameMode::RecSeconds() const { return VideoRec.IsValid() ? VideoRec->Seconds() : 0.0; }
