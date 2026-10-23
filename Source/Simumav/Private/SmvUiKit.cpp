@@ -372,15 +372,18 @@ namespace SmvUi
 
 	// ---- bileşen yardımcıları ----
 
+	/** Açık temada saf beyaz metin rengi koyu mürekkebe döner */
+	static FLinearColor Ink(const FLinearColor& C) { return (Light() && C.R > 0.95f && C.G > 0.95f && C.B > 0.95f) ? Fg() : C; }
+
 	TSharedRef<SWidget> Title(const FText& T, int32 Size, const FLinearColor& Color)
 	{
-		return SNew(STextBlock).Text(FText::FromString(T.ToString().ToUpper())).Font(Font(Size, "Bold", 180)).ColorAndOpacity(Color)
+		return SNew(STextBlock).Text(FText::FromString(T.ToString().ToUpper())).Font(Font(Size, "Bold", 180)).ColorAndOpacity(Ink(Color))
 			.ShadowOffset(FVector2D(0, 2)).ShadowColorAndOpacity(Accent().CopyWithNewOpacity(0.35f));
 	}
 
 	TSharedRef<SWidget> Text(const TAttribute<FText>& T, int32 Size, const ANSICHAR* Weight, const FLinearColor& Color, bool bWrap)
 	{
-		return SNew(STextBlock).Text(T).Font(Font(Size, Weight)).ColorAndOpacity(Color).AutoWrapText(bWrap);
+		return SNew(STextBlock).Text(T).Font(Font(Size, Weight)).ColorAndOpacity(Ink(Color)).AutoWrapText(bWrap);
 	}
 
 	TSharedRef<SWidget> Section(const FText& T, const FLinearColor& Color)

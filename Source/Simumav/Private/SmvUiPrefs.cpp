@@ -31,11 +31,14 @@ void FSmvUiPrefs::Load()
 	GConfig->GetBool(GSmvPrefsSection, TEXT("Preview3d"), bPreview3d, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("Season"), Season, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("SensPreset"), SensPreset, Ini);
-	GConfig->GetFloat(GSmvPrefsSection, TEXT("Deadzone"), Deadzone, Ini);
-	GConfig->GetFloat(GSmvPrefsSection, TEXT("ExpoRP"), ExpoRP, Ini);
-	GConfig->GetFloat(GSmvPrefsSection, TEXT("ExpoYaw"), ExpoYaw, Ini);
-	GConfig->GetFloat(GSmvPrefsSection, TEXT("RateRP"), RateRP, Ini);
-	GConfig->GetFloat(GSmvPrefsSection, TEXT("RateYaw"), RateYaw, Ini);
+	GConfig->GetBool(GSmvPrefsSection, TEXT("LinkRP"), bLinkRP, Ini);
+	GConfig->GetString(GSmvPrefsSection, TEXT("DialTheme"), DialTheme, Ini);
+	for (int32 i = 0; i < 4; ++i)
+	{
+		GConfig->GetFloat(GSmvPrefsSection, *FString::Printf(TEXT("Dead%d"), i), Dead[i], Ini);
+		GConfig->GetFloat(GSmvPrefsSection, *FString::Printf(TEXT("Expo%d"), i), Ex[i], Ini);
+		GConfig->GetFloat(GSmvPrefsSection, *FString::Printf(TEXT("Rate%d"), i), Rate[i], Ini);
+	}
 	TArray<FString> Lines;
 	GConfig->GetArray(GSmvPrefsSection, TEXT("Bind"), Lines, Ini);
 	for (const FString& L : Lines)
@@ -65,11 +68,14 @@ void FSmvUiPrefs::Save()
 	GConfig->SetBool(GSmvPrefsSection, TEXT("Preview3d"), bPreview3d, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("Season"), *Season, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("SensPreset"), *SensPreset, Ini);
-	GConfig->SetFloat(GSmvPrefsSection, TEXT("Deadzone"), Deadzone, Ini);
-	GConfig->SetFloat(GSmvPrefsSection, TEXT("ExpoRP"), ExpoRP, Ini);
-	GConfig->SetFloat(GSmvPrefsSection, TEXT("ExpoYaw"), ExpoYaw, Ini);
-	GConfig->SetFloat(GSmvPrefsSection, TEXT("RateRP"), RateRP, Ini);
-	GConfig->SetFloat(GSmvPrefsSection, TEXT("RateYaw"), RateYaw, Ini);
+	GConfig->SetBool(GSmvPrefsSection, TEXT("LinkRP"), bLinkRP, Ini);
+	GConfig->SetString(GSmvPrefsSection, TEXT("DialTheme"), *DialTheme, Ini);
+	for (int32 i = 0; i < 4; ++i)
+	{
+		GConfig->SetFloat(GSmvPrefsSection, *FString::Printf(TEXT("Dead%d"), i), Dead[i], Ini);
+		GConfig->SetFloat(GSmvPrefsSection, *FString::Printf(TEXT("Expo%d"), i), Ex[i], Ini);
+		GConfig->SetFloat(GSmvPrefsSection, *FString::Printf(TEXT("Rate%d"), i), Rate[i], Ini);
+	}
 	TArray<FString> Lines;
 	for (const TPair<FString, FString>& B : Binds) Lines.Add(B.Key + TEXT("=") + B.Value);
 	GConfig->SetArray(GSmvPrefsSection, TEXT("Bind"), Lines, Ini);
@@ -146,20 +152,28 @@ FName FSmvUiPrefs::ConflictOf(FName Action, bool bPad, const FKey& Key) const
 
 void FSmvUiPrefs::ApplySensPreset(const FString& P)
 {
+	// web RCFEEL_PRESETS: soft (Hassas) / normal / sport (Çevik) — sıra roll, pitch, gaz, yaw
 	SensPreset = P;
-	if (P == TEXT("precise")) { Deadzone = 0.05f; ExpoRP = 0.5f; ExpoYaw = 0.4f; RateRP = 0.6f; RateYaw = 0.6f; }
-	else if (P == TEXT("normal")) { Deadzone = 0.03f; ExpoRP = 0.3f; ExpoYaw = 0.2f; RateRP = 0.85f; RateYaw = 0.8f; }
-	else if (P == TEXT("agile")) { Deadzone = 0.02f; ExpoRP = 0.15f; ExpoYaw = 0.1f; RateRP = 1.f; RateYaw = 1.f; }
+	auto Set = [this](const float (&D)[4], const float (&E)[4], const float (&R)[4]) { for (int32 i = 0; i < 4; ++i) { Dead[i] = D[i]; Ex[i] = E[i]; Rate[i] = R[i]; } };
+	if (P == TEXT("precise")) Set({ 0.04f, 0.04f, 0.04f, 0.05f }, { 0.45f, 0.45f, 0.3f, 0.4f }, { 0.7f, 0.7f, 1.f, 0.6f });
+	else if (P == TEXT("normal")) Set({ 0.03f, 0.03f, 0.03f, 0.04f }, { 0.2f, 0.2f, 0.1f, 0.2f }, { 1.f, 1.f, 1.f, 0.9f });
+	else if (P == TEXT("agile")) Set({ 0.02f, 0.02f, 0.02f, 0.02f }, { 0.f, 0.f, 0.f, 0.05f }, { 1.f, 1.f, 1.f, 1.f });
+}
+
+void FSmvUiPrefs::SyncLink()
+{
+	if (bLinkRP) { Dead[1] = Dead[0]; Ex[1] = Ex[0]; Rate[1] = Rate[0]; }
 }
 
 float FSmvUiPrefs::Shape(float V, int32 Axis, float FallbackExpo) const
 {
-	if (SensPreset.IsEmpty()) return V * (1.f - FallbackExpo) + V * V * V * FallbackExpo;
-	const float A = FMath::Abs(V);
-	if (A <= Deadzone) return 0.f;
-	const float N = FMath::Sign(V) * (A - Deadzone) / FMath::Max(0.01f, 1.f - Deadzone);
-	const bool bYaw = Axis == 3;
-	const float E = FMath::Clamp(bYaw ? ExpoYaw : ExpoRP, 0.f, 0.9f);
-	const float R = FMath::Clamp(bYaw ? RateYaw : RateRP, 0.3f, 1.f);
-	return (N * (1.f - E) + N * N * N * E) * R;
+	if (SensPreset.IsEmpty()) return Axis == 2 ? V : V * (1.f - FallbackExpo) + V * V * V * FallbackExpo;
+	const int32 Ax = FMath::Clamp(Axis, 0, 3);
+	const float A = FMath::Abs(FMath::Clamp(V, -1.f, 1.f));
+	const float D = FMath::Clamp(Dead[Ax], 0.f, 0.5f);
+	if (A <= D) return 0.f;
+	const float N = (A - D) / FMath::Max(0.01f, 1.f - D);
+	const float E = FMath::Clamp(Ex[Ax], 0.f, 1.f);
+	const float R = FMath::Clamp(Rate[Ax], 0.f, 1.f);
+	return FMath::Sign(V) * ((1.f - E) * N + E * N * N * N) * R;
 }

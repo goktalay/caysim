@@ -349,7 +349,9 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 		StickR = FVector2D(*Ax[SM[2]], *Ax[SM[3]]);
 		// hassasiyet (Ayarlar → Kumanda: ölü bölge / expo / oran; hazır ayar yoksa tek expo)
 		const FSmvUiPrefs& Pf = FSmvUiPrefs::Get();
-		Roll = Pf.Shape(AxRoll, 0, Expo); Pitch = Pf.Shape(AxPitch, 1, Expo); Yaw = Pf.Shape(AxYaw, 3, Expo); Thr = AxThr;
+		Roll = Pf.Shape(AxRoll, 0, Expo); Pitch = Pf.Shape(AxPitch, 1, Expo); Yaw = Pf.Shape(AxYaw, 3, Expo);
+		// gaz eğrisi yalnız kopter ailesinde (merkez = askı); uçakta gaz tutmalı ve doğrusal (web makeShaper)
+		Thr = (VType == TEXT("plane") || VType == TEXT("interceptor")) ? AxThr : Pf.Shape(AxThr, 2, Expo);
 	}
 	Rc.SetNum(8);
 	if (bRover)

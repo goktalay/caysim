@@ -48,6 +48,8 @@ public:
 	bool IsPausedMenu() const { return bPauseMenu; }
 	void Command(const FString& Name, TSharedPtr<FJsonObject> Params = nullptr);
 	ASmvPilotPawn* GetPilot() const;
+	/** Uçuş olay akışına bildirim (arayüzden) */
+	void UiEvent(const FString& Text, int32 Sev) { PushEvent(Text, Sev); }
 	FString MissionPlannerLine() const;
 	/** Uçuş arayüzü düğmeleri (SSmvFlightUi): Mode{arg}, CamCycle, IntroBeep{count|go}, Help ya da pilot eylem adları (ArmToggle, Takeoff, Rtl, Land, Reset, Pause …). */
 	void UiAction(const FString& Name, const FString& Arg = FString());

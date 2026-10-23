@@ -12,13 +12,13 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Özellik | Web kaynağı | UE karşılığı | Durum | Plan |
 |---|---|---|---|---|
 | Görsel dil: koyu cam kartlar, neon mavi vurgu, yumuşak animasyon | `theme.css`, `fx.css` | `SmvUiKit` (renk/yazı tipi/fırça, `SSmvButton` parıltı + büyüme + basma, giriş solması) | ✓ | — |
-| Sahne geçişleri (FLIP, ışık süpürmesi) | `ui/transition.js` | Kart giriş animasyonu + açılma sesi; tam FLIP yok | ◐ | P2 |
+| Sahne geçişleri (FLIP, ışık süpürmesi) | `ui/transition.js` | Ekran geçişinde içerik solup kayarak gelir (menüye dönüşte ters yön) + çapraz ışık süpürmesi + açılma sesi; hareket azaltmada kapalı | ✓ | P2 |
 | Bölüme özel hareketli arka planlar | `ui/backdrop.js` | `SSmvBackdrop` ortak katman + bölüme özel sahne: hangar içi (projektör, pist ışıkları), brifing radarı (Görevler/Sihirbaz/Parkurlar/Yükleme), tel kafes küre (Lobi/TOP10/Hesap), ilaçlama tarlası (Seyir defteri/Özet), gökyüzü paralaksı (Uç/FPV/Ayarlar/Destek) | ✓ | P2 |
 | Menü canlı uçuş sahnesi (3B, sinematik kamera) | `menu/flight.js`, `flightcore.js` | `ASmvMenuScene`: prosedürel arazi (TR TEST Kalecik), sekizli tur atan sabit kanat, kamera döngüsü takip → yan → yörünge → yerden; Ayarlar'dan kapatılır | ✓ | — |
 | Klavye / gamepad tam gezinme, odak halkası | `menu/index.js` | Slate odak gezinmesi; odak halkası yalnız klavye/gamepad'de; A/Enter seç, B/Esc geri, LB/RB-Q/E sekme, Y/F1 yardım | ✓ | — |
 | Arayüz sesleri (hover, tık, geri, hata, süpürme) | `ui/sfx.js` | `FSmvUiSound` → `USmvToneSynth` (ayrı kazanç; ses dosyası yok) | ✓ | — |
 | Bildirimler (toast; boş metin bastırılır) | `ui/components.js` | Sağ üst yığın (en çok 4), önem rengi + simge, kayarak girer, 5 sn | ✓ | — |
-| Onay / soru diyalogları | `modal`, `confirmDlg` | Tehlikeli işlemler kırmızı düğme; ayrı diyalog bileşeni yok (Sıfırla çift basma, DISARM çift basma) | ◐ | P2 |
+| Onay / soru diyalogları | `modal`, `confirmDlg` | Onay diyaloğu bileşeni (cam kart, karartma, ölçekle açılış; odak Vazgeç'te, Esc/B kapatır): silmeler (dron/pilot/parkur/görev), oyundan çık, uçuşu bitir, oturumu kapat | ✓ | P2 |
 | Tema koyu / açık / otomatik | `sm:theme` | Ayarlar → Genel → Arayüz teması: koyu / açık / otomatik (07–19 açık); tüm renkler ve cam kartlar temaya göre; sunucu ayarı `theme` | ✓ | P2 |
 | 7 dil, Arapça sağdan sola | `app/i18n` | `Content/Simumav/Lang/*.json` (7 dil, eksiksiz); Arapçada tüm kabuk sağdan sola (FlowDirection RTL) | ✓ | P1 |
 | Hareket azaltma | `prefers-reduced-motion` | Ayarlar → Genel → Hareketi azalt | ✓ | — |
@@ -89,7 +89,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 |---|---|---|---|---|
 | "Nasıl uçmak istersin?" (tek / FPV / çok oyunculu) | `fly/index.js` | "Nasıl uçmak istersin?" ekranı: tek uçuş / FPV parkuru / çok oyunculu / yapay zekâ rakip | ✓ | P1 |
 | Adımlı tek oyunculu sihirbaz | `fly/wizard.js` | 7 adım: Araç (3B önizleme + statlar + pilot) → Harita (kartlar, önizleme görseli) → Ortam (saat, hava, rüzgâr pusulası; UDS'ye gider) → Kumanda (Mode 1–4 şemalı kartlar, cihaz, expo) → Görev ve kurallar (görev, yarış/it dalaşı, hedefler) → Gelişmiş (kalkış, güç, kamera, hız, arka uç, .BIN) → Özet + BAŞLAT; LB/RB / Q-E adım; "Hemen başlat" | ✓ | — |
-| Kalkış yöntemleri + rüzgâr önerisi | `wizard.js` | Yöntemler ve aralıklar ✓; rüzgâr önerisi yok | ◐ | P2 |
+| Kalkış yöntemleri + rüzgâr önerisi | `wizard.js` | Yöntemler ve aralıklar + rüzgâra karşı kalkış önerisi (baş/yan/kuyruk bileşeni, uygun değilse amber; "Rüzgâra karşı çevir" pist yönünü ayarlar) | ✓ | P2 |
 | Yer kontrol (radar/EO) adımı | `wizard.js` | — | ✗ | P2 |
 | Kamera türü + termal paleti, gösterge tasarımı, grafik ön ayarı | `wizard.js` | Kamera türü ✓ (palet yok); gösterge teması Ayarlar'da; grafik Ayarlar'da | ◐ | P2 |
 | Video kaydı (WebM) | `wizard.js` | — | ✗ | P2 |
@@ -116,12 +116,12 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 |---|---|---|---|---|
 | Bilgi kartı, dron paneli (PFD, telemetri, haberleşme) | `flightsim_panel.js` | `SSmvFlightUi` (cam tema, 7 dil) | ✓ | — |
 | Güç kadranları (yakıt/hız/motor/batarya) | `flightsim_power.js` | ✓ | ✓ | — |
-| Gösterge temaları (klasik / uçak kokpiti / dijital cam / minimal / retro) | `gtheme.js` | Askerî / FPV OSD / sade + **klasik kokpit altılısı** (sabit kanat/VTOL: hız, yapay ufuk, irtifa, dönüş, yön, dikey hız; G) | ◐ | P2 |
+| Gösterge temaları (klasik / uçak kokpiti / dijital cam / minimal / retro) | `gtheme.js` | Uçak kokpiti / klasik otomobil / dijital cam (MFD) / minimal / retro askerî / göstergesiz + klasik altılı kokpit (sabit kanat/VTOL); G ile döngü, Ayarlar → Genel | ✓ | P2 |
 | Alt bant (ARM, Kalkış, İniş, RTL, mod, Sıfırla, kamera, kumanda, panel, menü) | `flightsim_fltbar.js` | ✓ + Kokpit + "?" | ✓ | — |
 | Uçuş modu seçici | `flightsim_fltbar.js` | **Radyal tekerlek** (F / gamepad View; fare açısı ya da sağ çubuk; A/F seç, B kapat) | ✓ | — |
 | Sanal kumanda + Mode 1–4 + klavye WASD/oklar | `rc.js`, `flightsim_stickmode.js` | ✓ (aynı eşleme; çubuk etiketleri ve ipucu moda göre) | ✓ | — |
-| Hassasiyet ⚙ (ölü bölge/expo/oran, hazır ayarlar, eğri) | `flightsim_sens*.js` | Ayarlar → Kumanda: Hassas / Normal / Çevik / Özel; ölü bölge, expo ve oran (roll+pitch / yaw), canlı eğri; gaz şekillendirilmez | ◐ (eksen başına ayrı yok) | P2 |
-| Gamepad profili / eksen algıla | `flightsim_gamepad.js` | XInput sabit eşleme + tuş atama (Ayarlar → Tuşlar); RC verici eksen eşlemesi | ◐ | P2 |
+| Hassasiyet ⚙ (ölü bölge/expo/oran, hazır ayarlar, eğri) | `flightsim_sens*.js` | Ayarlar → Kumanda: Hassas / Normal / Çevik / Özel; eksen başına (roll, pitch, yaw, gaz) oran, expo ve ölü bölge, roll+pitch bağla; canlı eğri; gaz eğrisi yalnız kopterde | ✓ | P2 |
+| Gamepad profili / eksen algıla | `flightsim_gamepad.js` | XInput sabit eşleme + tuş atama (Ayarlar → Tuşlar) + RC verici eksen eşlemesi ve "Algıla" (kolu oynat → eksen + ters yön otomatik) | ✓ | P2 |
 | Kamera kipleri 1–7, PiP, FPV FOV | `flightsim_camera.js` | ✓ (PiP sürükleme/boyut yok) | ◐ | P2 |
 | Rüzgâr göstergesi (pusula, bileşenler) | `flightsim_wind.js` | Sol üstte kart: dönen pusula, akış oku, hız/yön, esinti, baş-kuyruk / yan bileşeni (yan > 6 m/s amber); 3B rüzgâr tulumu yok | ◐ | P2 |
 | Hava efektleri (yağmur/kar/şimşek) | `flightsim3d.js` | Ultra Dynamic Weather (pakette varsa; içerik ajanı) | ◐ | — |

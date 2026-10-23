@@ -6,6 +6,7 @@
 #include "SmvLocalFlightLink.h"
 #include "SmvMatchClient.h"
 #include "SmvGameMode.h"
+#include "SmvPilotPawn.h"
 #include "SmvGameInstance.h"
 #include "SmvSteam.h"
 #include "SmvFabContent.h"
@@ -195,6 +196,25 @@ void SSmvShell::Construct(const FArguments& InArgs)
 	const FString Season = SeasonId();
 	if (Data()) { EditSettings = Data()->Settings(); ReducedMotion() = EditSettings.bReducedMotion; }
 
+	TSharedRef<SSmvCanvas> Sweep = SNew(SSmvCanvas);
+	Sweep->SetVisibility(EVisibility::HitTestInvisible);
+	Sweep->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		if (ReducedMotion()) return;
+		const float K = (float)(FPlatformTime::Seconds() - TransAt) / 0.55f;
+		if (K < 0.f || K > 1.f) return;
+		const FVector2D Sz = G.GetLocalSize();
+		const float X = FMath::Lerp(-0.3f, 1.3f, K) * (float)Sz.X;
+		const float A = FMath::Sin(K * PI) * 0.10f;
+		const FLinearColor C1 = Accent().CopyWithNewOpacity(A), C2 = FLinearColor(1, 1, 1, A * 0.9f);
+		TArray<FVector2D> P;
+		for (int32 i = 0; i < 3; ++i)
+		{
+			const float W = 70.f + i * 60.f;
+			P = { FVector2D(X - W, Sz.Y), FVector2D(X - W + Sz.Y * 0.35f, 0.f) };
+			FSlateDrawElement::MakeLines(Out, L, G.ToPaintGeometry(), P, ESlateDrawEffect::None, i == 0 ? C2 : C1, true, W * 0.5f);
+		}
+	};
 	ChildSlot
 	[
 		SNew(SOverlay)
@@ -227,7 +247,27 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		]
 		+ SOverlay::Slot()
 		[
-			SAssignNew(Content, SBox)
+			SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("NoBorder")).Padding(0.f)
+			.ColorAndOpacity_Lambda([this]()
+			{
+				if (ReducedMotion()) return FLinearColor::White;
+				const float K = FMath::Clamp((float)(FPlatformTime::Seconds() - TransAt) / 0.32f, 0.f, 1.f);
+				return FLinearColor(1, 1, 1, 1.f - (1.f - K) * (1.f - K));
+			})
+			.RenderTransform_Lambda([this]()
+			{
+				const float K = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - TransAt) / 0.38f, 0.f, 1.f);
+				const float E = 1.f - FMath::Pow(1.f - K, 3.f);
+				return TOptional<FSlateRenderTransform>(FSlateRenderTransform(FVector2f((1.f - E) * 46.f * TransDir, (1.f - E) * 10.f)));
+			})
+			[
+				SAssignNew(Content, SBox)
+			]
+		]
+		// ışık süpürmesi (geçişte soldan sağa çapraz parlak şerit)
+		+ SOverlay::Slot()
+		[
+			Sweep
 		]
 		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(0, 96, 28, 0)
 		[
@@ -247,6 +287,56 @@ void SSmvShell::Construct(const FArguments& InArgs)
 }
 
 void SSmvShell::Refresh() { bDirty = true; }
+
+void SSmvShell::Confirm(const FText& Title, const FText& Body, const FText& YesLabel, bool bDanger, TFunction<void()> OnYes)
+{
+	if (!OverlayBox.IsValid()) return;
+	TSharedRef<SSmvButton> No = SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).MinWidth(150.f).Text(FSmvI18n::T(TEXT("common.cancel")))
+		.OnClick([this]() { CloseOverlay(); });
+	const double At = FPlatformTime::Seconds();
+	OverlayBox->SetContent(
+		SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).Padding(0.f)
+		.BorderBackgroundColor_Lambda([At]() { return FSlateColor(FLinearColor(0.f, 0.f, 0.02f, 0.6f * FMath::Clamp((float)(FPlatformTime::Seconds() - At) * 6.f, 0.f, 1.f))); })
+		.HAlign(HAlign_Center).VAlign(VAlign_Center)
+		[
+			SNew(SBox).WidthOverride(500.f)
+			.RenderTransform_Lambda([At]()
+			{
+				const float K = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - At) * 5.f, 0.f, 1.f);
+				const float S = 0.92f + 0.08f * (1.f - (1.f - K) * (1.f - K));
+				return TOptional<FSlateRenderTransform>(FSlateRenderTransform(S));
+			})
+			.RenderTransformPivot(FVector2D(0.5f, 0.5f))
+			[
+				SNew(SBorder).BorderImage(GlassCard()).Padding(FMargin(26.f, 22.f))
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight()
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 12, 0)[Icon(bDanger ? ESmvIcon::Trash : ESmvIcon::Help, 26.f, bDanger ? Danger() : Accent())]
+						+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[Title.IsEmpty() ? SNullWidget::NullWidget : SmvUi::Title(Title, 20)]
+					]
+					+ SVerticalBox::Slot().AutoHeight().Padding(0, 12, 0, 20)[SmvUi::Text(Body, 13, "Regular", Dim())]
+					+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 10, 0)[No]
+						+ SHorizontalBox::Slot().AutoWidth()
+						[
+							SNew(SSmvButton).Kind(bDanger ? ESmvBtn::Danger : ESmvBtn::Primary).MinWidth(150.f).Text(YesLabel)
+							.Icon(bDanger ? ESmvIcon::Trash : ESmvIcon::Check)
+							.OnClick([this, OnYes]() { CloseOverlay(); if (OnYes) OnYes(); })
+						]
+					]
+				]
+			]
+		]);
+	bOverlay = true;
+	FSmvUiSound::Play(ESmvSnd::Open);
+	DefaultFocus = No;
+	bWantFocus = true;
+}
 
 void SSmvShell::ShowToast(const FString& Text, int32 Severity)
 {
@@ -381,11 +471,34 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 				BuildScreen(Built)
 			]);
 		if (Built == ESmvScreen::Summary) SummaryAt = FPlatformTime::Seconds();
+		if (bScreenChanged) { TransAt = FPlatformTime::Seconds(); TransDir = (Built == ESmvScreen::Menu) ? -1 : 1; }
 		bWantFocus = true;
 		// ilk açılış tanıtımı (ana menüye ilk girişte)
 		if (Built == ESmvScreen::Menu && !FSmvUiPrefs::Get().bTutorialDone && !bOverlay) OpenTutorial();
 	}
 	if (ASmvMenuScene* S = Scene()) S->SetPreviewActive(bPreviewVisible);
+	// RC eksen algılama: tabandan en çok sapan eksen (> 0,45) seçilir; eksi yönde ise ters çevrilir (kol yukarı / sağa itilir)
+	if (DetectSlot >= 0)
+	{
+		ASmvPilotPawn* Pw = GameMode.IsValid() ? GameMode->GetPilot() : nullptr;
+		int32 Best = -1; float BestD = 0.45f, BestSigned = 0.f;
+		for (int32 k = 0; Pw && k < 8; ++k)
+		{
+			const float D = Pw->GetRawAxis(k) - DetectBase[k];
+			if (FMath::Abs(D) > BestD) { BestD = FMath::Abs(D); Best = k; BestSigned = D; }
+		}
+		if (Best >= 0 && EditSettings.RcAxisMap.IsValidIndex(DetectSlot))
+		{
+			static const TCHAR* SlotKey[] = { TEXT("rc.roll"), TEXT("rc.pitch"), TEXT("rc.throttle"), TEXT("rc.yaw"), TEXT("rc.mode") };
+			EditSettings.RcAxisMap[DetectSlot] = Best + 1;
+			if (EditSettings.RcInvert.IsValidIndex(DetectSlot)) EditSettings.RcInvert[DetectSlot] = BestSigned < 0.f;
+			Toast(FSmvI18n::Format(TEXT("pad.learned"), { { TEXT("a"), FSmvI18n::T(SlotKey[FMath::Clamp(DetectSlot, 0, 4)]).ToString() }, { TEXT("n"), FString::FromInt(Best + 1) },
+				{ TEXT("inv"), BestSigned < 0.f ? FString(TEXT(" (") ) + FSmvI18n::T(TEXT("pad.inv")).ToString() + TEXT(")") : FString() } }).ToString(), 6);
+			DetectSlot = -1;
+			Refresh();
+		}
+		else if (FPlatformTime::Seconds() - DetectAt > 8.0) { Toast(FSmvI18n::T(TEXT("pad.learn_timeout")).ToString(), 4); DetectSlot = -1; }
+	}
 	// odak: menü ekranlarında odak kabuk dışına (oyun görünümüne) kaçarsa varsayılana döner — gamepad/klavye gezinmesi kopmasın
 	const bool bMenuScreen = Built != ESmvScreen::Flight || bPause;
 	if (bMenuScreen)
@@ -968,7 +1081,7 @@ TSharedRef<SWidget> SSmvShell::Account()
 	{
 		B->AddSlot().AutoHeight().Padding(0, 18, 0, 0)[Btn(Tx(TEXT("account.import")), [F]() { if (F.IsValid()) F->ImportGuest(); }, false, true, ESmvIcon::Save)];
 	}
-	B->AddSlot().AutoHeight().Padding(0, 18, 0, 0)[bIn ? Btn(Tx(TEXT("account.logout")), [F]() { if (F.IsValid()) F->Logout(); }, false, true, ESmvIcon::Power)
+	B->AddSlot().AutoHeight().Padding(0, 18, 0, 0)[bIn ? Btn(Tx(TEXT("account.logout")), [this, F]() { Confirm(FSmvI18n::T(TEXT("dlg.logout_title")), FSmvI18n::T(TEXT("dlg.logout_body")), FSmvI18n::T(TEXT("account.logout")), false, [F]() { if (F.IsValid()) F->Logout(); }); }, false, true, ESmvIcon::Power)
 		: Btn(Tx(TEXT("welcome.login")), [F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Login); }, true, true, ESmvIcon::User)];
 	B->AddSlot().AutoHeight().Padding(0, 18, 0, 0)[SmvUi::Text(Tx(TEXT("account.features")), 11, "Regular", Dim())];
 	return Page(Tx(TEXT("menu.account")), Tx(TEXT("account.sub")), ESmvIcon::User, SNew(SBox).HAlign(HAlign_Left)[SNew(SBox).WidthOverride(760.f)[Glass(B, FMargin(28.f))]]);
@@ -1015,7 +1128,11 @@ TSharedRef<SWidget> SSmvShell::Menu()
 	Sm(Tx(TEXT("menu.settings")), ESmvIcon::Gear, Go(ESmvScreen::Settings));
 	Sm(Tx(TEXT("menu.account")), ESmvIcon::User, Go(ESmvScreen::Account));
 	Sm(Tx(TEXT("menu.help")), ESmvIcon::Help, [Self]() { Self->ToggleHelp(); });
-	Sm(Tx(TEXT("menu.quit")), ESmvIcon::Power, [G = GameMode]() { if (G.IsValid()) UKismetSystemLibrary::QuitGame(G.Get(), nullptr, EQuitPreference::Quit, false); }, true);
+	Sm(Tx(TEXT("menu.quit")), ESmvIcon::Power, [Self = this, G = GameMode]()
+	{
+		Self->Confirm(FSmvI18n::T(TEXT("dlg.quit_title")), FSmvI18n::T(TEXT("dlg.quit_body")), FSmvI18n::T(TEXT("dlg.yes_quit")), true,
+			[G]() { if (G.IsValid()) UKismetSystemLibrary::QuitGame(G.Get(), nullptr, EQuitPreference::Quit, false); });
+	}, true);
 
 	// sağ: durum paneli
 	auto Status = [](bool bOk, const FText& T) -> TSharedRef<SWidget>
@@ -1210,7 +1327,10 @@ TSharedRef<SWidget> SSmvShell::Hangar()
 			TAttribute<bool>(!bNew), ESmvIcon::Star)]
 		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Danger).Icon(ESmvIcon::Trash).Text(Tx(TEXT("common.delete"))).IsEnabled(!bNew).OnClick([Self]()
 		{
-			Self->Data()->DeleteDrone(Self->EditDrone.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); if (bOk && Self->Data()->Drones().Num()) Self->EditDrone = Self->Data()->Drones()[0]; Self->Refresh(); }));
+			Self->Confirm(FSmvI18n::T(TEXT("dlg.delete_title")), FSmvI18n::Format(TEXT("dlg.delete_body"), { { TEXT("n"), Self->EditDrone.Name } }), FSmvI18n::T(TEXT("dlg.yes_delete")), true, [Self]()
+			{
+				Self->Data()->DeleteDrone(Self->EditDrone.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); if (bOk && Self->Data()->Drones().Num()) Self->EditDrone = Self->Data()->Drones()[0]; Self->Refresh(); }));
+			});
 		})]
 	];
 	return Page(Tx(TEXT("menu.hangar")), Tx(TEXT("menu.hangar_sub")), ESmvIcon::Drone, SNew(SHorizontalBox)
@@ -1425,7 +1545,10 @@ TSharedRef<SWidget> SSmvShell::Crew()
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(Tx(TEXT("common.make_default")), [Self]() { Self->Data()->SetDefault(TEXT("pilot"), Self->EditPilot.Id); Self->EditPilot.bIsDefault = true; Self->Refresh(); }, false, TAttribute<bool>(!bNew), ESmvIcon::Star)]
 		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Danger).Icon(ESmvIcon::Trash).Text(Tx(TEXT("common.delete"))).IsEnabled(!bNew).OnClick([Self]()
 		{
-			Self->Data()->DeletePilot(Self->EditPilot.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); if (bOk && Self->Data()->Pilots().Num()) Self->EditPilot = Self->Data()->Pilots()[0]; Self->Refresh(); }));
+			Self->Confirm(FSmvI18n::T(TEXT("dlg.delete_title")), FSmvI18n::Format(TEXT("dlg.delete_body"), { { TEXT("n"), Self->EditPilot.Name } }), FSmvI18n::T(TEXT("dlg.yes_delete")), true, [Self]()
+			{
+				Self->Data()->DeletePilot(Self->EditPilot.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); if (bOk && Self->Data()->Pilots().Num()) Self->EditPilot = Self->Data()->Pilots()[0]; Self->Refresh(); }));
+			});
 		})]
 	];
 	return Page(Tx(TEXT("menu.crew")), Tx(TEXT("menu.crew_sub")), ESmvIcon::Pilot, SNew(SHorizontalBox)
@@ -1521,7 +1644,10 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(Tx(TEXT("common.make_default")), [Self]() { Self->Data()->SetDefault(TEXT("track"), Self->EditTrack.Id); Self->EditTrack.bIsDefault = true; Self->Refresh(); }, false, TAttribute<bool>(!bNew), ESmvIcon::Star)]
 		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Danger).Icon(ESmvIcon::Trash).Text(Tx(TEXT("common.delete"))).IsEnabled(!bNew).OnClick([Self]()
 		{
-			Self->Data()->DeleteTrack(Self->EditTrack.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); if (bOk && Self->Data()->Tracks().Num()) Self->EditTrack = Self->Data()->Tracks()[0]; Self->Refresh(); }));
+			Self->Confirm(FSmvI18n::T(TEXT("dlg.delete_title")), FSmvI18n::Format(TEXT("dlg.delete_body"), { { TEXT("n"), Self->EditTrack.Name } }), FSmvI18n::T(TEXT("dlg.yes_delete")), true, [Self]()
+			{
+				Self->Data()->DeleteTrack(Self->EditTrack.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); if (bOk && Self->Data()->Tracks().Num()) Self->EditTrack = Self->Data()->Tracks()[0]; Self->Refresh(); }));
+			});
 		})]
 	];
 	TSharedRef<SVerticalBox> Mid = SNew(SVerticalBox);
@@ -1904,7 +2030,10 @@ TSharedRef<SWidget> SSmvShell::Missions()
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(FText::FromString(TEXT("−")), [Self]() { Self->MZoom = FMath::Max(Self->MZoom / 1.4, 0.2); }, false, true)]
 		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Danger).Icon(ESmvIcon::Trash).Text(Tx(TEXT("common.delete"))).IsEnabled(!EditMission.Id.IsEmpty()).OnClick([Self]()
 		{
-			Self->Data()->DeleteMission(Self->EditMission.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); Self->EditMission = FSmvMission(); Self->MPlanLoad(); Self->Refresh(); }));
+			Self->Confirm(FSmvI18n::T(TEXT("dlg.delete_title")), FSmvI18n::Format(TEXT("dlg.delete_body"), { { TEXT("n"), Self->EditMission.Name } }), FSmvI18n::T(TEXT("dlg.yes_delete")), true, [Self]()
+			{
+				Self->Data()->DeleteMission(Self->EditMission.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : M, bOk ? 6 : 3); Self->EditMission = FSmvMission(); Self->MPlanLoad(); Self->Refresh(); }));
+			});
 		})]
 	];
 	return Page(Tx(TEXT("menu.missions")), Tx(TEXT("menu.missions_sub")), ESmvIcon::Mission, SNew(SHorizontalBox)
@@ -2264,6 +2393,31 @@ TSharedRef<SWidget> SSmvShell::WizAdvanced()
 		if (R.Launch.Method == TEXT("ramp")) L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.angle")), Slider(&R.Launch.AngleDeg, 10, 30, 1, [](double V) { return FString::Printf(TEXT("%.0f°"), V); }))];
 		if (R.Launch.Method == TEXT("ramp") || R.Launch.Method == TEXT("vehicle")) L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.release")), Slider(&R.Launch.ReleaseKmh, 40, 110, 1, [](double V) { return FString::Printf(TEXT("%.0f km/h"), V); }))];
 		if (R.Launch.Method == TEXT("hand")) L->AddSlot().AutoHeight().Padding(0, 3)[SmvUi::Text(Tx(TEXT("launch.hand_note")), 10, "Regular", Mute())];
+		// rüzgâra karşı kalkış önerisi (web takeoffAdvice): baş/yan/kuyruk bileşeni + "Rüzgâra karşı çevir" (pist yönü)
+		const FSmvTrack& Tk = R.Track;
+		if (R.Launch.Method != TEXT("hand") && Tk.WindMs > 0.3)
+		{
+			const double Hdg = Tk.World.RunwayHeading;
+			double Rel = FMath::Fmod(Tk.WindDir - Hdg, 360.0); if (Rel > 180) Rel -= 360; if (Rel <= -180) Rel += 360;
+			const double Head = Tk.WindMs * FMath::Cos(FMath::DegreesToRadians(Rel)), Cross = Tk.WindMs * FMath::Sin(FMath::DegreesToRadians(Rel));
+			const int32 Sug = ((FMath::RoundToInt(Tk.WindDir / 5.0) * 5) % 360 + 360) % 360;
+			const double Off = FMath::Fmod(FMath::Fmod(Sug - Hdg, 360.0) + 540.0, 360.0) - 180.0;
+			const bool bOk = Head >= -1.0 && FMath::Abs(Cross) <= 6.0;
+			const FText Comp = Head >= 0 ? FSmvI18n::Format(TEXT("wiz.wind_head"), { { TEXT("h"), FString::Printf(TEXT("%.1f"), Head) } })
+				: FSmvI18n::Format(TEXT("wiz.wind_tail"), { { TEXT("h"), FString::Printf(TEXT("%.1f"), -Head) } });
+			L->AddSlot().AutoHeight().Padding(0, 8, 0, 0)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)[Icon(ESmvIcon::Wind, 18.f, bOk ? Accent3() : Warn())]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(FSmvI18n::Format(TEXT("wiz.wind_adv"), {
+					{ TEXT("ms"), FString::Printf(TEXT("%.1f"), Tk.WindMs) }, { TEXT("dir"), FString::Printf(TEXT("%.0f"), Tk.WindDir) },
+					{ TEXT("hdg"), FString::Printf(TEXT("%.0f"), Hdg) }, { TEXT("comp"), Comp.ToString() }, { TEXT("x"), FString::Printf(TEXT("%.1f"), FMath::Abs(Cross)) } }), 11, "Regular", bOk ? Dim() : Warn())]
+			];
+			if (FMath::Abs(Off) >= 15.0)
+				L->AddSlot().AutoHeight().HAlign(HAlign_Left).Padding(0, 6, 0, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12).Icon(ESmvIcon::Wind)
+					.Text(FSmvI18n::Format(TEXT("wiz.wind_turn"), { { TEXT("s"), FString::FromInt(Sug) } }))
+					.OnClick([Self, F, Sug]() { F->Draft.Track.World.RunwayHeading = Sug; Self->Toast(FSmvI18n::T(TEXT("wfx.into_wind")).ToString(), 6); Self->Refresh(); })];
+		}
 	}
 	else if (Ty == TEXT("interceptor"))
 	{
@@ -2471,7 +2625,11 @@ TSharedRef<SWidget> SSmvShell::FlightPause()
 		B->AddSlot().AutoHeight().Padding(0, 8, 0, 0)[SNew(STextBlock).Text_Lambda([G]() { return FText::FromString(G.IsValid() ? G->MissionPlannerLine() : FString()); }).Font(Font(10)).ColorAndOpacity(Dim()).AutoWrapText(true)];
 	}
 	B->AddSlot().AutoHeight().Padding(0, 14, 0, 0)[SNew(SSmvButton).Kind(ESmvBtn::Danger).Icon(ESmvIcon::Power).MinWidth(420.f).Text(Tx(TEXT("pause.end")))
-		.OnClick([F, G]() { if (G.IsValid() && G->IsPausedMenu()) G->TogglePause(); if (F.IsValid()) F->EndFlight(TEXT("user")); })];
+		.OnClick([this, F, G]()
+		{
+			Confirm(FSmvI18n::T(TEXT("dlg.end_title")), FSmvI18n::T(TEXT("dlg.end_body")), FSmvI18n::T(TEXT("dlg.yes_end")), true,
+				[F, G]() { if (G.IsValid() && G->IsPausedMenu()) G->TogglePause(); if (F.IsValid()) F->EndFlight(TEXT("user")); });
+		})];
 	B->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(0, 12, 0, 0)[HintBar({ { TEXT("Esc"), Tx(TEXT("pause.resume")) }, { TEXT("F1"), Tx(TEXT("hint.help")) } },
 		{ { TEXT("pad:Menu"), Tx(TEXT("pause.resume")) }, { TEXT("pad:A"), Tx(TEXT("hint.select")) } })];
 	return SNew(SBorder).BorderImage(White()).BorderBackgroundColor(FLinearColor(0.01f, 0.015f, 0.03f, 0.55f)).HAlign(HAlign_Center).VAlign(VAlign_Center)
@@ -2918,6 +3076,8 @@ TSharedRef<SWidget> SSmvShell::SetGeneral()
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.units")), Chips(&S.Units, { TEXT("metric"), TEXT("imperial") }, { Tx(TEXT("units.metric")), Tx(TEXT("units.imperial")) }, {}))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.gauge")), Chips(&S.GaugeTheme, { TEXT("military"), TEXT("fpv_osd"), TEXT("minimal") },
 		{ Tx(TEXT("gauge.military")), Tx(TEXT("gauge.fpv_osd")), Tx(TEXT("gauge.minimal")) }, {}))];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("gtheme.title")), Chips(&P.DialTheme, { TEXT("cockpit"), TEXT("classic"), TEXT("glass"), TEXT("minimal"), TEXT("military"), TEXT("none") },
+		{ Tx(TEXT("gtheme.cockpit")), Tx(TEXT("gtheme.classic")), Tx(TEXT("gtheme.glass")), Tx(TEXT("gtheme.minimal")), Tx(TEXT("gtheme.military")), Tx(TEXT("gtheme.none")) }, {}, SaveP, 3), Tx(TEXT("gtheme.sub")))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.analog_fpv")), Toggle(&S.bAnalogFpv))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.leader_hidden")), Toggle(&S.bLeaderboardHidden))];
 	V->AddSlot().AutoHeight().Padding(0, 14, 0, 8)[Section(Tx(TEXT("set.interface")), Accent2())];
@@ -3101,11 +3261,19 @@ TSharedRef<SWidget> SSmvShell::SetControls()
 			}, 3))];
 		if (P.SensPreset == TEXT("custom"))
 		{
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.deadzone")), SliderF(&P.Deadzone, 0.f, 0.2f, 0.01f, Pct, SaveP))];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.expo_rp")), SliderF(&P.ExpoRP, 0.f, 0.9f, 0.05f, Pct, SaveP))];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.expo_yaw")), SliderF(&P.ExpoYaw, 0.f, 0.9f, 0.05f, Pct, SaveP))];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.rate_rp")), SliderF(&P.RateRP, 0.3f, 1.f, 0.05f, Pct, SaveP))];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("sens.rate_yaw")), SliderF(&P.RateYaw, 0.3f, 1.f, 0.05f, Pct, SaveP))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("rcfeel.all")), Toggle(&P.bLinkRP, [Self]() { FSmvUiPrefs::Get().SyncLink(); FSmvUiPrefs::Get().Save(); Self->Refresh(); }))];
+			auto SaveL = []() { FSmvUiPrefs::Get().SyncLink(); FSmvUiPrefs::Get().Save(); };
+			static const TCHAR* AxKey[4] = { TEXT("rcfeel.roll"), TEXT("rcfeel.pitch"), TEXT("rcfeel.thr"), TEXT("rcfeel.yaw") };
+			for (int32 Ax : { 0, 1, 3, 2 })
+			{
+				if (Ax == 1 && P.bLinkRP) continue;
+				const FText Name = (Ax == 0 && P.bLinkRP) ? Tx(TEXT("rcfeel.all")) : Tx(AxKey[Ax]);
+				V->AddSlot().AutoHeight().Padding(0, 8, 0, 2)[SmvUi::Text(Name, 12, "Bold", Accent3())];
+				V->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("rcfeel.rate")), SliderF(&P.Rate[Ax], 0.3f, 1.f, 0.05f, Pct, SaveL), Tx(TEXT("rcfeel.rate_hint")))];
+				V->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("rcfeel.expo")), SliderF(&P.Ex[Ax], 0.f, 0.9f, 0.05f, Pct, SaveL), Tx(TEXT("rcfeel.expo_hint")))];
+				V->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("rcfeel.dead")), SliderF(&P.Dead[Ax], 0.f, 0.2f, 0.01f, Pct, SaveL), Tx(TEXT("rcfeel.dead_hint")))];
+			}
+			V->AddSlot().AutoHeight().Padding(0, 4)[SmvUi::Text(Tx(TEXT("rcfeel.plane_thr")), 10, "Regular", Mute())];
 		}
 		TSharedRef<SSmvCanvas> Curve = SNew(SSmvCanvas).Size(FVector2D(260, 150));
 		Curve->Painter = [Self](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
@@ -3116,7 +3284,7 @@ TSharedRef<SWidget> SSmvShell::SetControls()
 			DrSeg(Out, L + 1, G, FVector2D(Sz.X * 0.5, 0), FVector2D(Sz.X * 0.5, Sz.Y), Edge(), 1.f);
 			DrSeg(Out, L + 1, G, FVector2D(0, Sz.Y), FVector2D(Sz.X, 0), FLinearColor(1, 1, 1, 0.12f), 1.f);
 			const float Fe = (float)Self->EditSettings.StickExpo;
-			for (int32 Ax : { 0, 3 })
+			for (int32 Ax : { 0, 3, 2 })
 			{
 				TArray<FVector2D> P;
 				for (int32 i = 0; i <= 40; ++i)
@@ -3125,10 +3293,11 @@ TSharedRef<SWidget> SSmvShell::SetControls()
 					const float Y = FSmvUiPrefs::Get().Shape(X, Ax, Fe);
 					P.Add(FVector2D(Sz.X * (X + 1.f) * 0.5f, Sz.Y * (1.f - (Y + 1.f) * 0.5f)));
 				}
-				DrLine(Out, L + 2, G, P, Ax == 0 ? Accent() : Warn(), 2.f);
+				DrLine(Out, L + 2, G, P, Ax == 0 ? Accent() : Ax == 3 ? Warn() : Accent3(), 2.f);
 			}
 			DrText(Out, L + 3, G, TEXT("roll/pitch"), FVector2D(8.f, 12.f), Font(9, "Bold"), Accent(), -1);
 			DrText(Out, L + 3, G, TEXT("yaw"), FVector2D(8.f, 26.f), Font(9, "Bold"), Warn(), -1);
+			DrText(Out, L + 3, G, FSmvI18n::T(TEXT("rcfeel.thr")).ToString(), FVector2D(8.f, 40.f), Font(9, "Bold"), Accent3(), -1);
 		};
 		V->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[Row(Tx(TEXT("sens.curve")), Curve)];
 	}
@@ -3142,7 +3311,20 @@ TSharedRef<SWidget> SSmvShell::SetControls()
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0, 8, 0)[SmvUi::Text(Tx(TEXT("settings.invert")), 11, "Regular", Dim(), false)]
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SSmvToggle)
 					.Value_Lambda([Self, i]() { return Self->EditSettings.RcInvert[i]; })
-					.OnChanged([Self, i](bool b) { Self->EditSettings.RcInvert[i] = b; })])];
+					.OnChanged([Self, i](bool b) { Self->EditSettings.RcInvert[i] = b; })]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(12, 0, 0, 0)
+				[
+					SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(11).Icon(ESmvIcon::Stick)
+					.Text_Lambda([Self, i]() { return Self->DetectSlot == i ? FSmvI18n::T(TEXT("pad.move")) : FSmvI18n::T(TEXT("pad.learn")); })
+					.Selected_Lambda([Self, i]() { return Self->DetectSlot == i; })
+					.OnClick([Self, i]()
+					{
+						ASmvPilotPawn* Pw = Self->GameMode.IsValid() ? Self->GameMode->GetPilot() : nullptr;
+						if (!Pw) return;
+						Self->DetectSlot = i; Self->DetectAt = FPlatformTime::Seconds();
+						for (int32 k = 0; k < 8; ++k) Self->DetectBase[k] = Pw->GetRawAxis(k);
+					})
+				])];
 		}
 		V->AddSlot().AutoHeight().Padding(0, 4, 0, 0)[SmvUi::Text(Tx(TEXT("settings.rc_note")), 10, "Regular", Mute())];
 	}

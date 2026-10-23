@@ -27,6 +27,8 @@ struct SIMUMAV_API FSmvUiPrefs
 	bool bFlightTipsDone = false;
 	/** Sabit kanat / VTOL için klasik kokpit gösterge paneli (altılı) */
 	bool bCockpit = false;
+	/** Güç kadranları tasarımı (web gtheme): cockpit | classic | glass | minimal | military | none */
+	FString DialTheme = TEXT("cockpit");
 	/** Ana menüde canlı 3B sahne (uçan dron); kapalıysa yalnız animasyonlu arka plan */
 	bool bMenuScene = true;
 	/** Hangar 3B önizleme */
@@ -34,13 +36,18 @@ struct SIMUMAV_API FSmvUiPrefs
 	/** Hassasiyet (web §27 ⚙): hazır ayar precise | normal | agile | custom; ölü bölge, expo ve oran (roll+pitch / yaw).
 	 *  Boş = eski tek expo (FSmvSettings::StickExpo). */
 	FString SensPreset;
-	float Deadzone = 0.03f;
-	float ExpoRP = 0.3f, ExpoYaw = 0.2f;
-	float RateRP = 0.85f, RateYaw = 0.8f;
+	/** Eksen başına (0 roll, 1 pitch, 2 gaz, 3 yaw — web rcfeel): ölü bölge 0–0.2, expo 0–0.9, oran 0.3–1 */
+	float Dead[4] = { 0.03f, 0.03f, 0.03f, 0.04f };
+	float Ex[4] = { 0.2f, 0.2f, 0.1f, 0.2f };
+	float Rate[4] = { 1.f, 1.f, 1.f, 0.9f };
+	/** Roll ve pitch birlikte ayarlanır */
+	bool bLinkRP = true;
 	/** Hazır ayarı değerlere uygula */
 	void ApplySensPreset(const FString& P);
 	/** Eksen şekillendirme (Axis: 0 roll, 1 pitch, 3 yaw) — FallbackExpo: hazır ayar yoksa */
 	float Shape(float V, int32 Axis, float FallbackExpo) const;
+	/** Bağlıysa pitch = roll */
+	void SyncLink();
 	/** Bayram / mevsim teması: auto | off */
 	FString Season = TEXT("auto");
 	/** Tuş atamaları: "kb.<Eylem>" / "pad.<Eylem>" → FKey adı */

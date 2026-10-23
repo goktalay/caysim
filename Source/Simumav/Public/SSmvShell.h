@@ -54,6 +54,13 @@ private:
 	bool bBuiltPause = false;
 	bool bDirty = true;
 	bool bOverlay = false;
+	/** Sahne geçişi başlangıcı (içerik solup kayarak gelir + ışık süpürmesi) */
+	double TransAt = -100.0;
+	/** RC eksen algılama (Ayarlar → Kumanda → Algıla): yuva, başlangıç, taban değerler */
+	int32 DetectSlot = -1;
+	double DetectAt = 0;
+	float DetectBase[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	int32 TransDir = 1;
 	bool bWantFocus = true;
 	bool bPreviewVisible = false;
 
@@ -172,6 +179,8 @@ private:
 	void SaveSettingsQuiet();
 	void OpenTutorial();
 	void CloseOverlay();
+	/** Onay diyaloğu (web confirmDlg): başlık, açıklama, onay düğmesi (tehlikeli = kırmızı); odak Vazgeç'te; Esc/B kapatır */
+	void Confirm(const FText& Title, const FText& Body, const FText& YesLabel, bool bDanger, TFunction<void()> OnYes);
 	void FocusDefault();
 	class USmvDataService* Data() const;
 	class USimumavClient* Client() const;

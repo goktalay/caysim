@@ -344,37 +344,76 @@ struct FSmvDial
 	bool bOn = true, bDanger = false;
 };
 
+/** Kadran tasarımı (web gtheme): 0 uçak kokpiti, 1 klasik otomobil, 2 dijital cam (MFD karosu), 3 minimal, 4 retro askerî */
+static int32 SmvDialTheme()
+{
+	const FString& T = FSmvUiPrefs::Get().DialTheme;
+	return T == TEXT("classic") ? 1 : T == TEXT("glass") ? 2 : T == TEXT("minimal") ? 3 : T == TEXT("military") ? 4 : 0;
+}
+
 static void SmvPaintDial(const FGeometry& G, FSlateWindowElementList& Out, int32 L, const FVector2D& C, float R, const FSmvDial& D, const FSlateBrush* Circle)
 {
 	using namespace SmvFuiDraw;
 	using namespace SmvFuiTheme;
+	const int32 Th = SmvDialTheme();
 	const bool bBlink = FMath::Fmod(FPlatformTime::Seconds(), 0.9) < 0.45;
+	const float Alpha = D.bOn ? 1.f : 0.35f;
+	if (Th == 2)
+	{
+		// dijital cam: MFD karosu — başlık, büyük sayısal değer, seviye şeridi
+		const FVector2D P0 = C - FVector2D(R, R * 0.78f), Sz(2 * R, R * 1.56f);
+		DrRect(Out, L, G, P0, Sz, FLinearColor(0.02f, 0.05f, 0.08f, 0.82f), nullptr);
+		DrPoly(Out, L + 1, G, { P0, P0 + FVector2D(Sz.X, 0), P0 + Sz, P0 + FVector2D(0, Sz.Y), P0 }, D.bDanger && bBlink ? Red : Accent.CopyWithNewOpacity(0.55f), 1.f);
+		DrText(Out, L + 2, G, D.Title, P0 + FVector2D(8.f, 9.f), Font(7, true), Accent, -1);
+		DrText(Out, L + 2, G, D.Value, C + FVector2D(0, -R * 0.05f), Mono(R > 50.f ? 20 : 15), D.bDanger ? Red : Txt.CopyWithNewOpacity(Alpha), 0);
+		if (!D.Sub.IsEmpty()) DrText(Out, L + 2, G, D.Sub, C + FVector2D(0, R * 0.30f), Mono(7), Dim, 0);
+		const FVector2D B0 = P0 + FVector2D(8.f, Sz.Y - 12.f);
+		const float Bw = (float)Sz.X - 16.f;
+		DrRect(Out, L + 2, G, B0, FVector2D(Bw, 5.f), FLinearColor(1, 1, 1, 0.1f), nullptr);
+		if (D.RedA >= 0.f && D.RedB > D.RedA) DrRect(Out, L + 3, G, B0 + FVector2D(Bw * D.RedA, 0), FVector2D(Bw * (D.RedB - D.RedA), 5.f), Red.CopyWithNewOpacity(0.35f), nullptr);
+		DrRect(Out, L + 4, G, B0, FVector2D(Bw * FMath::Clamp(D.bOn ? D.Frac : 0.f, 0.f, 1.f), 5.f), D.bDanger ? Red : Accent, nullptr);
+		return;
+	}
+	// renk takımı
+	FLinearColor Face, Ring, Tick, Lab, Needle, Hub, ValC;
+	switch (Th)
+	{
+	case 1: Face = FLinearColor(0.92f, 0.92f, 0.88f, 0.96f); Ring = FLinearColor(0.25f, 0.25f, 0.27f, 1.f); Tick = FLinearColor(0.05f, 0.05f, 0.06f, 1.f);
+		Lab = FLinearColor(0.1f, 0.1f, 0.12f, 1.f); Needle = FLinearColor(0.85f, 0.18f, 0.08f, 1.f); Hub = FLinearColor(0.1f, 0.1f, 0.1f, 1.f); ValC = FLinearColor(0.08f, 0.08f, 0.1f, 1.f); break;
+	case 3: Face = FLinearColor(0, 0, 0, 0.18f); Ring = FLinearColor(1, 1, 1, 0.35f); Tick = FLinearColor(1, 1, 1, 0.55f);
+		Lab = Dim; Needle = Accent; Hub = Accent; ValC = Txt; break;
+	case 4: Face = FLinearColor(0.11f, 0.14f, 0.07f, 0.94f); Ring = FLinearColor(0.32f, 0.38f, 0.2f, 1.f); Tick = FLinearColor(0.45f, 1.f, 0.35f, 1.f);
+		Lab = FLinearColor(0.45f, 1.f, 0.35f, 0.8f); Needle = FLinearColor(0.55f, 1.f, 0.4f, 1.f); Hub = FLinearColor(0.3f, 0.36f, 0.2f, 1.f); ValC = FLinearColor(0.55f, 1.f, 0.4f, 1.f); break;
+	default: Face = FLinearColor(0.035f, 0.05f, 0.065f, 0.90f); Ring = FLinearColor(1, 1, 1, 0.16f); Tick = FLinearColor::White;
+		Lab = Dim; Needle = Accent; Hub = FLinearColor(0.85f, 0.87f, 0.9f, 1.f); ValC = Txt; break;
+	}
 	const float A0 = 150.f, Sweep = 240.f;
 	auto Ang = [A0, Sweep](float F) { return A0 + Sweep * FMath::Clamp(F, 0.f, 1.f); };
-	DrRect(Out, L, G, C - FVector2D(R, R), FVector2D(2 * R, 2 * R), FLinearColor(0.035f, 0.05f, 0.065f, 0.90f), Circle);
-	DrArc(Out, L + 1, G, C, R - 1.f, 0.f, 360.f, D.bDanger && bBlink ? Red : FLinearColor(1, 1, 1, 0.16f), D.bDanger ? 2.5f : 1.5f);
-	const float Alpha = D.bOn ? 1.f : 0.35f;
-	if (D.RedA >= 0.f && D.RedB > D.RedA) DrArc(Out, L + 1, G, C, R - 7.f, Ang(D.RedA), Ang(D.RedB), Red.CopyWithNewOpacity(0.85f * Alpha), 4.f);
+	DrRect(Out, L, G, C - FVector2D(R, R), FVector2D(2 * R, 2 * R), Face, Circle);
+	DrArc(Out, L + 1, G, C, R - 1.f, 0.f, 360.f, D.bDanger && bBlink ? Red : Ring, D.bDanger ? 2.5f : (Th == 1 || Th == 4 ? 3.f : 1.5f));
+	if (Th == 3) DrArc(Out, L + 1, G, C, R - 6.f, Ang(0.f), Ang(D.bOn ? D.Frac : 0.f), (D.bDanger ? Red : Accent).CopyWithNewOpacity(0.8f * Alpha), 3.f);
+	if (D.RedA >= 0.f && D.RedB > D.RedA) DrArc(Out, L + 1, G, C, R - 7.f, Ang(D.RedA), Ang(D.RedB), Red.CopyWithNewOpacity(0.85f * Alpha), Th == 3 ? 2.f : 4.f);
 	const int32 Major = FMath::Max(1, D.Labels.Num() - 1);
 	for (int32 i = 0; i <= Major * 5; ++i)
 	{
+		const bool bMaj = i % 5 == 0;
+		if (Th == 3 && !bMaj) continue;
 		const float F = (float)i / (Major * 5);
 		const float Rad = FMath::DegreesToRadians(Ang(F));
 		const FVector2D U(FMath::Cos(Rad), FMath::Sin(Rad));
-		const bool bMaj = i % 5 == 0;
-		DrSeg(Out, L + 2, G, C + U * (R - 3.f), C + U * (R - (bMaj ? 12.f : 7.f)), FLinearColor(1, 1, 1, (bMaj ? 0.85f : 0.45f) * Alpha), bMaj ? 2.f : 1.f);
-		if (bMaj && D.Labels.IsValidIndex(i / 5) && R > 50.f) DrText(Out, L + 2, G, D.Labels[i / 5], C + U * (R - 22.f), Mono(7), Dim.CopyWithNewOpacity(Alpha), 0);
-		else if (bMaj && D.Labels.IsValidIndex(i / 5) && (i == 0 || i == Major * 5)) DrText(Out, L + 2, G, D.Labels[i / 5], C + U * (R - 20.f), Mono(7), Dim.CopyWithNewOpacity(Alpha), 0);
+		DrSeg(Out, L + 2, G, C + U * (R - 3.f), C + U * (R - (bMaj ? 12.f : 7.f)), Tick.CopyWithNewOpacity(Tick.A * (bMaj ? 0.85f : 0.45f) * Alpha), bMaj ? 2.f : 1.f);
+		if (bMaj && D.Labels.IsValidIndex(i / 5) && R > 50.f) DrText(Out, L + 2, G, D.Labels[i / 5], C + U * (R - 22.f), Mono(7), Lab.CopyWithNewOpacity(Lab.A * Alpha), 0);
+		else if (bMaj && D.Labels.IsValidIndex(i / 5) && (i == 0 || i == Major * 5)) DrText(Out, L + 2, G, D.Labels[i / 5], C + U * (R - 20.f), Mono(7), Lab.CopyWithNewOpacity(Lab.A * Alpha), 0);
 	}
 	// ibre
 	const float Nr = FMath::DegreesToRadians(Ang(D.bOn ? D.Frac : 0.f));
 	const FVector2D U(FMath::Cos(Nr), FMath::Sin(Nr));
-	DrSeg(Out, L + 3, G, C - U * 8.f, C + U * (R - 10.f), FLinearColor(0, 0, 0, 0.6f), 4.5f);
-	DrSeg(Out, L + 4, G, C - U * 8.f, C + U * (R - 10.f), D.bDanger ? Red : Accent, 2.5f);
-	DrRect(Out, L + 5, G, C - FVector2D(5, 5), FVector2D(10, 10), FLinearColor(0.85f, 0.87f, 0.9f, 1.f), Circle);
-	DrText(Out, L + 5, G, D.Title, C + FVector2D(0, -R * 0.36f), Font(R > 50.f ? 8 : 7, true), Dim, 0);
-	DrText(Out, L + 5, G, D.Value, C + FVector2D(0, R * 0.42f), Mono(R > 50.f ? 13 : 10), D.bDanger ? Red : Txt.CopyWithNewOpacity(Alpha), 0);
-	if (!D.Sub.IsEmpty()) DrText(Out, L + 5, G, D.Sub, C + FVector2D(0, R * 0.70f), Mono(7), Dim, 0);
+	if (Th != 3) DrSeg(Out, L + 3, G, C - U * 8.f, C + U * (R - 10.f), FLinearColor(0, 0, 0, 0.6f), 4.5f);
+	DrSeg(Out, L + 4, G, C - U * 8.f, C + U * (R - 10.f), D.bDanger ? Red : Needle, Th == 3 ? 1.5f : 2.5f);
+	DrRect(Out, L + 5, G, C - FVector2D(5, 5), FVector2D(10, 10), Hub, Circle);
+	DrText(Out, L + 5, G, D.Title, C + FVector2D(0, -R * 0.36f), Font(R > 50.f ? 8 : 7, true), Lab, 0);
+	DrText(Out, L + 5, G, D.Value, C + FVector2D(0, R * 0.42f), Mono(R > 50.f ? 13 : 10), D.bDanger ? Red : ValC.CopyWithNewOpacity(Alpha), 0);
+	if (!D.Sub.IsEmpty()) DrText(Out, L + 5, G, D.Sub, C + FVector2D(0, R * 0.70f), Mono(7), Lab, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -481,9 +520,18 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0.f, 0.f, 0.f, 70.f)
 		[
 			SNew(SBox)
-			.Visibility_Lambda([this]() { return St.bHideGauges || St.bMenuOpen || (St.bPlane && FSmvUiPrefs::Get().bCockpit) ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
+			.Visibility_Lambda([this]() { return St.bHideGauges || St.bMenuOpen || (St.bPlane && FSmvUiPrefs::Get().bCockpit) || FSmvUiPrefs::Get().DialTheme == TEXT("none") ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
 			[
 				Gauges()
+			]
+		]
+		// göstergesiz: küçük "Göstergeler" düğmesi (ya da G) geri açar
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0.f, 0.f, 0.f, 76.f)
+		[
+			SNew(SBox)
+			.Visibility_Lambda([this]() { return !St.bMenuOpen && !St.bHideGauges && !(St.bPlane && FSmvUiPrefs::Get().bCockpit) && FSmvUiPrefs::Get().DialTheme == TEXT("none") ? EVisibility::Visible : EVisibility::Collapsed; })
+			[
+				Btn(TAttribute<FText>::CreateLambda([]() { return FSmvI18n::T(TEXT("gtheme.none_show")); }), [this]() { ToggleCockpit(); }, []() { return FLinearColor(0.6f, 0.7f, 0.8f, 0.85f); })
 			]
 		]
 		// alt bant
@@ -1052,10 +1100,21 @@ void SSmvFlightUi::ConfirmRadial()
 
 void SSmvFlightUi::ToggleCockpit()
 {
+	// G: kadran tasarımı döngüsü (web gtheme) — sabit kanat / VTOL'de sona klasik altılı kokpit eklenir
 	FSmvUiPrefs& P = FSmvUiPrefs::Get();
-	P.bCockpit = !P.bCockpit;
+	TArray<FString> Cyc = { TEXT("cockpit"), TEXT("classic"), TEXT("glass"), TEXT("minimal"), TEXT("military"), TEXT("none") };
+	if (St.bPlane) Cyc.Add(TEXT("sixpack"));
+	const FString Cur = (St.bPlane && P.bCockpit) ? FString(TEXT("sixpack")) : P.DialTheme;
+	const FString Next = Cyc[(FMath::Max(0, Cyc.IndexOfByKey(Cur)) + 1) % Cyc.Num()];
+	P.bCockpit = Next == TEXT("sixpack");
+	if (!P.bCockpit) P.DialTheme = Next;
 	P.Save();
 	FSmvUiSound::Play(ESmvSnd::Toggle);
+	if (GM.IsValid())
+	{
+		const FString Name = P.bCockpit ? FSmvI18n::T(TEXT("bind.cockpit")).ToString() : FSmvI18n::T(TEXT("gtheme.") + Next).ToString();
+		GM->UiEvent(FSmvI18n::Format(TEXT("gtheme.changed"), { { TEXT("t"), Name } }).ToString(), 6);
+	}
 }
 
 // ---------------------------------------------------------------------------
