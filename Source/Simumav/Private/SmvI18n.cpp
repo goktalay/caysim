@@ -42,7 +42,7 @@ TMap<FString, FString>& FSmvI18n::Table(const FString& Lang)
 	{
 		if (const TSharedPtr<FJsonObject> O = SmvJson::Parse(Text))
 		{
-			for (const TPair<FString, TSharedPtr<FJsonValue>>& Kv : O->Values) if (Kv.Value.IsValid()) Tbl.Add(Kv.Key, Kv.Value->AsString());
+			for (const auto& Kv : O->Values) if (Kv.Value.IsValid()) Tbl.Add(FString(*Kv.Key), Kv.Value->AsString());
 		}
 	}
 	else

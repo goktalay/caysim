@@ -86,13 +86,13 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "CAYSIM|Kayıt") FString Status;
 
 private:
-	struct FFrame
+	struct FReplayFrame
 	{
 		float T = 0.f;
 		FCaySimTelemetry Tele;
 		FQuat QNed = FQuat::Identity;
 	};
-	TArray<FFrame> Frames;
+	TArray<FReplayFrame> Frames;
 	FCaySimReplayHeader Header;
 	float TimeS = 0.f;
 	float Speed = 1.f;

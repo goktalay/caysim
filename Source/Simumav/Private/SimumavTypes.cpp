@@ -141,7 +141,7 @@ TSharedRef<FJsonObject> FSmvDrone::ToJson(bool bForCreate) const
 	O->SetStringField(TEXT("color"), Color);
 	if (Type == TEXT("plane")) O->SetStringField(TEXT("airframe"), Airframe);
 	TSharedRef<FJsonObject> P = MakeShared<FJsonObject>();
-	for (const TPair<FString, double>& Kv : Params) P->SetNumberField(Kv.Key, Kv.Value);
+	for (const TPair<FString, double>& Kv : Params) P->SetNumberField(FString(*Kv.Key), Kv.Value);
 	O->SetObjectField(TEXT("params"), P);
 	O->SetObjectField(TEXT("power"), Power.ToJson());
 	if (!bForCreate) O->SetBoolField(TEXT("is_default"), bIsDefault);
@@ -161,9 +161,9 @@ FSmvDrone FSmvDrone::FromJson(const TSharedPtr<FJsonObject>& O)
 	D.bIsDefault = SmvJson::Bool(O, TEXT("is_default"));
 	if (const TSharedPtr<FJsonObject> P = SmvJson::Obj(O, TEXT("params")))
 	{
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& Kv : P->Values)
+		for (const auto& Kv : P->Values)
 		{
-			if (Kv.Value.IsValid() && Kv.Value->Type == EJson::Number) D.Params.Add(Kv.Key, Kv.Value->AsNumber());
+			if (Kv.Value.IsValid() && Kv.Value->Type == EJson::Number) D.Params.Add(FString(*Kv.Key), Kv.Value->AsNumber());
 		}
 	}
 	D.Power = FSmvPowerSettings::FromJson(SmvJson::Obj(O, TEXT("power")));

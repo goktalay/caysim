@@ -453,7 +453,7 @@ void UHepgoClient::FetchModels(const FString& TypeKey)
 		{
 			for (const auto& KV : (*D)->Values)
 			{
-				if (KV.Value.IsValid() && KV.Value->Type == EJson::String) ModelDefaults.Add(KV.Key, KV.Value->AsString());
+				if (KV.Value.IsValid() && KV.Value->Type == EJson::String) ModelDefaults.Add(FString(*KV.Key), KV.Value->AsString());
 			}
 		}
 		OnModels.Broadcast(Out);

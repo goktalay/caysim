@@ -93,7 +93,7 @@ void USmvSteamSubsystem::Flush()
 	const FUniqueNetIdPtr U = Idt.IsValid() ? Idt->GetUniquePlayerId(0) : FUniqueNetIdPtr();
 	if (!Ach.IsValid() || !U.IsValid()) return;
 	FOnlineAchievementsWriteRef W = MakeShared<FOnlineAchievementsWrite, ESPMode::ThreadSafe>();
-	for (const FString& A : PendingWrites) W->SetFloatStat(FName(*A), 100.f);
+	for (const FString& A : PendingWrites) W->SetFloatStat(A, 100.f);
 	const TArray<FString> Sent = PendingWrites;
 	TWeakObjectPtr<USmvSteamSubsystem> Weak(this);
 	Ach->WriteAchievements(*U, W, FOnAchievementsWrittenDelegate::CreateLambda([Weak, Sent](const FUniqueNetId&, bool bOk)

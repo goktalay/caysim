@@ -53,14 +53,14 @@ namespace
 		TSharedPtr<FJsonObject> O;
 		TSharedRef<TJsonReader<>> R = TJsonReaderFactory<>::Create(Json);
 		if (!FJsonSerializer::Deserialize(R, O) || !O.IsValid()) return false;
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& Kv : O->Values) Out.Add(Kv.Key, Kv.Value->AsString());
+		for (const auto& Kv : O->Values) Out.Add(FString(*Kv.Key), Kv.Value->AsString());
 		return true;
 	}
 
 	bool SmvWriteAll(const TMap<FString, FString>& In)
 	{
 		TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
-		for (const TPair<FString, FString>& Kv : In) O->SetStringField(Kv.Key, Kv.Value);
+		for (const TPair<FString, FString>& Kv : In) O->SetStringField(FString(*Kv.Key), Kv.Value);
 		FString Json;
 		TSharedRef<TJsonWriter<>> W = TJsonWriterFactory<>::Create(&Json);
 		FJsonSerializer::Serialize(O, W);

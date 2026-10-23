@@ -165,7 +165,7 @@ bool UCaySimReplayPlayer::ParseJson(const FString& Text)
 		const TArray<TSharedPtr<FJsonValue>>* RP = nullptr;
 		if (!RowV->TryGetArray(RP) || !RP) continue;
 		const TArray<TSharedPtr<FJsonValue>>& R = *RP;
-		FFrame F;
+		FReplayFrame F;
 		F.T = (float)Num(R, cT, 0);
 		FCaySimTelemetry& T = F.Tele;
 		T.Ts = Header.StartUtc + F.T;
@@ -245,8 +245,8 @@ FCaySimPose UCaySimReplayPlayer::SampleAt(float T) const
 	FCaySimPose P;
 	if (Frames.Num() == 0) return P;
 	const int32 i = FindFrame(T);
-	const FFrame& A = Frames[i];
-	const FFrame* B = (i + 1 < Frames.Num()) ? &Frames[i + 1] : nullptr;
+	const FReplayFrame& A = Frames[i];
+	const FReplayFrame* B = (i + 1 < Frames.Num()) ? &Frames[i + 1] : nullptr;
 	float Alpha = 0.f;
 	if (B)
 	{
