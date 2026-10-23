@@ -1,0 +1,67 @@
+# Simumav - Fab / Epic icerik envanteri (sirket bilgisayari). Yalniz okur: hicbir dosyayi degistirmez, kopyalamaz.
+# Satin alinan Fab iceriklerinin (asset paketleri, motor eklentileri) nerede durdugunu listeler; sonuc fab-envanter.txt artefakti.
+name: fab-envanter
+
+on:
+  workflow_dispatch:
+    inputs:
+      ekstra:
+        description: "Ek taranacak klasorler (; ile ayrilmis)"
+        type: string
+        default: ""
+
+jobs:
+  envanter:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, unreal]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Envanter
+        env:
+          UE_ROOT: ${{ vars.UE_ROOT }}
+          EKSTRA: ${{ inputs.ekstra }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = Join-Path $env:RUNNER_TEMP 'fab-envanter.txt'
+          function W($s) { Add-Content -Path $out -Value $s -Encoding UTF8; Write-Host $s }
+          function Size($p) { try { $b = (Get-ChildItem -LiteralPath $p -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum; '{0:N1} MB' -f ($b / 1MB) } catch { '?' } }
+          W ("whoami: " + (whoami))
+          W ("UE_ROOT: " + $env:UE_ROOT)
+          $ue = if ($env:UE_ROOT) { $env:UE_ROOT } else { 'D:\Epic Games\UE_5.8' }
+          W "=== Motor eklentileri (Marketplace / Fab) ==="
+          foreach ($d in @("$ue\Engine\Plugins\Marketplace", "$ue\Engine\Plugins\Fab")) {
+            if (Test-Path $d) { Get-ChildItem $d -Directory | ForEach-Object { W ("  " + $_.FullName + "  [" + (Size $_.FullName) + "]") } } else { W ("  (yok) " + $d) }
+          }
+          W "=== Launcher ayarlari (VaultCache yeri) ==="
+          $ini = Get-ChildItem -Path "C:\Users\*\AppData\Local\EpicGamesLauncher\Saved\Config\Windows*\GameUserSettings.ini" -ErrorAction SilentlyContinue
+          foreach ($f in $ini) { W ("  " + $f.FullName); Select-String -Path $f.FullName -Pattern 'Vault|Cache|Install' | ForEach-Object { W ("    " + $_.Line) } }
+          W "=== Aday klasorler ==="
+          $cands = @('C:\ProgramData\Epic\EpicGamesLauncher\VaultCache', 'D:\VaultCache', 'D:\Epic Games\VaultCache', 'D:\Epic Games', 'C:\Program Files\Epic Games', 'D:\Fab', 'D:\FabLibrary')
+          $cands += Get-ChildItem -Path "C:\Users\*\AppData\Local\Fab*", "C:\Users\*\Documents\Unreal Projects", "D:\Unreal Projects", "C:\Users\*\AppData\Local\UnrealEngine\Common\Fab*" -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+          if ($env:EKSTRA) { $cands += $env:EKSTRA.Split(';') | Where-Object { $_ } }
+          foreach ($d in $cands) {
+            if (-not (Test-Path $d)) { W ("  (yok) " + $d); continue }
+            W ("  " + $d)
+            Get-ChildItem $d -Directory -ErrorAction SilentlyContinue | ForEach-Object { W ("    " + $_.Name + "  [" + (Size $_.FullName) + "]") }
+          }
+          W "=== Diskte .uproject dosyalari (D:, derinlik 4) ==="
+          Get-ChildItem -Path D:\ -Filter *.uproject -Recurse -Depth 4 -ErrorAction SilentlyContinue | ForEach-Object { W ("  " + $_.FullName) }
+          W "=== Diskte Content klasoru olan paketler (VaultCache benzeri: */data/Content) ==="
+          foreach ($root in @('C:\ProgramData\Epic', 'D:\')) {
+            Get-ChildItem -Path $root -Directory -Recurse -Depth 4 -Filter Content -ErrorAction SilentlyContinue | Where-Object { $_.Parent.Name -eq 'data' } | ForEach-Object { W ("  " + $_.FullName + "  [" + (Size $_.FullName) + "]") }
+          }
+          W "=== Ust duzey .uasset iceren Content alt klasorleri (D: projeleri) ==="
+          Get-ChildItem -Path D:\ -Filter *.uproject -Recurse -Depth 4 -ErrorAction SilentlyContinue | ForEach-Object {
+            $c = Join-Path $_.DirectoryName 'Content'
+            if (Test-Path $c) { Get-ChildItem $c -Directory -ErrorAction SilentlyContinue | ForEach-Object { W ("  " + $_.FullName + "  [" + (Size $_.FullName) + "]") } }
+          }
+          W "=== Disk bos alan ==="
+          Get-PSDrive -PSProvider FileSystem | ForEach-Object { W ("  " + $_.Name + ": bos " + ('{0:N0} GB' -f ($_.Free / 1GB))) }
+      - name: Artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: fab-envanter
+          path: ${{ runner.temp }}/fab-envanter.txt
