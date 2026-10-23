@@ -56,6 +56,11 @@ protected:
 	UPROPERTY() TObjectPtr<ACaySimWorldSetup> WorldSetup;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> Terrain;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Flyer;
+	/** Ek süzülen araçlar (katalogdan: kopter yörüngede, VTOL uzun tur) */
+	UPROPERTY() TArray<TObjectPtr<ASmvDroneActor>> Extras;
+	/** Fab haritası (varsa menü arka planı) ve gök */
+	UPROPERTY() TObjectPtr<class ULevelStreamingDynamic> MenuLevel;
+	UPROPERTY() TArray<TObjectPtr<AActor>> SkyActors;
 	UPROPERTY() TObjectPtr<ACameraActor> Cam;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Preview;
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> PilotPrev;
@@ -80,6 +85,11 @@ private:
 	float FaceK = 0.f;
 	double ManualUntil = 0;
 	FString PilotKey;
+	bool bFabMap = false;
+	double FabStartE = 0, FabStartN = 0;
+	TMap<int64, float> GroundCache;
+	float GroundAt(double E, double N);
+	ASmvDroneActor* SpawnFlyer(const FString& Type, const FLinearColor& Color);
 	TArray<TPair<FString, FSmvAvatar>> SnapQueue;
 	FString SnapPending;
 	int32 SnapPhase = 0;

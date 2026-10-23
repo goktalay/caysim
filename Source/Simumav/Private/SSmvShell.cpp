@@ -190,6 +190,55 @@ void SSmvShell::Construct(const FArguments& InArgs)
 	PreviewBrush.DrawAs = ESlateBrushDrawType::Image;
 	if (Data()) { EditSettings = Data()->Settings(); ReducedMotion() = EditSettings.bReducedMotion; }
 
+	// açılış logosu (bir kez)
+	{
+		static bool bLogoShown = false;
+		if (!bLogoShown && !ReducedMotion())
+		{
+			bLogoShown = true;
+			LogoAt = FPlatformTime::Seconds();
+			TArray<uint8> Png;
+			if (FFileHelper::LoadFileToArray(Png, *(FPaths::ProjectContentDir() / TEXT("Simumav/Brand/icon-512.png"))))
+				if (UTexture2D* Tx2 = FImageUtils::ImportBufferAsTexture2D(Png))
+				{
+					LogoTex.Reset(Tx2);
+					LogoBrush.DrawAs = ESlateBrushDrawType::Image;
+					LogoBrush.SetResourceObject(Tx2);
+					LogoBrush.ImageSize = FVector2D(512, 512);
+				}
+			FSmvUiSound::Play(ESmvSnd::Open);
+		}
+	}
+	TSharedRef<SSmvCanvas> Logo = SNew(SSmvCanvas);
+	Logo->SetVisibility(TAttribute<EVisibility>::CreateLambda([this]() { return FPlatformTime::Seconds() - LogoAt < 3.6 ? EVisibility::HitTestInvisible : EVisibility::Collapsed; }));
+	Logo->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		const double T = FPlatformTime::Seconds() - LogoAt;
+		if (T > 3.6) return;
+		const FVector2D Sz = FVector2D(G.GetLocalSize()), C = Sz * 0.5;
+		const float Fade = (float)FMath::Clamp((3.6 - T) / 0.8, 0.0, 1.0);
+		DrBox(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor(0.01f, 0.015f, 0.03f, Fade), nullptr);
+		// ışık halkası + simge (ölçeklenip döner)
+		const float In = (float)FMath::Clamp(T / 1.1, 0.0, 1.0), E = 1.f - FMath::Pow(1.f - In, 3.f);
+		const float Ls = 150.f * (0.7f + 0.3f * E);
+		DrGlow(Out, L + 1, G, C - FVector2D(0, 40), Ls * 1.8f, Accent().CopyWithNewOpacity(0.35f * E * Fade));
+		for (int32 k = 0; k < 3; ++k) DrArc(Out, L + 2, G, C - FVector2D(0, 40), Ls * (0.75f + k * 0.12f), (float)(T * (90 + k * 40)), (float)(T * (90 + k * 40)) + 120.f + k * 60.f, Accent().CopyWithNewOpacity(0.7f * Fade * E), 2.f);
+		if (LogoTex.IsValid())
+			FSlateDrawElement::MakeBox(Out, L + 3, G.ToPaintGeometry(FVector2f(Ls, Ls), FSlateLayoutTransform(FVector2f(C - FVector2D(Ls * 0.5, 40 + Ls * 0.5)))), &LogoBrush, ESlateDrawEffect::None, FLinearColor(1, 1, 1, E * Fade));
+		// kelime işareti: harf harf belirir + ışık süpürmesi
+		const FString Word = TEXT("SIMUMAV");
+		const FSlateFontInfo F = SmvUi::Font(54, "Black");
+		const float Step = 46.f, X0 = (float)C.X - Step * (Word.Len() - 1) * 0.5f;
+		for (int32 i = 0; i < Word.Len(); ++i)
+		{
+			const float A = (float)FMath::Clamp((T - 0.7 - i * 0.07) / 0.35, 0.0, 1.0);
+			DrText(Out, L + 4, G, Word.Mid(i, 1), FVector2D(X0 + i * Step, C.Y + 120 + (1.f - A) * 18.f), F, FLinearColor(1, 1, 1, A * Fade), 0);
+		}
+		const float Sx = (float)FMath::Lerp(-0.2, 1.2, FMath::Clamp((T - 1.4) / 0.9, 0.0, 1.0)) * (float)Sz.X;
+		DrGlow(Out, L + 5, G, FVector2D(Sx, C.Y + 120), 60.f, FLinearColor(1, 1, 1, 0.35f * Fade));
+		const float Sub = (float)FMath::Clamp((T - 1.6) / 0.5, 0.0, 1.0);
+		DrText(Out, L + 5, G, TEXT("CAYSIM · ") + FSmvI18n::T(TEXT("menu.fly_sub")).ToString(), FVector2D(C.X, C.Y + 176), SmvUi::Font(14, "Regular"), Dim().CopyWithNewOpacity(Sub * Fade), 0);
+	};
 	TSharedRef<SSmvCanvas> Sweep = SNew(SSmvCanvas);
 	Sweep->SetVisibility(EVisibility::HitTestInvisible);
 	Sweep->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
@@ -273,6 +322,10 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		+ SOverlay::Slot()
 		[
 			SAssignNew(OverlayBox, SBox).Visibility_Lambda([this]() { return bOverlay ? EVisibility::Visible : EVisibility::Collapsed; })
+		]
+		+ SOverlay::Slot()
+		[
+			Logo
 		]
 	];
 	// kabuk tüm ekranı kaplar: kendisi tıklamayı yutmasın (alttaki uçuş arayüzü düğmeleri çalışsın)
@@ -519,6 +572,7 @@ FNavigationReply SSmvShell::OnNavigation(const FGeometry& G, const FNavigationEv
 FReply SSmvShell::OnKeyDown(const FGeometry& G, const FKeyEvent& E)
 {
 	const FKey K = E.GetKey();
+	if (FPlatformTime::Seconds() - LogoAt < 3.6) { LogoAt = FPlatformTime::Seconds() - 2.9; return FReply::Handled(); }
 	if (K.IsGamepadKey()) PadActive() = true;
 	const TSharedPtr<SWidget> Fw = FSlateApplication::Get().GetKeyboardFocusedWidget();
 	const bool bTyping = Fw.IsValid() && (Fw->GetType() == FName(TEXT("SEditableText")) || Fw->GetType() == FName(TEXT("SMultiLineEditableText")));

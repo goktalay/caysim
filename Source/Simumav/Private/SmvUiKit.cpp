@@ -1067,10 +1067,12 @@ int32 SSmvButton::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSla
 	DrGradient(Out, L + 2, G, FVector2D(R * 0.6f, 1.f), FVector2D(Sz.X - R * 1.2f, FMath::Min(Sz.Y * 0.45f, 40.0)),
 		{ { 0.f, FLinearColor(1, 1, 1, 0.07f + 0.05f * HoverA) }, { 1.f, FLinearColor(1, 1, 1, 0.f) } }, true);
 	// parlak süpürme (Hero / Primary)
-	if ((Kind == ESmvBtn::Hero || Kind == ESmvBtn::Primary) && bEn && !ReducedMotion())
+	if ((Kind == ESmvBtn::Hero || Kind == ESmvBtn::Primary || Kind == ESmvBtn::Tile) && bEn && !ReducedMotion())
 	{
-		const float Per = Kind == ESmvBtn::Hero ? 3.6f : 5.f;
-		const float U = (float)FMath::Fmod(T / Per, 1.0);
+		// karolarda ekran konumuna göre faz kayması → süpürme menüde soldan sağa dalga gibi geçer
+		const float Per = Kind == ESmvBtn::Hero ? 3.6f : Kind == ESmvBtn::Tile ? 7.f : 5.f;
+		const double Ph = Kind == ESmvBtn::Tile ? G.GetAbsolutePosition().X / 2400.0 : 0.0;
+		const float U = (float)FMath::Fmod(T / Per - Ph + 10.0, 1.0);
 		const float X = -60.f + U * ((float)Sz.X + 120.f);
 		Out.PushClip(FSlateClippingZone(G));
 		DrSeg(Out, L + 2, G, FVector2D(X, -4.0), FVector2D(X - Sz.Y * 0.5f, Sz.Y + 4.0), FLinearColor(1, 1, 1, 0.10f), 18.f);

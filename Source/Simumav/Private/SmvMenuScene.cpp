@@ -17,6 +17,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ConfigCacheIni.h"
+#include "SmvFabContent.h"
+#include "Engine/LevelStreamingDynamic.h"
 
 namespace
 {
@@ -153,24 +155,59 @@ void ASmvMenuScene::BuildWorld()
 	Tr.World.RunwayHeading = 70.0;
 	Tr.World.Water = 0.12;
 	Tr.World.Fog = 0.25;
-	Terrain = W->SpawnActor<ASmvProcTerrain>();
-	if (Terrain) Terrain->Build(Tr, GroundMsl, WorldSetup);
+	// Fab haritası (ini MenuMap = anahtar; boş → askeri üs / rafineri / orman önceliği) — yoksa prosedürel arazi
+	{
+		FString Want;
+		if (GConfig) GConfig->GetString(GSmvMenuSection, TEXT("MenuMap"), Want, GGameIni);
+		const FSmvFabMap* Pick = nullptr;
+		const TArray<FSmvFabMap>& Maps = FSmvFabContent::Maps();
+		for (const FSmvFabMap& M : Maps) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty() && M.Key == Want) Pick = &M;
+		static const TCHAR* Pref[] = { TEXT("askeri"), TEXT("military"), TEXT("base"), TEXT("rafineri"), TEXT("refinery"), TEXT("orman"), TEXT("forest") };
+		for (const TCHAR* Pf : Pref) { if (Pick || Want == TEXT("none")) break; for (const FSmvFabMap& M : Maps) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty() && M.Key.Contains(Pf)) { Pick = &M; break; } }
+		if (Pick)
+		{
+			bool bOk = false;
+			MenuLevel = ULevelStreamingDynamic::LoadLevelInstance(W, Pick->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
+			bFabMap = bOk && MenuLevel;
+			FabStartE = Pick->StartE; FabStartN = Pick->StartN;
+			UE_LOG(LogTemp, Log, TEXT("Menü sahnesi Fab haritası: %s (%s)"), *Pick->Level, bFabMap ? TEXT("yükleniyor") : TEXT("yüklenemedi"));
+		}
+	}
+	if (!bFabMap)
+	{
+		Terrain = W->SpawnActor<ASmvProcTerrain>();
+		if (Terrain) Terrain->Build(Tr, GroundMsl, WorldSetup);
+	}
+	// Ultra Dynamic Sky (varsa; alacakaranlık)
+	{
+		TArray<AActor*> Sky;
+		if (FSmvFabContent::SpawnSky(W, Tr, Sky)) { WorldSetup->DisableBuiltinSky(); for (AActor* A : Sky) SkyActors.Add(A); }
+	}
 
 	FActorSpawnParameters P;
 	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	Flyer = W->SpawnActor<ASmvDroneActor>(ASmvDroneActor::StaticClass(), FTransform::Identity, P);
-	if (Flyer)
-	{
-		Flyer->Setup(S, nullptr);
-		Flyer->ConfigureVisual(TEXT("plane"), FString(), FLinearColor(0.92f, 0.94f, 0.97f));
-		Flyer->SetActorTickEnabled(false);   // konumu biz sürüyoruz (telemetri yok)
-		if (USmvMotorSynth* M = Flyer->GetMotor()) M->Stop();
-	}
+	Flyer = SpawnFlyer(TEXT("plane"), FLinearColor(0.92f, 0.94f, 0.97f));
+	if (ASmvDroneActor* Q = SpawnFlyer(TEXT("multirotor"), FLinearColor(0.15f, 0.16f, 0.18f))) Extras.Add(Q);
+	if (ASmvDroneActor* V = SpawnFlyer(TEXT("vtol"), FLinearColor(0.85f, 0.25f, 0.2f))) Extras.Add(V);
 	Cam = W->SpawnActor<ACameraActor>(FVector::ZeroVector, FRotator::ZeroRotator, P);
 	if (Cam && Cam->GetCameraComponent())
 	{
-		Cam->GetCameraComponent()->SetFieldOfView(62.f);
-		Cam->GetCameraComponent()->bConstrainAspectRatio = false;
+		UCameraComponent* Cc = Cam->GetCameraComponent();
+		Cc->SetFieldOfView(62.f);
+		Cc->bConstrainAspectRatio = false;
+		// sinematik son işlem: alan derinliği (odak = takip edilen araç; Tick'te), bloom, vinyet, hafif film greni ve sıcak-soğuk renk ayarı
+		FPostProcessSettings& Pp = Cc->PostProcessSettings;
+		Pp.bOverride_DepthOfFieldFstop = true; Pp.DepthOfFieldFstop = 2.2f;
+		Pp.bOverride_DepthOfFieldSensorWidth = true; Pp.DepthOfFieldSensorWidth = 36.f;
+		Pp.bOverride_DepthOfFieldFocalDistance = true; Pp.DepthOfFieldFocalDistance = 2000.f;
+		Pp.bOverride_BloomIntensity = true; Pp.BloomIntensity = 1.1f;
+		Pp.bOverride_VignetteIntensity = true; Pp.VignetteIntensity = 0.55f;
+		Pp.bOverride_FilmGrainIntensity = true; Pp.FilmGrainIntensity = 0.12f;
+		Pp.bOverride_ColorSaturation = true; Pp.ColorSaturation = FVector4(1.f, 1.f, 1.f, 1.08f);
+		Pp.bOverride_ColorGainShadows = true; Pp.ColorGainShadows = FVector4(0.92f, 0.98f, 1.08f, 1.f);
+		Pp.bOverride_ColorGainHighlights = true; Pp.ColorGainHighlights = FVector4(1.06f, 1.0f, 0.92f, 1.f);
+		Pp.bOverride_SceneFringeIntensity = true; Pp.SceneFringeIntensity = 0.6f;
+		Cc->PostProcessBlendWeight = 1.f;
 	}
 	bLive = Flyer && Cam;
 	UE_LOG(LogSimumav, Log, TEXT("Menü 3B sahnesi kuruldu (%s)"), bLive ? TEXT("canlı") : TEXT("eksik"));
@@ -184,6 +221,11 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 		if (Cam && PC->GetViewTarget() == Cam) PC->SetViewTarget(PC->GetPawn() ? (AActor*)PC->GetPawn() : (AActor*)PC);
 	}
 	if (Flyer) Flyer->Destroy();
+	for (TObjectPtr<ASmvDroneActor>& X : Extras) if (X) X->Destroy();
+	Extras.Reset();
+	for (TObjectPtr<AActor>& X : SkyActors) if (X) X->Destroy();
+	SkyActors.Reset();
+	if (MenuLevel) { MenuLevel->SetShouldBeLoaded(false); MenuLevel->SetShouldBeVisible(false); MenuLevel->SetIsRequestingUnloadAndRemoval(true); MenuLevel = nullptr; }
 	if (Preview) Preview->Destroy();
 	if (PilotPrev) PilotPrev->Destroy();
 	if (SnapFig) SnapFig->Destroy();
@@ -200,6 +242,14 @@ FVector ASmvMenuScene::EnuToWorld(double E, double N, double Agl) const
 	if (!WorldSetup) return FVector(E * 100.0, -N * 100.0, Agl * 100.0);
 	const double Lat = Lat0 + FMath::RadiansToDegrees(N / 6378137.0);
 	const double Lon = Lon0 + FMath::RadiansToDegrees(E / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));
+	if (bFabMap)
+	{
+		const double Lat = Lat0 + FMath::RadiansToDegrees((N + FabStartN) / 6378137.0);
+		const double Lon = Lon0 + FMath::RadiansToDegrees((E + FabStartE) / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));
+		FVector P = WorldSetup->GeoToUnreal(Lon, Lat, WorldSetup->MslToWorldHeight(Lat, Lon, GroundMsl));
+		P.Z = const_cast<ASmvMenuScene*>(this)->GroundAt(E, N) + Agl * 100.0;
+		return P;
+	}
 	const double Gh = Terrain ? Terrain->HeightAt(E, N) : 0.0;
 	return WorldSetup->GeoToUnreal(Lon, Lat, WorldSetup->MslToWorldHeight(Lat, Lon, GroundMsl + Gh + Agl));
 }
@@ -348,6 +398,21 @@ void ASmvMenuScene::Tick(float Dt)
 		R.Roll = FMath::Clamp(Turn * 9.f, -40.f, 40.f);
 		Flyer->SetActorLocationAndRotation(P0, R);
 		UpdateCamera(Dt, P0, Fwd);
+		// kopter: kalkış alanı yakınında yavaş yörünge (18 m, 25 sn); VTOL: geniş tur (1,4 km, 120 sn) yüksekte
+		if (Extras.Num() > 0 && Extras[0])
+		{
+			const double A = T * UE_DOUBLE_TWO_PI / 25.0;
+			const FVector Q0 = EnuToWorld(140.0 + 18.0 * FMath::Cos(A), -120.0 + 18.0 * FMath::Sin(A), 14.0 + 3.0 * FMath::Sin(T * 0.6));
+			Extras[0]->SetActorLocationAndRotation(Q0, FRotator(-6.0 * FMath::Cos(T * 0.5), FMath::RadiansToDegrees(A) + 90.0, 4.0 * FMath::Sin(A)));
+		}
+		if (Extras.Num() > 1 && Extras[1])
+		{
+			const double A = T * UE_DOUBLE_TWO_PI / 120.0;
+			const FVector V0 = EnuToWorld(1400.0 * FMath::Cos(A), 900.0 * FMath::Sin(A), 140.0), V1 = EnuToWorld(1400.0 * FMath::Cos(A + 0.01), 900.0 * FMath::Sin(A + 0.01), 140.0);
+			FRotator Rv = (V1 - V0).Rotation(); Rv.Roll = -18.0;
+			Extras[1]->SetActorLocationAndRotation(V0, Rv);
+		}
+		if (Cam && Cam->GetCameraComponent()) Cam->GetCameraComponent()->PostProcessSettings.DepthOfFieldFocalDistance = (float)FVector::Dist(CamPos, P0);
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
 			if (PC->GetViewTarget() != Cam)
@@ -531,4 +596,51 @@ void ASmvMenuScene::TickDroneSnaps()
 				}
 			});
 	}
+}
+
+ASmvDroneActor* ASmvMenuScene::SpawnFlyer(const FString& Type, const FLinearColor& Color)
+{
+	UWorld* W = GetWorld();
+	if (!W) return nullptr;
+	FActorSpawnParameters P;
+	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ASmvDroneActor* D = W->SpawnActor<ASmvDroneActor>(ASmvDroneActor::StaticClass(), FTransform::Identity, P);
+	if (!D) return nullptr;
+	FCaySimSession S;
+	S.Type = SmvMenuCaysimType(Type);
+	S.Model.Orient.Forward = TEXT("+x");
+	S.Model.Orient.Up = TEXT("+y");
+	S.Model.Orient.Scale = 1.f;
+	D->Setup(S, nullptr);
+	// katalogdan bu tipin varsayılan modeli (dinamik: yeni modeller kendiliğinden)
+	const FString Model = USmvDataService::DefaultModelFor(Type);
+	D->ConfigureVisual(Type, Model, Color);
+	D->SetActorTickEnabled(false);   // konumu biz sürüyoruz (telemetri yok)
+	if (USmvMotorSynth* M = D->GetMotor()) M->Stop();
+	if (USmvGameInstance* GI = USmvGameInstance::GetSmv(this))
+	{
+		TWeakObjectPtr<ASmvDroneActor> WD(D);
+		if (GI->GetData() && !Model.IsEmpty()) GI->GetData()->FetchModelGlb(Model, [WD](bool bOk, const TArray<uint8>& Bytes) { if (bOk && WD.IsValid()) WD->LoadGlbBytes(Bytes); });
+	}
+	return D;
+}
+
+float ASmvMenuScene::GroundAt(double E, double N)
+{
+	// 10 m ızgarada önbellekli aşağı iz düşümü (Fab haritası yüklendikçe dolar)
+	const int64 Key = ((int64)FMath::RoundToInt(E / 10.0) << 32) ^ (int64)(uint32)FMath::RoundToInt(N / 10.0);
+	if (const float* G = GroundCache.Find(Key)) return *G;
+	const double Lat = Lat0 + FMath::RadiansToDegrees((N + FabStartN) / 6378137.0);
+	const double Lon = Lon0 + FMath::RadiansToDegrees((E + FabStartE) / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));
+	const FVector P = WorldSetup ? WorldSetup->GeoToUnreal(Lon, Lat, WorldSetup->MslToWorldHeight(Lat, Lon, GroundMsl)) : FVector(E * 100.0, -N * 100.0, 0.0);
+	FHitResult Hit;
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvMenuGround), true);
+	for (const TObjectPtr<ASmvDroneActor>& X : Extras) Q.AddIgnoredActor(X);
+	if (Flyer) Q.AddIgnoredActor(Flyer);
+	if (GetWorld() && GetWorld()->LineTraceSingleByChannel(Hit, P + FVector(0, 0, 200000.0), P - FVector(0, 0, 200000.0), ECC_Visibility, Q))
+	{
+		GroundCache.Add(Key, (float)Hit.ImpactPoint.Z);
+		return (float)Hit.ImpactPoint.Z;
+	}
+	return (float)P.Z;   // henüz yüklenmedi: önbelleğe yazma
 }

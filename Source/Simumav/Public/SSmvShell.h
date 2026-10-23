@@ -58,6 +58,10 @@ private:
 	bool bOverlay = false;
 	/** Sahne geçişi başlangıcı (içerik solup kayarak gelir + ışık süpürmesi) */
 	double TransAt = -100.0;
+	/** Açılış logosu animasyonu (oyun başlangıcında bir kez; tuş/tık geçer) */
+	double LogoAt = -100.0;
+	FSlateBrush LogoBrush;
+	TStrongObjectPtr<class UTexture2D> LogoTex;
 	/** RC eksen algılama (Ayarlar → Kumanda → Algıla): yuva, başlangıç, taban değerler */
 	int32 DetectSlot = -1;
 	double DetectAt = 0;
