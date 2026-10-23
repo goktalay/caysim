@@ -6,6 +6,7 @@
 #include "CaySimTypes.h"
 #include "LaunchRig.generated.h"
 
+class UStaticMesh;
 class UStaticMeshComponent;
 class USceneComponent;
 class ACaySimDroneActor;
@@ -57,7 +58,7 @@ public:
 
 	/** Merkez konumuna yerleştirir ve donanımı seçilen yönteme göre kurar. */
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kalkış")
-	void Setup(const FCaySimLaunchConfig& Config, ACaySimWorldSetup* World, ACaySimDroneActor* Drone, double Lat, double Lon, double GroundMsl);
+	void Setup(const FCaySimLaunchConfig& InConfig, ACaySimWorldSetup* InWorldSetup, ACaySimDroneActor* Drone, double Lat, double Lon, double GroundMsl);
 
 	/** Sunucu `launch` olayı. */
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kalkış")

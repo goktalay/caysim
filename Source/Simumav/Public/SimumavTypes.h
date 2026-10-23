@@ -438,5 +438,5 @@ namespace SmvJson
 	SIMUMAV_API FString ToString(const TSharedRef<FJsonObject>& O, bool bPretty = false);
 	SIMUMAV_API TSharedPtr<FJsonObject> Parse(const FString& S);
 	/** Sunucu kimliği sayısal mı (yerel "l-" ön ekli değil) */
-	SIMUMAV_API bool IsServerId(const FString& Id);
+	SIMUMAV_API bool IsServerId(const FString& InId);
 }

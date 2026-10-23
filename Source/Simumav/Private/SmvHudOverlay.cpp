@@ -21,12 +21,12 @@ namespace
 	void SmvText(FSlateWindowElementList& Out, int32 Layer, const FGeometry& G, const FVector2D& Pos, const FString& Text, int32 Size, const FLinearColor& C, bool bBold = true)
 	{
 		const FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle(bBold ? "Bold" : "Regular", Size);
-		FSlateDrawElement::MakeText(Out, Layer, G.ToPaintGeometry(FVector2D(1200, Size * 1.6f), FSlateLayoutTransform(Pos)), Text, F, ESlateDrawEffect::None, C);
+		FSlateDrawElement::MakeText(Out, Layer, G.ToPaintGeometry(FVector2D(1200, Size * 1.6f), FSlateLayoutTransform(FVector2f(Pos))), Text, F, ESlateDrawEffect::None, C);
 	}
 
 	void SmvBox(FSlateWindowElementList& Out, int32 Layer, const FGeometry& G, const FVector2D& Pos, const FVector2D& Size, const FLinearColor& C, const FSlateBrush* Brush)
 	{
-		FSlateDrawElement::MakeBox(Out, Layer, G.ToPaintGeometry(Size, FSlateLayoutTransform(Pos)), Brush, ESlateDrawEffect::None, C);
+		FSlateDrawElement::MakeBox(Out, Layer, G.ToPaintGeometry(Size, FSlateLayoutTransform(FVector2f(Pos))), Brush, ESlateDrawEffect::None, C);
 	}
 }
 
@@ -141,7 +141,7 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 		const FVector2D PSz(384, 216);
 		const FVector2D P(Sz.X - PSz.X - 16, Sz.Y - PSz.Y - 16);
 		SmvBox(Out, Layer, G, P - FVector2D(2, 2), PSz + FVector2D(4, 4), FLinearColor(0, 0, 0, 0.8f), W);
-		FSlateDrawElement::MakeBox(Out, Layer + 1, G.ToPaintGeometry(PSz, FSlateLayoutTransform(P)), &PipBrush, ESlateDrawEffect::None, FLinearColor::White);
+		FSlateDrawElement::MakeBox(Out, Layer + 1, G.ToPaintGeometry(PSz, FSlateLayoutTransform(FVector2f(P))), &PipBrush, ESlateDrawEffect::None, FLinearColor::White);
 		SmvText(Out, Layer + 2, G, P + FVector2D(6, 4), TEXT("GIMBAL"), 10, Green, false);
 	}
 

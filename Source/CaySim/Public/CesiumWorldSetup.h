@@ -8,6 +8,7 @@
 #include "CesiumWorldSetup.generated.h"
 
 class UHepgoClient;
+class UStaticMesh;
 class ADirectionalLight;
 class ASkyLight;
 class ASkyAtmosphere;
@@ -53,7 +54,7 @@ public:
 
 	/** Saat/sis/rüzgâr değişikliklerini canlı uygular. */
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Dünya")
-	void ApplyWorldSettings(const FCaySimWorld& World);
+	void ApplyWorldSettings(const FCaySimWorld& InWorld);
 
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dünya") bool IsReady() const { return bReady; }
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dünya") ECaySimWorldSource GetSource() const { return ActiveSource; }
@@ -110,10 +111,12 @@ private:
 	UPROPERTY() TObjectPtr<AVolumetricCloud> Clouds;
 	UPROPERTY() TObjectPtr<AActor> FlatGround;
 #if CAYSIM_WITH_CESIUM
-	UPROPERTY() TObjectPtr<ACesiumGeoreference> Georeference;
-	UPROPERTY() TObjectPtr<ACesium3DTileset> Terrain;
-	UPROPERTY() TObjectPtr<ACesium3DTileset> GoogleTiles;
-	UPROPERTY() TObjectPtr<ACesiumSunSky> SunSky;
+	// UHT, WITH_EDITORONLY_DATA dışındaki #if blokları içinde UPROPERTY kabul etmez → yansıtılmayan zayıf işaretçiler.
+	// Aktörler dünyaya (seviyeye) ait olduğundan çöp toplayıcıdan korunmaları için UPROPERTY gerekmez.
+	TWeakObjectPtr<ACesiumGeoreference> Georeference;
+	TWeakObjectPtr<ACesium3DTileset> Terrain;
+	TWeakObjectPtr<ACesium3DTileset> GoogleTiles;
+	TWeakObjectPtr<ACesiumSunSky> SunSky;
 #endif
 
 	void SetupLighting();

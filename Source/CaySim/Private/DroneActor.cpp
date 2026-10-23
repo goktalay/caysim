@@ -205,7 +205,7 @@ void ACaySimDroneActor::BuildPlaceholderProps(int32 Count, float ArmM)
 		{
 			const int32 N = (DroneType == ECaySimDroneType::Vtol) ? Count - 1 : Count;
 			const int32 k = (DroneType == ECaySimDroneType::Vtol) ? i - 1 : i;
-			const float Ang = (2.f * PI * k) / FMath::Max(1, N) + PI / N; // kollar arasına
+			const float Ang = (2.f * UE_PI * k) / FMath::Max(1, N) + UE_PI / N; // kollar arasına
 			Pos = FVector(FMath::Cos(Ang) * ArmM, FMath::Sin(Ang) * ArmM, 0.05f) * 100.f;
 		}
 		P->SetRelativeLocationAndRotation(Pos, Rot);
@@ -223,6 +223,11 @@ void ACaySimDroneActor::ApplyPoseDirect(const FCaySimPose& Pose)
 {
 	Latest = Pose.Latest;
 	ApplyPose(Pose);
+}
+
+FVector ACaySimDroneActor::GetForwardWorld() const
+{
+	return Body ? Body->GetForwardVector() : GetActorForwardVector();
 }
 
 void ACaySimDroneActor::GetRenderedPose(float& RollRad, float& PitchRad, float& YawRad) const

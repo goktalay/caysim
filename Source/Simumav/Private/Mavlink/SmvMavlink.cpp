@@ -113,7 +113,7 @@ namespace SmvMav
 			RxCrc = B; St = EState::Crc1; return false;
 		case EState::Crc1:
 		{
-			RxCrc |= (uint16_t)B << 8;
+			RxCrc = (uint16_t)(RxCrc | ((uint16_t)B << 8));   // açık döküm: int→uint16 (MSVC C4244)
 			uint8_t CrcExtra = 0, MaxLen = 0;
 			if (!MessageInfo(Cur.MsgId, CrcExtra, MaxLen))
 			{
@@ -306,7 +306,7 @@ namespace SmvMav
 	std::vector<uint8_t> PackRequestDataStream(uint8_t TS, uint8_t TC, uint8_t StreamId, uint16_t RateHz, bool bStart)
 	{
 		FWriter W;
-		W.U16(RateHz); W.U8(TS); W.U8(TC); W.U8(StreamId); W.U8(bStart ? 1 : 0);
+		W.U16(RateHz); W.U8(TS); W.U8(TC); W.U8(StreamId); W.U8((uint8_t)(bStart ? 1 : 0));
 		return W.B;
 	}
 

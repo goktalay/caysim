@@ -15,14 +15,15 @@ class SIMUMAV_API USmvCloudFlightLink : public USmvFlightLink
 	GENERATED_BODY()
 
 public:
-	void Init(USimumavClient* InClient) { Client = InClient; }
+	/** Gövde .cpp'de: USimumavClient burada yalnız ileri bildirimli (TObjectPtr ataması tam tür ister). */
+	void Init(USimumavClient* InClient);
 	/** Karşılaşma uçuşu: sunucu uçuşu zaten açtı (flight_id) → yalnız bağlan. */
 	void AttachExisting(const FString& FlightId);
 
 	virtual void Start(const FSmvFlightRequest& Request) override;
 	virtual void Stop(const FString& Reason) override;
 	virtual void SendRc(const TArray<int32>& Channels) override;
-	virtual FString Command(const FString& Name, const TSharedPtr<FJsonObject>& Params) override;
+	virtual FString Command(const FString& Name, const TSharedPtr<FJsonObject>& InParams) override;
 	virtual double Now() const override;
 	virtual bool IsReady() const override { return bReady; }
 	virtual FString MissionPlannerInfo() const override;

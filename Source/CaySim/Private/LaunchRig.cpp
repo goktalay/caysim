@@ -3,7 +3,9 @@
 #include "CaySimGeo.h"
 #include "DroneActor.h"
 #include "CesiumWorldSetup.h"
+#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 
 ACaySimLaunchRig::ACaySimLaunchRig()
 {
@@ -43,10 +45,10 @@ ACaySimLaunchRig::ACaySimLaunchRig()
 	for (TObjectPtr<UStaticMeshComponent>& W : Wheels) W->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
-void ACaySimLaunchRig::Setup(const FCaySimLaunchConfig& InConfig, ACaySimWorldSetup* World, ACaySimDroneActor* Drone, double Lat, double Lon, double GroundMsl)
+void ACaySimLaunchRig::Setup(const FCaySimLaunchConfig& InConfig, ACaySimWorldSetup* InWorldSetup, ACaySimDroneActor* Drone, double Lat, double Lon, double GroundMsl)
 {
 	Config = InConfig;
-	WorldSetup = World;
+	WorldSetup = InWorldSetup;
 	DroneActor = Drone;
 	Lat0 = Lat; Lon0 = Lon; Ground0 = GroundMsl;
 	Phase = ECaySimLaunchPhase::Idle;
@@ -201,7 +203,7 @@ void ACaySimLaunchRig::UpdateVehicle(float Dt)
 	if (Phase == ECaySimLaunchPhase::Idle) { VehicleDistM = 0.f; VehicleSpeedNow = 0.f; }
 	Vehicle->SetRelativeLocation(FVector(VehicleDistM * 100.f, 0.f, 0.f));
 	const float WheelR = 0.35f;
-	WheelSpin += (VehicleSpeedNow / WheelR) * Dt * (180.f / PI);
+	WheelSpin += (VehicleSpeedNow / WheelR) * Dt * (180.f / UE_PI);
 	for (TObjectPtr<UStaticMeshComponent>& W : Wheels)
 	{
 		if (W) W->SetRelativeRotation(FRotator(-WheelSpin, 0.f, 0.f));
@@ -213,7 +215,8 @@ void ACaySimLaunchRig::AnchorToDrone()
 	// Düzeneğin bağlama noktası (rampa taşıyıcısı / araç kasası) dronun konumuna oturtulur; yön korunur.
 	ACaySimDroneActor* D = DroneActor.Get();
 	if (!D) return;
-	USceneComponent* Attach = (Config.Method == ECaySimLaunchMethod::Ramp) ? (USceneComponent*)RampCarriage : (USceneComponent*)Vehicle;
+	// TObjectPtr → ham işaretçi açıkça (.Get()); C tarzı dönüşüm TObjectPtr üzerinde belirsiz olabilir
+	USceneComponent* Attach = (Config.Method == ECaySimLaunchMethod::Ramp) ? static_cast<USceneComponent*>(RampCarriage.Get()) : static_cast<USceneComponent*>(Vehicle.Get());
 	if (!Attach) return;
 	const FVector BedOffset = (Config.Method == ECaySimLaunchMethod::Vehicle) ? FVector(0, 0, 150.f) : FVector(0, 0, 20.f); // kasa/kızak üstü
 	const FVector AttachWorld = Attach->GetComponentTransform().TransformPosition(BedOffset);

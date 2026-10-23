@@ -23,7 +23,7 @@ bool UCaySimReplayPlayer::GunzipIfNeeded(const TArray<uint8>& In, TArray<uint8>&
 	Out.Reset();
 	Out.Reserve(In.Num() * 6);
 	Z.next_in = const_cast<Bytef*>(In.GetData());
-	Z.avail_in = In.Num();
+	Z.avail_in = (uInt)In.Num();
 	uint8 Buf[64 * 1024];
 	int Ret;
 	do
@@ -36,7 +36,7 @@ bool UCaySimReplayPlayer::GunzipIfNeeded(const TArray<uint8>& In, TArray<uint8>&
 			inflateEnd(&Z);
 			return false;
 		}
-		Out.Append(Buf, sizeof(Buf) - Z.avail_out);
+		Out.Append(Buf, (int32)(sizeof(Buf) - Z.avail_out));
 	} while (Ret != Z_STREAM_END);
 	inflateEnd(&Z);
 	return true;
@@ -211,7 +211,7 @@ void UCaySimReplayPlayer::Pause() { bPlaying = false; }
 void UCaySimReplayPlayer::TogglePlay() { if (bPlaying) Pause(); else Play(); }
 void UCaySimReplayPlayer::Restart() { TimeS = FMath::Max(0.f, Header.TakeoffT - 5.f); bPlaying = true; OnTime.Broadcast(TimeS); }
 void UCaySimReplayPlayer::SetSpeed(float Mult) { Speed = FMath::Clamp(Mult, 0.25f, 16.f); }
-void UCaySimReplayPlayer::Seek(float T) { TimeS = FMath::Clamp(T, 0.f, Header.DurationS); OnTime.Broadcast(TimeS); }
+void UCaySimReplayPlayer::Seek(float InTimeS) { TimeS = FMath::Clamp(InTimeS, 0.f, Header.DurationS); OnTime.Broadcast(TimeS); }
 void UCaySimReplayPlayer::Skip(float DeltaS) { Seek(TimeS + DeltaS); }
 
 void UCaySimReplayPlayer::Tick(float DeltaSeconds)

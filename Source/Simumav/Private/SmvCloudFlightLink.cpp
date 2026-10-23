@@ -4,6 +4,11 @@
 #include "SimumavSocket.h"
 #include "HepgoClient.h"
 
+void USmvCloudFlightLink::Init(USimumavClient* InClient)
+{
+	Client = InClient;
+}
+
 // ---------------------------------------------------------------------------
 
 void USmvCloudFlightLink::BeginDestroy()
@@ -166,7 +171,7 @@ FString USmvCloudFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	C->SetStringField(TEXT("t"), TEXT("cmd"));
 	C->SetStringField(TEXT("rid"), Rid);
 	C->SetStringField(TEXT("name"), Name);
-	C->SetObjectField(TEXT("params"), P.IsValid() ? P : MakeShared<FJsonObject>());
+	C->SetObjectField(TEXT("params"), P.IsValid() ? P : TSharedPtr<FJsonObject>(MakeShared<FJsonObject>()));
 	Ws->Send(C);
 	return Rid;
 }

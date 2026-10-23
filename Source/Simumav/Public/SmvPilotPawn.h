@@ -16,6 +16,7 @@ class UInputMappingContext;
 class UInputAction;
 class ACaySimDroneActor;
 struct FInputActionValue;
+struct FKey;   // InputCoreTypes.h (MapKey bildirimi için yeterli)
 
 UENUM(BlueprintType)
 enum class ESmvCamMode : uint8

@@ -12,6 +12,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
 
 ACaySimGameMode::ACaySimGameMode()
 {
@@ -20,7 +21,7 @@ ACaySimGameMode::ACaySimGameMode()
 	DroneClass = ACaySimDroneActor::StaticClass();
 	WorldSetupClass = ACaySimWorldSetup::StaticClass();
 	LaunchRigClass = ACaySimLaunchRig::StaticClass();
-	HudClass = UCaySimHudWidget::StaticClass();
+	HudWidgetClass = UCaySimHudWidget::StaticClass();
 }
 
 void ACaySimGameMode::BeginPlay()
@@ -89,6 +90,7 @@ void ACaySimGameMode::StartScene()
 	if (!Wizard.IsValid() || !Hepgo.IsValid()) return;
 	const FCaySimSession S = Wizard->GetSession();
 	UWorld* W = GetWorld();
+	if (!W) return;
 	bSceneRunning = true;
 	bGcsEverConnected = false;
 	SessionT0 = Hepgo->NowServer();
@@ -126,11 +128,11 @@ void ACaySimGameMode::StartScene()
 	}
 
 	// HUD
-	if (!Hud && HudClass)
+	if (!Hud && HudWidgetClass)
 	{
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
-			Hud = CreateWidget<UCaySimHudWidget>(PC, HudClass);
+			Hud = CreateWidget<UCaySimHudWidget>(PC, HudWidgetClass);
 			if (Hud) Hud->AddToViewport(5);
 		}
 	}

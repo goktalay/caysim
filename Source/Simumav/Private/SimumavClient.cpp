@@ -167,7 +167,7 @@ void USimumavClient::Request(const FString& Verb, const FString& UrlOrPath, cons
 		{
 			O = SmvJson::Parse(Text);
 		}
-		Done.ExecuteIfBound(Status, O.IsValid() ? O : MakeShared<FJsonObject>(), FString(), FString());
+		Done.ExecuteIfBound(Status, O.IsValid() ? O : TSharedPtr<FJsonObject>(MakeShared<FJsonObject>()), FString(), FString());
 	});
 	Req->ProcessRequest();
 }
@@ -301,7 +301,7 @@ void USimumavClient::Login(const FString& EmailIn, const FString& Password, TFun
 			bool bOk = false;
 			const FTCHARToUTF8 Pw(*Password);
 			const FTCHARToUTF8 Salt(*SmvJson::Str(Kdf, TEXT("salt")));
-			const std::string Hash = SmvKdf::ComputeAuthHash(std::string(Pw.Get(), Pw.Length()), std::string(Salt.Get(), Salt.Length()),
+			const std::string Hash = SmvKdf::ComputeAuthHash(std::string((const char*)Pw.Get(), Pw.Length()), std::string((const char*)Salt.Get(), Salt.Length()),
 				(uint32_t)SmvJson::Num(Kdf, TEXT("iter"), 0), bOk);
 			if (!bOk) { Done(false, TEXT("account_service"), TEXT("Hesap servisi geçersiz KDF bildirdi.")); return; }
 			TSharedRef<FJsonObject> L = MakeShared<FJsonObject>();

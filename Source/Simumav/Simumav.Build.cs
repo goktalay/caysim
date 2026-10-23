@@ -30,7 +30,9 @@ public class Simumav : ModuleRules
 			"WebSockets",
 			"Json",
 			"JsonUtilities",
-			"CaySim"
+			"CaySim",
+			// AudioMixer: Public/SmvMotorSynth.h ve SmvToneSynth.h "Components/SynthComponent.h" içeriyor → herkese açık bağımlılık
+			"AudioMixer"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
@@ -38,7 +40,6 @@ public class Simumav : ModuleRules
 			"ApplicationCore",
 			"Sockets",
 			"Networking",
-			"AudioMixer",
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
 			"ProceduralMeshComponent",

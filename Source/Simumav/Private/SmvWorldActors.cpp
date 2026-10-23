@@ -10,6 +10,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace
@@ -22,12 +23,6 @@ namespace
 	/** Editor Python betiğinin ürettiği malzemeler (varsa) — yoksa BasicShapeMaterial */
 	const TCHAR* GSmvTerrainMat = TEXT("/Game/Simumav/Materials/M_SmvTerrain.M_SmvTerrain");
 	const TCHAR* GSmvGlowMat = TEXT("/Game/Simumav/Materials/M_SmvGlow.M_SmvGlow");
-
-	FLinearColor SmvHex(const FString& Hex, const FLinearColor& Def)
-	{
-		if (Hex.Len() < 7 || Hex[0] != TEXT('#')) return Def;
-		return FLinearColor::FromSRGBColor(FColor::FromHex(Hex));
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -67,18 +62,18 @@ UStaticMeshComponent* ASmvDroneActor::AddPart(UStaticMesh* M, const FVector& Pos
 	return C;
 }
 
-void ASmvDroneActor::ConfigureVisual(const FString& Type, const FString& /*ModelKey*/, const FLinearColor& Color)
+void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& /*ModelKey*/, const FLinearColor& Color)
 {
-	SmvType = Type;
+	SmvType = InType;
 	BodyColor = Color;
 	if (Motor)
 	{
 		ESmvEngineKind K = ESmvEngineKind::ElectricMulti;
 		int32 Rotors = 4;
-		if (Type == TEXT("plane")) K = ESmvEngineKind::ElectricProp;
-		else if (Type == TEXT("interceptor")) K = ESmvEngineKind::ElectricProp;
-		else if (Type == TEXT("rover")) K = ESmvEngineKind::Rover;
-		else if (Type == TEXT("heli")) { K = ESmvEngineKind::Combustion; Rotors = 2; }
+		if (InType == TEXT("plane")) K = ESmvEngineKind::ElectricProp;
+		else if (InType == TEXT("interceptor")) K = ESmvEngineKind::ElectricProp;
+		else if (InType == TEXT("rover")) K = ESmvEngineKind::Rover;
+		else if (InType == TEXT("heli")) { K = ESmvEngineKind::Combustion; Rotors = 2; }
 		Motor->SetKind(K, Rotors);
 		Motor->Start();
 	}
@@ -162,9 +157,9 @@ void ASmvDroneActor::UpdateAudio(const FVector& Listener, float Volume)
 	const FVector Vel = (Pos - LastPos) / Dt / 100.f;   // m/s
 	LastPos = Pos;
 	const FVector ToL = (Listener - Pos).GetSafeNormal();
-	const float Vr = FVector::DotProduct(Vel, ToL);   // dinleyiciye yaklaşma hızı
+	const float Vr = (float)FVector::DotProduct(Vel, ToL);   // dinleyiciye yaklaşma hızı
 	const float Doppler = 343.f / FMath::Max(100.f, 343.f - Vr);
-	const float DistM = FVector::Dist(Listener, Pos) / 100.f;
+	const float DistM = (float)(FVector::Dist(Listener, Pos) / 100.0);
 	const float Atten = FMath::Clamp(30.f / FMath::Max(DistM, 1.f), 0.02f, 1.f);
 	Motor->SetParams(T.Throttle / 100.f, T.Airspeed > 0 ? T.Airspeed : T.Groundspeed, T.bArmed, Doppler, Volume * Atten);
 }
@@ -189,12 +184,12 @@ void ASmvGateActor::Build(float RadiusM, float TubeM, const FLinearColor& Color)
 	const float R = RadiusM * 100.f, r = TubeM * 100.f;
 	for (int32 i = 0; i <= Seg; ++i)
 	{
-		const float U = 2.f * PI * i / Seg;
+		const float U = 2.f * UE_PI * i / Seg;
 		// halka düzlemi YZ (normal +X = geçiş yönü; aktör yaw'ı halka yönüne çevrilir)
 		const FVector Ctr(0.f, R * FMath::Cos(U), R * FMath::Sin(U));
 		for (int32 j = 0; j <= Side; ++j)
 		{
-			const float W = 2.f * PI * j / Side;
+			const float W = 2.f * UE_PI * j / Side;
 			const FVector Radial = FVector(0.f, FMath::Cos(U), FMath::Sin(U));
 			const FVector Nrm = Radial * FMath::Cos(W) + FVector(1, 0, 0) * FMath::Sin(W);
 			V.Add(Ctr + Nrm * r);
@@ -291,7 +286,7 @@ double ASmvProcTerrain::HeightAt(double E, double N) const
 	for (const FMountain& M : Mountains)
 	{
 		const double D = FMath::Sqrt((E - M.E) * (E - M.E) + (N - M.N) * (N - M.N));
-		if (D < M.R) H += M.H * FMath::Square(FMath::Cos(D / M.R * PI * 0.5));
+		if (D < M.R) H += M.H * FMath::Square(FMath::Cos(D / M.R * UE_DOUBLE_PI * 0.5));
 	}
 	// ev çevresi düz (SITL'in düz zemini) — 300 m'den 600 m'ye yumuşak geçiş
 	const double Blend = FMath::Clamp((Dist - FlatR) / FlatR, 0.0, 1.0);
@@ -309,7 +304,7 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	Mountains.Reset();
 	for (int32 i = 0; i < FMath::Clamp(W.MountainCount, 0, 12); ++i)
 	{
-		const double A = Rng.Uniform(0, 2 * PI), R = Rng.Uniform(0.45, 0.95) * Half;
+		const double A = Rng.Uniform(0.0, 2.0 * UE_DOUBLE_PI), R = Rng.Uniform(0.45, 0.95) * Half;
 		Mountains.Add({ R * FMath::Sin(A), R * FMath::Cos(A), W.MountainHeight * Rng.Uniform(0.5, 1.0), Rng.Uniform(0.15, 0.35) * Half });
 	}
 	auto ToUe = [Geo, &Track, GroundMsl](double E, double N, double H)
@@ -386,7 +381,7 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	}
 	for (int32 i = 0; i < FMath::Clamp(W.BuildingCount, 0, 400); ++i)
 	{
-		const double A = Rng.Uniform(0, 2 * PI), R = Rng.Uniform(FlatR * 1.3, Half * 0.6);
+		const double A = Rng.Uniform(0.0, 2.0 * UE_DOUBLE_PI), R = Rng.Uniform(FlatR * 1.3, Half * 0.6);
 		const double E = R * FMath::Sin(A), N = R * FMath::Cos(A);
 		const FVector P = ToUe(E, N, HeightAt(E, N)) - Origin;
 		const FVector S((float)Rng.Uniform(0.08, 0.3), (float)Rng.Uniform(0.08, 0.3), (float)Rng.Uniform(0.06, 0.4));

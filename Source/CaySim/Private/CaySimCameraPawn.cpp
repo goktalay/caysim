@@ -10,6 +10,8 @@
 #include "InputMappingContext.h"
 #include "InputAction.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/LocalPlayer.h"
+#include "Components/InputComponent.h"
 
 ACaySimCameraPawn::ACaySimCameraPawn()
 {
@@ -81,7 +83,7 @@ void ACaySimCameraPawn::SetMode(ECaySimCameraMode InMode)
 	if (Mode == ECaySimCameraMode::Free)
 	{
 		const FRotator R = Camera->GetComponentRotation();
-		FreeYaw = R.Yaw; FreePitch = R.Pitch;
+		FreeYaw = (float)R.Yaw; FreePitch = (float)R.Pitch;
 		SetActorLocation(Camera->GetComponentLocation());
 		Arm->SetRelativeLocation(FVector::ZeroVector);
 	}

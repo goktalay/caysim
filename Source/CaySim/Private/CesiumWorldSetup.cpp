@@ -11,7 +11,9 @@
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/SkyAtmosphereComponent.h"
 #include "Components/VolumetricCloudComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Kismet/GameplayStatics.h"
 #include "CollisionQueryParams.h"
 
@@ -107,7 +109,7 @@ void ACaySimWorldSetup::SetupLighting()
 	if (!W) return;
 #if CAYSIM_WITH_CESIUM
 	// CesiumSunSky: georeference'a göre gerçek güneş konumu; saat/tarih ayarlanır
-	if (!SunSky)
+	if (!SunSky.IsValid())
 	{
 		TArray<AActor*> Found;
 		UGameplayStatics::GetAllActorsOfClass(W, ACesiumSunSky::StaticClass(), Found);
@@ -159,7 +161,7 @@ void ACaySimWorldSetup::ApplyWorldSettings(const FCaySimWorld& InWorld)
 	World = InWorld;
 	const float Hours = TimeOfDayHours(World.Time);
 #if CAYSIM_WITH_CESIUM
-	if (SunSky)
+	if (SunSky.IsValid())
 	{
 		SunSky->SolarTime = Hours;
 		SunSky->UpdateSun();
@@ -168,7 +170,7 @@ void ACaySimWorldSetup::ApplyWorldSettings(const FCaySimWorld& InWorld)
 	if (Sun)
 	{
 		// Basit güneş: saat → yükseklik açısı
-		const float Elev = FMath::Clamp(FMath::Sin((Hours - 6.f) / 12.f * PI) * 70.f, -10.f, 70.f);
+		const float Elev = FMath::Clamp(FMath::Sin((Hours - 6.f) / 12.f * UE_PI) * 70.f, -10.f, 70.f);
 		Sun->SetActorRotation(FRotator(-Elev, 180.f, 0.f));
 		if (UDirectionalLightComponent* L = Cast<UDirectionalLightComponent>(Sun->GetLightComponent()))
 		{
@@ -184,9 +186,10 @@ void ACaySimWorldSetup::ApplyWorldSettings(const FCaySimWorld& InWorld)
 		F->SetFogHeightFalloff(0.2f);
 		F->SetStartDistance(0.f);
 	}
-	if (Clouds && Clouds->GetComponent())
+	// AVolumetricCloud bileşen alıcısı sürüme göre değişebilir → bileşeni sınıfıyla bul
+	if (UVolumetricCloudComponent* CloudComp = Clouds ? Clouds->FindComponentByClass<UVolumetricCloudComponent>() : nullptr)
 	{
-		Clouds->GetComponent()->SetVisibility(World.Fog < 0.9f);
+		CloudComp->SetVisibility(World.Fog < 0.9f);
 	}
 }
 
@@ -214,34 +217,41 @@ void ACaySimWorldSetup::SetupCesiumIon()
 #if CAYSIM_WITH_CESIUM
 	UWorld* W = GetWorld();
 	if (!W) return;
-	if (!Georeference) Georeference = ACesiumGeoreference::GetDefaultGeoreference(W);
-	if (!Georeference)
+	if (!Georeference.IsValid()) Georeference = ACesiumGeoreference::GetDefaultGeoreference(W);
+	ACesiumGeoreference* Geo = Georeference.Get();
+	if (!Geo)
 	{
 		Finish(false);
 		return;
 	}
 	// Georeference merkezi = seçilen merkez; yükseklik elipsoid (MSL + geoid)
-	Georeference->SetOriginLongitudeLatitudeHeight(FVector(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM));
+	Geo->SetOriginLongitudeLatitudeHeight(FVector(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM));
 
-	if (!Terrain)
+	if (!Terrain.IsValid())
 	{
-		Terrain = W->SpawnActor<ACesium3DTileset>();
-		Terrain->SetTilesetSource(ETilesetSource::FromCesiumIon);
-		Terrain->SetIonAssetID(CesiumTerrainAssetId);
-		Terrain->SetIonAccessToken(CesiumIonToken);
-		Terrain->SetGeoreference(Georeference);
-		Terrain->SetCreatePhysicsMeshes(true);
-		Terrain->SetMaximumScreenSpaceError(12.0);
+		ACesium3DTileset* Tiles = W->SpawnActor<ACesium3DTileset>();
+		if (!Tiles)
+		{
+			Finish(false);
+			return;
+		}
+		Terrain = Tiles;
+		Tiles->SetTilesetSource(ETilesetSource::FromCesiumIon);
+		Tiles->SetIonAssetID(CesiumTerrainAssetId);
+		Tiles->SetIonAccessToken(CesiumIonToken);
+		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
+		Tiles->SetCreatePhysicsMeshes(true);
+		Tiles->SetMaximumScreenSpaceError(12.0);
 		// Bing uydu dokusu
-		UCesiumIonRasterOverlay* Overlay = NewObject<UCesiumIonRasterOverlay>(Terrain, TEXT("Imagery"));
+		UCesiumIonRasterOverlay* Overlay = NewObject<UCesiumIonRasterOverlay>(Tiles, TEXT("Imagery"));
 		Overlay->IonAssetID = CesiumImageryAssetId;
 		Overlay->IonAccessToken = CesiumIonToken;
 		Overlay->MaterialLayerKey = TEXT("Overlay0");
 		Overlay->RegisterComponent();
-		Terrain->AddInstanceComponent(Overlay);
+		Tiles->AddInstanceComponent(Overlay);
 		Overlay->Refresh();
 	}
-	if (GoogleTiles) GoogleTiles->SetActorHiddenInGame(true);
+	if (GoogleTiles.IsValid()) GoogleTiles->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
 	// Hazır sayma: ilk kareler yüklendikçe Tick'te LoadProgress izlenir; 100'e yaklaşınca Finish
 #else
@@ -254,24 +264,31 @@ void ACaySimWorldSetup::SetupGoogle(const FString& Key)
 #if CAYSIM_WITH_CESIUM
 	UWorld* W = GetWorld();
 	if (!W) return;
-	if (!Georeference) Georeference = ACesiumGeoreference::GetDefaultGeoreference(W);
-	if (!Georeference)
+	if (!Georeference.IsValid()) Georeference = ACesiumGeoreference::GetDefaultGeoreference(W);
+	ACesiumGeoreference* Geo = Georeference.Get();
+	if (!Geo)
 	{
 		Finish(false);
 		return;
 	}
-	Georeference->SetOriginLongitudeLatitudeHeight(FVector(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM));
-	if (!GoogleTiles)
+	Geo->SetOriginLongitudeLatitudeHeight(FVector(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM));
+	if (!GoogleTiles.IsValid())
 	{
-		GoogleTiles = W->SpawnActor<ACesium3DTileset>();
-		GoogleTiles->SetTilesetSource(ETilesetSource::FromUrl);
-		GoogleTiles->SetUrl(FString::Printf(TEXT("https://tile.googleapis.com/v1/3dtiles/root.json?key=%s"), *Key));
-		GoogleTiles->SetGeoreference(Georeference);
-		GoogleTiles->SetCreatePhysicsMeshes(true);
-		GoogleTiles->SetMaximumScreenSpaceError(8.0);
-		GoogleTiles->ShowCreditsOnScreen = true; // Google atıf zorunluluğu
+		ACesium3DTileset* Tiles = W->SpawnActor<ACesium3DTileset>();
+		if (!Tiles)
+		{
+			Finish(false);
+			return;
+		}
+		GoogleTiles = Tiles;
+		Tiles->SetTilesetSource(ETilesetSource::FromUrl);
+		Tiles->SetUrl(FString::Printf(TEXT("https://tile.googleapis.com/v1/3dtiles/root.json?key=%s"), *Key));
+		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
+		Tiles->SetCreatePhysicsMeshes(true);
+		Tiles->SetMaximumScreenSpaceError(8.0);
+		Tiles->ShowCreditsOnScreen = true; // Google atıf zorunluluğu
 	}
-	if (Terrain) Terrain->SetActorHiddenInGame(true);
+	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
 #else
 	Finish(false);
@@ -329,7 +346,7 @@ void ACaySimWorldSetup::Finish(bool bOk)
 FVector ACaySimWorldSetup::GeoToUnreal(double Lon, double Lat, double HeightM) const
 {
 #if CAYSIM_WITH_CESIUM
-	if (Georeference) return Georeference->TransformLongitudeLatitudeHeightPositionToUnreal(FVector(Lon, Lat, HeightM));
+	if (const ACesiumGeoreference* Geo = Georeference.Get()) return Geo->TransformLongitudeLatitudeHeightPositionToUnreal(FVector(Lon, Lat, HeightM));
 #endif
 	const FVector Enu = CaySimGeo::GeoToEnuMeters(Lon, Lat, HeightM, Center.Lon, Center.Lat, CenterGroundMsl);
 	return FVector(Enu.X, -Enu.Y, Enu.Z) * 100.0; // X Doğu, Y Güney, Z Yukarı (Cesium sözleşmesiyle aynı)
@@ -338,9 +355,9 @@ FVector ACaySimWorldSetup::GeoToUnreal(double Lon, double Lat, double HeightM) c
 void ACaySimWorldSetup::UnrealToGeo(const FVector& Unreal, double& Lon, double& Lat, double& HeightM) const
 {
 #if CAYSIM_WITH_CESIUM
-	if (Georeference)
+	if (const ACesiumGeoreference* Geo = Georeference.Get())
 	{
-		const FVector LLH = Georeference->TransformUnrealPositionToLongitudeLatitudeHeight(Unreal);
+		const FVector LLH = Geo->TransformUnrealPositionToLongitudeLatitudeHeight(Unreal);
 		Lon = LLH.X; Lat = LLH.Y; HeightM = LLH.Z;
 		return;
 	}
@@ -352,10 +369,10 @@ void ACaySimWorldSetup::UnrealToGeo(const FVector& Unreal, double& Lon, double& 
 FQuat ACaySimWorldSetup::EnuToUnrealRotation(const FVector& UnrealLocation) const
 {
 #if CAYSIM_WITH_CESIUM
-	if (Georeference)
+	if (const ACesiumGeoreference* Geo = Georeference.Get())
 	{
 		// Doğu-Güney-Yukarı → Unreal; kürenin eğriliği nedeniyle konuma bağlı
-		const FMatrix M = Georeference->ComputeEastSouthUpToUnrealTransformation(UnrealLocation);
+		const FMatrix M = Geo->ComputeEastSouthUpToUnrealTransformation(UnrealLocation);
 		return M.ToQuat();
 	}
 #endif
@@ -365,7 +382,7 @@ FQuat ACaySimWorldSetup::EnuToUnrealRotation(const FVector& UnrealLocation) cons
 double ACaySimWorldSetup::MslToWorldHeight(double Lat, double Lon, double MslM) const
 {
 #if CAYSIM_WITH_CESIUM
-	if (Georeference) return MslM + (bGroundOffsetMeasured ? MeasuredGroundOffsetM : GeoidOffsetM);
+	if (Georeference.IsValid()) return MslM + (bGroundOffsetMeasured ? MeasuredGroundOffsetM : GeoidOffsetM);
 #endif
 	return MslM;
 }

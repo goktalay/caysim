@@ -684,6 +684,7 @@ void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 	for (const SmvCore::FGpwsActive& A : R.Active)
 	{
 		const SmvCore::FGpwsCodeDef* D = SmvCore::GpwsCode(A.Code);
+		if (!D) continue;   // bilinmeyen kod (çekirdek tablosuyla uyumsuzluk) — çökme yerine atla
 		const bool bWarn = A.Level == "warning";
 		ActiveAlerts.Add(TPair<FString, bool>(bAviation ? FString(UTF8_TO_TCHAR(D->Av)) : FSmvI18n::T(FString(TEXT("gpws.c_")) + UTF8_TO_TCHAR(D->Code)).ToString(), bWarn));
 		if (!A.bAcked) { bAnyUnacked = true; if (!Alarm) Alarm = bWarn ? 1 : 2; }
@@ -694,6 +695,7 @@ void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 	for (const std::string& F : R.Fresh)
 	{
 		const SmvCore::FGpwsCodeDef* D = SmvCore::GpwsCode(F);
+		if (!D) continue;
 		PushEvent(FString::Printf(TEXT("%s · %s"), std::string(D->Level) == "warning" ? TEXT("WARNING") : TEXT("CAUTION"), UTF8_TO_TCHAR(D->Av)), std::string(D->Level) == "warning" ? 3 : 4);
 	}
 	for (const SmvCore::FGpwsEpisode& E : R.Ended)
@@ -753,6 +755,8 @@ void ASmvGameMode::UpdateRace(float Dt)
 	// yerel botlar
 	if (!bRaceStarted) return;
 	const double Tt = Now - RaceStartWall;
+	// FBotPilot::StepRings std::vector ister (Rings bir TArray) — kare başına bir kez kopyala
+	const std::vector<SmvCore::FRing> RingVec = Dogfight ? std::vector<SmvCore::FRing>() : std::vector<SmvCore::FRing>(Rings->GetData(), Rings->GetData() + Rings->Num());
 	for (int32 i = 0; i < Bots.Num(); ++i)
 	{
 		FBot& B = Bots[i];
@@ -783,7 +787,7 @@ void ASmvGameMode::UpdateRace(float Dt)
 		}
 		else
 		{
-			B.Pilot->StepRings(Dt, *Rings, B.Tracker->NextIndex());
+			B.Pilot->StepRings(Dt, RingVec, B.Tracker->NextIndex());
 			const SmvCore::FBotPose& Bp = B.Pilot->Pose();
 			for (const SmvCore::FRingEvent& E : B.Tracker->Update(Bp.X, Bp.Y, GroundMsl + Bp.Z, Tt))
 			{
@@ -919,7 +923,7 @@ void ASmvGameMode::UpdateHud()
 	{
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
-			float Best = 1e12f; FVector2D BestPos; bool bAny = false; int32 BestI = 0;
+			float Best = 1e12f; FVector2D BestPos = FVector2D::ZeroVector; bool bAny = false; int32 BestI = 0;
 			for (int32 i = 0; i < TargetActors.Num(); ++i)
 			{
 				FVector2D Sp;

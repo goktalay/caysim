@@ -577,7 +577,7 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 			T.Gates.Reset();
 			for (int32 i = 0; i < 8; ++i)
 			{
-				const double A = 2 * PI * i / 8, R = FMath::Min(T.RadiusM * 0.4, 400.0);
+				const double A = 2.0 * UE_DOUBLE_PI * i / 8, R = FMath::Min(T.RadiusM * 0.4, 400.0);
 				FSmvGate G; G.I = i;
 				G.Lat = T.Lat + FMath::RadiansToDegrees(R * FMath::Cos(A) / 6378137.0);
 				G.Lon = T.Lon + FMath::RadiansToDegrees(R * FMath::Sin(A) / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(T.Lat))));
@@ -674,7 +674,7 @@ TSharedRef<SWidget> SSmvShell::Wizard()
 	USmvFlow* F = Flow.Get();
 	FSmvFlightRequest& R = F->Draft;
 	// seçim kutuları için kimlik tamponları
-	static FString DroneId, PilotId, TrackId, MissionId, Backend, Speed, BotsS;
+	static FString DroneId, PilotId, TrackId, MissionId, Backend, Speed;
 	DroneId = R.Drone.Id; PilotId = R.Pilot.Id; TrackId = R.Track.Id; MissionId = R.bHasMission ? R.Mission.Id : FString(TEXT("-"));
 	Backend = R.Backend == ESmvFlightBackend::Cloud ? TEXT("cloud") : TEXT("local");
 	Speed = FString::SanitizeFloat(R.Speedup);

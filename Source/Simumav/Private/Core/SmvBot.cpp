@@ -120,7 +120,7 @@ namespace SmvCore
 		// tahmin hatası (sunucuyla aynı biçim; faz sabit)
 		const double E = L.PredErrM;
 		const double Ox = O.X + E * std::sin(0.37 * T + 0.3), Oy = O.Y + E * std::cos(0.29 * T + 1.1), Oz = O.Z + 0.25 * E * std::sin(0.21 * T + 2.0);
-		double Tx, Ty, Tz, V = Vmax;
+		double Tx = 0, Ty = 0, Tz = 0, V = Vmax;   // MSVC C4701 (olası başlatılmamış) önlemi
 		const double D = std::sqrt((Ox - P.X) * (Ox - P.X) + (Oy - P.Y) * (Oy - P.Y) + (Oz - P.Z) * (Oz - P.Z));
 		if (bChaser)
 		{

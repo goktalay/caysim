@@ -97,7 +97,7 @@ namespace SmvMav
 		void I32(int32_t V) { U32((uint32_t)V); }
 		void U64(uint64_t V) { for (int i = 0; i < 8; ++i) B.push_back((uint8_t)((V >> (8 * i)) & 0xff)); }
 		void F32(float V) { uint32_t U; std::memcpy(&U, &V, 4); U32(U); }
-		void Chars(const std::string& S, size_t N) { for (size_t i = 0; i < N; ++i) B.push_back(i < S.size() ? (uint8_t)S[i] : 0); }
+		void Chars(const std::string& S, size_t N) { for (size_t i = 0; i < N; ++i) B.push_back((uint8_t)(i < S.size() ? S[i] : 0)); }   // açık döküm: int→uint8 (MSVC C4244)
 	};
 
 	struct FReader

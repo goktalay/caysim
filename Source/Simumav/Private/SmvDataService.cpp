@@ -505,7 +505,7 @@ void USmvDataService::DeleteMission(const FString& Id, FSmvDone Done)
 void USmvDataService::SaveSettings(FSmvDone Done)
 {
 	SaveSettingsLocalOnly();
-	if (IsOnline()) { const FString CapId; SMV_ONLINE_WRITE("PUT", FString(TEXT("/api/settings")), SettingsCache.ToServerJson(), Self->SettingsCache.ApplyServerJson(O)) return; }
+	if (IsOnline()) { const FString CapId = FString(); SMV_ONLINE_WRITE("PUT", FString(TEXT("/api/settings")), SettingsCache.ToServerJson(), Self->SettingsCache.ApplyServerJson(O)) return; }
 	OnChanged.Broadcast();
 	Done.ExecuteIfBound(true, FString());
 }

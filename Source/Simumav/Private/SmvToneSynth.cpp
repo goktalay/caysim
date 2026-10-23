@@ -55,8 +55,8 @@ int32 USmvToneSynth::OnGenerateAudio(float* Out, int32 NumSamples)
 		}
 		if (A > 0.f)
 		{
-			Ph += 2.f * PI * F / Sr;
-			if (Ph > 2.f * PI) Ph -= 2.f * PI;
+			Ph += UE_TWO_PI * F / Sr;
+			if (Ph > UE_TWO_PI) Ph -= UE_TWO_PI;
 			S = FMath::Sin(Ph) * A;
 		}
 		Out[i] = S * Gain;

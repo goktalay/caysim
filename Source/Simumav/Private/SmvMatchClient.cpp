@@ -3,6 +3,11 @@
 #include "SimumavClient.h"
 #include "SimumavSocket.h"
 
+void USmvMatchClient::Init(USimumavClient* InClient)
+{
+	Client = InClient;
+}
+
 void USmvMatchClient::BeginDestroy()
 {
 	if (Ws.IsValid()) { Ws->Close(); Ws.Reset(); }
@@ -12,9 +17,10 @@ void USmvMatchClient::BeginDestroy()
 TSharedRef<FJsonObject> USmvMatchClient::BaseBody(const FSmvFlightRequest& Draft, const FString& Kind, TSharedPtr<FJsonObject> Rings, TSharedPtr<FJsonObject> Dogfight) const
 {
 	TSharedRef<FJsonObject> B = MakeShared<FJsonObject>();
-	const TSharedRef<FJsonObject> Start = Draft.ToStartJson();
-	B->SetField(TEXT("drone_id"), Start->TryGetField(TEXT("drone_id")));
-	B->SetField(TEXT("track_id"), Start->TryGetField(TEXT("track_id")));
+	// yerel ad üye işlevi Start() ile aynı olmasın; boş kimlik alanı null değer olarak yazılmasın
+	const TSharedRef<FJsonObject> StartJson = Draft.ToStartJson();
+	if (const TSharedPtr<FJsonValue> DroneId = StartJson->TryGetField(TEXT("drone_id"))) B->SetField(TEXT("drone_id"), DroneId);
+	if (const TSharedPtr<FJsonValue> TrackId = StartJson->TryGetField(TEXT("track_id"))) B->SetField(TEXT("track_id"), TrackId);
 	if (const TSharedPtr<FJsonObject> L = Draft.Launch.ToJson()) B->SetObjectField(TEXT("launch"), L);
 	B->SetStringField(TEXT("camera"), Draft.Camera);
 	B->SetStringField(TEXT("kind"), Kind);

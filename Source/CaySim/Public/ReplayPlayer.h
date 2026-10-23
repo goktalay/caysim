@@ -44,7 +44,7 @@ class CAYSIM_API UCaySimReplayPlayer : public UObject
 public:
 	/** Kareleri indirir; HAZIR değilse (409) `Retry` ile yeniden denenir. */
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kayıt")
-	void Load(UHepgoClient* Client, const FString& SessionId);
+	void Load(UHepgoClient* Client, const FString& InSessionId);
 
 	/** Ham gzip/JSON gövdesinden yükle (test / yerel dosya). */
 	bool LoadFromBytes(const TArray<uint8>& Bytes);
@@ -55,7 +55,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kayıt") void Restart();
 	/** 0.5 / 1 / 2 / 4 / 8 */
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kayıt") void SetSpeed(float Mult);
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kayıt") void Seek(float TimeS);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kayıt") void Seek(float InTimeS);
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Kayıt") void Skip(float DeltaS);
 
 	/** Oyun döngüsünden çağrılır; oynuyorsa saati ilerletir ve OnTime yayınlar. */

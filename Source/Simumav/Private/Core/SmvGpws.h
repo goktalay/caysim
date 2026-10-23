@@ -3,6 +3,7 @@
 // Yalnız C++17, Unreal'sız. "Yok" değerler NaN ile gösterilir. tests/cpp/test_core.py Node (JS) ve Python'a karşı sınar.
 #pragma once
 
+#include <cmath>
 #include <limits>
 #include <map>
 #include <set>
@@ -12,7 +13,8 @@
 namespace SmvCore
 {
 	constexpr double NaN = std::numeric_limits<double>::quiet_NaN();
-	inline bool Has(double V) { return V == V; }
+	// V == V, /fp:fast (MSVC/UE) altında derleyicinin "her zaman doğru" sayabileceği bir NaN sınamasıdır → std::isnan
+	inline bool Has(double V) { return !std::isnan(V); }
 
 	struct FGpwsCodeDef { const char* Code; const char* Level; int Prio; const char* Av; const char* Say; const char* Tr; bool bRover; bool bPlaneOnly; };
 	const std::vector<FGpwsCodeDef>& GpwsCodes();

@@ -96,7 +96,7 @@ namespace SmvKdf
 		FBytes Key = KeyIn.size() > 64 ? Sha256(KeyIn.data(), KeyIn.size()) : KeyIn;
 		Key.resize(64, 0);
 		uint8_t Ipad[64], Opad[64];
-		for (int i = 0; i < 64; ++i) { Ipad[i] = Key[i] ^ 0x36; Opad[i] = Key[i] ^ 0x5c; }
+		for (int i = 0; i < 64; ++i) { Ipad[i] = (uint8_t)(Key[i] ^ 0x36); Opad[i] = (uint8_t)(Key[i] ^ 0x5c); }   // açık döküm (C4244)
 		FSha256 In;
 		In.Update(Ipad, 64);
 		In.Update(Data, Len);

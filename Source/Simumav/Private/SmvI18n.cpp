@@ -33,22 +33,23 @@ FString FSmvI18n::SystemLanguage()
 
 TMap<FString, FString>& FSmvI18n::Table(const FString& Lang)
 {
-	if (TMap<FString, FString>* T = GSmvTables.Find(Lang)) return *T;
-	TMap<FString, FString>& T = GSmvTables.Add(Lang);
+	// yerel ad "T" olmamalı: FSmvI18n::T üye işlevini gölgeler
+	if (TMap<FString, FString>* Found = GSmvTables.Find(Lang)) return *Found;
+	TMap<FString, FString>& Tbl = GSmvTables.Add(Lang);
 	FString Text;
 	const FString File = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Simumav"), TEXT("Lang"), Lang + TEXT(".json"));
 	if (FFileHelper::LoadFileToString(Text, *File))
 	{
 		if (const TSharedPtr<FJsonObject> O = SmvJson::Parse(Text))
 		{
-			for (const TPair<FString, TSharedPtr<FJsonValue>>& Kv : O->Values) if (Kv.Value.IsValid()) T.Add(Kv.Key, Kv.Value->AsString());
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Kv : O->Values) if (Kv.Value.IsValid()) Tbl.Add(Kv.Key, Kv.Value->AsString());
 		}
 	}
 	else
 	{
 		UE_LOG(LogSimumav, Warning, TEXT("Dil dosyası yok: %s"), *File);
 	}
-	return T;
+	return Tbl;
 }
 
 FText FSmvI18n::T(const FString& Key)

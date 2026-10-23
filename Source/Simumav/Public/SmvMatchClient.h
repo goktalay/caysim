@@ -38,7 +38,8 @@ class SIMUMAV_API USmvMatchClient : public UObject
 	GENERATED_BODY()
 
 public:
-	void Init(USimumavClient* InClient) { Client = InClient; }
+	/** Gövde .cpp'de: USimumavClient burada yalnız ileri bildirimli (TObjectPtr ataması tam tür ister). */
+	void Init(USimumavClient* InClient);
 	virtual void BeginDestroy() override;
 
 	/** kind: rings | dogfight; Rings/Dogfight: sunucu ayar nesneleri (null → varsayılan). */

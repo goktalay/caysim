@@ -40,7 +40,8 @@ float USmvMotorSynth::NextNoise()
 
 int32 USmvMotorSynth::OnGenerateAudio(float* Out, int32 NumSamples)
 {
-	const float TwoPi = 2.f * PI;
+	// UE5: PI yerine UE_PI / UE_TWO_PI (eski makro adları kullanımdan kalkıyor)
+	const float TwoPi = UE_TWO_PI;
 	for (int32 i = 0; i < NumSamples; ++i)
 	{
 		// parametre yumuşatma (≈ 50 ms)
@@ -89,7 +90,7 @@ int32 USmvMotorSynth::OnGenerateAudio(float* Out, int32 NumSamples)
 			const float Detune = Kind == ESmvEngineKind::ElectricMulti ? 1.f + 0.011f * (v - Voices * 0.5f) : (float)(v + 1);
 			Phase[v] += TwoPi * Base * Detune / Sr;
 			if (Phase[v] > TwoPi) Phase[v] -= TwoPi;
-			const float Saw = (Phase[v] / PI) - 1.f;   // testere: zengin harmonik
+			const float Saw = (Phase[v] / UE_PI) - 1.f;   // testere: zengin harmonik
 			S += (Kind == ESmvEngineKind::Combustion ? (Saw > 0.6f ? 1.f : -0.2f) : Saw) / (v + 1);
 		}
 		S *= Amp / FMath::Max(1, Voices) * 1.6f;

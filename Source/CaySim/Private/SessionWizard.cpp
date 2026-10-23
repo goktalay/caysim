@@ -100,7 +100,7 @@ void UCaySimSessionWizard::HandleHello(bool bOk, const FCaySimHello& InHello)
 	Hello = InHello;
 	Status(FString::Printf(TEXT("%s · %s"), *Hello.Company.Name, *Hello.ClientName));
 	// Logo: her zaman PNG (SVG sunucuda çevrilir) — `/brand/logo?format=png&size=640` (§2)
-	LoadImage(TEXT("/brand/logo?format=png&size=640"), [this](UTexture2D* Tex) { Logo = Tex; OnLogoReady.Broadcast(Tex); });
+	LoadRemoteImage(TEXT("/brand/logo?format=png&size=640"), [this](UTexture2D* Tex) { Logo = Tex; OnLogoReady.Broadcast(Tex); });
 	AfterHello();
 	SetStep(ECaySimWizardStep::Welcome);
 }
@@ -129,7 +129,7 @@ void UCaySimSessionWizard::HandleError(const FString& Code, const FString& Msg)
 	else if (Step == ECaySimWizardStep::Starting) SetStep(ECaySimWizardStep::Summary);
 }
 
-void UCaySimSessionWizard::LoadImage(const FString& Url, TFunction<void(UTexture2D*)> Done)
+void UCaySimSessionWizard::LoadRemoteImage(const FString& Url, TFunction<void(UTexture2D*)> Done)
 {
 	if (!Hepgo) { Done(nullptr); return; }
 	TWeakObjectPtr<UCaySimSessionWizard> WeakThis(this);
@@ -185,7 +185,7 @@ void UCaySimSessionWizard::HandleModels(const TArray<FCaySimModelInfo>& In)
 	{
 		if (M.ThumbUrl.IsEmpty() || Thumbs.Contains(M.Id)) continue;
 		const FString Id = M.Id;
-		LoadImage(M.ThumbUrl, [this, Id](UTexture2D* Tex) { if (Tex) { Thumbs.Add(Id, Tex); OnThumbReady.Broadcast(Id); } });
+		LoadRemoteImage(M.ThumbUrl, [this, Id](UTexture2D* Tex) { if (Tex) { Thumbs.Add(Id, Tex); OnThumbReady.Broadcast(Id); } });
 	}
 	OnDataChanged.Broadcast(ECaySimWizardStep::Model);
 }

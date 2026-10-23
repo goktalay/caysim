@@ -319,13 +319,14 @@ FCaySimTelemetry FCaySimTelemetry::FromJson(const TSharedPtr<FJsonObject>& O)
 	T.BattV = (float)NumOr(O, TEXT("batt_v"), -1.0);
 	T.BattPct = (float)NumOr(O, TEXT("batt_pct"), -1.0);
 	T.Throttle = (float)NumOr(O, TEXT("throttle"), 0.0);
-	const TArray<TSharedPtr<FJsonValue>>* Rc = nullptr;
+	// Yerel ad `RcArr`: `Rc` üyesini gölgelemesin (C4458)
+	const TArray<TSharedPtr<FJsonValue>>* RcArr = nullptr;
 	T.Rc.Init(0, 8);
-	if (O->TryGetArrayField(TEXT("rc"), Rc) && Rc)
+	if (O->TryGetArrayField(TEXT("rc"), RcArr) && RcArr)
 	{
-		for (int32 i = 0; i < FMath::Min(8, Rc->Num()); ++i)
+		for (int32 i = 0; i < FMath::Min(8, RcArr->Num()); ++i)
 		{
-			T.Rc[i] = (int32)(*Rc)[i]->AsNumber();
+			T.Rc[i] = (int32)(*RcArr)[i]->AsNumber();
 		}
 	}
 	const TSharedPtr<FJsonObject> H = ObjOr(O, TEXT("home"));

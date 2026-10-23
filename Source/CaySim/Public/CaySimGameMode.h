@@ -14,6 +14,7 @@ class ACaySimLaunchRig;
 class UCaySimHudWidget;
 class UHepgoClient;
 class ACaySimCameraPawn;
+class UUserWidget;
 
 UCLASS()
 class CAYSIM_API ACaySimGameMode : public AGameModeBase
@@ -41,7 +42,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "CAYSIM|Sınıflar") TSubclassOf<ACaySimDroneActor> DroneClass;
 	UPROPERTY(EditDefaultsOnly, Category = "CAYSIM|Sınıflar") TSubclassOf<ACaySimWorldSetup> WorldSetupClass;
 	UPROPERTY(EditDefaultsOnly, Category = "CAYSIM|Sınıflar") TSubclassOf<ACaySimLaunchRig> LaunchRigClass;
-	UPROPERTY(EditDefaultsOnly, Category = "CAYSIM|Sınıflar") TSubclassOf<UCaySimHudWidget> HudClass;
+	/** Ad `HudClass` OLAMAZ: AGameModeBase::HUDClass ile UHT ad karşılaştırması büyük/küçük harf duyarsız → gölgeleme hatası. */
+	UPROPERTY(EditDefaultsOnly, Category = "CAYSIM|Sınıflar") TSubclassOf<UCaySimHudWidget> HudWidgetClass;
 	UPROPERTY(EditDefaultsOnly, Category = "CAYSIM|Sınıflar") TSubclassOf<UUserWidget> WizardWidgetClass;
 
 protected:

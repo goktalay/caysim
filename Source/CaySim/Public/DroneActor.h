@@ -8,6 +8,7 @@
 #include "DroneActor.generated.h"
 
 class USceneComponent;
+class UStaticMesh;
 class UStaticMeshComponent;
 class UHepgoClient;
 class ICaySimGeoTransform;
@@ -68,7 +69,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dron") ECaySimDroneType GetDroneType() const { return DroneType; }
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dron") bool IsOnGround() const { return bOnGround; }
 	/** Burun yönü (Unreal dünya) — kamera takibi için. */
-	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dron") FVector GetForwardWorld() const { return Body->GetForwardVector(); }
+	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dron") FVector GetForwardWorld() const; // gövdesi .cpp'de (USceneComponent burada eksik tip)
 
 	/** Gecikme tamponu (sn). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dron", meta = (ClampMin = "0.0", ClampMax = "0.5"))

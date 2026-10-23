@@ -47,7 +47,9 @@ namespace
 		uint32 Len = 0;
 		FMemory::Memcpy(&Len, Bytes.GetData(), 4);
 		if (Len + 4 > (uint32)Bytes.Num()) return false;
-		const FString Json = FString(FUTF8ToTCHAR((const ANSICHAR*)Bytes.GetData() + 4, (int32)Len));
+		// dönüşüm nesnesi uzunluklu ve sıfırla bitmez → FString(Uzunluk, işaretçi) ile açıkça kurulur
+		const FUTF8ToTCHAR JsonConv((const ANSICHAR*)Bytes.GetData() + 4, (int32)Len);
+		const FString Json(JsonConv.Length(), JsonConv.Get());
 		TSharedPtr<FJsonObject> O;
 		TSharedRef<TJsonReader<>> R = TJsonReaderFactory<>::Create(Json);
 		if (!FJsonSerializer::Deserialize(R, O) || !O.IsValid()) return false;
@@ -99,7 +101,8 @@ bool FSmvSecrets::Load(const FString& Key, FString& OutValue)
 	const FString Target = SmvCredTarget(Key);
 	if (CredReadW(*Target, CRED_TYPE_GENERIC, 0, &P) && P)
 	{
-		OutValue = FString(FUTF8ToTCHAR((const ANSICHAR*)P->CredentialBlob, (int32)P->CredentialBlobSize));
+		const FUTF8ToTCHAR BlobConv((const ANSICHAR*)P->CredentialBlob, (int32)P->CredentialBlobSize);
+		OutValue = FString(BlobConv.Length(), BlobConv.Get());
 		CredFree(P);
 		return true;
 	}

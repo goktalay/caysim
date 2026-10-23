@@ -33,7 +33,9 @@ void USmvSteamSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 	if (IOnlineAchievementsPtr Ach = Oss->GetAchievementsInterface())
 	{
-		if (const FUniqueNetIdPtr U = Oss->GetIdentityInterface() ? Oss->GetIdentityInterface()->GetUniquePlayerId(0) : nullptr)
+		IOnlineIdentityPtr IdQ = Oss->GetIdentityInterface();
+		const FUniqueNetIdPtr U = IdQ.IsValid() ? IdQ->GetUniquePlayerId(0) : FUniqueNetIdPtr();
+		if (U.IsValid())
 		{
 			TWeakObjectPtr<USmvSteamSubsystem> Weak(this);
 			Ach->QueryAchievements(*U, FOnQueryAchievementsCompleteDelegate::CreateLambda([Weak](const FUniqueNetId&, bool bOk)
@@ -86,9 +88,9 @@ void USmvSteamSubsystem::Flush()
 {
 	if (!bSteam || PendingWrites.Num() == 0) return;
 	IOnlineSubsystem* Oss = IOnlineSubsystem::Get(STEAM_SUBSYSTEM);
-	IOnlineAchievementsPtr Ach = Oss ? Oss->GetAchievementsInterface() : nullptr;
-	IOnlineIdentityPtr Idt = Oss ? Oss->GetIdentityInterface() : nullptr;
-	const FUniqueNetIdPtr U = Idt.IsValid() ? Idt->GetUniquePlayerId(0) : nullptr;
+	IOnlineAchievementsPtr Ach = Oss ? Oss->GetAchievementsInterface() : IOnlineAchievementsPtr();
+	IOnlineIdentityPtr Idt = Oss ? Oss->GetIdentityInterface() : IOnlineIdentityPtr();
+	const FUniqueNetIdPtr U = Idt.IsValid() ? Idt->GetUniquePlayerId(0) : FUniqueNetIdPtr();
 	if (!Ach.IsValid() || !U.IsValid()) return;
 	FOnlineAchievementsWriteRef W = MakeShared<FOnlineAchievementsWrite, ESPMode::ThreadSafe>();
 	for (const FString& A : PendingWrites) W->SetFloatStat(FName(*A), 100.f);

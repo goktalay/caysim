@@ -55,17 +55,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ForgetClientCode();
 
 	// ---- adım 2/3 ----
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseMode(ECaySimSessionMode Mode);
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseCenter(int32 CenterId);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseMode(ECaySimSessionMode InMode);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseCenter(int32 InCenterId);
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void SearchLogs(const FString& Query);
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseLog(int32 LogId);
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseType(const FString& TypeKey);
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseModel(const FString& ModelId);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseLog(int32 InLogId);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseType(const FString& InTypeKey);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void ChooseModel(const FString& InModelId);
 	/** Oturuma özel yönelim düzeltmesi (kütüphane kaydını değiştirmez). */
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void SetModelOrientOverride(const FCaySimModelOrient& Orient, bool bEnabled);
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void SetWorld(const FCaySimWorld& World, ECaySimWorldSource Source);
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void SetLaunch(const FCaySimLaunchConfig& Launch);
-	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void GoTo(ECaySimWizardStep Step);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void SetWorld(const FCaySimWorld& InWorld, ECaySimWorldSource Source);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void SetLaunch(const FCaySimLaunchConfig& InLaunch);
+	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void GoTo(ECaySimWizardStep InStep);
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void Back();
 	UFUNCTION(BlueprintCallable, Category = "CAYSIM|Sihirbaz") void Next();
 
@@ -136,7 +136,8 @@ private:
 	void Status(const FString& S) { OnStatus.Broadcast(S); }
 	void BindClient();
 	void UnbindClient();
-	void LoadImage(const FString& Url, TFunction<void(UTexture2D*)> Done);
+	/** Windows `LoadImage` makrosuyla (LoadImageW) çakışmasın diye farklı ad. */
+	void LoadRemoteImage(const FString& Url, TFunction<void(UTexture2D*)> Done);
 	void AfterHello();
 
 	UFUNCTION() void HandleHello(bool bOk, const FCaySimHello& InHello);

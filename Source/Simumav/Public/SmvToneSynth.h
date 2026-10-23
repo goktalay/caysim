@@ -14,7 +14,7 @@ class SIMUMAV_API USmvToneSynth : public USynthComponent
 public:
 	USmvToneSynth(const FObjectInitializer& ObjectInitializer);
 	/** 0 sessiz, 1 warning (sürekli), 2 caution (sürekli). */
-	void SetAlarm(int32 Kind, float Gain);
+	void SetAlarm(int32 Kind, float InGain);   // parametre adı üye `Gain` ile çakışmasın (C4458)
 	/** Tek seferlik: 1 halka, 2 kilit, 3 geri sayım, 4 başla. */
 	void Blip(int32 Kind);
 

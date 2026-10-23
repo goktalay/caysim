@@ -82,15 +82,16 @@ TSharedPtr<FJsonObject> SmvJson::Parse(const FString& S)
 	return O;
 }
 
-bool SmvJson::IsServerId(const FString& Id)
+bool SmvJson::IsServerId(const FString& InId)
 {
-	return !Id.IsEmpty() && Id.IsNumeric();
+	// parametre adı SmvJson::Id işleviyle aynı olmasın (gölgeleme uyarısı C4459 UE'de hata)
+	return !InId.IsEmpty() && InId.IsNumeric();
 }
 
-static void SmvSetIdField(const TSharedRef<FJsonObject>& O, const TCHAR* K, const FString& Id)
+static void SmvSetIdField(const TSharedRef<FJsonObject>& O, const TCHAR* K, const FString& InId)
 {
-	if (SmvJson::IsServerId(Id)) O->SetNumberField(K, FCString::Atod(*Id));
-	else if (!Id.IsEmpty()) O->SetStringField(K, Id);
+	if (SmvJson::IsServerId(InId)) O->SetNumberField(K, FCString::Atod(*InId));
+	else if (!InId.IsEmpty()) O->SetStringField(K, InId);
 }
 
 // ---------------------------------------------------------------------------
@@ -326,7 +327,8 @@ TSharedRef<FJsonObject> FSmvMission::ToJson() const
 	O->SetStringField(TEXT("name"), Name.Left(60));
 	O->SetStringField(TEXT("kind"), Kind);
 	const TSharedPtr<FJsonObject> P = SmvJson::Parse(PlanJson);
-	O->SetObjectField(TEXT("plan"), P.IsValid() ? P : MakeShared<FJsonObject>());
+	// üçlü işleçte TSharedPtr/TSharedRef karışımı yerine açık tür
+	O->SetObjectField(TEXT("plan"), P.IsValid() ? P : TSharedPtr<FJsonObject>(MakeShared<FJsonObject>()));
 	return O;
 }
 

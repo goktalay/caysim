@@ -284,7 +284,7 @@ void USmvLocalFlightLink::Start(const FSmvFlightRequest& Request)
 	Session->Launch.AzimuthDeg = Req.Launch.AimAzDeg;
 	for (const TPair<FString, double>& Kv : Req.Drone.Params) Session->UserParams.push_back({ std::string(TCHAR_TO_UTF8(*Kv.Key)), Kv.Value });
 	ModeVehicle = UTF8_TO_TCHAR(SmvCore::ModeVehicle(Type).c_str());
-	VehicleMavType = ModeVehicle == TEXT("plane") ? 1 : ModeVehicle == TEXT("rover") ? 10 : 2;
+	VehicleMavType = (uint8)(ModeVehicle == TEXT("plane") ? 1 : ModeVehicle == TEXT("rover") ? 10 : 2);
 
 	// güç ayarı: dron önerisi → istek → tip varsayılanı (flightsim_power.dogrula)
 	SmvCore::FPowerCfg Pc = SmvCore::FPowerCfg::Defaults(Type);
@@ -454,7 +454,7 @@ bool USmvLocalFlightLink::OnTick(float /*Dt*/)
 		while (Tcp && Tcp->HasPendingData(Pending) && Guard++ < 64)
 		{
 			int32 Read = 0;
-			if (!Tcp->Recv(Buf, FMath::Min<int32>(sizeof(Buf), (int32)FMath::Max<uint32>(Pending, 1u)), Read) || Read <= 0) break;
+			if (!Tcp->Recv(Buf, FMath::Min<int32>((int32)sizeof(Buf), (int32)FMath::Max<uint32>(Pending, 1u)), Read) || Read <= 0) break;
 			// ham köprü: SITL → Mission Planner
 			if (Udp && MpAddr.IsValid())
 			{
@@ -569,11 +569,11 @@ void USmvLocalFlightLink::OnFirstHeartbeat()
 
 void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 {
-	using namespace SmvMav;
+	// `using namespace SmvMav` YOK: UE küresel adlarıyla (ör. FFrame) belirsizlik olmasın diye adlar nitelikli
 	if (F.SysId == GSmvGcsSys) return;   // kendi yankımız
-	if (F.MsgId == MSG_HEARTBEAT)
+	if (F.MsgId == SmvMav::MSG_HEARTBEAT)
 	{
-		const FHeartbeat H = DecodeHeartbeat(F);
+		const SmvMav::FHeartbeat H = SmvMav::DecodeHeartbeat(F);
 		if (H.Type == 6 || H.Type == 18) return;   // GCS / onboard controller
 		if (!bHeartbeatSeen)
 		{
@@ -583,7 +583,7 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 			OnFirstHeartbeat();
 		}
 		if (F.SysId != TargetSys) return;
-		const bool bArmedNow = (H.BaseMode & MODE_FLAG_ARMED) != 0;
+		const bool bArmedNow = (H.BaseMode & SmvMav::MODE_FLAG_ARMED) != 0;
 		if (bArmedNow && FirstArmWall <= 0) FirstArmWall = FPlatformTime::Seconds();
 		Tele.bArmed = bArmedNow;
 		Tele.Mode = UTF8_TO_TCHAR(SmvCore::ModeName(std::string(TCHAR_TO_UTF8(*ModeVehicle)), H.CustomMode).c_str());
@@ -592,9 +592,9 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 	if (bHeartbeatSeen && F.SysId != TargetSys) return;
 	switch (F.MsgId)
 	{
-	case MSG_ATTITUDE:
+	case SmvMav::MSG_ATTITUDE:
 	{
-		const FAttitude A = DecodeAttitude(F);
+		const SmvMav::FAttitude A = SmvMav::DecodeAttitude(F);
 		Tele.Roll = A.Roll; Tele.Pitch = A.Pitch; Tele.Yaw = A.Yaw;
 		Tele.RollSpeed = A.RollSpeed; Tele.PitchSpeed = A.PitchSpeed; Tele.YawSpeed = A.YawSpeed;
 		Tele.Tbm = A.TimeBootMs;
@@ -602,9 +602,9 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		Publish(true);
 		break;
 	}
-	case MSG_GLOBAL_POSITION_INT:
+	case SmvMav::MSG_GLOBAL_POSITION_INT:
 	{
-		const FGlobalPositionInt G = DecodeGlobalPositionInt(F);
+		const SmvMav::FGlobalPositionInt G = SmvMav::DecodeGlobalPositionInt(F);
 		if (G.Lat != 0 || G.Lon != 0) { Tele.Lat = G.Lat / 1e7; Tele.Lon = G.Lon / 1e7; }
 		Tele.AltMsl = G.Alt / 1000.0;
 		Tele.AltRel = G.RelativeAlt / 1000.0;
@@ -613,38 +613,38 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		if (FPlatformTime::Seconds() - LastAttWall > 0.1) { Tele.Tbm = G.TimeBootMs; Publish(false); }
 		break;
 	}
-	case MSG_VFR_HUD:
+	case SmvMav::MSG_VFR_HUD:
 	{
-		const FVfrHud V = DecodeVfrHud(F);
+		const SmvMav::FVfrHud V = SmvMav::DecodeVfrHud(F);
 		Tele.Airspeed = V.Airspeed; Tele.Groundspeed = V.Groundspeed; Tele.Climb = V.Climb;
 		Tele.Throttle = bMotorCut ? 0.f : (float)V.Throttle;
 		Tele.Heading = (float)V.Heading;
 		break;
 	}
-	case MSG_SYS_STATUS:
+	case SmvMav::MSG_SYS_STATUS:
 	{
-		const FSysStatus S = DecodeSysStatus(F);
+		const SmvMav::FSysStatus S = SmvMav::DecodeSysStatus(F);
 		Tele.BattV = S.VoltageMv == 65535 ? -1.f : S.VoltageMv / 1000.f;
 		Tele.BattPct = S.BatteryRemaining < 0 ? -1.f : (float)S.BatteryRemaining;
 		break;
 	}
-	case MSG_GPS_RAW_INT:
+	case SmvMav::MSG_GPS_RAW_INT:
 	{
-		const FGpsRawInt G = DecodeGpsRawInt(F);
+		const SmvMav::FGpsRawInt G = SmvMav::DecodeGpsRawInt(F);
 		Tele.GpsFix = G.FixType;
 		Tele.Sats = G.Sats == 255 ? -1 : G.Sats;
 		break;
 	}
-	case MSG_RC_CHANNELS:
+	case SmvMav::MSG_RC_CHANNELS:
 	{
-		const FRcChannels R = DecodeRcChannels(F);
+		const SmvMav::FRcChannels R = SmvMav::DecodeRcChannels(F);
 		Tele.Rc.SetNum(8);
 		for (int32 i = 0; i < 8; ++i) Tele.Rc[i] = R.Chan[i];
 		break;
 	}
-	case MSG_SERVO_OUTPUT_RAW:
+	case SmvMav::MSG_SERVO_OUTPUT_RAW:
 	{
-		const FServoOutputRaw S = DecodeServoOutputRaw(F);
+		const SmvMav::FServoOutputRaw S = SmvMav::DecodeServoOutputRaw(F);
 		if (S.Port != 0) break;
 		Extra.Servo.SetNum(8);
 		for (int32 i = 0; i < 8; ++i) Extra.Servo[i] = S.Servo[i];
@@ -669,17 +669,17 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		}
 		break;
 	}
-	case MSG_HOME_POSITION:
+	case SmvMav::MSG_HOME_POSITION:
 	{
-		const FHomePosition H = DecodeHomePosition(F);
+		const SmvMav::FHomePosition H = SmvMav::DecodeHomePosition(F);
 		Tele.bHasHome = true;
 		Tele.HomeLat = H.Latitude / 1e7; Tele.HomeLon = H.Longitude / 1e7; Tele.HomeAlt = H.Altitude / 1000.0;
 		HomeAltMsl = Tele.HomeAlt; bHomeKnown = true;
 		break;
 	}
-	case MSG_PARAM_VALUE:
+	case SmvMav::MSG_PARAM_VALUE:
 	{
-		const FParamValue P = DecodeParamValue(F);
+		const SmvMav::FParamValue P = SmvMav::DecodeParamValue(F);
 		const FString Id = UTF8_TO_TCHAR(P.Id.c_str());
 		int32 N = 0;
 		if (Id.StartsWith(TEXT("SERVO")) && Id.EndsWith(TEXT("_FUNCTION")) && LexTryParseString(N, *Id.Mid(5, Id.Len() - 14)) && N >= 1 && N <= 8)
@@ -689,10 +689,10 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		}
 		break;
 	}
-	case MSG_COMMAND_ACK:
+	case SmvMav::MSG_COMMAND_ACK:
 	{
-		const FCommandAck A = DecodeCommandAck(F);
-		if (A.Command == CMD_SET_MESSAGE_INTERVAL && A.Result != 0 && A.Result != 5 && ModeVehicle == TEXT("plane") && !bStreamFallback)
+		const SmvMav::FCommandAck A = SmvMav::DecodeCommandAck(F);
+		if (A.Command == SmvMav::CMD_SET_MESSAGE_INTERVAL && A.Result != 0 && A.Result != 5 && ModeVehicle == TEXT("plane") && !bStreamFallback)
 		{
 			bStreamFallback = true;
 			RequestStreams(false);
@@ -704,9 +704,9 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		}
 		break;
 	}
-	case MSG_STATUSTEXT:
+	case SmvMav::MSG_STATUSTEXT:
 	{
-		const FStatusText S = DecodeStatusText(F);
+		const SmvMav::FStatusText S = SmvMav::DecodeStatusText(F);
 		const FString Text = UTF8_TO_TCHAR(S.Text.c_str());
 		EmitEvent(Text, S.Severity);
 		// "SIM Hit ground at X m/s" — SITL fiziği yere çarptı
@@ -720,7 +720,7 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		}
 		break;
 	}
-	case MSG_EXTENDED_SYS_STATE:
+	case SmvMav::MSG_EXTENDED_SYS_STATE:
 	default:
 		break;
 	}
@@ -1083,7 +1083,7 @@ void USmvLocalFlightLink::PumpMp()
 	{
 		TSharedRef<FInternetAddr> From = SS->CreateInternetAddr();
 		int32 Read = 0;
-		if (!Udp->RecvFrom(Buf, sizeof(Buf), Read, *From) || Read <= 0) break;
+		if (!Udp->RecvFrom(Buf, (int32)sizeof(Buf), Read, *From) || Read <= 0) break;
 		const double W = FPlatformTime::Seconds();
 		if (MpLocked.IsValid() && !MpLocked->CompareEndpoints(*From) && W - MpLastRx < 30.0) continue;   // GCS kilidi
 		if (!MpLocked.IsValid() || !MpLocked->CompareEndpoints(*From)) MpLocked = From;

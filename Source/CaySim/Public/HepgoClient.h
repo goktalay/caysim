@@ -185,7 +185,7 @@ private:
 	/** Sarmalanmış liste: `{<Key>:[…]}`. */
 	void RequestList(const FString& Path, const FString& Key, TFunction<void(bool, const TArray<TSharedPtr<FJsonValue>>&, const TSharedPtr<FJsonObject>&)> Done);
 	static bool ParseJson(const FString& Text, TSharedPtr<FJsonObject>& Out);
-	void ReportError(const FString& Code, const FString& Msg);
+	void ReportError(const FString& ErrCode, const FString& Msg);
 	void ParseError(int32 Status, const FString& Body, FString& OutCode, FString& OutMsg) const;
 
 	// WS

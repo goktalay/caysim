@@ -69,7 +69,7 @@ private:
 	// yardımcılar
 	TSharedRef<SWidget> Page(const FText& Title, TSharedRef<SWidget> Body, bool bBack = true);
 	TSharedRef<SWidget> Panel(TSharedRef<SWidget> Inner, float Padding = 16.f);
-	TSharedRef<SWidget> Btn(const FText& Label, TFunction<void()> OnClick, bool bPrimary = false, TAttribute<bool> Enabled = true);
+	TSharedRef<SWidget> Btn(const FText& InLabel, TFunction<void()> OnClick, bool bPrimary = false, TAttribute<bool> Enabled = true);
 	TSharedRef<SWidget> Label(const FText& T, int32 Size = 12, bool bBold = false, const FLinearColor& Color = FLinearColor(0.85f, 0.9f, 0.95f));
 	TSharedRef<SWidget> Field(const FText& Name, TSharedRef<SWidget> Editor);
 	TSharedRef<SWidget> TextEdit(FString* Target, bool bPassword = false, const FText& Hint = FText::GetEmpty());

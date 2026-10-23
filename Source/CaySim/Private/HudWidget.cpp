@@ -3,6 +3,7 @@
 #include "Styling/CoreStyle.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Rendering/SlateRenderer.h"
 #include "Misc/DateTime.h"
 #include "CaySimGeo.h"
 
@@ -34,11 +35,11 @@ struct UCaySimHudWidget::FPainter
 	TSharedRef<FSlateFontMeasure> Measure;
 	FVector2D Size;
 
-	FPainter(FSlateWindowElementList& InOut, const FGeometry& InGeo, int32 InLayer, const FLinearColor& InC, int32 FontSize, float InThick)
+	FPainter(FSlateWindowElementList& InOut, const FGeometry& InGeo, int32 InLayer, const FLinearColor& InC, int32 InFontSize, float InThick)
 		: Out(InOut), Geo(InGeo), Layer(InLayer), C(InC), Thick(InThick), Measure(FSlateApplication::Get().GetRenderer()->GetFontMeasureService())
 	{
-		Font = FCoreStyle::GetDefaultFontStyle("Mono", FontSize);
-		FontBig = FCoreStyle::GetDefaultFontStyle("Mono", FontSize + 5);
+		Font = FCoreStyle::GetDefaultFontStyle("Mono", InFontSize);
+		FontBig = FCoreStyle::GetDefaultFontStyle("Mono", InFontSize + 5);
 		Size = Geo.GetLocalSize();
 	}
 
@@ -70,7 +71,7 @@ struct UCaySimHudWidget::FPainter
 		Pts.Reserve(PtsD.Num());
 		for (const FVector2D& V : PtsD) Pts.Add(FVector2f((float)V.X, (float)V.Y));
 		// dış çizgi
-		FSlateDrawElement::MakeLines(Out, Layer, Geo.ToPaintGeometry(), Pts, ESlateDrawEffect::None, FLinearColor(0, 0, 0, 0.6f * Alpha), true, Thick + 2.f);
+		FSlateDrawElement::MakeLines(Out, Layer, Geo.ToPaintGeometry(), Pts, ESlateDrawEffect::None, FLinearColor(0.f, 0.f, 0.f, 0.6f * Alpha), true, Thick + 2.f);
 		FSlateDrawElement::MakeLines(Out, Layer + 1, Geo.ToPaintGeometry(), Pts, ESlateDrawEffect::None, C.CopyWithNewOpacity(Alpha), true, Thick);
 	}
 
@@ -83,9 +84,10 @@ struct UCaySimHudWidget::FPainter
 		const FLinearColor Col = (Override.A > 0.f) ? Override : C;
 		for (const FVector2D& O : { FVector2D(1, 1), FVector2D(-1, 1), FVector2D(1, -1), FVector2D(-1, -1) })
 		{
-			FSlateDrawElement::MakeText(Out, Layer, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos + O)), S, F, ESlateDrawEffect::None, FLinearColor(0, 0, 0, 0.8f));
+			// UE 5.2+: ToPaintGeometry(boyut FVector2f, FSlateLayoutTransform) — boyutu açıkça FVector2f veriyoruz
+			FSlateDrawElement::MakeText(Out, Layer, Geo.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform(FVector2f(Pos + O))), S, F, ESlateDrawEffect::None, FLinearColor(0.f, 0.f, 0.f, 0.8f));
 		}
-		FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)), S, F, ESlateDrawEffect::None, Col);
+		FSlateDrawElement::MakeText(Out, Layer + 1, Geo.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform(FVector2f(Pos))), S, F, ESlateDrawEffect::None, Col);
 	}
 
 	void Box(FVector2D Min, FVector2D Max, float Alpha = 1.f) const
@@ -95,7 +97,7 @@ struct UCaySimHudWidget::FPainter
 
 	void FilledBox(FVector2D Min, FVector2D Max, FLinearColor Fill) const
 	{
-		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(Max - Min, FSlateLayoutTransform(Min)), FCoreStyle::Get().GetBrush("WhiteBrush"), ESlateDrawEffect::None, Fill);
+		FSlateDrawElement::MakeBox(Out, Layer, Geo.ToPaintGeometry(FVector2f(Max - Min), FSlateLayoutTransform(FVector2f(Min))), FCoreStyle::Get().GetBrush("WhiteBrush"), ESlateDrawEffect::None, Fill);
 	}
 
 	static FVector2D Rot(FVector2D P, float Ang) { const float c = FMath::Cos(Ang), s = FMath::Sin(Ang); return FVector2D(P.X * c - P.Y * s, P.X * s + P.Y * c); }
@@ -180,13 +182,13 @@ int32 UCaySimHudWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, 
 			float DriftDeg = Track - T.Heading;
 			while (DriftDeg > 180.f) DriftDeg -= 360.f;
 			while (DriftDeg < -180.f) DriftDeg += 360.f;
-			const float Fpa = FMath::RadiansToDegrees(FMath::Atan2(-T.Vd, FMath::Max(0.1f, FVector2D(T.Vn, T.Ve).Size())));
+			const float Fpa = FMath::RadiansToDegrees(FMath::Atan2(-T.Vd, FMath::Max(0.1f, (float)FVector2D(T.Vn, T.Ve).Size())));
 			FVector2D Pos = Ctr + FPainter::Rot(FVector2D(DriftDeg * Ppd, (CamPitchDeg - Fpa) * Ppd), -Roll);
 			const bool bClipped = FMath::Abs(Pos.X - Ctr.X) > W * 0.45f || FMath::Abs(Pos.Y - Ctr.Y) > H * 0.45f;
 			Pos.X = FMath::Clamp(Pos.X, W * 0.05f, W * 0.95f);
 			Pos.Y = FMath::Clamp(Pos.Y, H * 0.05f, H * 0.95f);
 			TArray<FVector2D> Circ;
-			for (int32 i = 0; i <= 24; ++i) { const float a = i / 24.f * 2 * PI; Circ.Add(Pos + FVector2D(FMath::Cos(a) * 9, FMath::Sin(a) * 9)); }
+			for (int32 i = 0; i <= 24; ++i) { const float a = i / 24.f * 2 * UE_PI; Circ.Add(Pos + FVector2D(FMath::Cos(a) * 9, FMath::Sin(a) * 9)); }
 			P.Lines(Circ, bClipped);
 			P.Lines({ Pos + FVector2D(-9, 0), Pos + FVector2D(-22, 0) });
 			P.Lines({ Pos + FVector2D(9, 0), Pos + FVector2D(22, 0) });
@@ -288,9 +290,10 @@ int32 UCaySimHudWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, 
 		float Y = H - 150.f;
 		const float X = 24.f;
 		P.Text(T.Mode.IsEmpty() ? TEXT("---") : T.Mode, FVector2D(X, Y), -1, true); Y += 26;
-		P.Text(T.bArmed ? TEXT("ARM") : TEXT("SAFE"), FVector2D(X, Y), -1, false, T.bArmed ? FLinearColor::Transparent : FLinearColor(1, 0.6f, 0.2f)); Y += 20;
-		const float G = (T.bArmed && T.Airspeed > 5.f) ? 1.f / FMath::Max(0.2f, FMath::Cos(Roll)) : 1.f;
-		P.Text(FString::Printf(TEXT("G %.1f"), G), FVector2D(X, Y), -1); Y += 20;
+		P.Text(T.bArmed ? TEXT("ARM") : TEXT("SAFE"), FVector2D(X, Y), -1, false, T.bArmed ? FLinearColor::Transparent : FLinearColor(1.f, 0.6f, 0.2f)); Y += 20;
+		// yerel ad `LoadG`: NativePaint parametresi `G` (FGeometry) gölgelenmesin (C4457)
+		const float LoadG = (T.bArmed && T.Airspeed > 5.f) ? 1.f / FMath::Max(0.2f, FMath::Cos(Roll)) : 1.f;
+		P.Text(FString::Printf(TEXT("G %.1f"), LoadG), FVector2D(X, Y), -1); Y += 20;
 		P.Text(FString::Printf(TEXT("THR %3.0f%%"), T.Throttle), FVector2D(X, Y), -1);
 		P.Box(FVector2D(X + 90, Y + 4), FVector2D(X + 190, Y + 14));
 		P.FilledBox(FVector2D(X + 90, Y + 4), FVector2D(X + 90 + FMath::Clamp(T.Throttle, 0.f, 100.f), Y + 14), P.C.CopyWithNewOpacity(0.6f)); Y += 20;
@@ -358,7 +361,7 @@ int32 UCaySimHudWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, 
 		{
 			const FVector2D Sz = P.Measure->Measure(Wn, P.FontBig);
 			const FVector2D Min(Ctr.X - Sz.X * 0.5f - 12, Y), Max(Ctr.X + Sz.X * 0.5f + 12, Y + Sz.Y + 8);
-			if (bBlink) P.FilledBox(Min, Max, FLinearColor(0.8f, 0, 0, 0.55f));
+			if (bBlink) P.FilledBox(Min, Max, FLinearColor(0.8f, 0.f, 0.f, 0.55f));
 			const TArray<FVector2f> Frame = { FVector2f(Min), FVector2f((float)Max.X, (float)Min.Y), FVector2f(Max), FVector2f((float)Min.X, (float)Max.Y), FVector2f(Min) };
 			FSlateDrawElement::MakeLines(Out, P.Layer + 1, G.ToPaintGeometry(), Frame, ESlateDrawEffect::None, FLinearColor::Red, true, 2.f);
 			P.Text(Wn, FVector2D(Ctr.X, Y + 4), 0, true, FLinearColor::White);

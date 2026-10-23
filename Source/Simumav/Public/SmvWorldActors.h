@@ -15,6 +15,8 @@ class UProceduralMeshComponent;
 class UInstancedStaticMeshComponent;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
+class UMaterialInterface;
+class UStaticMesh;
 class USmvMotorSynth;
 class ICaySimGeoTransform;
 
@@ -26,7 +28,8 @@ class SIMUMAV_API ASmvDroneActor : public ACaySimDroneActor
 public:
 	ASmvDroneActor();
 	/** SIMUMAV tipine göre gövde + renk + motor sesi türü. */
-	void ConfigureVisual(const FString& SmvType, const FString& ModelKey, const FLinearColor& Color);
+	// Not: parametre adı üye SmvType ile aynı olmamalı (C4458)
+	void ConfigureVisual(const FString& InType, const FString& ModelKey, const FLinearColor& Color);
 	USmvMotorSynth* GetMotor() const { return Motor; }
 	/** Kamera konumuna göre ses (Doppler + uzaklık) — her kare. */
 	void UpdateAudio(const FVector& Listener, float Volume);
@@ -45,7 +48,7 @@ private:
 	FString SmvType = TEXT("multirotor");
 	FLinearColor BodyColor = FLinearColor(0.8f, 0.1f, 0.1f);
 	FVector LastPos = FVector::ZeroVector;
-	UStaticMeshComponent* AddPart(UStaticMesh* Mesh, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color);
+	UStaticMeshComponent* AddPart(UStaticMesh* M, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color);
 };
 
 UCLASS()

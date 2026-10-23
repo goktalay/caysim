@@ -225,15 +225,15 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 	{
 		const FVector2D L = bStickMode2 ? LeftStick : FVector2D(LeftStick.X, RightStick.Y);
 		const FVector2D R = bStickMode2 ? RightStick : FVector2D(RightStick.X, LeftStick.Y);
-		Yaw = L.X; Roll = R.X; Pitch = R.Y;
+		Yaw = (float)L.X; Roll = (float)R.X; Pitch = (float)R.Y;   // FVector2D bileşenleri double (LWC)
 		const bool bKeyboard = InputDevice == TEXT("keyboard");
 		if (bKeyboard && IsPlaneLike())
 		{
 			// uçakta klavye gazı kalıcı: W/S ile 0,6/sn hızında değişir
-			KeyThrottle = FMath::Clamp(KeyThrottle + L.Y * 0.6f * Dt, -1.f, 1.f);
+			KeyThrottle = FMath::Clamp(KeyThrottle + (float)L.Y * 0.6f * Dt, -1.f, 1.f);
 			Thr = KeyThrottle;
 		}
-		else Thr = L.Y;   // kopter: yaylı (orta = irtifa tut)
+		else Thr = (float)L.Y;   // kopter: yaylı (orta = irtifa tut)
 		Roll = SmvExpo(Roll, Expo); Pitch = SmvExpo(Pitch, Expo); Yaw = SmvExpo(Yaw, Expo);
 	}
 	Rc.SetNum(8);
@@ -353,8 +353,8 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 		CamRot = FRotator(GimbalPitch, Body.Yaw, 0.f);   // stabilize gimbal: roll/pitch'ten bağımsız
 		break;
 	case ESmvCamMode::Orbit:
-		OrbitYaw += Look.X * 0.3f;
-		OrbitPitch = FMath::Clamp(OrbitPitch + Look.Y * 0.3f, -85.f, 10.f);
+		OrbitYaw += (float)Look.X * 0.3f;
+		OrbitPitch = FMath::Clamp(OrbitPitch + (float)Look.Y * 0.3f, -85.f, 10.f);
 		CamPos = Pos - FRotator(OrbitPitch, OrbitYaw, 0).Vector() * OrbitDist * 100.f;
 		CamRot = (Pos - CamPos).Rotation();
 		break;
@@ -365,8 +365,8 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 		Camera->SetFieldOfView(FMath::Clamp(FMath::RadiansToDegrees(2.f * FMath::Atan(800.f / FMath::Max(1.f, (float)FVector::Dist(Pos, CamPos)))), 5.f, 60.f));
 		break;
 	case ESmvCamMode::Free:
-		FreeYaw += Look.X * 0.3f;
-		FreePitch = FMath::Clamp(FreePitch + Look.Y * 0.3f, -89.f, 89.f);
+		FreeYaw += (float)Look.X * 0.3f;
+		FreePitch = FMath::Clamp(FreePitch + (float)Look.Y * 0.3f, -89.f, 89.f);
 		CamRot = FRotator(FreePitch, FreeYaw, 0.f);
 		CamPos += (CamRot.Vector() * RightStick.Y + FRotator(0, FreeYaw + 90.f, 0).Vector() * RightStick.X + FVector(0, 0, LeftStick.Y)) * 3000.f * Dt;
 		break;

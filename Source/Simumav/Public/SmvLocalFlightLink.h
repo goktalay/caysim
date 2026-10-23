@@ -14,6 +14,8 @@
 #include "CoreMinimal.h"
 #include "SmvFlightLink.h"
 #include "Containers/Ticker.h"
+#include "HAL/PlatformProcess.h"   // FProcHandle (IWYU: CoreMinimal getirmez)
+#include "HAL/PlatformTime.h"
 #include "SmvLocalFlightLink.generated.h"
 
 class FSocket;
@@ -34,7 +36,7 @@ public:
 	virtual void Start(const FSmvFlightRequest& Request) override;
 	virtual void Stop(const FString& Reason) override;
 	virtual void SendRc(const TArray<int32>& Channels) override;
-	virtual FString Command(const FString& Name, const TSharedPtr<FJsonObject>& Params) override;
+	virtual FString Command(const FString& Name, const TSharedPtr<FJsonObject>& InParams) override;
 	virtual double Now() const override;
 	virtual bool IsReady() const override { return bHeartbeatSeen; }
 	virtual FString MissionPlannerInfo() const override;

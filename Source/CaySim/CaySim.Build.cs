@@ -34,9 +34,11 @@ public class CaySim : ModuleRules
 		AddEngineThirdPartyPrivateStaticDependencies(Target, "zlib");
 
 		// Cesium for Unreal eklentisi varsa georeference / 3D Tiles kodu derlenir.
-		// Eklenti Plugins/CesiumForUnreal altında ya da motorun Marketplace eklentilerinde olabilir.
+		// Eklenti Plugins/CesiumForUnreal altında ya da motorun Marketplace (Fab) eklentilerinde olabilir.
+		// EngineDirectory mutlak yoldur (Target.RelativeEnginePath çalışma dizinine göreli olduğundan güvenilmez).
 		bool bCesium = Directory.Exists(Path.Combine(PluginDirectory(Target), "CesiumForUnreal"))
-			|| Directory.Exists(Path.Combine(Target.RelativeEnginePath, "Plugins", "Marketplace", "CesiumForUnreal"));
+			|| Directory.Exists(Path.Combine(EngineDirectory, "Plugins", "Marketplace", "CesiumForUnreal"))
+			|| Directory.Exists(Path.Combine(EngineDirectory, "Plugins", "Fab", "CesiumForUnreal"));
 		if (bCesium)
 		{
 			PublicDependencyModuleNames.Add("CesiumRuntime");

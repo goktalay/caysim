@@ -8,11 +8,17 @@ Denetimler:
   4. Saf çekirdek (Private/Core|Mavlink|Crypto) Unreal başlığı içermez.
   5. Ayraç / parantez dengesi (yorum ve dizgeler ayıklanarak).
   6. AddDynamic ile bağlanan üye işlevler UFUNCTION olmalı.
+  7–12. ue_denetim_ek.py: gölgeleme (C4456/C4457/C4458), [=] lambda, unity derleme ad çakışması, kaldırılmış API'ler,
+        karışık float/double FMath (uyarı), Build.cs eklenti modülleri ↔ .uproject Plugins.
 Kullanım: python3 tests/ue_denetim.py   (çıkış 0 = temiz)
 """
 import os
 import re
 import sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ue_denetim_ek as EK  # noqa: E402
 
 KOK = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 SRC = os.path.join(KOK, 'Source')
@@ -20,7 +26,8 @@ SRC = os.path.join(KOK, 'Source')
 # motor başlığı → sağlayan modül (yalnız projede kullanılanlar; yeni başlık eklenince buraya da eklenir — bilinçli gözden geçirme)
 MOTOR = {
     'CoreMinimal.h': 'Core', 'Modules/ModuleManager.h': 'Core', 'Containers/Ticker.h': 'Core', 'Misc/AES.h': 'Core', 'Misc/FileHelper.h': 'Core',
-    'Misc/Paths.h': 'Core', 'HAL/FileManager.h': 'Core', 'HAL/PlatformMisc.h': 'Core', 'HAL/PlatformProcess.h': 'Core', 'Misc/ConfigCacheIni.h': 'Core',
+    'Misc/Paths.h': 'Core', 'HAL/FileManager.h': 'Core', 'HAL/PlatformMisc.h': 'Core', 'HAL/PlatformProcess.h': 'Core', 'HAL/PlatformTime.h': 'Core', 'Components/InputComponent.h': 'Engine',
+    'Rendering/SlateRenderer.h': 'SlateCore', 'Misc/ConfigCacheIni.h': 'Core',
     'Misc/DateTime.h': 'Core', 'Misc/App.h': 'Core', 'Internationalization/Culture.h': 'Core', 'Internationalization/Internationalization.h': 'Core',
     'GenericPlatform/GenericPlatformHttp.h': 'Core',
     'Misc/Base64.h': 'Core', 'Misc/SecureHash.h': 'Core', 'Dom/JsonValue.h': 'Json', 'zlib.h': 'zlib',
@@ -104,8 +111,15 @@ def main():
         for f in dosyalar:
             if f.endswith('.h'):
                 proje_basliklar.setdefault(f, []).append(os.path.join(kok, f))
+    # ek denetimler için proje sınıfları (veri üyeleri + üst sınıflar)
+    basliklar = [(p, yorumsuz(open(p, encoding='utf-8').read())) for ps in proje_basliklar.values() for p in ps]
+    siniflar = EK.siniflari_topla(basliklar)
+    hatalar.extend(EK.oz_sinama(yorumsuz))
+    hatalar.extend(EK.eklenti_tutarlilik(KOK))
     for modul in [d for d in os.listdir(SRC) if os.path.isdir(os.path.join(SRC, d))]:
         mdir = os.path.join(SRC, modul)
+        dosya_adlari = {}   # unity: ad → [dosyalar]
+        dosya_tanimlari = {}
         api = modul.upper() + '_API'
         mods = build_moduller(mdir)
         for kok, _, dosyalar in os.walk(mdir):
@@ -148,6 +162,18 @@ def main():
                             for m in re.finditer(r'^\s*(UCLASS|USTRUCT)\s*\([^)]*\)\s*\n\s*(class|struct)\s+(\w+)\s+(\w+)?', t, flags=re.M):
                                 if m.group(3) != api and m.group(2) == 'class':
                                     uyarilar.append(f'{goreli}: {m.group(2)} {m.group(3)} {m.group(4) or ""} — {api} makrosu yok')
+                # 7–11: gölgeleme, [=] lambda, kaldırılmış API, karışık FMath
+                hatalar.extend(EK.golgeleme(goreli, t, siniflar))
+                if not saf:
+                    hatalar.extend(EK.lambda_esittir(goreli, t))
+                    hatalar.extend(EK.kaldirilmis(goreli, t))
+                    uyarilar.extend(EK.fmath_karisik(goreli, t))
+                if f.endswith('.cpp'):
+                    adlar, tanimlar = EK.dosya_kapsami_adlar(t if not saf else ham)
+                    for a in adlar:
+                        dosya_adlari.setdefault(a, []).append(goreli)
+                    for a in tanimlar:
+                        dosya_tanimlari.setdefault(a, []).append(goreli)
                 # ayraç dengesi
                 for a, b in (('{', '}'), ('(', ')'), ('[', ']')):
                     if t.count(a) != t.count(b):
@@ -161,6 +187,13 @@ def main():
                         ht = open(bas[0], encoding='utf-8').read()
                         if not re.search(r'UFUNCTION\([^)]*\)\s*(virtual\s+)?void\s+' + isl + r'\s*\(', ht):
                             hatalar.append(f'{goreli}: AddDynamic {sinif}::{isl} UFUNCTION değil')
+        # 9: unity derlemesinde aynı çeviri birimine düşebilecek dosya-kapsamı adlar
+        for a, ds in sorted(dosya_adlari.items()):
+            if len(ds) > 1:
+                hatalar.append(f'{modul}: dosya-kapsamı "{a}" birden çok .cpp\'de tanımlı (unity derlemede yeniden tanım): {", ".join(ds)}')
+        for a, ds in sorted(dosya_tanimlari.items()):
+            if len(ds) > 1:
+                hatalar.append(f'{modul}: #define {a} birden çok .cpp\'de (#undef yok; unity derlemede yeniden tanım uyarısı): {", ".join(ds)}')
     for u in uyarilar:
         print('UYARI', u)
     for h in hatalar:

@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "HAL/PlatformTime.h"   // satır içi FPlatformTime::Seconds
 #include "CaySimTypes.h"
 #include "SimumavTypes.h"
 #include "SmvFlightLink.generated.h"
@@ -29,7 +30,7 @@ public:
 	virtual void SendRc(const TArray<int32>& Channels) PURE_VIRTUAL(USmvFlightLink::SendRc, );
 	/** Sunucu komut adları (arm, disarm, mode{mode}, takeoff{alt}, rtl, set_home, speed{factor}, servo_set{ch,pwm}, servo_trigger{…},
 	 *  motor_cut{on}, reset, crash{kind,speed}, engage{action,i}, camera{type}, gpws{events,cfg}). Dönüş: istek kimliği (rid). */
-	virtual FString Command(const FString& Name, const TSharedPtr<FJsonObject>& Params) PURE_VIRTUAL(USmvFlightLink::Command, return FString(););
+	virtual FString Command(const FString& Name, const TSharedPtr<FJsonObject>& InParams) PURE_VIRTUAL(USmvFlightLink::Command, return FString(););
 	/** tele.ts ile aynı ölçekte şimdiki zaman (Unix sn). */
 	virtual double Now() const PURE_VIRTUAL(USmvFlightLink::Now, return 0.0;);
 	virtual bool IsReady() const PURE_VIRTUAL(USmvFlightLink::IsReady, return false;);

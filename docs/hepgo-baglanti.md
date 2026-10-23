@@ -17,7 +17,7 @@ güncelledikçe buraya da kopyalanır). Bu sayfa, sözleşmenin CAYSIM kodunda n
 | Sözleşme | CAYSIM |
 |---|---|
 | `GET /hello` (+ `X-Caysim-Host/-Ver/-Platform`) | `UHepgoClient::Hello` → `FCaySimHello` (şirket adı/ünvan/logo/tema rengi, caps, limits, host, google3d, sitl, ws_url); `v ≠ 1` uyarısı |
-| `GET /brand/logo?format=png&size=640` | `UCaySimSessionWizard::HandleHello` → `LoadImage` (Bearer ile `FetchBytes` → `FImageUtils::ImportBufferAsTexture2D`); sunucu her zaman PNG döner (SVG çevrilir) |
+| `GET /brand/logo?format=png&size=640` | `UCaySimSessionWizard::HandleHello` → `LoadRemoteImage` (Bearer ile `FetchBytes` → `FImageUtils::ImportBufferAsTexture2D`); sunucu her zaman PNG döner (SVG çevrilir) |
 | `GET /centers` `{centers}` | `FetchCenters` → `OnCenters` (`alt` null → `bHasAlt=false`) |
 | `GET /types` `{types}` | `FetchTypes`; `key` → `ECaySimDroneType` (`multirotor, hexarotor, helikopter, sabit_kanat, vtol`) |
 | `GET /models?type=` `{models, defaults}` | `FetchModels` → `OnModels` + `GetDefaultModelFor(type)`; `ready=false` → dahili gövde |
