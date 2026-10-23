@@ -415,3 +415,10 @@ private:
 	TSharedPtr<SWidget> NextBtn;
 	void Rebuild();
 };
+
+/** Düz renkli parça malzemesi: /Game/Simumav/Materials/M_SmvPbr (BaseColor; editör betiği üretir) varsa o, yoksa verilen yedek
+ *  (BasicShapeMaterial'da "Color" parametresi yok → beyaz kalıyordu). Rengi her iki parametreye de yazın: SmvSetSolidColor. */
+class UMaterialInterface;
+class UMaterialInstanceDynamic;
+SIMUMAV_API UMaterialInterface* SmvSolidMat(UMaterialInterface* Fallback);
+SIMUMAV_API void SmvSetSolidColor(UMaterialInstanceDynamic* M, const FLinearColor& C);

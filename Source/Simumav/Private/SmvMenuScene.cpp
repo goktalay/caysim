@@ -6,6 +6,10 @@
 #include "SmvMotorSynth.h"
 #include "SmvUiPrefs.h"
 #include "SmvPilotFigure.h"
+#include "SmvUiKit.h"
+#include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "UObject/ConstructorHelpers.h"
 #include "CesiumWorldSetup.h"
 #include "CaySimTypes.h"
 #include "Camera/CameraActor.h"
@@ -64,6 +68,23 @@ ASmvMenuScene::ASmvMenuScene()
 	KeyLight->SetupAttachment(Root);
 	RimLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("RimLight"));
 	RimLight->SetupAttachment(Root);
+	StudioWall = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StudioWall"));
+	StudioWall->SetupAttachment(Root);
+	StudioFloor = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StudioFloor"));
+	StudioFloor->SetupAttachment(Root);
+	{
+		static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
+		static ConstructorHelpers::FObjectFinder<UStaticMesh> Cyl(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+		StudioWall->SetStaticMesh(Cube.Object);
+		StudioFloor->SetStaticMesh(Cyl.Object);
+		for (UStaticMeshComponent* C : { StudioWall.Get(), StudioFloor.Get() })
+		{
+			C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			C->SetCastShadow(false);
+			C->SetLightingChannels(false, true, false);
+			C->SetVisibleInSceneCaptureOnly(true);   // ana menü kamerası göğünde görünmesin
+		}
+	}
 	SnapCap = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("SnapCapture"));
 	SnapCap->SetupAttachment(Root);
 	SnapCap->bCaptureEveryFrame = false;
@@ -106,6 +127,13 @@ void ASmvMenuScene::BeginPlay()
 		Lt->SetLightingChannels(false, true, false);
 	}
 	KeyLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 60.f));
+	// stüdyo malzemeleri (koyu lacivert duvar, biraz açık zemin)
+	if (UMaterialInterface* Sm = SmvSolidMat(StudioWall->GetMaterial(0)))
+	{
+		UMaterialInstanceDynamic* Mw = UMaterialInstanceDynamic::Create(Sm, this); SmvSetSolidColor(Mw, FLinearColor(0.012f, 0.022f, 0.05f)); StudioWall->SetMaterial(0, Mw);
+		UMaterialInstanceDynamic* Mf = UMaterialInstanceDynamic::Create(Sm, this); SmvSetSolidColor(Mf, FLinearColor(0.035f, 0.06f, 0.11f)); StudioFloor->SetMaterial(0, Mf);
+	}
+	PlaceStudio(0.f);
 	KeyLight->SetLightColor(FLinearColor(1.f, 0.96f, 0.9f));
 	RimLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 60.f) * 0.7f);
 	RimLight->SetLightColor(FLinearColor(0.35f, 0.75f, 1.f));
@@ -281,6 +309,8 @@ void ASmvMenuScene::SetPreview(const FString& Type, const FString& ModelKey, con
 	if (USmvMotorSynth* M = Preview->GetMotor()) M->Stop();
 	PreviewDistCm = FMath::Clamp(Preview->GetVisualRadiusM() * 100.f * 3.4f, 140.f, 2400.f);
 	Capture->ShowOnlyActors.Reset();
+	Capture->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
+	PlaceStudio(0.f);
 	Capture->ShowOnlyActors.Add(Preview);
 	ApplyPreviewChannels();
 	if (USmvGameInstance* GI = USmvGameInstance::GetSmv(this))
@@ -328,6 +358,8 @@ void ASmvMenuScene::SetPilotPreview(const FSmvAvatar& A, bool bFace)
 	PilotKey = Key;
 	PilotPrev->Build(A, false);
 	Capture->ShowOnlyActors.Reset();
+	Capture->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
+	PlaceStudio(0.f);
 	Capture->ShowOnlyActors.Add(PilotPrev);
 	ApplyPreviewChannels();
 }
@@ -441,8 +473,10 @@ void ASmvMenuScene::Tick(float Dt)
 		if (FPlatformTime::Seconds() > ManualUntil) PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 14.f, 360.f);
 		FaceK = FMath::FInterpTo(FaceK, bFaceZoom ? 1.f : 0.f, Dt, 4.f);
 		PilotPrev->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, 180.f + PreviewYaw, 0.f));
-		const FVector Target = GSmvPreviewAt + FVector(0, 0, FMath::Lerp(95.f, PilotPrev->HeadHeightCm(), FaceK));
-		const float Dist = FMath::Lerp(330.f, 75.f, FaceK);
+		// tam boy: tüm figür (yatay FOV 28° → dikey ~18°) için ~6,4 m; yüz: 0,95 m
+		const FVector Target = GSmvPreviewAt + FVector(0, 0, FMath::Lerp(92.f, PilotPrev->HeadHeightCm() - 4.f, FaceK));
+		const float Dist = FMath::Lerp(640.f, 95.f, FaceK);
+		StudioFloor->SetWorldLocation(GSmvPreviewAt + FVector(0.0, 0.0, -1.0));
 		const FVector CamAt = Target + FVector(-Dist, 0.0, FMath::Lerp(20.f, 4.f, FaceK));
 		Capture->FOVAngle = 28.f;
 		Capture->SetWorldLocationAndRotation(CamAt, (Target - CamAt).Rotation());
@@ -459,6 +493,7 @@ void ASmvMenuScene::Tick(float Dt)
 		const double Drop = Lk < 1.0 ? FMath::Pow(1.0 - Lk, 3.0) * PreviewDistCm * 0.9 : 0.0;
 		Preview->SetActorLocationAndRotation(GSmvPreviewAt + FVector(0, 0, Drop), FRotator(0.f, PreviewYaw + (float)((1.0 - Lk) * 180.0), 0.f));
 		const FVector CamAt = GSmvPreviewAt + FVector(-PreviewDistCm, 0.0, PreviewDistCm * 0.32);
+		StudioFloor->SetWorldLocation(GSmvPreviewAt + FVector(0.0, 0.0, -PreviewDistCm * 0.16));
 		Capture->SetWorldLocationAndRotation(CamAt, (GSmvPreviewAt - CamAt).Rotation());
 		KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-PreviewDistCm * 0.6, PreviewDistCm * 0.7, PreviewDistCm * 0.8));
 		RimLight->SetWorldLocation(GSmvPreviewAt + FVector(PreviewDistCm * 0.8, -PreviewDistCm * 0.5, PreviewDistCm * 0.4));
@@ -500,6 +535,7 @@ void ASmvMenuScene::TickSnaps()
 			KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-180, 160, 220));
 			RimLight->SetWorldLocation(GSmvPreviewAt + FVector(160, -120, 200));
 			SnapCap->ShowOnlyActors.Reset();
+			SnapCap->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
 			SnapCap->ShowOnlyActors.Add(SnapFig);
 			SnapCap->CaptureScene();
 		}
@@ -567,6 +603,7 @@ void ASmvMenuScene::TickDroneSnaps()
 				KeyLight->SetWorldLocation(At + FVector(-D * 0.6, D * 0.7, D * 0.8));
 				RimLight->SetWorldLocation(At + FVector(D * 0.8, -D * 0.5, D * 0.4));
 				SnapCap->ShowOnlyActors.Reset();
+				SnapCap->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
 				SnapCap->ShowOnlyActors.Add(DSnapActor);
 				SnapCap->CaptureScene();
 			}
@@ -678,10 +715,20 @@ void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
 	if (!WorldPrev) return;
 	WorldPrev->Build(T, GroundMsl, WorldSetup);
 	Capture->ShowOnlyActors.Reset();
+	StudioWall->SetVisibility(false); StudioFloor->SetVisibility(false);
 	Capture->ShowOnlyActors.Add(WorldPrev);
 	// arazinin oluşturduğu alt aktörler (ağaç / bina ISM'leri ayrı aktörse) de görünsün
 	TArray<AActor*> Att;
 	WorldPrev->GetAttachedActors(Att, true);
 	for (AActor* A : Att) Capture->ShowOnlyActors.Add(A);
 	Capture->bCaptureEveryFrame = bPreviewOn;
+}
+
+void ASmvMenuScene::PlaceStudio(float FloorZ)
+{
+	StudioWall->SetVisibility(true); StudioFloor->SetVisibility(true);
+	StudioWall->SetWorldLocationAndRotation(GSmvPreviewAt + FVector(2600.0, 0.0, 1500.0), FRotator::ZeroRotator);
+	StudioWall->SetWorldScale3D(FVector(0.2f, 120.f, 80.f));
+	StudioFloor->SetWorldLocation(GSmvPreviewAt + FVector(0.0, 0.0, FloorZ - 1.0));
+	StudioFloor->SetWorldScale3D(FVector(16.f, 16.f, 0.02f));
 }

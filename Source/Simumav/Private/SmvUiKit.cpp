@@ -372,12 +372,20 @@ namespace SmvUi
 
 	// ---- bileşen yardımcıları ----
 
+	/** Büyük harf (ICU; Türkçede i → İ, ı → I) — FString::ToUpper yalnız ASCII'yi çevirir (ğ, ş, ö kalıyordu) */
+	static FString SmvUpper(const FString& In)
+	{
+		FString S = In;
+		if (FSmvI18n::Language() == TEXT("tr")) { S.ReplaceInline(TEXT("i"), TEXT("İ"), ESearchCase::CaseSensitive); S.ReplaceInline(TEXT("ı"), TEXT("I"), ESearchCase::CaseSensitive); }
+		return FText::FromString(S).ToUpper().ToString();
+	}
+
 	/** Açık temada saf beyaz metin rengi koyu mürekkebe döner */
 	static FLinearColor Ink(const FLinearColor& C) { return (Light() && C.R > 0.95f && C.G > 0.95f && C.B > 0.95f) ? Fg() : C; }
 
 	TSharedRef<SWidget> Title(const FText& T, int32 Size, const FLinearColor& Color)
 	{
-		return SNew(STextBlock).Text(FText::FromString(T.ToString().ToUpper())).Font(Font(Size, "Bold", 180)).ColorAndOpacity(Ink(Color))
+		return SNew(STextBlock).Text(FText::FromString(SmvUpper(T.ToString()))).Font(Font(Size, "Bold", 180)).ColorAndOpacity(Ink(Color))
 			.ShadowOffset(FVector2D(0, 2)).ShadowColorAndOpacity(Accent().CopyWithNewOpacity(0.35f));
 	}
 
@@ -395,7 +403,7 @@ namespace SmvUi
 			]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			[
-				SNew(STextBlock).Text(FText::FromString(T.ToString().ToUpper())).Font(Font(12, "Bold", 160)).ColorAndOpacity(Color)
+				SNew(STextBlock).Text(FText::FromString(SmvUpper(T.ToString()))).Font(Font(12, "Bold", 160)).ColorAndOpacity(Color)
 			]
 			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(12, 0, 0, 0)
 			[
@@ -847,7 +855,8 @@ void SSmvBackdrop::PaintScene(int32 S, FSlateWindowElementList& Out, int32 L, co
 		const FVector2D D0(W * 0.18f, H * 0.18f), D1(W * 0.82f, H * 0.62f);
 		DrBox(Out, L, G, D0, D1 - D0, Hex(0x020611, 0.55f));
 		for (int32 i = 0; i < 40; ++i) DrBox(Out, L, G, FVector2D(D0.X + SmvHash(i, 9) * (D1.X - D0.X), D0.Y + SmvHash(i, 8) * (D1.Y - D0.Y) * 0.6f), FVector2D(1.5f, 1.5f), FLinearColor(1, 1, 1, 0.5f + 0.5f * FMath::Sin((float)T * 2.f + i)));
-		DrLine(Out, L + 1, G, { FVector2D(D0.X, D1.Y), D0, FVector2D(D1.X, D0.Y), FVector2D(D1.X, D1.Y) }, Edge().CopyWithNewOpacity(0.9f), 6.f);
+		// kapı çerçevesi: arayüz arkasında sönük, ince (keskin mavi çizgiler karışıklık yaratıyordu)
+		DrLine(Out, L + 1, G, { FVector2D(D0.X, D1.Y), D0, FVector2D(D1.X, D0.Y), FVector2D(D1.X, D1.Y) }, Edge().CopyWithNewOpacity(0.18f), 2.f);
 		for (int32 k = 0; k < 2; ++k)
 		{
 			const float A = FMath::DegreesToRadians(-90.f + 28.f * FMath::Sin((float)T * 0.35f + k * 2.1f));
@@ -1635,4 +1644,28 @@ FReply SSmvTutorial::OnKeyDown(const FGeometry& G, const FKeyEvent& E)
 	if (E.GetKey() == EKeys::Gamepad_RightShoulder || E.GetKey() == EKeys::E) { Go(1); return FReply::Handled(); }
 	if (E.GetKey() == EKeys::Gamepad_LeftShoulder || E.GetKey() == EKeys::Q) { Go(-1); return FReply::Handled(); }
 	return FReply::Unhandled();
+}
+
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+
+UMaterialInterface* SmvSolidMat(UMaterialInterface* Fallback)
+{
+	static TWeakObjectPtr<UMaterialInterface> Pbr;
+	static bool bTried = false;
+	if (!bTried)
+	{
+		bTried = true;
+		Pbr = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Simumav/Materials/M_SmvPbr.M_SmvPbr"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+	return Pbr.IsValid() ? Pbr.Get() : Fallback;
+}
+
+void SmvSetSolidColor(UMaterialInstanceDynamic* M, const FLinearColor& C)
+{
+	if (!M) return;
+	M->SetVectorParameterValue(TEXT("BaseColor"), C);
+	M->SetVectorParameterValue(TEXT("Color"), C);
+	M->SetScalarParameterValue(TEXT("Roughness"), 0.65f);
+	M->SetScalarParameterValue(TEXT("Metallic"), 0.f);
 }

@@ -1,5 +1,6 @@
 #include "SmvPilotFigure.h"
 #include "Components/StaticMeshComponent.h"
+#include "SmvUiKit.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -47,8 +48,8 @@ UStaticMeshComponent* ASmvPilotFigure::Part(USceneComponent* Parent, int32 Shape
 	C->SetCastShadow(true);
 	if (BaseMat)
 	{
-		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(BaseMat, this);
-		M->SetVectorParameterValue(TEXT("Color"), Color);
+		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(SmvSolidMat(BaseMat), this);
+		SmvSetSolidColor(M, Color);
 		C->SetMaterial(0, M);
 	}
 	C->SetRelativeTransform(FTransform(Rot, Pos, SizeCm / 100.f));

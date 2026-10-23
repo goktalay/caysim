@@ -67,6 +67,10 @@ protected:
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Preview;
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> PilotPrev;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> SnapCap;
+	/** Önizleme stüdyosu: arka duvar + zemin diski (siyah boşluk yerine) */
+	UPROPERTY(VisibleAnywhere) TObjectPtr<class UStaticMeshComponent> StudioWall;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<class UStaticMeshComponent> StudioFloor;
+	void PlaceStudio(float FloorZ);
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> SnapFig;
 	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> DSnapActor;

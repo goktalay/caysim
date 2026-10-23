@@ -1,4 +1,5 @@
 #include "SmvFpvActor.h"
+#include "SmvUiKit.h"
 #include "SimumavModule.h"
 #include "SmvWorldActors.h"
 #include "SmvMotorSynth.h"
@@ -60,8 +61,8 @@ UInstancedStaticMeshComponent* ASmvFpvCourseActor::IsmFor(int32 Shape, const FSt
 	C->SetMobility(EComponentMobility::Movable);
 	if (BaseMat)
 	{
-		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(BaseMat, this);
-		M->SetVectorParameterValue(TEXT("Color"), SmvFpv::MatColor(Mat));
+		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(SmvSolidMat(BaseMat), this);
+		SmvSetSolidColor(M, SmvFpv::MatColor(Mat));
 		C->SetMaterial(0, M);
 	}
 	C->RegisterComponent();

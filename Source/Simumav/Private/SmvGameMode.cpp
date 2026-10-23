@@ -58,6 +58,7 @@
 #include "Sound/SoundBase.h"
 #include "Widgets/SWeakWidget.h"
 #include "Misc/DateTime.h"
+#include "HAL/IConsoleManager.h"
 
 ASmvGameMode::ASmvGameMode()
 {
@@ -83,6 +84,8 @@ FString ASmvGameMode::MissionPlannerLine() const
 
 void ASmvGameMode::BeginPlay()
 {
+	// geliştirme derlemesinde ekrana basılan VSM taşma uyarısı (çok yerel ışık) arayüzün üstüne yazılmasın
+	if (IConsoleVariable* Cv = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Shadow.Virtual.AllowScreenOverflowMessages"))) Cv->Set(0, ECVF_SetByCode);
 	Super::BeginPlay();
 	USmvGameInstance* GI = USmvGameInstance::GetSmv(this);
 	if (!GI) { UE_LOG(LogSimumav, Error, TEXT("SmvGameInstance yok — DefaultEngine.ini GameInstanceClass")); return; }
@@ -358,9 +361,10 @@ void ASmvGameMode::BuildScene()
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 	{
 		Hud = CreateWidget<UCaySimHudWidget>(PC, UCaySimHudWidget::StaticClass());
-		if (Hud) { Hud->AddToViewport(5); Hud->SetVisibility(ESlateVisibility::HitTestInvisible); }
+		// alt bant (≈ 48 px) HUD yazılarının üstüne binmesin
+		if (Hud) { Hud->AddToViewport(5); Hud->SetVisibility(ESlateVisibility::HitTestInvisible); Hud->SetPadding(FMargin(0.f, 0.f, 0.f, 48.f)); }
 		Overlay = CreateWidget<USmvHudOverlay>(PC, USmvHudOverlay::StaticClass());
-		if (Overlay) { Overlay->AddToViewport(6); Overlay->SetVisibility(ESlateVisibility::HitTestInvisible); }
+		if (Overlay) { Overlay->AddToViewport(6); Overlay->SetVisibility(ESlateVisibility::HitTestInvisible); Overlay->SetPadding(FMargin(0.f, 0.f, 0.f, 48.f)); }
 	}
 	// ---- uçuş arayüzü (dron paneli, kadranlar, alt bant, sanal kumanda) ----
 	UiLog.Reset();
@@ -643,7 +647,7 @@ void ASmvGameMode::HandleTele(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 	{
 		const double Now = FPlatformTime::Seconds();
 		if (Flow->LastPath.Num() == 0) PathT0 = Now;
-		if (Now - PathAt >= 0.2 && Flow->LastPath.Num() < 20000)
+		if (Now - PathAt >= 0.2 && Flow->LastPath.Num() < 20000 && (FMath::Abs(T.Lat) > 1e-4 || FMath::Abs(T.Lon) > 1e-4))
 		{
 			PathAt = Now;
 			FSmvReplayFrame F;

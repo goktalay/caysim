@@ -446,7 +446,7 @@ static void SmvPaintStick(const FGeometry& G, FSlateWindowElementList& Out, int3
 	const FVector2D Sz = FVector2D(G.GetLocalSize());
 	const FVector2D C = Sz * 0.5;
 	const float R = (float)FMath::Min(Sz.X, Sz.Y) * 0.5f - 16.f;
-	DrRect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor::White, Card);
+	DrRect(Out, L, G, FVector2D::ZeroVector, Sz, Bg, Card);
 	DrArc(Out, L + 1, G, C, R, 0.f, 360.f, FLinearColor(1, 1, 1, 0.14f), 1.f);
 	DrArc(Out, L + 1, G, C, R * 0.5f, 0.f, 360.f, FLinearColor(1, 1, 1, 0.07f), 1.f);
 	DrSeg(Out, L + 1, G, C - FVector2D(R, 0), C + FVector2D(R, 0), FLinearColor(1, 1, 1, 0.12f), 1.f);
@@ -1087,7 +1087,7 @@ TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 	TSharedRef<SHorizontalBox> H = SNew(SHorizontalBox);
 	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
 	[
-		PB(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FSmvI18n::T(TEXT("bar.camera")).ToString() + TEXT(": ") + St.CamLabel + TEXT(" ▾")); }), [this]() { Act(TEXT("CamCycle")); }, [Clear]() { return FLinearColor(1, 1, 1, 0.06f); })
+		PB(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FSmvI18n::T(TEXT("bar.camera")).ToString() + TEXT(": ") + St.CamLabel + TEXT("")); }), [this]() { Act(TEXT("CamCycle")); }, [Clear]() { return FLinearColor(1, 1, 1, 0.06f); })
 	];
 	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
 	[
@@ -1095,7 +1095,7 @@ TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 	];
 	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
 	[
-		PB(TAttribute<FText>::CreateLambda([]() { return FText::FromString(FSmvI18n::T(TEXT("gfx.btn")).ToString() + TEXT(" ▾")); }), [this]() { bGfx = !bGfx; }, [this]() { return bGfx ? SmvGt::C(0x3b82f6) : FLinearColor(1, 1, 1, 0.06f); })
+		PB(TAttribute<FText>::CreateLambda([]() { return FText::FromString(FSmvI18n::T(TEXT("gfx.btn")).ToString() + TEXT("")); }), [this]() { bGfx = !bGfx; }, [this]() { return bGfx ? SmvGt::C(0x3b82f6) : FLinearColor(1, 1, 1, 0.06f); })
 	];
 	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
 	[
@@ -1109,7 +1109,7 @@ TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
 	[
 		Pill({
-			PB(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("%s ▾"), St.Mode.IsEmpty() ? TEXT("—") : *St.Mode)); }), [this]() { ToggleModeMenu(); },
+			PB(TAttribute<FText>::CreateLambda([this]() { return FText::FromString(FString::Printf(TEXT("%s"), St.Mode.IsEmpty() ? TEXT("—") : *St.Mode)); }), [this]() { ToggleModeMenu(); },
 				[this]() { return bModeMenu ? SmvGt::C(0x3b82f6) : SmvGt::C(0x22d3ee, 0.18f); }),
 			PB(TAttribute<FText>::CreateLambda([this]()
 				{
@@ -1458,7 +1458,7 @@ TSharedRef<SWidget> SSmvFlightUi::WindCard()
 		using namespace SmvFuiTheme;
 		if (St.bMenuOpen) return;
 		const FVector2D Sz = FVector2D(G.GetLocalSize());
-		DrRect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor::White, &CardBrush);
+		DrRect(Out, L, G, FVector2D::ZeroVector, Sz, Bg, &CardBrush);
 		const FVector2D C(39.f, Sz.Y * 0.5f);
 		const float R = 30.f;
 		DrArc(Out, L + 1, G, C, R, 0.f, 360.f, Edge, 1.5f);
@@ -1500,7 +1500,7 @@ TSharedRef<SWidget> SSmvFlightUi::FpvBar()
 		using namespace SmvFuiTheme;
 		if (!St.bFpv || St.bMenuOpen) return;
 		const FVector2D Sz = FVector2D(G.GetLocalSize());
-		DrRect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor::White, &CardBrush);
+		DrRect(Out, L, G, FVector2D::ZeroVector, Sz, Bg, &CardBrush);
 		auto Tm = [](float S) { return S < 0.f ? FString(TEXT("—")) : FString::Printf(TEXT("%d:%05.2f"), (int32)(S / 60.f), FMath::Fmod(S, 60.f)); };
 		DrText(Out, L + 1, G, FString::Printf(TEXT("%s %d/%d"), *Loc(TEXT("fpv.lap")), FMath::Max(1, St.FpvLap), St.FpvLaps), FVector2D(16.f, 18.f), Font(9, true), Dim, -1);
 		DrText(Out, L + 1, G, St.bFpvFinished ? Tm(St.FpvTotal) : Tm(St.FpvLapT), FVector2D(16.f, 44.f), Mono(18), Txt, -1);

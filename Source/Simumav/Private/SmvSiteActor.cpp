@@ -1,5 +1,6 @@
 #include "SmvSiteActor.h"
 #include "Components/StaticMeshComponent.h"
+#include "SmvUiKit.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -36,8 +37,8 @@ UStaticMeshComponent* ASmvSiteActor::Part(USceneComponent* Parent, int32 Shape, 
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	if (BaseMat)
 	{
-		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(BaseMat, this);
-		M->SetVectorParameterValue(TEXT("Color"), Color);
+		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(SmvSolidMat(BaseMat), this);
+		SmvSetSolidColor(M, Color);
 		C->SetMaterial(0, M);
 	}
 	C->SetRelativeTransform(FTransform(Rot, Pos, SizeCm / 100.f));
@@ -194,8 +195,9 @@ void ASmvWindSock::BeginPlay()
 		if (!C || C->ComponentTags.Num() == 0) continue;
 		FLinearColor Col;
 		Col.InitFromString(C->ComponentTags[0].ToString());
-		UMaterialInstanceDynamic* M = C->CreateAndSetMaterialInstanceDynamic(0);
-		if (M) M->SetVectorParameterValue(TEXT("Color"), Col);
+		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(SmvSolidMat(C->GetMaterial(0)), this);
+		C->SetMaterial(0, M);
+		if (M) SmvSetSolidColor(M, Col);
 	}
 }
 
@@ -224,8 +226,8 @@ UStaticMeshComponent* ASmvHolidayDecor::Part(int32 Shape, const FVector& Pos, co
 	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	if (BaseMat)
 	{
-		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(BaseMat, this);
-		M->SetVectorParameterValue(TEXT("Color"), Color);
+		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(SmvSolidMat(BaseMat), this);
+		SmvSetSolidColor(M, Color);
 		C->SetMaterial(0, M);
 	}
 	C->SetRelativeTransform(FTransform(Rot, Pos, SizeCm / 100.f));

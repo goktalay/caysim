@@ -4056,7 +4056,9 @@ TSharedRef<SWidget> SSmvShell::RouteMap(const TArray<FSmvReplayFrame>* Frames, f
 			DrSeg(Out, L + 1, G, FVector2D(0, Sz.Y * k / 6.0), FVector2D(Sz.X, Sz.Y * k / 6.0), FLinearColor(1, 1, 1, 0.04f), 1.f);
 		}
 		if (!Frames || Frames->Num() < 2) { DrText(Out, L + 2, G, FSmvI18n::T(TEXT("ops.no_data")).ToString(), Sz * 0.5, Font(11), Mute(), 0); return; }
-		const TArray<FSmvReplayFrame>& F = *Frames;
+		TArray<FSmvReplayFrame> F;
+		for (const FSmvReplayFrame& Q : *Frames) if (FMath::Abs(Q.Lat) > 1e-4 || FMath::Abs(Q.Lon) > 1e-4) F.Add(Q);
+		if (F.Num() < 2) { DrText(Out, L + 2, G, FSmvI18n::T(TEXT("ops.no_data")).ToString(), Sz * 0.5, Font(11), Mute(), 0); return; }
 		const double La0 = F[0].Lat, Lo0 = F[0].Lon, Kx = 111320.0 * FMath::Cos(FMath::DegreesToRadians(La0)), Ky = 110540.0;
 		double X0 = 1e18, X1 = -1e18, Y0 = 1e18, Y1 = -1e18, MaxA = 1;
 		for (const FSmvReplayFrame& Q : F)
