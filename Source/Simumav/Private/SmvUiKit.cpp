@@ -213,7 +213,7 @@ namespace SmvUi
 		Arc(P + FVector2D(S.X - R, R), 270.f, 360.f);
 		Arc(P + FVector2D(S.X - R, S.Y - R), 0.f, 90.f);
 		Arc(P + FVector2D(R, S.Y - R), 90.f, 180.f);
-		Pts.Add(Pts[0]);
+		{ const FVector2D First = Pts[0]; Pts.Add(First); }
 		DrLine(Out, L, G, Pts, C, Th);
 	}
 

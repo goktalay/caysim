@@ -136,7 +136,7 @@ namespace
 		};
 		if (Rr <= 0.01) { P = { FVector2D(X, Y), FVector2D(X + W, Y), FVector2D(X + W, Y + H), FVector2D(X, Y + H), FVector2D(X, Y) }; Out.Add(P); return; }
 		Corner(X + W - Rr, Y + Rr, -PI / 2); Corner(X + W - Rr, Y + H - Rr, 0); Corner(X + Rr, Y + H - Rr, PI / 2); Corner(X + Rr, Y + Rr, PI);
-		P.Add(P[0]);
+		{ const FVector2D First = P[0]; P.Add(First); }
 		Out.Add(P);
 	}
 

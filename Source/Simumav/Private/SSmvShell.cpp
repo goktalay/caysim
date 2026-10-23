@@ -2024,7 +2024,7 @@ TSharedRef<SWidget> SSmvShell::MissionMap(float Wd, float Ht)
 		else if ((P.Kind == TEXT("spray") || P.Kind == TEXT("survey")) && P.Shape.Num() > 2) Poly = P.Shape;
 		if (Poly.Num() > 2)
 		{
-			TArray<FVector2D> S; for (const FVector2D& Q : Poly) S.Add(ToScr(Q)); S.Add(S[0]);
+			TArray<FVector2D> S; for (const FVector2D& Q : Poly) S.Add(ToScr(Q)); { const FVector2D First = S[0]; S.Add(First); }
 			DrLine(Out, L + 2, G, S, Accent2(), 2.f);
 		}
 		// rota önizlemesi
@@ -3895,7 +3895,7 @@ TSharedRef<SWidget> SSmvShell::FpvMap(const FString& CourseId, float Wd, float H
 		// yarış hattı (kapı merkezleri sırayla) + kapılar
 		TArray<FVector2D> Line;
 		for (const FSmvFpvGate& Gt : Co->Gates) Line.Add(M(Gt.X, Gt.Y));
-		if (Line.Num()) Line.Add(Line[0]);
+		if (Line.Num()) { const FVector2D First = Line[0]; Line.Add(First); }
 		DrLine(Out, L + 2, G, Line, Accent().CopyWithNewOpacity(0.35f), 1.5f);
 		for (int32 i = 0; i < Co->Gates.Num(); ++i)
 		{

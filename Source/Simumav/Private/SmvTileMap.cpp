@@ -151,7 +151,7 @@ int32 SSmvTileMap::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSl
 	{
 		TArray<FVector2D> Path;
 		for (const FSmvGate& Gt : *Gates) Path.Add(ToLocal(G, Gt.Lat, Gt.Lon));
-		if (Path.Num() > 1) { Path.Add(Path[0]); DrLine(Out, L + 3, G, Path, Hex(0xf472b6, 0.6f), 1.5f); Path.Pop(); }
+		if (Path.Num() > 1) { { const FVector2D First = Path[0]; Path.Add(First); } DrLine(Out, L + 3, G, Path, Hex(0xf472b6, 0.6f), 1.5f); Path.Pop(); }
 		for (int32 i = 0; i < Gates->Num(); ++i)
 		{
 			const float R = FMath::Max(8.f, (float)((*Gates)[i].RadiusM / Mpp));
