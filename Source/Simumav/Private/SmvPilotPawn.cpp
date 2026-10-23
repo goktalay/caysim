@@ -1,6 +1,7 @@
 #include "SmvPilotPawn.h"
 #include "SimumavModule.h"
 #include "DroneActor.h"
+#include "SmvWorldActors.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -12,6 +13,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Engine/World.h"
+#include "CollisionQueryParams.h"
 
 ASmvPilotPawn::ASmvPilotPawn()
 {
@@ -89,52 +92,57 @@ void ASmvPilotPawn::BuildInput()
 {
 	if (Imc) return;
 	Imc = NewObject<UInputMappingContext>(this, TEXT("IMC_Simumav"));
-	MakeAction(TEXT("Left"), 2);    // Mod-2: X yaw, Y gaz
-	MakeAction(TEXT("Right"), 2);   // X roll, Y pitch
+	MakeAction(TEXT("Left"), 2);    // gamepad sol çubuk (klavye çubukları ComputeRc'de tuş durumundan)
+	MakeAction(TEXT("Right"), 2);   // gamepad sağ çubuk
 	MakeAction(TEXT("Look"), 2);
 	MakeAction(TEXT("Zoom"), 1);
 	for (int32 i = 0; i < 8; ++i) MakeAction(*FString::Printf(TEXT("RcAxis%d"), i + 1), 1);
-	const FName Btn[] = { TEXT("Arm"), TEXT("Disarm"), TEXT("Takeoff"), TEXT("Rtl"), TEXT("Land"), TEXT("Lock"), TEXT("Ack"), TEXT("Pause"), TEXT("Reset"),
-		TEXT("CamCycle"), TEXT("CamType"), TEXT("Hud"), TEXT("Pip"), TEXT("SpeedUp"), TEXT("SpeedDown"), TEXT("Mode1"), TEXT("Mode2"), TEXT("Mode3"), TEXT("MotorCut"),
-		TEXT("GimbalUp"), TEXT("GimbalDown") };
+	const FName Btn[] = { TEXT("Arm"), TEXT("ArmToggle"), TEXT("Takeoff"), TEXT("Rtl"), TEXT("Land"), TEXT("Lock"), TEXT("Ack"), TEXT("Pause"), TEXT("Reset"),
+		TEXT("CamCycle"), TEXT("CamType"), TEXT("Hud"), TEXT("Pip"), TEXT("Panel"), TEXT("Sticks"), TEXT("ModeMenu"), TEXT("SpeedUp"), TEXT("SpeedDown"),
+		TEXT("Mode1"), TEXT("Mode2"), TEXT("Mode3"), TEXT("MotorCut"), TEXT("GimbalUp"), TEXT("GimbalDown"),
+		TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7"), TEXT("Ch5Up"), TEXT("Ch5Down"), TEXT("ThrCenter") };
 	for (const FName& B : Btn) MakeAction(B, 0);
 
-	// klavye: W/S gaz, A/D yaw, oklar pitch/roll (Mod-2 düzeni)
-	MapKey(TEXT("Left"), EKeys::W, false, true);
-	MapKey(TEXT("Left"), EKeys::S, true, true);
-	MapKey(TEXT("Left"), EKeys::D);
-	MapKey(TEXT("Left"), EKeys::A, true);
-	MapKey(TEXT("Right"), EKeys::Up, false, true);
-	MapKey(TEXT("Right"), EKeys::Down, true, true);
-	MapKey(TEXT("Right"), EKeys::Right);
-	MapKey(TEXT("Right"), EKeys::Left, true);
 	// gamepad (XInput): sol çubuk gaz/yaw, sağ çubuk pitch/roll
 	MapKey(TEXT("Left"), EKeys::Gamepad_Left2D);
 	MapKey(TEXT("Right"), EKeys::Gamepad_Right2D);
-	// fare: serbest/yörünge kamera bakışı, tekerlek yakınlaştırma
+	// fare: sürükle = kamera bakışı (takip/yörünge/serbest), tekerlek yakınlaştırma
 	MapKey(TEXT("Look"), EKeys::Mouse2D);
 	MapKey(TEXT("Zoom"), EKeys::MouseWheelAxis);
 	// RC verici (RawInput eklentisi; Ayarlar → Kumanda'dan eksen eşlemesi)
 	for (int32 i = 0; i < 8; ++i) MapKey(*FString::Printf(TEXT("RcAxis%d"), i + 1), FKey(*FString::Printf(TEXT("GenericUSBController_Axis%d"), i + 1)));
 
-	MapKey(TEXT("Arm"), EKeys::E);               MapKey(TEXT("Arm"), EKeys::Gamepad_FaceButton_Bottom);
-	MapKey(TEXT("Disarm"), EKeys::Q);
+	// klavye: W/S/A/D + oklar çubukları sürer (ComputeRc); Q/E ch5, Boşluk gaz orta (web virtualRC)
+	MapKey(TEXT("Ch5Down"), EKeys::Q);
+	MapKey(TEXT("Ch5Up"), EKeys::E);
+	MapKey(TEXT("ThrCenter"), EKeys::SpaceBar);
+	MapKey(TEXT("ArmToggle"), EKeys::X);         MapKey(TEXT("Arm"), EKeys::Gamepad_FaceButton_Bottom);
 	MapKey(TEXT("Takeoff"), EKeys::T);           MapKey(TEXT("Takeoff"), EKeys::Gamepad_FaceButton_Left);
 	MapKey(TEXT("Rtl"), EKeys::R);               MapKey(TEXT("Rtl"), EKeys::Gamepad_FaceButton_Top);
 	MapKey(TEXT("Land"), EKeys::L);
-	MapKey(TEXT("Lock"), EKeys::SpaceBar);       MapKey(TEXT("Lock"), EKeys::Gamepad_RightTrigger);
+	MapKey(TEXT("ModeMenu"), EKeys::F);
+	MapKey(TEXT("Lock"), EKeys::Tab);            MapKey(TEXT("Lock"), EKeys::Gamepad_RightTrigger);
 	MapKey(TEXT("Ack"), EKeys::B);               MapKey(TEXT("Ack"), EKeys::Gamepad_FaceButton_Right);
 	MapKey(TEXT("Pause"), EKeys::Escape);        MapKey(TEXT("Pause"), EKeys::Gamepad_Special_Right);
 	MapKey(TEXT("Reset"), EKeys::BackSpace);
 	MapKey(TEXT("CamCycle"), EKeys::C);          MapKey(TEXT("CamCycle"), EKeys::Gamepad_RightShoulder);
+	MapKey(TEXT("Cam1"), EKeys::One);
+	MapKey(TEXT("Cam2"), EKeys::Two);
+	MapKey(TEXT("Cam3"), EKeys::Three);
+	MapKey(TEXT("Cam4"), EKeys::Four);
+	MapKey(TEXT("Cam5"), EKeys::Five);
+	MapKey(TEXT("Cam6"), EKeys::Six);
+	MapKey(TEXT("Cam7"), EKeys::Seven);
 	MapKey(TEXT("CamType"), EKeys::N);
 	MapKey(TEXT("Hud"), EKeys::H);
-	MapKey(TEXT("Pip"), EKeys::P);               MapKey(TEXT("Pip"), EKeys::Gamepad_LeftShoulder);
+	MapKey(TEXT("Panel"), EKeys::P);
+	MapKey(TEXT("Pip"), EKeys::I);               MapKey(TEXT("Pip"), EKeys::Gamepad_LeftShoulder);
+	MapKey(TEXT("Sticks"), EKeys::V);
 	MapKey(TEXT("SpeedUp"), EKeys::Add);         MapKey(TEXT("SpeedUp"), EKeys::Equals);
 	MapKey(TEXT("SpeedDown"), EKeys::Subtract);  MapKey(TEXT("SpeedDown"), EKeys::Hyphen);
-	MapKey(TEXT("Mode1"), EKeys::One);           MapKey(TEXT("Mode1"), EKeys::Gamepad_DPad_Left);
-	MapKey(TEXT("Mode2"), EKeys::Two);           MapKey(TEXT("Mode2"), EKeys::Gamepad_DPad_Up);
-	MapKey(TEXT("Mode3"), EKeys::Three);         MapKey(TEXT("Mode3"), EKeys::Gamepad_DPad_Right);
+	MapKey(TEXT("Mode1"), EKeys::Gamepad_DPad_Left);
+	MapKey(TEXT("Mode2"), EKeys::Gamepad_DPad_Up);
+	MapKey(TEXT("Mode3"), EKeys::Gamepad_DPad_Right);
 	MapKey(TEXT("MotorCut"), EKeys::K);
 	MapKey(TEXT("GimbalUp"), EKeys::PageUp);
 	MapKey(TEXT("GimbalDown"), EKeys::PageDown);
@@ -172,7 +180,7 @@ void ASmvPilotPawn::OnZoom(const FInputActionValue& V)
 {
 	const float Z = V.Get<float>();
 	if (Mode == ESmvCamMode::Orbit) OrbitDist = FMath::Clamp(OrbitDist * (1.f - 0.1f * Z), 3.f, 400.f);
-	else ChaseZoom = FMath::Clamp(ChaseZoom * (1.f - 0.1f * Z), 0.3f, 6.f);
+	else ChaseZoom = FMath::Clamp(ChaseZoom * (1.f - 0.1f * Z), 0.35f, 6.f);
 }
 
 void ASmvPilotPawn::OnRcAxis(const FInputActionValue& V, int32 Index)
@@ -185,12 +193,18 @@ void ASmvPilotPawn::OnRcAxis(const FInputActionValue& V, int32 Index)
 void ASmvPilotPawn::Fire(FName Name)
 {
 	if (Name == TEXT("CamCycle")) { CycleMode(); return; }
+	static const FName CamKeys[] = { TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7") };
+	static const ESmvCamMode CamModes[] = { ESmvCamMode::Chase, ESmvCamMode::Fpv, ESmvCamMode::Gimbal, ESmvCamMode::Free, ESmvCamMode::Ground, ESmvCamMode::Orbit, ESmvCamMode::Top };
+	for (int32 i = 0; i < 7; ++i) if (Name == CamKeys[i]) { SetMode(CamModes[i]); OnAction.Broadcast(TEXT("CamCycle")); return; }
 	if (Name == TEXT("CamType")) { SetCamType((ESmvCamType)(((uint8)CamType + 1) % 3)); }
 	if (Name == TEXT("Hud")) bHud = !bHud;
 	if (Name == TEXT("Pip")) bPip = !bPip;
 	if (Name == TEXT("Mode1")) ModeSwitch = 1000;
 	if (Name == TEXT("Mode2")) ModeSwitch = 1500;
 	if (Name == TEXT("Mode3")) ModeSwitch = 2000;
+	if (Name == TEXT("Ch5Up")) ModeSwitch = FMath::Clamp(ModeSwitch + 500, 1000, 2000);
+	if (Name == TEXT("Ch5Down")) ModeSwitch = FMath::Clamp(ModeSwitch - 500, 1000, 2000);
+	if (Name == TEXT("ThrCenter")) { AxThr = 0.f; bThrUsed = true; if (VType == TEXT("rover")) AxRoll = 0.f; }
 	if (Name == TEXT("GimbalUp")) GimbalPitch = FMath::Clamp(GimbalPitch + 5.f, -90.f, 20.f);
 	if (Name == TEXT("GimbalDown")) GimbalPitch = FMath::Clamp(GimbalPitch - 5.f, -90.f, 20.f);
 	OnAction.Broadcast(Name);
@@ -198,7 +212,20 @@ void ASmvPilotPawn::Fire(FName Name)
 
 bool ASmvPilotPawn::IsPlaneLike() const
 {
-	return VType == TEXT("plane") || VType == TEXT("sabit_kanat");
+	return VType == TEXT("plane") || VType == TEXT("sabit_kanat") || VType == TEXT("vtol") || VType == TEXT("interceptor");
+}
+
+bool ASmvPilotPawn::KeyDown(const FKey& K) const
+{
+	const APlayerController* PC = Cast<APlayerController>(GetController());
+	return PC && PC->IsInputKeyDown(K);
+}
+
+void ASmvPilotPawn::SetVirtualStick(int32 Side, const FVector2D& V, bool bActive)
+{
+	if (Side < 0 || Side > 1) return;
+	VStick[Side] = FVector2D(FMath::Clamp(V.X, -1.0, 1.0), FMath::Clamp(V.Y, -1.0, 1.0));
+	bVStick[Side] = bActive;
 }
 
 static float SmvExpo(float V, float E) { return V * (1.f - E) + V * V * V * E; }
@@ -206,8 +233,10 @@ static int32 SmvPwm(float V) { return FMath::RoundToInt(FMath::Clamp(1500.f + V 
 
 void ASmvPilotPawn::ComputeRc(float Dt)
 {
+	Dt = FMath::Min(Dt, 0.2f);
 	float Roll = 0, Pitch = 0, Thr = 0, Yaw = 0;
 	int32 ModePwm = ModeSwitch;
+	const bool bRover = VType == TEXT("rover");
 	if (InputDevice == TEXT("rc") && bRcAxisSeen)
 	{
 		auto Ax = [this](int32 Slot, int32 Def) -> float
@@ -220,30 +249,70 @@ void ASmvPilotPawn::ComputeRc(float Dt)
 		Roll = Ax(0, 1); Pitch = Ax(1, 2); Thr = Ax(2, 3); Yaw = Ax(3, 4);
 		const float M = Ax(4, 5);
 		if (RcAxisMap.IsValidIndex(4) && RcAxisMap[4] > 0) ModePwm = M < -0.33f ? 1000 : M > 0.33f ? 2000 : 1500;
+		AxRoll = Roll; AxPitch = Pitch; AxThr = Thr; AxYaw = Yaw; bThrUsed = true;
+		StickL = bStickMode2 ? FVector2D(Yaw, Thr) : FVector2D(Yaw, Pitch);
+		StickR = bStickMode2 ? FVector2D(Roll, Pitch) : FVector2D(Roll, Thr);
 	}
 	else
 	{
-		const FVector2D L = bStickMode2 ? LeftStick : FVector2D(LeftStick.X, RightStick.Y);
-		const FVector2D R = bStickMode2 ? RightStick : FVector2D(RightStick.X, LeftStick.Y);
-		Yaw = (float)L.X; Roll = (float)R.X; Pitch = (float)R.Y;   // FVector2D bileşenleri double (LWC)
-		const bool bKeyboard = InputDevice == TEXT("keyboard");
-		if (bKeyboard && IsPlaneLike())
+		// klavye: serbest kamerada WASD/oklar kamerayı sürer (araca gitmez)
+		const bool bKeys = bFlying && Mode != ESmvCamMode::Free;
+		auto Kx = [this, bKeys](const FKey& Neg, const FKey& Pos) { return bKeys ? (KeyDown(Pos) ? 1.f : 0.f) - (KeyDown(Neg) ? 1.f : 0.f) : 0.f; };
+		const float KLx = Kx(EKeys::A, EKeys::D), KLy = Kx(EKeys::S, EKeys::W), KRx = Kx(EKeys::Left, EKeys::Right), KRy = Kx(EKeys::Down, EKeys::Up);
+		// eksen → çubuk eşlemesi (Mode 2: sol yaw/gaz, sağ roll/pitch; Mode 1: sol yaw/pitch, sağ roll/gaz)
+		const bool bM2 = bStickMode2;
+		// mutlak kaynak (sanal çubuk > gamepad): o tarafın eksenlerini yazar
+		const bool bPadL = LeftStick.SizeSquared() > 0.0025, bPadR = RightStick.SizeSquared() > 0.0025;
+		const bool bAbsL = bVStick[0] || bPadL, bAbsR = bVStick[1] || bPadR;
+		const FVector2D AbsL = bVStick[0] ? VStick[0] : LeftStick, AbsR = bVStick[1] ? VStick[1] : RightStick;
+		const float KeyRate = 3.5f, Decay = FMath::Exp(-9.f * Dt);
+		auto Spring = [KeyRate, Decay, Dt](float& A, float Dir)
 		{
-			// uçakta klavye gazı kalıcı: W/S ile 0,6/sn hızında değişir
-			KeyThrottle = FMath::Clamp(KeyThrottle + (float)L.Y * 0.6f * Dt, -1.f, 1.f);
-			Thr = KeyThrottle;
+			if (Dir != 0.f) A = FMath::Clamp(A + Dir * KeyRate * Dt, -1.f, 1.f);
+			else { A *= Decay; if (FMath::Abs(A) < 0.004f) A = 0.f; }
+		};
+		if (bRover)
+		{
+			// kara aracı: harf ve ok tuşları aynı ekseni sürer; iki eksen de yaylı (bırakınca dur / düz)
+			const float Steer = FMath::Clamp(KLx + KRx, -1.f, 1.f), Gas = FMath::Clamp(KLy + KRy, -1.f, 1.f);
+			if (bAbsR) AxRoll = (float)AbsR.X; else Spring(AxRoll, Steer);
+			if (bAbsL) AxThr = (float)AbsL.Y; else Spring(AxThr, Gas);
+			StickL = FVector2D(0, AxThr); StickR = FVector2D(AxRoll, 0);
+			Rc.SetNum(8);
+			Rc = { SmvPwm(AxRoll), 0, SmvPwm(AxThr), 0, ModePwm, 0, 0, 0 };
+			return;
 		}
-		else Thr = (float)L.Y;   // kopter: yaylı (orta = irtifa tut)
-		Roll = SmvExpo(Roll, Expo); Pitch = SmvExpo(Pitch, Expo); Yaw = SmvExpo(Yaw, Expo);
+		const float KYaw = KLx, KRoll = KRx, KThr = bM2 ? KLy : KRy, KPitch = bM2 ? KRy : KLy;
+		if (bAbsL) AxYaw = (float)AbsL.X; else Spring(AxYaw, KYaw);
+		if (bAbsR) AxRoll = (float)AbsR.X; else Spring(AxRoll, KRoll);
+		const bool bAbsPitch = bM2 ? bAbsR : bAbsL, bAbsThr = bM2 ? bAbsL : bAbsR;
+		const float AbsPitch = (float)(bM2 ? AbsR.Y : AbsL.Y), AbsThr = (float)(bM2 ? AbsL.Y : AbsR.Y);
+		if (bAbsPitch) AxPitch = AbsPitch; else Spring(AxPitch, KPitch);
+		const bool bThrVirtual = bM2 ? bVStick[0] : bVStick[1];
+		if (IsPlaneLike())
+		{
+			// uçak: tutmalı gaz (W/S ve gamepad kolu hızla kaydırır; sanal çubuk mutlak)
+			if (bThrVirtual) AxThr = AbsThr;
+			else if (bAbsThr) AxThr = FMath::Clamp(AxThr + AbsThr * 0.7f * Dt, -1.f, 1.f);
+			else if (KThr != 0.f) AxThr = FMath::Clamp(AxThr + KThr * 0.7f * Dt, -1.f, 1.f);
+		}
+		else
+		{
+			if (bAbsThr) AxThr = AbsThr; else Spring(AxThr, KThr);
+		}
+		if (KThr != 0.f || (bAbsThr && FMath::Abs(AbsThr) > 0.05f)) bThrUsed = true;
+		StickL = bM2 ? FVector2D(AxYaw, AxThr) : FVector2D(AxYaw, AxPitch);
+		StickR = bM2 ? FVector2D(AxRoll, AxPitch) : FVector2D(AxRoll, AxThr);
+		Roll = SmvExpo(AxRoll, Expo); Pitch = SmvExpo(AxPitch, Expo); Yaw = SmvExpo(AxYaw, Expo); Thr = AxThr;
 	}
 	Rc.SetNum(8);
-	if (VType == TEXT("rover"))
+	if (bRover)
 	{
-		// rover: [RC1 direksiyon, 0, RC3 gaz (1500 = dur), 0, ch5, 0, 0, 0]
+		// rover (RC verici): [RC1 direksiyon, 0, RC3 gaz (1500 = dur), 0, ch5, 0, 0, 0]
 		Rc = { SmvPwm(Yaw + Roll), 0, SmvPwm(Thr + Pitch), 0, ModePwm, 0, 0, 0 };
 		return;
 	}
-	Rc = { SmvPwm(Roll), SmvPwm(-Pitch), SmvPwm(Thr), SmvPwm(Yaw), ModePwm, 0, 0, 0 };
+	Rc = { SmvPwm(Roll), SmvPwm(-Pitch), bThrUsed ? SmvPwm(Thr) : 0, SmvPwm(Yaw), ModePwm, 0, 0, 0 };
 }
 
 void ASmvPilotPawn::Tick(float Dt)
@@ -256,6 +325,8 @@ void ASmvPilotPawn::Tick(float Dt)
 		LastRcSent = Now;
 		OnRc.Broadcast(Rc);
 	}
+	// imleç görünür (alt bant düğmeleri): bakış yalnız fare tuşu basılıyken (sürükle) — imleci gezdirmek kamerayı döndürmesin
+	if (!KeyDown(EKeys::LeftMouseButton) && !KeyDown(EKeys::RightMouseButton)) Look = FVector2D::ZeroVector;
 	UpdateCamera(Dt);
 	Look = FVector2D::ZeroVector;
 }
@@ -269,7 +340,35 @@ void ASmvPilotPawn::SetTarget(ACaySimDroneActor* InTarget, const FString& Vehicl
 	Target = InTarget;
 	VType = VehicleType;
 	bGroundPlaced = false;
-	KeyThrottle = IsPlaneLike() ? -1.f : 0.f;
+	bChaseInit = false;
+	ChaseYawOff = 0.f; ChasePitch = -14.f; ChaseZoom = 1.f;
+	AxRoll = AxPitch = AxYaw = 0.f;
+	AxThr = (IsPlaneLike() && VType != TEXT("rover")) ? -1.f : 0.f;
+	// kopter: ch3 ilk gaz girdisine dek 0 (dokunma) — web lazyThr
+	bThrUsed = IsPlaneLike() || VType == TEXT("rover");
+	bVStick[0] = bVStick[1] = false;
+	if (const ASmvDroneActor* D = Cast<ASmvDroneActor>(InTarget))
+	{
+		VisRadius = D->GetVisualRadiusM();
+		VisNose = D->GetVisualNoseM();
+	}
+	else { VisRadius = 1.f; VisNose = 0.5f; }
+	OrbitDist = FMath::Max(6.f, VisRadius * 7.f);
+}
+
+FString ASmvPilotPawn::ModeLabel(ESmvCamMode M)
+{
+	switch (M)
+	{
+	case ESmvCamMode::Chase: return TEXT("Takip");
+	case ESmvCamMode::Fpv: return TEXT("FPV");
+	case ESmvCamMode::Gimbal: return TEXT("Gimbal");
+	case ESmvCamMode::Free: return TEXT("Serbest");
+	case ESmvCamMode::Ground: return TEXT("Yer");
+	case ESmvCamMode::Orbit: return TEXT("Yörünge");
+	case ESmvCamMode::Top: return TEXT("Tepeden");
+	default: return TEXT("?");
+	}
 }
 
 void ASmvPilotPawn::SetMode(ESmvCamMode M)
@@ -277,11 +376,18 @@ void ASmvPilotPawn::SetMode(ESmvCamMode M)
 	Mode = M;
 	Camera->SetFieldOfView(GetFov());
 	if (M == ESmvCamMode::Ground) bGroundPlaced = false;
+	if (M == ESmvCamMode::Free) { FreeYaw = GetActorRotation().Yaw; FreePitch = GetActorRotation().Pitch; }
+	if (M == ESmvCamMode::Chase) bChaseInit = false;
+	ApplyCamTypePost();
 }
 
 void ASmvPilotPawn::CycleMode()
 {
-	SetMode((ESmvCamMode)(((uint8)Mode + 1) % 7));
+	// web sırası: Takip → FPV → Gimbal → Serbest → Yer → (Yörünge → Tepeden)
+	static const ESmvCamMode Order[] = { ESmvCamMode::Chase, ESmvCamMode::Fpv, ESmvCamMode::Gimbal, ESmvCamMode::Free, ESmvCamMode::Ground, ESmvCamMode::Orbit, ESmvCamMode::Top };
+	int32 Cur = 0;
+	for (int32 i = 0; i < 7; ++i) if (Order[i] == Mode) Cur = i;
+	SetMode(Order[(Cur + 1) % 7]);
 }
 
 float ASmvPilotPawn::GetFov() const
@@ -291,7 +397,7 @@ float ASmvPilotPawn::GetFov() const
 	case ESmvCamMode::Fpv: return 110.f;
 	case ESmvCamMode::Gimbal: return 60.f;
 	case ESmvCamMode::Ground: return 45.f;
-	default: return 75.f;
+	default: return 70.f;
 	}
 }
 
@@ -330,46 +436,80 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 {
 	ACaySimDroneActor* D = Target.Get();
 	if (!D) return;
+	Dt = FMath::Min(Dt, 0.1f);
 	const FVector Pos = D->GetActorLocation();
 	const FRotator Body = D->GetActorRotation();
 	FVector CamPos = GetActorLocation();
 	FRotator CamRot = GetActorRotation();
+	UWorld* W = GetWorld();
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvCam), false, D);
+	Q.AddIgnoredActor(this);
+	const float R = FMath::Max(0.3f, VisRadius);
 	switch (Mode)
 	{
 	case ESmvCamMode::Chase:
 	{
-		const FRotator YawOnly(0.f, Body.Yaw, 0.f);
-		const FVector Want = Pos - YawOnly.Vector() * 1200.f * ChaseZoom + FVector(0, 0, 350.f * ChaseZoom);
-		CamPos = FMath::VInterpTo(CamPos, Want, Dt, 5.f);
-		CamRot = (Pos + FVector(0, 0, 80.f) - CamPos).Rotation();
+		// arkadan-üstten takip: gövde yönü yumuşatılır (yaw ~0,3 sn), konum dronun çizilen konumuna kilitli (gecikme yok → titreme yok);
+		// fare sürükle bakış açısını, tekerlek mesafeyi değiştirir
+		ChaseYawOff += (float)Look.X * 0.25f;
+		ChasePitch = FMath::Clamp(ChasePitch - (float)Look.Y * 0.25f, -75.f, 15.f);
+		if (!bChaseInit) { ChaseYawSm = Body.Yaw; bChaseInit = true; }
+		const float dYaw = FRotator::NormalizeAxis(Body.Yaw - ChaseYawSm);
+		ChaseYawSm = FRotator::NormalizeAxis(ChaseYawSm + dYaw * FMath::Clamp(Dt * 3.5f, 0.f, 1.f));
+		const float Dist = (2.8f + 3.6f * R) * ChaseZoom * 100.f;
+		const FVector Off = FRotator(ChasePitch, ChaseYawSm + ChaseYawOff, 0.f).Vector() * -Dist;
+		ChaseOffSm = ChaseOffSm.IsNearlyZero() ? Off : FMath::VInterpTo(ChaseOffSm, Off, Dt, 8.f);
+		const FVector Aim = Pos + FVector(0, 0, 25.f * R);
+		CamPos = Aim + ChaseOffSm;
+		// kamera yerin / binanın içine girmesin
+		FHitResult Hit;
+		if (W && W->LineTraceSingleByChannel(Hit, Aim, CamPos, ECC_Visibility, Q)) CamPos = Hit.Location + Hit.ImpactNormal * 40.f;
+		CamRot = (Aim - CamPos).Rotation();
 		break;
 	}
 	case ESmvCamMode::Fpv:
-		CamPos = Pos + Body.RotateVector(FVector(30.f, 0, 8.f));
+		CamPos = Pos + Body.RotateVector(FVector(VisNose * 100.f, 0, 6.f * R));
 		CamRot = (FQuat(Body) * FQuat(FRotator(IsPlaneLike() ? 0.f : 20.f, 0, 0))).Rotator();   // FPV kamera eğimi (uptilt)
 		break;
 	case ESmvCamMode::Gimbal:
-		CamPos = Pos + FVector(0, 0, -20.f);
+		CamPos = Pos + FVector(0, 0, -12.f * R);
 		CamRot = FRotator(GimbalPitch, Body.Yaw, 0.f);   // stabilize gimbal: roll/pitch'ten bağımsız
 		break;
 	case ESmvCamMode::Orbit:
 		OrbitYaw += (float)Look.X * 0.3f;
-		OrbitPitch = FMath::Clamp(OrbitPitch + (float)Look.Y * 0.3f, -85.f, 10.f);
+		OrbitPitch = FMath::Clamp(OrbitPitch - (float)Look.Y * 0.3f, -85.f, 10.f);
 		CamPos = Pos - FRotator(OrbitPitch, OrbitYaw, 0).Vector() * OrbitDist * 100.f;
 		CamRot = (Pos - CamPos).Rotation();
 		break;
 	case ESmvCamMode::Ground:
-		if (!bGroundPlaced) { GroundPos = Pos + FVector(-1500.f, 600.f, 170.f - 0.f); bGroundPlaced = true; }
+		if (!bGroundPlaced)
+		{
+			// pilot gözü: aracın 15 m gerisinde-yanında, zeminde 1,7 m
+			const FVector Back = FRotator(0.f, Body.Yaw, 0.f).Vector();
+			GroundPos = Pos - Back * 1500.f + FRotator(0.f, Body.Yaw + 90.f, 0.f).Vector() * 600.f;
+			FHitResult Hit;
+			if (W && W->LineTraceSingleByChannel(Hit, GroundPos + FVector(0, 0, 50000.f), GroundPos - FVector(0, 0, 200000.f), ECC_Visibility, Q)) GroundPos.Z = Hit.ImpactPoint.Z + 170.f;
+			else GroundPos.Z = Pos.Z + 170.f;
+			bGroundPlaced = true;
+		}
 		CamPos = GroundPos;
 		CamRot = (Pos - CamPos).Rotation();
-		Camera->SetFieldOfView(FMath::Clamp(FMath::RadiansToDegrees(2.f * FMath::Atan(800.f / FMath::Max(1.f, (float)FVector::Dist(Pos, CamPos)))), 5.f, 60.f));
+		Camera->SetFieldOfView(FMath::Clamp(FMath::RadiansToDegrees(2.f * FMath::Atan(600.f * R / FMath::Max(1.f, (float)FVector::Dist(Pos, CamPos)))), 5.f, 60.f));
 		break;
 	case ESmvCamMode::Free:
+	{
 		FreeYaw += (float)Look.X * 0.3f;
 		FreePitch = FMath::Clamp(FreePitch + (float)Look.Y * 0.3f, -89.f, 89.f);
 		CamRot = FRotator(FreePitch, FreeYaw, 0.f);
-		CamPos += (CamRot.Vector() * RightStick.Y + FRotator(0, FreeYaw + 90.f, 0).Vector() * RightStick.X + FVector(0, 0, LeftStick.Y)) * 3000.f * Dt;
+		// serbest kamera: WASD yatay, oklar ↑↓ yükseklik, ←→ dönüş; Shift hızlı
+		auto Ax = [this](const FKey& Neg, const FKey& P) { return (KeyDown(P) ? 1.f : 0.f) - (KeyDown(Neg) ? 1.f : 0.f); };
+		const float Fw = Ax(EKeys::S, EKeys::W) + (float)RightStick.Y, Rt = Ax(EKeys::A, EKeys::D) + (float)RightStick.X;
+		const float Up = Ax(EKeys::Down, EKeys::Up) + (float)LeftStick.Y;
+		FreeYaw += Ax(EKeys::Left, EKeys::Right) * 60.f * Dt;
+		const float Spd = (KeyDown(EKeys::LeftShift) ? 9000.f : 2500.f);
+		CamPos += (CamRot.Vector() * Fw + FRotator(0, FreeYaw + 90.f, 0).Vector() * Rt + FVector(0, 0, Up)) * Spd * Dt;
 		break;
+	}
 	case ESmvCamMode::Top:
 		CamPos = Pos + FVector(0, 0, 8000.f * ChaseZoom);
 		CamRot = FRotator(-90.f, 0.f, 0.f);
@@ -379,7 +519,7 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 	if (bPip)
 	{
 		// PiP = gimbal kamerası
-		PipCapture->SetWorldLocationAndRotation(Pos + FVector(0, 0, -20.f), FRotator(GimbalPitch, Body.Yaw, 0.f));
+		PipCapture->SetWorldLocationAndRotation(Pos + FVector(0, 0, -12.f * R), FRotator(GimbalPitch, Body.Yaw, 0.f));
 		PipCapture->CaptureScene();
 	}
 }

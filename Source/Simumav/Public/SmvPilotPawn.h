@@ -1,8 +1,12 @@
 // Pilot piyonu: kamera kipleri + kumanda (Enhanced Input; tüm IA/IMC varlıkları KODDA oluşturulur — içerik dosyası gerekmez).
-// Kamera kipleri (SIMUMAV ile aynı adlar): Takip, FPV (gövde), Gimbal (eğim ayarlı), Yörünge, Yer (pilot gözü), Serbest, Tepeden.
+// Kamera kipleri (web flightsim3d CAMERA_MODES sırası, tuş 1–5, C döngü): Takip, FPV (gövde), Gimbal (eğim ayarlı), Serbest, Yer (pilot gözü);
+// ek olarak 6 Yörünge, 7 Tepeden. Takip: aracın arkasından-üstünden, yön yumuşatılır, fare sürükle = bakış açısı, tekerlek = mesafe.
 // PiP: ikinci görüntü (gimbal kamerası) SceneCapture → render hedefi → HUD köşesi. Görüntü tipi: gündüz / termal / gece (son işlem ayarlarıyla).
 // Kumanda → RC: ch1 roll, ch2 pitch (ters), ch3 gaz, ch4 yaw, ch5 uçuş kipi (1000/1500/2000); pwm = 1500 + v·500 (SIMUMAV fly/rc.js).
-// Kaynaklar: klavye, gamepad (XInput), RC verici (RawInput HID: GenericUSBController_Axis1..8; eksen eşlemesi Ayarlar'da).
+// Klavye (web virtualRC ile aynı): WASD sol çubuk, oklar sağ çubuk (Mode 2: W/S gaz, A/D yaw, ↑↓ pitch, ←→ roll); tuş basılıyken eksen
+// 3,5/sn ile uca gider, bırakınca yaylı döner; uçakta gaz tutmalıdır (0,7/sn). Boşluk = gaz orta (1500), Q/E = ch5 −/+ 500.
+// Kopterde ch3 ilk gaz girdisine dek 0 (dokunma; ARM ön denetimi "gaz yüksek" olmasın — web lazyThr).
+// Kaynaklar: klavye, ekrandaki sanal çubuklar (fare sürükle), gamepad (XInput), RC verici (RawInput HID: GenericUSBController_Axis1..8).
 #pragma once
 
 #include "CoreMinimal.h"
@@ -48,6 +52,15 @@ public:
 	void SetMode(ESmvCamMode M);
 	void CycleMode();
 	ESmvCamMode GetMode() const { return Mode; }
+	/** Kamera kipinin Türkçe adı (alt bant düğmesi). */
+	static FString ModeLabel(ESmvCamMode M);
+	/** Ekrandaki sanal çubuk (Side 0 sol, 1 sağ; V −1..1, yukarı +). bActive=false → bırakıldı (yaylı döner). */
+	void SetVirtualStick(int32 Side, const FVector2D& V, bool bActive);
+	/** Çubukların çizim konumu (−1..1; yukarı +) — klavye/sanal/gamepad birleşik, kip eşlemesine göre. */
+	FVector2D GetStickL() const { return StickL; }
+	FVector2D GetStickR() const { return StickR; }
+	int32 GetCh5() const { return ModeSwitch; }
+	bool IsThrottleEngaged() const { return bThrUsed; }
 	void SetCamType(ESmvCamType T);
 	ESmvCamType GetCamType() const { return CamType; }
 	float GetGimbalPitchDeg() const { return GimbalPitch; }
@@ -60,7 +73,8 @@ public:
 	/** Son RC kanalları (HUD çubuk göstergesi). */
 	const TArray<int32>& LastRc() const { return Rc; }
 
-	/** Eylemler: Arm, Disarm, Takeoff, Rtl, Land, Lock, Ack, Pause, Reset, CamCycle, CamType, Hud, Pip, SpeedUp, SpeedDown, Mode1, Mode2, Mode3, MotorCut */
+	/** Eylemler: Arm, ArmToggle, Takeoff, Rtl, Land, Lock, Ack, Pause, Reset, CamCycle, CamType, Hud, Pip, Panel, Sticks, ModeMenu, SpeedUp, SpeedDown,
+	 *  Mode1, Mode2, Mode3, MotorCut, Cam1..Cam7, Ch5Up, Ch5Down, ThrCenter */
 	FSmvPawnAction OnAction;
 	/** RC kanalları hazır (≈ 25 Hz) — GameMode bağlantıya iletir. */
 	DECLARE_MULTICAST_DELEGATE_OneParam(FSmvRcOut, const TArray<int32>&);
@@ -90,6 +104,11 @@ private:
 	ESmvCamType CamType = ESmvCamType::Day;
 	float GimbalPitch = -15.f;
 	float OrbitYaw = 0.f, OrbitPitch = -20.f, OrbitDist = 15.f;
+	// takip kamerası: yumuşatılmış gövde yönü + kullanıcının sürükleyerek verdiği açı
+	float ChaseYawSm = 0.f, ChaseYawOff = 0.f, ChasePitch = -14.f;
+	bool bChaseInit = false;
+	FVector ChaseOffSm = FVector::ZeroVector;
+	float VisRadius = 1.f, VisNose = 0.5f;
 	float FreeYaw = 0.f, FreePitch = -10.f;
 	FVector FreeVel = FVector::ZeroVector;
 	FVector GroundPos = FVector::ZeroVector;
@@ -97,9 +116,14 @@ private:
 	bool bHud = true, bPip = false, bFlying = false;
 	float ChaseZoom = 1.f;
 
-	// çubuk durumu (−1..1)
+	// gamepad çubukları (Enhanced Input; −1..1)
 	FVector2D LeftStick = FVector2D::ZeroVector, RightStick = FVector2D::ZeroVector;
-	float KeyThrottle = 0.f;   // klavye gazı (uçakta kalıcı, kopterde yaylı)
+	// birleşik eksenler (−1..1): klavye entegrasyonu + yay, sanal çubuk / gamepad mutlak değer
+	float AxRoll = 0.f, AxPitch = 0.f, AxYaw = 0.f, AxThr = 0.f;
+	bool bThrUsed = true;
+	FVector2D VStick[2] = { FVector2D::ZeroVector, FVector2D::ZeroVector };
+	bool bVStick[2] = { false, false };
+	FVector2D StickL = FVector2D::ZeroVector, StickR = FVector2D::ZeroVector;
 	int32 ModeSwitch = 1000;
 	float RcAxis[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 	bool bRcAxisSeen = false;
@@ -120,4 +144,5 @@ private:
 	void UpdateCamera(float Dt);
 	void ApplyCamTypePost();
 	bool IsPlaneLike() const;
+	bool KeyDown(const FKey& K) const;
 };
