@@ -82,7 +82,7 @@ void SSmvTileMap::Unproject(double X, double Y, int32 Z, double& La, double& Lo)
 	const double N = 256.0 * (1 << Z);
 	Lo = X / N * 360.0 - 180.0;
 	const double M = PI - 2.0 * PI * Y / N;
-	La = FMath::RadiansToDegrees(FMath::Atan(FMath::Sinh(M)));
+	La = FMath::RadiansToDegrees(FMath::Atan(0.5 * (FMath::Exp(M) - FMath::Exp(-M))));
 }
 
 void SSmvTileMap::EnsureInit()
