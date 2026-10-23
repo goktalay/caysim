@@ -4,31 +4,51 @@
 //   - Dron gövdesi: /Game/Fab/Drone (quad) ve /Game/Fab/DroneFpv (FPV/önleyici) altındaki ilk ağ (Scripts/Python/fab_import.py)
 //   - Sahne dekoru: /Game/Fab/Props/<ürün> statik ağları (yalnız görsel; davranış yok)
 //   - Gök: /Game/UltraDynamicSky (Ultra Dynamic Sky paketi; düz dünyada yerleşik gök yerine)
-//   - Haritalar: DefaultGame.ini [/Script/Simumav.SmvFabContent] +Maps=<anahtar>|/Game/<paket>/.../<Harita>  (CI ekler)
+//   - Uçak/VTOL motor sesi: /Game/Fab/Sounds/SC_Engine_<Prop|Pusher|Jet> (Aircraft Engine Sounds'tan CI kopyası)
+//   - Haritalar: KAYIT TABLOSU Private/SmvMapRegistry.cpp (ad, açıklama, önizleme, harita yolu, başlangıç); ek olarak
+//     DefaultGame.ini [/Script/Simumav.SmvFabContent] +Maps=<anahtar>|/Game/<paket>/.../<Harita> satırları.
 //     Parkur dünya kipi "fab:<anahtar>" — sihirbazda sanal parkur olarak listelenir, sunucuya kaydedilmez.
 #pragma once
 
 #include "CoreMinimal.h"
 #include "SimumavTypes.h"
+#include "SmvMapRegistry.h"
 
 class USkeletalMesh;
 class UStaticMesh;
 class UWorld;
 class AActor;
+class USoundBase;
 
 struct SIMUMAV_API FSmvFabMap
 {
 	FString Key;
-	/** Uzun paket adı (/Game/.../Harita) */
+	/** Uzun paket adı (/Game/.../Harita); kodla kurulan şehirde boş */
 	FString Level;
-	/** Görünen ad (dil dosyası "fabmap.<anahtar>"; yoksa anahtar) — Maps() her çağrıda geçerli dile göre tazeler */
+	/** Görünen ad ve açıklama (kayıt tablosundaki dil anahtarları; yoksa anahtar) — Maps()/AllMaps() her çağrıda geçerli dile göre tazeler */
 	FText Name;
+	FText Description;
+	/** Önizleme görseli: Content/ altına göre yol (ör. Simumav/MapPreviews/orman.png) ve okunacak dosya yolu
+	 *  (FPaths::ProjectContentDir() ile; pakette UFS/pak içinde — FFileHelper::LoadFileToArray ile okunur; yoksa boş) */
+	FString Preview;
+	FString PreviewFile;
+	ESmvMapKind Kind = ESmvMapKind::Level;
+	/** Başlangıç noktasına ek kaydırma (m, doğu/kuzey) ve kalkış yönü (derece) */
+	double StartE = 0, StartN = 0, StartYaw = 0;
+	/** Statik sahne dekoru (yalnız görsel) kalkış alanının yanına konur */
+	bool bDecor = false;
+	/** Gereken Fab paketi (bilgi) */
+	FString Package;
+	/** Pakette var mı (yoksa menüde gösterilip seçilemez) */
+	bool bAvailable = false;
 };
 
 struct SIMUMAV_API FSmvFabContent
 {
-	/** Pakette gerçekten bulunan Fab haritaları (ilk çağrıda yapılandırmadan okunur). */
+	/** Pakette gerçekten bulunan uçuş haritaları (kayıt tablosu + DefaultGame.ini +Maps; ilk çağrıda çözülür). */
 	static const TArray<FSmvFabMap>& Maps();
+	/** Kayıt tablosunun tamamı (pakette olmayanlar bAvailable = false) + ini ek haritaları — menü bunu gösterebilir. */
+	static const TArray<FSmvFabMap>& AllMaps();
 	/** "fab:<anahtar>" dünya kipine karşılık gelen harita (yoksa nullptr). */
 	static const FSmvFabMap* FindMap(const FString& WorldMode);
 	static bool IsFabWorld(const FString& WorldMode) { return WorldMode.StartsWith(TEXT("fab:")); }
@@ -43,6 +63,11 @@ struct SIMUMAV_API FSmvFabContent
 	/** Ultra Dynamic Sky + Ultra Dynamic Weather (Fab) kurar; parkur saat/hava/sis ayarlarını UDS değişkenlerine bağlar.
 	 *  Paket yoksa ya da UseUltraDynamicSky=False ise false (yerleşik gök kalır). */
 	static bool SpawnSky(UWorld* World, const FSmvTrack& Track, TArray<AActor*>& OutActors);
+	/** Uçak/VTOL motor sesi (Fab Aircraft Engine Sounds; Kind: Prop | Pusher | Jet). Yoksa nullptr (prosedürel ses kalır). */
+	static USoundBase* LoadEngineSound(const TCHAR* Kind);
+	/** Kodla kurulan şehir: bina ağları (European Buildings) ve pakette bulunan City Sample bina seviyeleri. */
+	static const TArray<UStaticMesh*>& CityMeshes();
+	static TArray<FString> CityTowerLevels();
 	/** Ayar (DefaultGame.ini [/Script/Simumav.SmvFabContent]); yoksa Default. */
 	static float GetFloat(const TCHAR* Key, float Default);
 };

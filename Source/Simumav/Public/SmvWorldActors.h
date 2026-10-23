@@ -19,6 +19,7 @@ class UMaterialInterface;
 class UStaticMesh;
 class UPoseableMeshComponent;
 class USmvMotorSynth;
+class UAudioComponent;
 class ICaySimGeoTransform;
 
 UCLASS()
@@ -49,6 +50,8 @@ protected:
 	/** Fab gövdesi iskeletsizse (statik ağ) */
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> FabStatic;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USmvMotorSynth> Motor;
+	/** Uçak/VTOL motor sesi (Fab Aircraft Engine Sounds döngüsü; gaz → perde/ses düzeyi). Yoksa yalnız prosedürel ses. */
+	UPROPERTY() TObjectPtr<UAudioComponent> EngineAudio;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Parts;
 	/** Pervane göbekleri (dönen düğüm; kanatlar alt bileşen). */
 	UPROPERTY() TArray<TObjectPtr<USceneComponent>> Hubs;
@@ -81,6 +84,11 @@ private:
 	/** Dönüş yönü (+1/−1; çapraz çiftler aynı) */
 	TArray<float> FabPropDir;
 	float FabPropPhase = 0.f;
+	/** Fab motor sesi etkin mi; prosedürel sesin bu durumdaki payı (uçak 0: motor sesi tek başına; VTOL: dikey rotorlar için) */
+	bool bFabEngineSound = false;
+	float SynthShare = 1.f;
+	/** Yumuşatılmış gaz (Fab motor sesi perdesi) */
+	float EngineThr = 0.f;
 };
 
 UCLASS()

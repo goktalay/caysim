@@ -10,8 +10,10 @@
 #     Dron ürünleri /Game/Fab/Drone (oyun çalışma anında buradan yükler). Kaynak imzası değişmedikçe yeniden aktarılmaz.
 #  c) VaultCache\<paket>\data\Content (Launcher'ın indirdiği UE paketleri) → proje Content\<paket> (a ile aynı kural).
 #  d) Config/DefaultGame.ini (yalnız çalışma kopyası; checkout her derlemede sıfırlar):
-#       DirectoriesToAlwaysCook "Fab" (içe aktarılan gövdeler yalnız yumuşak yolla yüklenir)
-#       MapsToCook + [/Script/Simumav.SmvFabContent] +Maps=<anahtar>|<harita>  (her paketten bir gösterim haritası)
+#       DirectoriesToAlwaysCook "Fab" (içe aktarılan gövdeler + motor sesi kopyaları; yalnız yumuşak yolla yüklenir), "UltraDynamicSky"
+#       MapsToCook: YALNIZ uçuş haritaları KAYIT TABLOSUNDAKİ (Source/Simumav/Private/SmvMapRegistry.cpp) haritalar + alt seviyeleri
+#       ve şehir bloğunun City Sample bina seviyeleri; şehir bina ağı klasörleri DirectoriesToAlwaysCook. Paketlerin geri kalanı
+#       (demo/showcase haritaları, kullanılmayan varlıklar) pakete GİRMEZ — pişirme süresi ve paket boyutu bunun için sınırlı.
 param(
 	[string]$Proje = (Get-Location).Path,
 	[string]$UeRoot = $env:UE_ROOT,
@@ -38,6 +40,18 @@ function Kopyala([string]$kaynak, [string]$hedef) {
 }
 
 function PaketKopyala([string]$srcContent, [string]$etiket) {
+	# Content kökündeki harita/varlık dosyaları (ör. KitBash3D Refineries: Content\Main.umap -> /Game/Main)
+	foreach ($f in (Get-ChildItem -LiteralPath $srcContent -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.umap', '.uasset' })) {
+		if ($kopyalanan -contains $f.Name) { continue }
+		$hedefDosya = Join-Path $content $f.Name
+		if ((Test-Path -LiteralPath $hedefDosya) -and -not ($oncekiListe -contains $f.Name)) { Uyari "atlandi (projede ayni adli dosya var): $etiket\$($f.Name)"; continue }
+		$h = Get-Item -LiteralPath $hedefDosya -ErrorAction SilentlyContinue
+		if (-not $h -or $h.Length -ne $f.Length -or $h.LastWriteTimeUtc -ne $f.LastWriteTimeUtc) {
+			Copy-Item -LiteralPath $f.FullName -Destination $hedefDosya -Force
+			Bilgi "kok dosyasi kopyalandi: $etiket\$($f.Name)"
+		}
+		[void]$kopyalanan.Add($f.Name)
+	}
 	foreach ($d in (Get-ChildItem -LiteralPath $srcContent -Directory -ErrorAction SilentlyContinue)) {
 		$ad = $d.Name
 		if ($ad -like '__External*') {
@@ -56,6 +70,10 @@ function PaketKopyala([string]$srcContent, [string]$etiket) {
 		if (Kopyala $d.FullName (Join-Path $content $ad)) { [void]$kopyalanan.Add($ad); [void]$paketler.Add($ad) }
 	}
 }
+
+$oncekiListe = @()
+$listeYolu = Join-Path $content '.fab-kopyalar.txt'
+if (Test-Path -LiteralPath $listeYolu) { $oncekiListe = @(Get-Content -LiteralPath $listeYolu | Where-Object { $_ }) }
 
 try {
 	# ---------------- a) hazırlama projesi ----------------
@@ -100,7 +118,7 @@ try {
 	$exclude = Join-Path $Proje '.git\info\exclude'
 	if (Test-Path -LiteralPath (Split-Path $exclude)) {
 		$mevcut = if (Test-Path -LiteralPath $exclude) { Get-Content -LiteralPath $exclude } else { @() }
-		$ekle = @('/Content/Fab/', '/Content/.fab-kopyalar.txt') + ($kopyalanan | ForEach-Object { '/Content/' + ($_ -replace '\\', '/') + '/' })
+		$ekle = @('/Content/Fab/', '/Content/.fab-kopyalar.txt') + ($kopyalanan | ForEach-Object { '/Content/' + ($_ -replace '\\', '/') + $(if ($_ -match '\.(umap|uasset)$') { '' } else { '/' }) })
 		$yeni = $ekle | Where-Object { $mevcut -notcontains $_ }
 		if ($yeni) { Add-Content -LiteralPath $exclude -Value $yeni -Encoding ASCII }
 	}
@@ -143,6 +161,13 @@ try {
 		$isler += [pscustomobject]@{ tur = 'uds'; hedef = '/Game/UltraDynamicSky' }
 		$imzalar['/Game/UltraDynamicSky'] = @($udsDamga, 'tamam')
 	}
+	# Aircraft Engine Sounds: secilen motor dongulerinin kopyasi /Game/Fab/Sounds (oyun ucak/VTOL sesi icin buradan yukler)
+	$sesDir = Join-Path $content 'cplomedia_AircraftEngineSounds'
+	$sesDamga = Join-Path $content 'Fab\Sounds\.ses-v1'
+	if ((Test-Path -LiteralPath $sesDir) -and -not (Test-Path -LiteralPath $sesDamga)) {
+		$isler += [pscustomobject]@{ tur = 'ses'; hedef = '/Game/Fab/Sounds'; kok = '/Game/cplomedia_AircraftEngineSounds' }
+		$imzalar['/Game/Fab/Sounds'] = @($sesDamga, 'tamam')
+	}
 	if ($isler.Count -gt 0) {
 		$editor = Join-Path $UeRoot 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
 		if (-not (Test-Path -LiteralPath $editor)) { Uyari "editor yok: $editor - ice aktarma atlandi" }
@@ -179,37 +204,49 @@ try {
 	# ---------------- d) paketleme ayarları ----------------
 	$satirlar = @()
 	if (Test-Path -LiteralPath (Join-Path $content 'Fab')) { $satirlar += '+DirectoriesToAlwaysCook=(Path="Fab")' }
-	# Ultra Dynamic Sky calisma aninda yumusak yolla yuklenir (SmvFabContent::SpawnSky) - haritalarina gerek yok
+	# Ultra Dynamic Sky calisma aninda yumusak yolla yuklenir (SmvFabContent::SpawnSky)
 	if (Test-Path -LiteralPath $udsDir) { $satirlar += '+DirectoriesToAlwaysCook=(Path="UltraDynamicSky")'; Bilgi "Ultra Dynamic Sky bulundu - pakete pisirilecek" }
-	# ucus haritasi olarak listelenmeyen paketler (gok/ses/malzeme kutuphaneleri)
-	$haritasiz = @('UltraDynamicSky')
-	$haritalar = @()
-	foreach ($p in $paketler) {
-		$kok = Join-Path $content $p
-		$umaps = @(Get-ChildItem -LiteralPath $kok -Filter *.umap -Recurse -File -ErrorAction SilentlyContinue)
-		if ($umaps.Count -eq 0) { Bilgi "paket: $p (harita yok)"; continue }
-		if ($haritasiz -contains $p) { Bilgi "paket: $p ($($umaps.Count) harita; ucus haritasi olarak listelenmez)"; continue }
-		# tercih: 1) adinda paket adi gecen (asil ortam, ör. P_Ruined_Construction) 2) demo/overview/example/level/map
-		#         3) showcase (varlik galerisi) 4) en buyugu; test/template/empty/_BuiltData haric
-		$pk = ($p -replace '[^A-Za-z0-9]', '').ToLower()
-		$adaylar = @($umaps | Where-Object { $_.BaseName -notmatch '(?i)test|template|empty|_BuiltData' })
-		$tercih = $adaylar | Where-Object { ($_.BaseName -replace '[^A-Za-z0-9]', '').ToLower().Contains($pk) } | Sort-Object Length -Descending | Select-Object -First 1
-		if (-not $tercih) { $tercih = $adaylar | Where-Object { $_.BaseName -match '(?i)forest|demo|overview|example|preview|level|map' } | Sort-Object Length -Descending | Select-Object -First 1 }
-		if (-not $tercih) { $tercih = $adaylar | Where-Object { $_.BaseName -match '(?i)showcase' } | Sort-Object Length -Descending | Select-Object -First 1 }
-		if (-not $tercih) { $tercih = $adaylar | Sort-Object Length -Descending | Select-Object -First 1 }
-		if (-not $tercih) { continue }
-		$umaps | ForEach-Object { Write-Host ("    harita: " + $_.FullName.Substring($content.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
-		$rel = $tercih.FullName.Substring($content.Length).TrimStart('\') -replace '\.umap$', ''
-		$paket = '/Game/' + ($rel -replace '\\', '/')
-		$anahtar = ($p -replace '[^A-Za-z0-9]', '').ToLower()
-		Bilgi "paket: $p - harita $paket (anahtar $anahtar; $($umaps.Count) harita)"
-		# secilen haritanin klasorundeki diger haritalar (kalici seviyenin alt seviyeleri) de pisirilir
-		foreach ($u in ($umaps | Where-Object { $_.DirectoryName -eq $tercih.DirectoryName -and $_.BaseName -notmatch '_BuiltData' })) {
-			$r2 = '/Game/' + (($u.FullName.Substring($content.Length).TrimStart('\') -replace '\.umap$', '') -replace '\\', '/')
-			$satirlar += "+MapsToCook=(FilePath=`"$r2`")"
+	# ucus haritalari: KAYIT TABLOSU (oyun kodu) - yalniz oradaki haritalar pisirilir
+	$reg = Join-Path $Proje 'Source\Simumav\Private\SmvMapRegistry.cpp'
+	$regMetin = if (Test-Path -LiteralPath $reg) { Get-Content -LiteralPath $reg -Raw -Encoding UTF8 } else { '' }
+	function Blok([string]$ad) { if ($regMetin -match "(?s)// <$ad>(.*?)// </$ad>") { return $Matches[1] } else { Uyari "kayit tablosunda blok yok: $ad"; return '' } }
+	function DiskYolu([string]$oyunYolu) { return (Join-Path $content (($oyunYolu.Substring(6)) -replace '/', '\')) }
+	function HaritaVar([string]$oyunYolu) { return ($oyunYolu.StartsWith('/Game/') -and (Test-Path -LiteralPath ((DiskYolu $oyunYolu) + '.umap'))) }
+	function Diskten([string]$umap) { return '/Game/' + (($umap.Substring($content.Length).TrimStart('\') -replace '\.umap$', '') -replace '\\', '/') }
+	$pisirilecek = New-Object System.Collections.ArrayList
+	foreach ($ln in ((Blok 'HARITA-TABLOSU') -split "`n")) {
+		$m = [regex]::Matches($ln, 'TEXT\("([^"]*)"\)')
+		if ($m.Count -lt 5) { continue }
+		$anahtar = $m[0].Groups[1].Value
+		$adaylar = $m[4].Groups[1].Value
+		if (-not $adaylar) { Bilgi "harita $anahtar : kodla kurulur (sehir blogu)"; continue }
+		$secilen = $null
+		foreach ($c in ($adaylar -split ';')) { $c = $c.Trim(); if ($c -and (HaritaVar $c)) { $secilen = $c; break } }
+		if (-not $secilen) { Uyari "harita $anahtar : pakette yok ($adaylar) - menude 'yok' gorunur"; continue }
+		Bilgi "harita $anahtar : $secilen"
+		[void]$pisirilecek.Add($secilen)
+		# alt seviyeler (Sub_Levels / SubLevels klasorleri: haritanin klasoru ve bir ustu) - calisma aninda kalici seviyeyle yuklenir
+		$hDir = Split-Path ((DiskYolu $secilen) + '.umap')
+		foreach ($kok in @($hDir, (Split-Path $hDir))) {
+			foreach ($sd in (Get-ChildItem -LiteralPath $kok -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)^sub_?levels?$' })) {
+				foreach ($u in (Get-ChildItem -LiteralPath $sd.FullName -Filter *.umap -File -Recurse -ErrorAction SilentlyContinue)) {
+					$r2 = Diskten $u.FullName
+					if (-not ($pisirilecek -contains $r2)) { [void]$pisirilecek.Add($r2) }
+				}
+			}
 		}
-		$haritalar += "+Maps=$anahtar|$paket"
 	}
+	# sehir blogu: bina agi klasorleri ve City Sample bina seviyeleri
+	foreach ($y in [regex]::Matches((Blok 'SEHIR-AG-KLASORLERI'), '"(/Game/[^"]+)"')) {
+		$g = $y.Groups[1].Value
+		if (Test-Path -LiteralPath (DiskYolu $g)) { $satirlar += "+DirectoriesToAlwaysCook=(Path=`"$($g.Substring(6))`")"; Bilgi "sehir agi klasoru: $g" } else { Uyari "sehir agi klasoru yok: $g" }
+	}
+	foreach ($y in [regex]::Matches((Blok 'SEHIR-KULELERI'), '"(/Game/[^"]+)"')) {
+		$g = $y.Groups[1].Value
+		if (HaritaVar $g) { [void]$pisirilecek.Add($g); Bilgi "sehir bina seviyesi: $g" } else { Uyari "sehir bina seviyesi yok: $g" }
+	}
+	foreach ($h in $pisirilecek) { $satirlar += "+MapsToCook=(FilePath=`"$h`")" }
+	$haritalar = @()
 	if ($satirlar.Count -gt 0 -or $haritalar.Count -gt 0) {
 		$ek = @('', '; ---- fab-hazirla.ps1 (derleme aninda; depoda yok) ----', '[/Script/UnrealEd.ProjectPackagingSettings]') + $satirlar
 		if ($haritalar.Count -gt 0) { $ek += @('', '[/Script/Simumav.SmvFabContent]') + $haritalar }

@@ -8,8 +8,11 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "UObject/UnrealType.h"
+#include "UObject/EnumProperty.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
+#include "Sound/SoundBase.h"
 
 namespace
 {
@@ -24,13 +27,63 @@ float FSmvFabContent::GetFloat(const TCHAR* Key, float Default)
 	return V;
 }
 
-const TArray<FSmvFabMap>& FSmvFabContent::Maps()
+namespace
 {
-	static TArray<FSmvFabMap> Out;
-	static bool bRead = false;
-	if (!bRead)
+	FText SmvI18nOr(const FString& Key, const FString& Fallback)
 	{
+		if (Key.IsEmpty()) return FText::FromString(Fallback);
+		const FText T = FSmvI18n::T(Key);
+		return T.ToString() == Key ? FText::FromString(Fallback) : T;
+	}
+
+	/** Kayıt tablosu + ini ek haritaları (ilk çağrıda çözülür; adlar her çağrıda geçerli dile göre tazelenir). */
+	TArray<FSmvFabMap>& SmvAllMapsMutable()
+	{
+		static TArray<FSmvFabMap> Out;
+		static bool bRead = false;
+		if (bRead) return Out;
 		bRead = true;
+		for (const FSmvMapDef& D : FSmvMapRegistry::All())
+		{
+			FSmvFabMap M;
+			M.Key = D.Key;
+			M.Kind = D.Kind;
+			M.StartE = D.StartE; M.StartN = D.StartN; M.StartYaw = D.StartYaw;
+			M.bDecor = D.bDecor;
+			M.Package = D.Package;
+			M.Preview = D.Preview;
+			// UFS (pak) içindeki dosya: göreli proje yolu korunur (pak bağlama noktası göreli; tam yola çevirmek bulamazdı)
+			const FString PreviewPath = FPaths::Combine(FPaths::ProjectContentDir(), M.Preview);
+			if (!M.Preview.IsEmpty() && FPaths::FileExists(PreviewPath)) M.PreviewFile = PreviewPath;
+			if (D.Kind == ESmvMapKind::ProcCity)
+			{
+				// ağları yüklemeden say (menü açılışında)
+				int32 N = 0;
+				for (const TCHAR* Dir : FSmvMapRegistry::CityMeshDirs())
+				{
+					TArray<FAssetData> A;
+					IAssetRegistry::GetChecked().GetAssetsByPath(FName(Dir), A, true);
+					for (const FAssetData& X : A) if (X.AssetClassPath == UStaticMesh::StaticClass()->GetClassPathName()) ++N;
+				}
+				M.bAvailable = N > 0 || FSmvFabContent::CityTowerLevels().Num() > 0;
+			}
+			else
+			{
+				TArray<FString> Cands;
+				FString(D.Levels).ParseIntoArray(Cands, TEXT(";"), true);
+				for (FString& C : Cands)
+				{
+					C.TrimStartAndEndInline();
+					if (C.IsEmpty()) continue;
+					if (M.Level.IsEmpty()) M.Level = C;   // pakette yoksa ilk aday (bilgi)
+					if (FPackageName::DoesPackageExist(C)) { M.Level = C; M.bAvailable = true; break; }
+				}
+			}
+			UE_LOG(LogSimumav, Log, TEXT("Uçuş haritası %s: %s (%s)"), *M.Key, M.bAvailable ? TEXT("var") : TEXT("pakette yok"),
+				M.Level.IsEmpty() ? TEXT("kodla kurulan şehir") : *M.Level);
+			Out.Add(M);
+		}
+		// ini ek haritaları: +Maps=<anahtar>|/Game/... (aynı anahtar tablodakini geçersiz kılar)
 		TArray<FString> Lines;
 		if (GConfig) GConfig->GetArray(GSmvFabSection, TEXT("Maps"), Lines, GGameIni);
 		for (const FString& Line : Lines)
@@ -40,27 +93,33 @@ const TArray<FSmvFabMap>& FSmvFabContent::Maps()
 			Key.TrimStartAndEndInline();
 			Level.TrimStartAndEndInline();
 			if (Key.IsEmpty() || Level.IsEmpty()) continue;
-			if (!FPackageName::DoesPackageExist(Level))
-			{
-				UE_LOG(LogSimumav, Log, TEXT("Fab haritası pakette yok, atlandı: %s (%s)"), *Key, *Level);
-				continue;
-			}
-			FSmvFabMap M;
-			M.Key = Key;
-			M.Level = Level;
-			Out.Add(M);
-			UE_LOG(LogSimumav, Log, TEXT("Fab haritası: %s → %s"), *Key, *Level);
+			FSmvFabMap* M = Out.FindByPredicate([&](const FSmvFabMap& X) { return X.Key == Key; });
+			if (!M) { M = &Out.AddDefaulted_GetRef(); M->Key = Key; M->Kind = ESmvMapKind::Level; }
+			M->Level = Level;
+			M->bAvailable = FPackageName::DoesPackageExist(Level);
+			UE_LOG(LogSimumav, Log, TEXT("Uçuş haritası (ini) %s → %s (%s)"), *Key, *Level, M->bAvailable ? TEXT("var") : TEXT("pakette yok"));
 		}
+		return Out;
 	}
-	// bilinen paketlerin görünen adı dil dosyasından; diğerleri paket anahtarıyla
-	for (FSmvFabMap& M : Out)
+}
+
+const TArray<FSmvFabMap>& FSmvFabContent::AllMaps()
+{
+	TArray<FSmvFabMap>& All = SmvAllMapsMutable();
+	for (FSmvFabMap& M : All)
 	{
-		const FString I18nKey = M.Key.Contains(TEXT("ruin")) ? FString(TEXT("fabmap.ruined"))
-			: (M.Key.Contains(TEXT("brushify")) || M.Key.Contains(TEXT("forest"))) ? FString(TEXT("fabmap.forest"))
-			: FString(TEXT("fabmap.")) + M.Key;
-		const FText T = FSmvI18n::T(I18nKey);
-		M.Name = T.ToString() == I18nKey ? FText::FromString(M.Key) : T;
+		const FSmvMapDef* D = FSmvMapRegistry::Find(M.Key);
+		M.Name = SmvI18nOr(D ? FString(D->NameKey) : FString(TEXT("fabmap.")) + M.Key, M.Key);
+		M.Description = SmvI18nOr(D ? FString(D->DescKey) : FString(), FString());
 	}
+	return All;
+}
+
+const TArray<FSmvFabMap>& FSmvFabContent::Maps()
+{
+	static TArray<FSmvFabMap> Out;
+	Out.Reset();
+	for (const FSmvFabMap& M : AllMaps()) if (M.bAvailable) Out.Add(M);
 	return Out;
 }
 
@@ -68,14 +127,16 @@ const FSmvFabMap* FSmvFabContent::FindMap(const FString& WorldMode)
 {
 	if (!IsFabWorld(WorldMode)) return nullptr;
 	const FString Key = WorldMode.Mid(4);
-	for (const FSmvFabMap& M : Maps()) if (M.Key == Key) return &M;
+	// kalıcı dizi (Maps() her çağrıda yeniden kurulur; işaretçi onu göstermemeli)
+	for (const FSmvFabMap& M : AllMaps()) if (M.bAvailable && M.Key == Key) return &M;
 	return nullptr;
 }
 
 FSmvTrack FSmvFabContent::MakeTrack(const FSmvFabMap& Map)
 {
 	FSmvTrack T;
-	T.Id = FString(TEXT("fab:")) + Map.Key;   // sanal: sunucuya/yerel dosyaya yazılmaz (yalnız yerel SITL ile uçulur)
+	T.Id = FString(TEXT("fab:")) + Map.Key;
+	// sanal: sunucuya/yerel dosyaya yazılmaz (yalnız yerel SITL ile uçulur)
 	T.Name = Map.Name.ToString();
 	T.Lat = 39.9334; T.Lon = 32.8597;   // SITL ev konumu; harita merkezi bu noktaya oturtulur (ASmvGameMode::HandleFabLevelShown)
 	T.GroundMsl = 0;
@@ -148,6 +209,67 @@ const TArray<UStaticMesh*>& FSmvFabContent::Props()
 	return Out;
 }
 
+USoundBase* FSmvFabContent::LoadEngineSound(const TCHAR* Kind)
+{
+	static TMap<FString, USoundBase*> Cache;
+	const FString K(Kind);
+	if (USoundBase** F = Cache.Find(K)) return *F;
+	// ayar ile değiştirilebilir: EngineSound<Kind>=/Game/.../Cue.Cue ; yoksa CI'nin kopyası /Game/Fab/Sounds/SC_Engine_<Kind>
+	FString Path;
+	if (!GConfig || !GConfig->GetString(GSmvFabSection, *(FString(TEXT("EngineSound")) + K), Path, GGameIni) || Path.IsEmpty())
+	{
+		Path = FString::Printf(TEXT("/Game/Fab/Sounds/SC_Engine_%s.SC_Engine_%s"), *K, *K);
+	}
+	if (!Path.Contains(TEXT("."))) Path += TEXT(".") + FPackageName::GetShortName(Path);   // paket yolu verildiyse nesne yolu
+	USoundBase* S = nullptr;
+	if (FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(Path))) S = LoadObject<USoundBase>(nullptr, *Path);
+	if (S)
+	{
+		S->AddToRoot();
+		UE_LOG(LogSimumav, Log, TEXT("Fab motor sesi (%s): %s"), *K, *S->GetPathName());
+	}
+	Cache.Add(K, S);
+	return S;
+}
+
+const TArray<UStaticMesh*>& FSmvFabContent::CityMeshes()
+{
+	static TArray<UStaticMesh*> Out;
+	static bool bRead = false;
+	if (bRead) return Out;
+	bRead = true;
+	for (const TCHAR* Dir : FSmvMapRegistry::CityMeshDirs())
+	{
+		TArray<FAssetData> Assets;
+		IAssetRegistry::GetChecked().GetAssetsByPath(FName(Dir), Assets, true);
+		Assets.Sort([](const FAssetData& A, const FAssetData& B) { return A.AssetName.LexicalLess(B.AssetName); });
+		for (const FAssetData& A : Assets)
+		{
+			if (A.AssetClassPath != UStaticMesh::StaticClass()->GetClassPathName()) continue;
+			if (UStaticMesh* M = Cast<UStaticMesh>(A.GetAsset()))
+			{
+				M->AddToRoot();
+				Out.Add(M);
+			}
+		}
+	}
+	UE_LOG(LogSimumav, Log, TEXT("Şehir bina ağları: %d"), Out.Num());
+	return Out;
+}
+
+TArray<FString> FSmvFabContent::CityTowerLevels()
+{
+	static TArray<FString> Out;
+	static bool bRead = false;
+	if (!bRead)
+	{
+		bRead = true;
+		for (const TCHAR* L : FSmvMapRegistry::CityTowerLevels()) if (FPackageName::DoesPackageExist(L)) Out.Add(L);
+		UE_LOG(LogSimumav, Log, TEXT("Şehir bina seviyeleri (City Sample): %d"), Out.Num());
+	}
+	return Out;
+}
+
 // ---------------------------------------------------------------------------
 // Ultra Dynamic Sky (Fab) — gök/ışık/hava
 // ---------------------------------------------------------------------------
@@ -190,6 +312,17 @@ namespace
 		if (!B) return false;
 		B->SetPropertyValue(B->ContainerPtrToValuePtr<void>(Obj), V);
 		return true;
+	}
+
+	/** Enum/byte değişkeni (ör. UDW "Random Weather Variation" = UDS_RandomWeatherTiming::DISABLED → 0). */
+	bool SmvSetEnumIndex(UObject* Obj, const TCHAR* Name, int64 V)
+	{
+		FProperty* P = SmvFindProp(Obj, Name);
+		if (!P) return false;
+		void* Ptr = P->ContainerPtrToValuePtr<void>(Obj);
+		if (FEnumProperty* E = CastField<FEnumProperty>(P)) { E->GetUnderlyingProperty()->SetIntPropertyValue(Ptr, V); return true; }
+		if (FByteProperty* B = CastField<FByteProperty>(P)) { B->SetPropertyValue(Ptr, (uint8)V); return true; }
+		return false;
 	}
 
 	bool SmvSetObj(UObject* Obj, const TCHAR* Name, UObject* V)
@@ -273,8 +406,8 @@ bool FSmvFabContent::SpawnSky(UWorld* W, const FSmvTrack& Track, TArray<AActor*>
 		if (Weather)
 		{
 			TArray<FString> Names;
-			if (Wx == TEXT("rain")) Names = { TEXT("rain"), TEXT("lightrain") };
-			else if (Wx == TEXT("snow")) Names = { TEXT("snow"), TEXT("lightsnow") };
+			if (Wx == TEXT("rain")) Names = { TEXT("rain"), TEXT("rainlight") };
+			else if (Wx == TEXT("snow")) Names = { TEXT("snow"), TEXT("snowlight") };
 			else if (Wx == TEXT("fog")) Names = { TEXT("foggy"), TEXT("fog") };
 			else if (Wx == TEXT("cloudy")) Names = { TEXT("cloudy"), TEXT("overcast"), TEXT("partlycloudy") };
 			else Names = { TEXT("clearskies"), TEXT("clear"), TEXT("partlycloudy") };
@@ -282,7 +415,7 @@ bool FSmvFabContent::SpawnSky(UWorld* W, const FSmvTrack& Track, TArray<AActor*>
 			{
 				if (SmvSetObj(Weather, TEXT("Weather"), Preset)) Set += FString(TEXT(" Weather=")) + Preset->GetName();
 			}
-			if (SmvSetBool(Weather, TEXT("Random Weather Variation"), false)) Set += TEXT(" RandomWeatherOff");
+			if (SmvSetBool(Weather, TEXT("Random Weather Variation"), false) || SmvSetEnumIndex(Weather, TEXT("Random Weather Variation"), 0)) Set += TEXT(" RandomWeatherOff");
 			Weather->FinishSpawning(Tr);
 			OutActors.Add(Weather);
 		}

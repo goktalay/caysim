@@ -22,6 +22,10 @@ on:
         description: "Steam dalı (boş = varsayılan dala yükleme yapılmaz, yalnız beta)"
         type: string
         default: "beta"
+      dev_artefakt:
+        description: "Development paketini de artefakt olarak yükle (büyük; varsayılan yalnız Shipping)"
+        type: boolean
+        default: false
 
 concurrency:
   group: build-windows-${{ github.ref }}
@@ -32,7 +36,8 @@ jobs:
     # fork PR'larından asla; yalnız bu depodaki push/manuel tetik
     if: github.event_name != 'pull_request' && github.repository_owner == 'goktalay'
     runs-on: [self-hosted, windows, unreal]
-    timeout-minutes: 360
+    # ilk Fab pisirmesi (golgelendirici derlemesi) uzun surer; sonraki derlemeler Zen DDC'den gelir
+    timeout-minutes: 720
     defaults:
       run:
         # Windows PowerShell 5.1 (her Windows'ta var; runner servisi Store/kullanıcı kurulumu pwsh'ı göremeyebilir). Betikler UTF-8 BOM'lu.
@@ -109,19 +114,37 @@ jobs:
           # Shipping'de Steam istemcisi uygulamayi kendi kimligiyle baslatir; gelistirme testleri icin steam_appid.txt paket kokune de konur
           Copy-Item steam_appid.txt "$env:ARCHIVE_DIR\Shipping\Windows\" -Force
 
-      - name: Artefakt — Development
-        uses: actions/upload-artifact@v4
-        with:
-          name: Simumav-Win64-Development-${{ github.sha }}
-          path: Paketler/Development/Windows
-          retention-days: 7
+      - name: Paket konumu ve boyutu
+        run: |
+          foreach ($k in @('Development', 'Shipping')) {
+            $d = Join-Path $env:ARCHIVE_DIR "$k\Windows"
+            if (Test-Path $d) {
+              $b = (Get-ChildItem $d -Recurse -File | Measure-Object Length -Sum).Sum
+              Write-Host ("{0}: {1} ({2:N2} GB)" -f $k, $d, ($b / 1GB))
+              Get-ChildItem (Join-Path $d 'Simumav\Content\Paks') -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("    {0}  {1:N0} MB" -f $_.Name, ($_.Length / 1MB)) }
+            }
+          }
+          Write-Host "Paketler runner diskinde kalir (sonraki derlemede ustune yazilir); artefakt yuklemesi basarisiz olsa da derleme gecerlidir."
 
+      # Buyuk artefakt yuklemesi ag hatasinda (ENOTFOUND blob.core.windows.net) derlemeyi dusurmesin: paket runner'da zaten var
       - name: Artefakt — Shipping
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: Simumav-Win64-Shipping-${{ github.sha }}
           path: Paketler/Shipping/Windows
           retention-days: 14
+          compression-level: 1
+
+      - name: Artefakt — Development (isteğe bağlı)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dev_artefakt }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: Simumav-Win64-Development-${{ github.sha }}
+          path: Paketler/Development/Windows
+          retention-days: 7
+          compression-level: 1
 
       - name: Steam'e yükle (steamcmd + app_build vdf)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.steam_upload }}

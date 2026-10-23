@@ -114,6 +114,11 @@ Ardından `Simumav.uproject` → Editor → *Play (Standalone Game)*. Steam iste
 ```
 Çıktı: `Paketler\Shipping\Windows\Simumav.exe` + `Simumav\` (pak'ler, `ThirdParty\ArduPilotSITL\Win64` NonUFS, `Content\Simumav\Lang`).
 
+**CI (build-windows) çıktısı:** paketler runner diskinde kalır — `D:\r\_work\caysim\caysim\Paketler\Shipping\Windows\Simumav.exe`
+(ve `...\Development\Windows`); her derleme üstüne yazar. GitHub artefaktı yalnız **Shipping** yüklenir (Fab haritalarıyla
+paket birkaç GB; yükleme ağ hatasında derlemeyi düşürmez — "Paket konumu ve boyutu" adımı yolu ve boyutu yazar).
+Development artefaktı gerekirse: Actions → build-windows → Run workflow → *Development paketini de artefakt olarak yükle*.
+
 ## 5. CAYSIM (HEPGO kurumsal) ile ilişki
 `Source/CaySim` (HEPGO sözleşmesi v1 istemcisi, Cesium dünya kurulumu, dron aktörü, askerî HUD) Simumav'ın ortak çekirdeğidir. Kurumsal istemci:
 `Simumav.exe /Game/Maps/SimumavMain?game=/Script/CaySim.CaySimGameMode` (CAYSIM sihirbaz arayüzü UMG varlıkları ister — docs/mimari.md).

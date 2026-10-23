@@ -32,6 +32,9 @@
 #include "Components/VolumetricCloudComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMeshActor.h"
+#include "GameFramework/PlayerStart.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Engine/StaticMesh.h"
 #include "Blueprint/UserWidget.h"
@@ -216,27 +219,30 @@ void ASmvGameMode::BuildScene()
 	if (WorldSetup->GetSource() == ECaySimWorldSource::Flat)
 	{
 		if (bReal) PushEvent(FSmvI18n::T(TEXT("flight.no_cesium")).ToString(), 4);
-		// Fab haritası (satın alınmış içerik; pakette varsa) — yoksa prosedürel dünya
+		// Fab haritası (satın alınmış içerik; pakette varsa; kayıt tablosu SmvMapRegistry.cpp) — yoksa prosedürel dünya
 		bool bFab = false;
+		ClearFabWorld();
 		if (FSmvFabContent::IsFabWorld(Req.Track.WorldMode))
 		{
 			if (const FSmvFabMap* FM = FSmvFabContent::FindMap(Req.Track.WorldMode))
 			{
-				bool bOk = false;
-				FabLevels.Reset();
-	for (TObjectPtr<AActor>& A : FabSkyActors) if (A) A->Destroy();
-	for (TObjectPtr<AActor>& A : FabDecor) if (A) A->Destroy();
-	FabSkyActors.Reset();
-	FabDecor.Reset();
-				bFabSubsRequested = false;
-				bFabPlaced = false;
-				ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, FM->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
-				if (bOk && Lv)
+				FabMapKey = FM->Key;
+				if (FM->Kind == ESmvMapKind::ProcCity)
 				{
-					Lv->OnLevelShown.AddDynamic(this, &ASmvGameMode::HandleFabLevelShown);
-					FabLevels.Add(Lv);
+					SpawnFabCity();
 					bFab = true;
-					UE_LOG(LogSimumav, Log, TEXT("Fab haritası yükleniyor: %s"), *FM->Level);
+				}
+				else
+				{
+					bool bOk = false;
+					ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, FM->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
+					if (bOk && Lv)
+					{
+						Lv->OnLevelShown.AddDynamic(this, &ASmvGameMode::HandleFabLevelShown);
+						FabLevels.Add(Lv);
+						bFab = true;
+						UE_LOG(LogSimumav, Log, TEXT("Fab haritası yükleniyor: %s (%s)"), *FM->Level, *FM->Key);
+					}
 				}
 			}
 			if (!bFab) PushEvent(FSmvI18n::T(TEXT("flight.fab_missing")).ToString(), 4);
@@ -469,13 +475,7 @@ void ASmvGameMode::StopScene()
 	Gates.Reset(); Ghosts.Reset(); TargetActors.Reset(); GhostIndex.Reset();
 	if (Drone) { Drone->Destroy(); Drone = nullptr; }
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
-	for (TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
-	{
-		if (!Lv) continue;
-		Lv->OnLevelShown.RemoveAll(this);
-		Lv->SetIsRequestingUnloadAndRemoval(true);
-	}
-	FabLevels.Reset();
+	ClearFabWorld();
 	if (WorldSetup) { WorldSetup->Destroy(); WorldSetup = nullptr; }
 	if (Tones) Tones->SetAlarm(0, 0.f);
 	FreeRace();
@@ -1204,8 +1204,10 @@ void ASmvGameMode::HandleFabLevelShown()
 	PlaceFabLevels();
 }
 
-// Tüm Fab seviyeleri görünür: kendi gök/ışık aktörlerini kaldır (dünya kurulumu güneş/gök/sisi zaten sağlar),
-// ortak sınır kutusunun merkezini orijine (SITL ev konumu) ve merkezdeki zemini Z=0'a (düz dünya zemini) taşı.
+// Tüm Fab seviyeleri görünür: kendi gök/ışık aktörlerini kaldır (Ultra Dynamic Sky / dünya kurulumu güneş-gök-sisi sağlar),
+// kalkış noktasını bul ve onu orijine (SITL ev konumu), oradaki zemini Z=0'a (SITL'in düz zemini) taşı.
+// Kalkış noktası sırası: ini MapStart=<anahtar>|X,Y (harita cm) → haritanın PlayerStart'ı (üstü açıksa) → merkeze en yakın
+// düz ve üstü açık zemin (arazi haritasında Landscape üstünde) → sınır kutusu merkezi; ardından kayıt tablosu kaydırması (StartE/N).
 void ASmvGameMode::PlaceFabLevels()
 {
 	UWorld* W = GetWorld();
@@ -1214,6 +1216,8 @@ void ASmvGameMode::PlaceFabLevels()
 	FBox Box(ForceInit);
 	TArray<AActor*> Drop;
 	TArray<ULevel*> Levels;
+	TArray<FVector> PlayerStarts;
+	bool bLandscape = false;
 	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
 	{
 		ULevel* L = Lv ? Lv->GetLoadedLevel() : nullptr;
@@ -1224,17 +1228,24 @@ void ASmvGameMode::PlaceFabLevels()
 			if (!IsValid(A)) continue;
 			const FString Cn = A->GetClass()->GetName();
 			if (A->IsA<ADirectionalLight>() || A->IsA<ASkyLight>() || A->IsA<ASkyAtmosphere>() || A->IsA<AExponentialHeightFog>() || A->IsA<AVolumetricCloud>()
-				|| Cn.Contains(TEXT("SkySphere")) || Cn.Contains(TEXT("Sky_Sphere")))
+				|| Cn.Contains(TEXT("SkySphere")) || Cn.Contains(TEXT("Sky_Sphere")) || Cn.Contains(TEXT("Ultra_Dynamic")) || Cn.StartsWith(TEXT("BP_Sky")))
 			{
 				Drop.Add(A);
 				continue;
 			}
+			if (A->IsA<APlayerStart>()) PlayerStarts.Add(A->GetActorLocation());
+			if (Cn.Contains(TEXT("Landscape"))) bLandscape = true;
 			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
 			for (UStaticMeshComponent* SC : Comps)
 			{
 				if (!SC || !SC->IsRegistered() || !SC->GetStaticMesh()) continue;
 				const FBox SB = SC->Bounds.GetBox();
 				if (SB.IsValid && SB.GetSize().GetMax() < 2.0e6) Box += SB;   // 20 km'den büyük (gök küresi vb.) sayılmaz
+			}
+			if (Cn.Contains(TEXT("Landscape")))
+			{
+				const FBox LB = A->GetComponentsBoundingBox(true);
+				if (LB.IsValid && LB.GetSize().GetMax() < 2.0e6) Box += LB;
 			}
 		}
 	}
@@ -1244,26 +1255,98 @@ void ASmvGameMode::PlaceFabLevels()
 		UE_LOG(LogSimumav, Warning, TEXT("Fab haritası boş görünüyor (statik ağ yok)"));
 		return;
 	}
-	const FVector Ctr = Box.GetCenter();
-	double Zg = Box.Min.Z;
-	FHitResult Hit;
 	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvFabGround), true);
-	if (W->LineTraceSingleByChannel(Hit, FVector(Ctr.X, Ctr.Y, Box.Max.Z + 100.0), FVector(Ctr.X, Ctr.Y, Box.Min.Z - 100.0), ECC_WorldStatic, Q)) Zg = Hit.ImpactPoint.Z;
-	const FVector Off(-Ctr.X, -Ctr.Y, -Zg);
+	const double ZTop = Box.Max.Z + 100.0, ZBot = Box.Min.Z - 100.0;
+	auto Down = [&](double X, double Y, FHitResult& H) { return W->LineTraceSingleByChannel(H, FVector(X, Y, ZTop), FVector(X, Y, ZBot), ECC_WorldStatic, Q); };
+	auto IsLand = [](const FHitResult& H) { return H.GetComponent() && H.GetComponent()->GetClass()->GetName().Contains(TEXT("Landscape")); };
+	// zemin + üstü açık mı (ilk isabet yukarıdan; 6 m çevresi düz)
+	auto Clear = [&](double X, double Y, double& OutZ) -> bool
+	{
+		FHitResult H;
+		if (!Down(X, Y, H) || H.ImpactNormal.Z < 0.95) return false;
+		if (bLandscape && !IsLand(H)) return false;
+		for (const FVector2D& O : { FVector2D(600, 0), FVector2D(-600, 0), FVector2D(0, 600), FVector2D(0, -600) })
+		{
+			FHitResult H2;
+			if (!Down(X + O.X, Y + O.Y, H2) || FMath::Abs(H2.ImpactPoint.Z - H.ImpactPoint.Z) > (bLandscape ? 120.0 : 60.0)) return false;
+		}
+		OutZ = H.ImpactPoint.Z;
+		return true;
+	};
+	const FSmvMapDef* Def = FSmvMapRegistry::Find(FabMapKey);
+	FVector Start = Box.GetCenter();
+	double Zg = Box.Min.Z;
+	FString How = TEXT("sınır kutusu merkezi");
+	bool bFound = false;
+	// 1) ayar: [/Script/Simumav.SmvFabContent] +MapStart=<anahtar>|X,Y   (harita koordinatı, cm)
+	TArray<FString> StartLines;
+	if (GConfig) GConfig->GetArray(TEXT("/Script/Simumav.SmvFabContent"), TEXT("MapStart"), StartLines, GGameIni);
+	for (const FString& Ln : StartLines)
+	{
+		FString K, V, Xs, Ys;
+		if (Ln.Split(TEXT("|"), &K, &V) && K.TrimStartAndEnd() == FabMapKey && V.Split(TEXT(","), &Xs, &Ys))
+		{
+			Start = FVector(FCString::Atod(*Xs), FCString::Atod(*Ys), 0.0);
+			FHitResult H;
+			Zg = Down(Start.X, Start.Y, H) ? H.ImpactPoint.Z : Box.Min.Z;
+			How = TEXT("ayar (MapStart)");
+			bFound = true;
+		}
+	}
+	// 2) haritanın PlayerStart'ı — altında zemin ve üstü açıksa (bina içindeki başlangıç dron için uygun değil)
+	for (int32 i = 0; i < PlayerStarts.Num() && !bFound; ++i)
+	{
+		const FVector P = PlayerStarts[i];
+		FHitResult Hd, Hu;
+		if (!W->LineTraceSingleByChannel(Hd, P + FVector(0, 0, 200), P - FVector(0, 0, 5000), ECC_WorldStatic, Q)) continue;
+		if (W->LineTraceSingleByChannel(Hu, Hd.ImpactPoint + FVector(0, 0, 150), Hd.ImpactPoint + FVector(0, 0, 6000), ECC_WorldStatic, Q)) continue;
+		Start = Hd.ImpactPoint; Zg = Hd.ImpactPoint.Z; How = TEXT("PlayerStart"); bFound = true;
+	}
+	// 3) merkeze en yakın düz, üstü açık zemin (20 m adımlı halkalar, 300 m'ye dek)
+	for (int32 r = 0; r <= 15 && !bFound; ++r)
+	{
+		const int32 N = r == 0 ? 1 : 8 * r;
+		for (int32 k = 0; k < N && !bFound; ++k)
+		{
+			const double Ang = 2.0 * UE_DOUBLE_PI * k / N;
+			const double X = Box.GetCenter().X + r * 2000.0 * FMath::Cos(Ang), Y = Box.GetCenter().Y + r * 2000.0 * FMath::Sin(Ang);
+			double Z = 0;
+			if (Clear(X, Y, Z)) { Start = FVector(X, Y, Z); Zg = Z; How = FString::Printf(TEXT("düz açıklık (merkezden %d m)"), r * 20); bFound = true; }
+		}
+	}
+	if (!bFound)
+	{
+		FHitResult Hit;
+		if (Down(Start.X, Start.Y, Hit)) Zg = Hit.ImpactPoint.Z;
+	}
+	// 4) kayıt tablosu kaydırması (doğu = +X, kuzey = −Y)
+	if (Def && (Def->StartE != 0.0 || Def->StartN != 0.0))
+	{
+		Start.X += Def->StartE * 100.0;
+		Start.Y -= Def->StartN * 100.0;
+		FHitResult H;
+		if (Down(Start.X, Start.Y, H)) Zg = H.ImpactPoint.Z;
+		How += TEXT(" + tablo kaydırması");
+	}
+	const FVector Off(-Start.X, -Start.Y, -Zg);
 	for (ULevel* L : Levels) L->ApplyWorldOffset(Off, false);
-	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi: %d seviye, kutu %s, merkez (%.0f, %.0f), zemin %.0f cm, %d gök/ışık aktörü kaldırıldı"),
-		Levels.Num(), *Box.GetSize().ToString(), Ctr.X, Ctr.Y, Zg, Drop.Num());
+	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi (%s): %d seviye, kutu %s, kalkış (%.0f, %.0f, %.0f) — %s; %d gök/ışık aktörü kaldırıldı"),
+		*FabMapKey, Levels.Num(), *Box.GetSize().ToString(), Start.X, Start.Y, Zg, *How, Drop.Num());
+	if (Def && Def->bDecor) SpawnFabDecor(FVector::ZeroVector, true);
 }
 
-// Sahne dekoru: Fab statik modelleri (ör. tank, hava savunma, anti-dron sistemi) ev konumunun doğusunda düz alanda
-// park hâlinde durur. Yalnız görsel — davranış, hedef mantığı ya da etkileşim yoktur. Ayar: [/Script/Simumav.SmvFabContent] PropsEnabled
-void ASmvGameMode::SpawnFabDecor()
+// Sahne dekoru: Fab statik modelleri (ör. tank, hava savunma, anti-dron sistemi) kalkış noktasının doğusunda
+// park hâlinde durur. Yalnız görsel — davranış, hedef/atış/güdüm mantığı ya da etkileşim YOKTUR.
+// Ayar: [/Script/Simumav.SmvFabContent] PropsEnabled
+void ASmvGameMode::SpawnFabDecor(const FVector& Origin, bool bTraceGround)
 {
 	UWorld* W = GetWorld();
 	bool bOn = true;
 	if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvFabContent"), TEXT("PropsEnabled"), bOn, GGameIni);
 	if (!W || !bOn) return;
 	const TArray<UStaticMesh*>& Props = FSmvFabContent::Props();
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvFabDecorGround), true);
+	int32 Placed = 0;
 	for (int32 i = 0; i < Props.Num() && i < 8; ++i)
 	{
 		UStaticMesh* M = Props[i];
@@ -1272,13 +1355,127 @@ void ASmvGameMode::SpawnFabDecor()
 		// gerçekçi araç boyu 2–30 m değilse 8 m'ye ölçekle (birim farkı)
 		const double S = (L < 200.0 || L > 3000.0) ? 800.0 / FMath::Max(L, 1.0) : 1.0;
 		const double E = 110.0 + 25.0 * i, N = 70.0;   // m (doğu, kuzey); düz ev alanı 300 m içinde
-		const FVector Loc(E * 100.0, -N * 100.0, -(B.Origin.Z - B.BoxExtent.Z) * S);
+		FVector Loc = Origin + FVector(E * 100.0, -N * 100.0, 0.0);
+		if (bTraceGround)
+		{
+			FHitResult H;
+			if (W->LineTraceSingleByChannel(H, Loc + FVector(0, 0, 30000), Loc - FVector(0, 0, 30000), ECC_WorldStatic, Q)) Loc.Z = H.ImpactPoint.Z;
+		}
+		Loc.Z += -(B.Origin.Z - B.BoxExtent.Z) * S;
 		AStaticMeshActor* A = W->SpawnActor<AStaticMeshActor>(Loc, FRotator(0.0, 90.0 + 20.0 * i, 0.0));
 		if (!A || !A->GetStaticMeshComponent()) continue;
 		A->SetMobility(EComponentMobility::Movable);
 		A->GetStaticMeshComponent()->SetStaticMesh(M);
 		A->SetActorScale3D(FVector(S));
 		FabDecor.Add(A);
+		++Placed;
 	}
-	if (FabDecor.Num()) UE_LOG(LogSimumav, Log, TEXT("Fab sahne dekoru: %d model"), FabDecor.Num());
+	if (Placed) UE_LOG(LogSimumav, Log, TEXT("Fab sahne dekoru: %d model (yalnız görsel)"), Placed);
+}
+
+// Kodla kurulan şehir bloğu: 5×5 adalık ızgara (ada 70 m, cadde 30 m), ortadaki ada kalkış meydanı (boş).
+// İç halka: European Buildings ağları (adada 2×2 bina); dış halka: City Sample bina seviyeleri (yoksa yine European ağları).
+// Binalar yalnız görseldir (SITL zemini düzdür; çarpışma fiziği yok).
+void ASmvGameMode::SpawnFabCity()
+{
+	UWorld* W = GetWorld();
+	if (!W) return;
+	const TArray<UStaticMesh*>& Meshes = FSmvFabContent::CityMeshes();
+	const TArray<FString> Towers = FSmvFabContent::CityTowerLevels();
+	const double Cell = 10000.0, Road = 3000.0;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	UMaterialInterface* BaseMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	auto Slab = [&](const FVector& Ctr, const FVector& SizeCm, const FLinearColor& C, bool bCollide = false)
+	{
+		if (!Cube) return;
+		AStaticMeshActor* A = W->SpawnActor<AStaticMeshActor>(Ctr, FRotator::ZeroRotator);
+		if (!A || !A->GetStaticMeshComponent()) return;
+		A->SetMobility(EComponentMobility::Movable);
+		UStaticMeshComponent* SC = A->GetStaticMeshComponent();
+		SC->SetStaticMesh(Cube);
+		if (!bCollide) SC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		A->SetActorScale3D(SizeCm / 100.0);   // BasicShapes küpü 100 cm
+		if (BaseMat)
+		{
+			UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(BaseMat, SC);
+			D->SetVectorParameterValue(TEXT("Color"), C);
+			SC->SetMaterial(0, D);
+		}
+		FabDecor.Add(A);
+	};
+	// zemin (3 km; üstü Z 0 = SITL düz zemini), caddeler (koyu asfalt) ve kalkış meydanı (açık beton)
+	const double Span = 5.0 * Cell + Road;
+	Slab(FVector(0, 0, -50), FVector(300000, 300000, 100), FLinearColor(0.16f, 0.2f, 0.12f), true);
+	for (int32 k = -2; k <= 3; ++k)
+	{
+		const double C = (k - 0.5) * Cell;
+		Slab(FVector(C, 0, 2), FVector(Road, Span, 4), FLinearColor(0.035f, 0.035f, 0.04f));
+		Slab(FVector(0, C, 2), FVector(Span, Road, 4), FLinearColor(0.035f, 0.035f, 0.04f));
+	}
+	Slab(FVector(0, 0, 3), FVector(Cell - Road, Cell - Road, 4), FLinearColor(0.42f, 0.42f, 0.4f));
+	int32 NMesh = 0, NTower = 0, Pick = 0;
+	auto PlaceMesh = [&](const FVector& Ctr, double MaxFoot, int32 Yaw90)
+	{
+		if (Meshes.Num() == 0) return;
+		UStaticMesh* M = Meshes[(Pick++ * 7 + 3) % Meshes.Num()];
+		const FBoxSphereBounds B = M->GetBounds();
+		const double Foot = 2.0 * FMath::Max(B.BoxExtent.X, B.BoxExtent.Y);
+		double S = (Foot < 300.0 || Foot > 20000.0) ? 2500.0 / FMath::Max(Foot, 1.0) : 1.0;   // birim farkı → 25 m
+		if (Foot * S > MaxFoot) S = MaxFoot / Foot;
+		const FRotator Rot(0.0, 90.0 * Yaw90, 0.0);
+		FVector Loc = Ctr - Rot.RotateVector(FVector(B.Origin.X, B.Origin.Y, 0.0) * S);
+		Loc.Z = -(B.Origin.Z - B.BoxExtent.Z) * S;
+		AStaticMeshActor* A = W->SpawnActor<AStaticMeshActor>(Loc, Rot);
+		if (!A || !A->GetStaticMeshComponent()) return;
+		A->SetMobility(EComponentMobility::Movable);
+		A->GetStaticMeshComponent()->SetStaticMesh(M);
+		A->SetActorScale3D(FVector(S));
+		FabDecor.Add(A);
+		++NMesh;
+	};
+	for (int32 i = -2; i <= 2; ++i)
+	{
+		for (int32 j = -2; j <= 2; ++j)
+		{
+			if (i == 0 && j == 0) continue;   // kalkış meydanı
+			const FVector Ctr(i * Cell, j * Cell, 0.0);
+			const int32 Ring = FMath::Max(FMath::Abs(i), FMath::Abs(j));
+			const int32 Yaw90 = ((i * 3 + j * 5) % 4 + 4) % 4;
+			if (Ring == 2 && Towers.Num() > 0)
+			{
+				bool bOk = false;
+				const FString& Pkg = Towers[(NTower * 3 + i + j + 8) % Towers.Num()];
+				ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, Pkg, Ctr, FRotator(0.0, 90.0 * Yaw90, 0.0), bOk);
+				if (bOk && Lv) { CityLevels.Add(Lv); ++NTower; continue; }
+			}
+			// ada başına 2×2 bina (her biri en çok 30 m taban)
+			for (int32 q = 0; q < 4; ++q)
+			{
+				const FVector Sub((q & 1) ? 1750.0 : -1750.0, (q & 2) ? 1750.0 : -1750.0, 0.0);
+				PlaceMesh(Ctr + Sub, 3200.0, (Yaw90 + q) % 4);
+			}
+		}
+	}
+	UE_LOG(LogSimumav, Log, TEXT("Şehir bloğu kuruldu: %d bina ağı, %d City Sample bina seviyesi"), NMesh, NTower);
+}
+
+void ASmvGameMode::ClearFabWorld()
+{
+	for (TArray<TObjectPtr<ULevelStreamingDynamic>>* Arr : { &FabLevels, &CityLevels })
+	{
+		for (TObjectPtr<ULevelStreamingDynamic>& Lv : *Arr)
+		{
+			if (!Lv) continue;
+			Lv->OnLevelShown.RemoveAll(this);
+			Lv->SetIsRequestingUnloadAndRemoval(true);
+		}
+		Arr->Reset();
+	}
+	for (TObjectPtr<AActor>& A : FabSkyActors) if (A) A->Destroy();
+	for (TObjectPtr<AActor>& A : FabDecor) if (A) A->Destroy();
+	FabSkyActors.Reset();
+	FabDecor.Reset();
+	bFabSubsRequested = false;
+	bFabPlaced = false;
+	FabMapKey.Reset();
 }

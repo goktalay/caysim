@@ -59,8 +59,17 @@ protected:
 	/** Fab Ultra Dynamic Sky aktörleri (düz dünyada yerleşik gök yerine) ve sahne dekoru (yalnız görsel statik ağlar) */
 	UPROPERTY() TArray<TObjectPtr<AActor>> FabSkyActors;
 	UPROPERTY() TArray<TObjectPtr<AActor>> FabDecor;
-	void SpawnFabDecor();
+	/** Kodla kurulan şehirde yüklenen City Sample bina seviyeleri (yerleri baştan verilir; merkezleme yok) */
+	UPROPERTY() TArray<TObjectPtr<ULevelStreamingDynamic>> CityLevels;
+	/** Uçulan harita anahtarı (kayıt tablosu; başlangıç kaydırması / dekor için) */
+	FString FabMapKey;
+	/** Sahne dekoru: Origin (cm) çevresine; bTraceGround ise her modelin zemini aşağı ışınla bulunur (Fab haritası) */
+	void SpawnFabDecor(const FVector& Origin = FVector::ZeroVector, bool bTraceGround = false);
 	void PlaceFabLevels();
+	/** Kodla kurulan şehir bloğu (European Buildings ağları + City Sample bina seviyeleri) */
+	void SpawnFabCity();
+	/** Fab/şehir aktörlerini ve seviyelerini kaldırır (uçuş sonu / yeni uçuş) */
+	void ClearFabWorld();
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Drone;
 	UPROPERTY() TArray<TObjectPtr<ASmvGateActor>> Gates;
 	UPROPERTY() TArray<TObjectPtr<ASmvDroneActor>> Ghosts;       // botlar / rakipler

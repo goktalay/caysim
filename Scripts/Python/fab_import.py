@@ -204,6 +204,76 @@ def uds_incele():
     return sonuc
 
 
+# Uçak/VTOL motor sesleri (Aircraft Engine Sounds): seçilen döngülerin SoundWave'i /Game/Fab/Sounds/SC_Engine_<tür> olarak
+# kopyalanır ve döngü açılır (oyun bu yoldan yükler; /Game/Fab her zaman pişirilir, paketin geri kalanı pakete girmez).
+# Seçim adayları sırayla denenir; oyunda DefaultGame.ini EngineSound<tür>=/Game/... ile başka bir ses seçilebilir.
+SES_SECIMI = {
+    "Prop": ["Cue_engine05_loop_Cue", "Cue_Engine05Loop01_Cue", "Cue_engine01_loop_Cue", "Cue_Engine01Loop-01_Cue", "Cue_EngineLoop01_Cue"],
+    "Pusher": ["Cue_engine03_loop_Cue", "Cue_Engine03Loop_Cue", "Cue_engine02_loop_Cue", "Cue_Engine02Loop-01_Cue"],
+    "Jet": ["Cue_JetTurbine03_loop_Cue", "Cue_JetTurbine01_loop_Cue", "Cue_JetTurbine02_loop_Cue"],
+}
+
+
+def ses_kopyala(j):
+    kok = j.get("kok", "/Game/cplomedia_AircraftEngineSounds")
+    hedef_kok = j.get("hedef", "/Game/Fab/Sounds")
+    sonuc = {"hedef": hedef_kok, "ok": False}
+    ar = unreal.AssetRegistryHelpers.get_asset_registry()
+    try:
+        ar.scan_paths_synchronous([kok], True)
+    except Exception:  # noqa: BLE001
+        pass
+    v = ar.get_assets_by_path(kok, recursive=True)
+    cues = {str(a.asset_name): str(a.package_name) for a in v if "SoundCue" in str(a.asset_class_path.asset_name)}
+    dalgalar = {str(a.package_name) for a in v if "SoundWave" in str(a.asset_class_path.asset_name)}
+    log(f"motor sesleri: {len(cues)} cue, {len(dalgalar)} dalga")
+    log("cue adlari: " + ", ".join(sorted(cues)))
+    secenek = unreal.AssetRegistryDependencyOptions(include_soft_package_references=True, include_hard_package_references=True)
+    tamam = 0
+    for tur, adaylar in SES_SECIMI.items():
+        hedef = f"{hedef_kok}/SC_Engine_{tur}"
+        kaynak = next((cues[a] for a in adaylar if a in cues), None)
+        if not kaynak:
+            jet = tur == "Jet"
+            for ad in sorted(cues):
+                n = ad.lower()
+                if "loop" in n and "inside" not in n and "damaged" not in n and (("jet" in n) == jet):
+                    kaynak = cues[ad]
+                    break
+        if not kaynak:
+            uyar(f"motor sesi bulunamadi: {tur}")
+            continue
+        if eal.does_asset_exist(hedef):
+            eal.delete_asset(hedef)
+        # cue'nun kullandigi dalga (dongu acilabilsin diye dalga kopyalanir); bulunamazsa cue kopyalanir
+        dalga = None
+        try:
+            for d in ar.get_dependencies(kaynak, secenek) or []:
+                if str(d) in dalgalar:
+                    dalga = str(d)
+                    break
+        except Exception as e:  # noqa: BLE001
+            uyar(f"bagimlilik okunamadi ({kaynak}): {e}")
+        kopya = None
+        if dalga:
+            kopya = eal.duplicate_asset(dalga, hedef)
+            if kopya:
+                try:
+                    kopya.set_editor_property("looping", True)
+                except Exception as e:  # noqa: BLE001
+                    uyar(f"dongu acilamadi: {e}")
+        if not kopya:
+            kopya = eal.duplicate_asset(kaynak, hedef)
+        if kopya:
+            eal.save_asset(hedef, only_if_is_dirty=False)
+            log(f"motor sesi {tur}: {dalga or kaynak} -> {hedef}")
+            tamam += 1
+        else:
+            uyar(f"motor sesi kopyalanamadi: {kaynak}")
+    sonuc["ok"] = tamam > 0
+    return sonuc
+
+
 def main():
     yol = os.environ.get("FAB_IS_LISTESI")
     if not yol or not os.path.isfile(yol):
@@ -216,7 +286,8 @@ def main():
     sonuclar = []
     for j in isler:
         try:
-            sonuclar.append(uds_incele() if j.get("tur") == "uds" else bir_is(j))
+            tur = j.get("tur")
+            sonuclar.append(uds_incele() if tur == "uds" else ses_kopyala(j) if tur == "ses" else bir_is(j))
         except Exception as e:  # noqa: BLE001
             unreal.log_error(f"[fab_import] hata: {j.get('kaynak')}: {e}")
             sonuclar.append({"hedef": j.get("hedef"), "ok": False})

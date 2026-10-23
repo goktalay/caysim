@@ -6,6 +6,8 @@
 #include "SmvPyRandom.h"
 #include "SmvFabContent.h"
 #include "Components/PoseableMeshComponent.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundBase.h"
 #include "Engine/SkeletalMesh.h"
 #include "ReferenceSkeleton.h"
 #include "Misc/ConfigCacheIni.h"
@@ -243,6 +245,35 @@ void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& Model
 		Motor->SetKind(K, Rotors);
 		Motor->Start();
 	}
+	// Uçak/VTOL: Fab Aircraft Engine Sounds motor döngüsü (pakette varsa); dronlar prosedürel seste kalır
+	const TCHAR* SoundKind = nullptr;
+	if (InType == TEXT("plane")) SoundKind = ModelKey.Contains(TEXT("jet")) ? TEXT("Jet") : TEXT("Prop");
+	else if (InType == TEXT("vtol")) SoundKind = TEXT("Pusher");
+	USoundBase* EngineSnd = SoundKind ? FSmvFabContent::LoadEngineSound(SoundKind) : nullptr;
+	bFabEngineSound = EngineSnd != nullptr;
+	SynthShare = !bFabEngineSound ? 1.f : (InType == TEXT("vtol") ? 0.6f : 0.f);
+	EngineThr = 0.f;
+	if (bFabEngineSound)
+	{
+		if (!EngineAudio)
+		{
+			EngineAudio = NewObject<UAudioComponent>(this, TEXT("EngineAudio"));
+			EngineAudio->bAutoActivate = false;
+			EngineAudio->bAllowSpatialization = true;
+			// uzaklık zayıflaması UpdateAudio'da elle (prosedürel sesle aynı eğri)
+			EngineAudio->bOverrideAttenuation = true;
+			EngineAudio->AttenuationOverrides.bAttenuate = false;
+			EngineAudio->SetupAttachment(Body);
+			EngineAudio->RegisterComponent();
+		}
+		EngineAudio->Stop();
+		EngineAudio->SetSound(EngineSnd);
+		EngineAudio->SetVolumeMultiplier(0.f);
+	}
+	else if (EngineAudio)
+	{
+		EngineAudio->Stop();
+	}
 	BuildPlaceholder();
 }
 
@@ -375,7 +406,24 @@ void ASmvDroneActor::UpdateAudio(const FVector& Listener, float Volume)
 	const float Doppler = 343.f / FMath::Max(100.f, 343.f - Vr);
 	const float DistM = (float)(FVector::Dist(Listener, Pos) / 100.0);
 	const float Atten = FMath::Clamp(30.f / FMath::Max(DistM, 1.f), 0.02f, 1.f);
-	Motor->SetParams(T.Throttle / 100.f, T.Airspeed > 0 ? T.Airspeed : T.Groundspeed, T.bArmed, Doppler, Volume * Atten);
+	Motor->SetParams(T.Throttle / 100.f, T.Airspeed > 0 ? T.Airspeed : T.Groundspeed, T.bArmed, Doppler, Volume * Atten * SynthShare);
+	if (bFabEngineSound && EngineAudio)
+	{
+		// gaz → devir: perde 0,6–1,5 (Doppler ile), ses düzeyi rölantide %30, tam gazda %100
+		const float Thr = T.bArmed ? FMath::Clamp(T.Throttle / 100.f, 0.f, 1.f) : 0.f;
+		EngineThr = FMath::FInterpTo(EngineThr, Thr, Dt, 2.5f);
+		const float Vol = T.bArmed ? (0.3f + 0.7f * EngineThr) * Volume * Atten : 0.f;
+		if (Vol > 0.001f)
+		{
+			if (!EngineAudio->IsPlaying()) EngineAudio->Play();   // döngü değilse de yeniden başlar
+			EngineAudio->SetPitchMultiplier(FMath::Clamp(FMath::Lerp(0.6f, 1.5f, EngineThr) * Doppler, 0.4f, 2.f));
+			EngineAudio->SetVolumeMultiplier(Vol);
+		}
+		else if (EngineAudio->IsPlaying())
+		{
+			EngineAudio->Stop();
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
