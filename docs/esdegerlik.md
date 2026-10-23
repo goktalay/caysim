@@ -120,10 +120,10 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Alt bant (ARM, Kalkış, İniş, RTL, mod, Sıfırla, kamera, kumanda, panel, menü) | `flightsim_fltbar.js` | ✓ + Kokpit + "?" | ✓ | — |
 | Uçuş modu seçici | `flightsim_fltbar.js` | **Radyal tekerlek** (F / gamepad View; fare açısı ya da sağ çubuk; A/F seç, B kapat) | ✓ | — |
 | Sanal kumanda + Mode 1–4 + klavye WASD/oklar | `rc.js`, `flightsim_stickmode.js` | ✓ (aynı eşleme; çubuk etiketleri ve ipucu moda göre) | ✓ | — |
-| Hassasiyet ⚙ (eksen başına ölü bölge/expo/oran, eğri) | `flightsim_sens*.js` | Tek expo kaydırıcısı | ◐ | P1 |
+| Hassasiyet ⚙ (ölü bölge/expo/oran, hazır ayarlar, eğri) | `flightsim_sens*.js` | Ayarlar → Kumanda: Hassas / Normal / Çevik / Özel; ölü bölge, expo ve oran (roll+pitch / yaw), canlı eğri; gaz şekillendirilmez | ◐ (eksen başına ayrı yok) | P2 |
 | Gamepad profili / eksen algıla | `flightsim_gamepad.js` | XInput sabit eşleme + tuş atama (Ayarlar → Tuşlar); RC verici eksen eşlemesi | ◐ | P2 |
 | Kamera kipleri 1–7, PiP, FPV FOV | `flightsim_camera.js` | ✓ (PiP sürükleme/boyut yok) | ◐ | P2 |
-| Rüzgâr göstergesi (pusula, bileşenler) | `flightsim_wind.js` | — (sihirbazda pusula) | ✗ | P1 |
+| Rüzgâr göstergesi (pusula, bileşenler) | `flightsim_wind.js` | Sol üstte kart: dönen pusula, akış oku, hız/yön, esinti, baş-kuyruk / yan bileşeni (yan > 6 m/s amber); 3B rüzgâr tulumu yok | ◐ | P2 |
 | Hava efektleri (yağmur/kar/şimşek) | `flightsim3d.js` | Ultra Dynamic Weather (pakette varsa; içerik ajanı) | ◐ | — |
 | GPWS uyarıları + MASTER lambaları + ton | `flightsim_gpws*.js` | ✓ (konuşma sentezi yok) | ◐ | P2 |
 | Grafik ▾ (ön ayarlar, FPS, kare sınırı, özel kaydırıcılar) | `flightsim_gfx.js` | Ayarlar → Görüntü: 5 ön ayar kartı + otomatik algılama + çözünürlük, pencere kipi, VSync, kare sınırı, ölçek, 8 ayrıntı kaydırıcısı | ✓ | — |
