@@ -14,13 +14,21 @@ on:
       wait:
         description: "En uzun bekleme (sn)"
         type: string
-        default: "420"
+        default: "900"
+      lang:
+        description: "Arayuz dili (bos = runner yerel ayari; tr, en, de ...)"
+        type: string
+        default: ""
+      flights:
+        description: "Ucus sayisi (0-3; Fab haritalari + saat/hava)"
+        type: string
+        default: "3"
 
 jobs:
   smoke:
     if: github.repository_owner == 'goktalay'
     runs-on: [self-hosted, windows, unreal]
-    timeout-minutes: 20
+    timeout-minutes: 35
     defaults:
       run:
         shell: powershell
@@ -29,6 +37,8 @@ jobs:
         env:
           CFG: ${{ inputs.config }}
           WAIT: ${{ inputs.wait }}
+          SLANG: ${{ inputs.lang }}
+          SFLIGHTS: ${{ inputs.flights }}
         run: |
           $ErrorActionPreference = 'Continue'
           $base = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
@@ -39,7 +49,11 @@ jobs:
           $shots = Join-Path $base 'Simumav\Saved\Screenshots'
           if (Test-Path $shots) { Remove-Item $shots -Recurse -Force -ErrorAction SilentlyContinue }
           Write-Host ("Oturum: " + [Environment]::UserInteractive + " / " + $env:USERNAME + " / session " + (Get-Process -Id $PID).SessionId)
-          $p = Start-Process -FilePath $exe.FullName -ArgumentList '-SmvSmoke','-RenderOffScreen','-ResX=1600','-ResY=900','-log','-unattended' -PassThru
+          $argl = @('-SmvSmoke','-RenderOffScreen','-ResX=1600','-ResY=900','-log','-unattended')
+          if ($env:SLANG) { $argl += ('-SmvSmokeLang=' + $env:SLANG) }
+          if ($env:SFLIGHTS) { $argl += ('-SmvSmokeFlights=' + $env:SFLIGHTS) }
+          Write-Host ("Args: " + ($argl -join ' '))
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList $argl -PassThru
           $deadline = (Get-Date).AddSeconds([int]$env:WAIT)
           while (-not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
           if (-not $p.HasExited) { Write-Host "Zaman asimi: kapatiliyor"; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
@@ -50,12 +64,12 @@ jobs:
           if (Test-Path $logs) { Copy-Item -Recurse -Force $logs (Join-Path $out 'Logs') }
           Get-ChildItem $out -Recurse -File | ForEach-Object { Write-Host ($_.FullName + "  " + $_.Length) }
           $log = Get-ChildItem (Join-Path $out 'Logs') -Filter *.log -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|Error|D3D|RHI' | Select-Object -First 120 | ForEach-Object { Write-Host $_.Line } }
+          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|Error|D3D|RHI|Fab haritas|GPS/EKF|Need Position|Arm:' | Select-Object -First 200 | ForEach-Object { Write-Host $_.Line } }
       - name: Artefakt
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-${{ inputs.config }}
+          name: smoke-${{ inputs.config }}-${{ inputs.lang }}
           path: ${{ runner.temp }}/smoke
           if-no-files-found: warn
           retention-days: 7

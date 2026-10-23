@@ -829,7 +829,12 @@ void ASmvGameMode::HandleAction(FName A)
 	if ((A == TEXT("Arm") || A == TEXT("Takeoff")) && bRaceLocked) { HandleToast(FSmvI18n::T(TEXT("race.wait_start")).ToString(), 4); return; }
 	if (A == TEXT("Arm")) Command(TEXT("arm"));
 	else if (A == TEXT("Disarm")) Command(TEXT("disarm"));
-	else if (A == TEXT("Takeoff")) Command(TEXT("takeoff"));
+	else if (A == TEXT("Takeoff"))
+	{
+		// yerel SITL konum tahmini henüz yok: komut bağlantıda kuyruğa alınır, hazır olunca kendiliğinden kalkar
+		if (Link() && Link()->LastExtra().PosReady == 0) HandleToast(FSmvI18n::T(TEXT("fui.prep_queued")).ToString(), 5);
+		Command(TEXT("takeoff"));
+	}
 	else if (A == TEXT("Rtl")) Command(TEXT("rtl"));
 	else if (A == TEXT("Land")) Command(TEXT("land"));
 	else if (A == TEXT("MotorCut"))
@@ -1256,6 +1261,16 @@ void ASmvGameMode::UpdateTargets()
 	}
 }
 
+bool ASmvGameMode::SmokeTele(float& OutAltRel, bool& bOutArmed, int32& OutPosReady) const
+{
+	USmvFlightLink* L = Link();
+	if (!L || !L->IsReady()) return false;
+	OutAltRel = (float)L->LastTele().AltRel;
+	bOutArmed = L->LastTele().bArmed;
+	OutPosReady = L->LastExtra().PosReady;
+	return true;
+}
+
 void ASmvGameMode::UpdateHud()
 {
 	USmvGameInstance* GI = USmvGameInstance::GetSmv(this);
@@ -1280,6 +1295,15 @@ void ASmvGameMode::UpdateHud()
 		Ctx.bCollision = bCrashed;
 		Hud->Update(T);
 		Hud->SetContext(Ctx);
+		// HUD metinleri sanal kumanda (sol alt) ve dron paneli (sağ üst) altında kalmasın
+		Hud->LeftInset = FlightUi.IsValid() && FlightUi->SticksShown() ? 240.f : 0.f;
+		Hud->RightInset = FlightUi.IsValid() && FlightUi->IsPanelOpen() ? 340.f : 0.f;
+		if (Hud->WarnLabels.Num() == 0 || HudLang != FSmvI18n::Language())
+		{
+			HudLang = FSmvI18n::Language();
+			Hud->WarnLabels = { FSmvI18n::T(TEXT("hud.w_crash")).ToString(), FSmvI18n::T(TEXT("hud.w_norc")).ToString(), FSmvI18n::T(TEXT("hud.w_batt")).ToString(),
+				FSmvI18n::T(TEXT("hud.w_gcs")).ToString(), FSmvI18n::T(TEXT("hud.w_low")).ToString() };
+		}
 		const bool bHudMode = Pw && Pw->IsHudOn() && (Pw->GetMode() == ESmvCamMode::Fpv || Pw->GetMode() == ESmvCamMode::Gimbal) && Set.GaugeTheme == TEXT("military");
 		Hud->SetVisibility(bHudMode ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
@@ -1396,6 +1420,7 @@ void ASmvGameMode::UpdateHud()
 		U.BattV = T.BattV; U.BattPct = T.BattPct; U.Speedup = (float)X.Speedup;
 		U.DistHome = T.bHasHome ? (float)CaySimGeo::HaversineM(T.Lat, T.Lon, T.HomeLat, T.HomeLon) : 0.f;
 		U.GpsFix = T.GpsFix; U.Sats = T.Sats;
+		U.PosReady = X.PosReady; U.bCmdQueued = X.bCmdQueued;
 		U.bFuel = X.bFuel; U.FuelPct = (float)X.FuelPct; U.FuelL = (float)X.FuelL; U.RangeKm = (float)X.RangeKm;
 		U.bElec = X.bElec; U.ElecPct = (float)X.ElecPct; U.ElecV = (float)X.ElecV; U.ElecW = (float)X.ElecW; U.ElecMin = (float)X.ElecMinLeft;
 		const double MaxMs = Req.Power.MaxSpeedMs > 3 ? Req.Power.MaxSpeedMs : Req.Drone.Power.MaxSpeedMs > 3 ? Req.Drone.Power.MaxSpeedMs : (U.bPlane ? 45.0 : U.bRover ? 8.0 : 18.0);

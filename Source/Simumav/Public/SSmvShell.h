@@ -138,6 +138,9 @@ private:
 	/** Duman testi (-SmvSmoke): ekranları sırayla açar, her birinde ekran görüntüsü alır (Saved/Screenshots/Smoke), uçuş + duraklatma + özet, çıkış */
 	int32 SmokeStep = -1;
 	double SmokeAt = 0;
+	/** duman testi uçuş aşaması: uçuş sırası, alt adım, bekleme sınırı */
+	int32 SmokeFl = 0, SmokeSub = 0;
+	double SmokeDeadline = 0;
 	void TickSmoke();
 	double WorldPrevAt = 0;
 	bool bWorldPrevDirty = false;

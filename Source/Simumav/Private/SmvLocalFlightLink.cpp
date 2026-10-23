@@ -521,7 +521,7 @@ bool USmvLocalFlightLink::OnTick(float /*Dt*/)
 			const std::vector<uint8_t> P = SmvMav::PackHeartbeatGcs();
 			SendFrame(SmvMav::MSG_HEARTBEAT, P.data(), (int32)P.size());
 		}
-		if (W - LastStreamRefresh >= 3.0) { LastStreamRefresh = W; RequestStreams(false); }
+		if (W - LastStreamRefresh >= 3.0) { LastStreamRefresh = W; RequestStreams(false); if (!bHomeKnown) CommandLong(SmvMav::CMD_REQUEST_MESSAGE, 242.f); }
 		if (Session->WindGust > 0 && W - LastGust >= 1.0)
 		{
 			LastGust = W;
@@ -539,6 +539,7 @@ bool USmvLocalFlightLink::OnTick(float /*Dt*/)
 		else ++i;
 	}
 	TickLaunch();
+	TickPosReady(W);
 
 	// çarpışma adayı zaman aşımı (SITL "Hit ground" doğrulamadı → çarpışma değil)
 	if (CrashCandidateUntil > 0 && W > CrashCandidateUntil) CrashCandidateUntil = 0;
@@ -563,16 +564,16 @@ void USmvLocalFlightLink::RequestStreams(bool bFull)
 	if (bStreamFallback)
 	{
 		// ArduPlane 20 ms aralığı reddederse akış tabanlı: EXTRA1 50, POSITION 50, EXTRA2 20, RC_CHANNELS 10 Hz
-		const uint8 Ids[4] = { 10, 6, 11, 3 };
-		const uint16 Hz[4] = { 50, 50, 20, 10 };
-		for (int32 i = 0; i < 4; ++i)
+		const uint8 Ids[5] = { 10, 6, 11, 3, 12 };
+		const uint16 Hz[5] = { 50, 50, 20, 10, 2 };
+		for (int32 i = 0; i < 5; ++i)
 		{
 			const std::vector<uint8_t> P = SmvMav::PackRequestDataStream(TargetSys, TargetComp, Ids[i], Hz[i], true);
 			SendFrame(SmvMav::MSG_REQUEST_DATA_STREAM, P.data(), (int32)P.size());
 		}
 		return;
 	}
-	const struct { float Id; float Us; } Iv[] = { { 30, 20000 }, { 33, 20000 }, { 32, 20000 }, { 74, 50000 }, { 65, 100000 }, { 36, 50000 } };
+	const struct { float Id; float Us; } Iv[] = { { 30, 20000 }, { 33, 20000 }, { 32, 20000 }, { 74, 50000 }, { 65, 100000 }, { 36, 50000 }, { 193, 500000 } };
 	for (const auto& X : Iv) CommandLong(SmvMav::CMD_SET_MESSAGE_INTERVAL, X.Id, X.Us);
 }
 
@@ -747,6 +748,7 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		const SmvMav::FStatusText S = SmvMav::DecodeStatusText(F);
 		const FString Text = UTF8_TO_TCHAR(S.Text.c_str());
 		EmitEvent(Text, S.Severity);
+		if (Text.Contains(TEXT("is using GPS"))) bEkfGpsText = true;
 		// "SIM Hit ground at X m/s" — SITL fiziği yere çarptı
 		int32 At = Text.Find(TEXT("Hit ground at"));
 		if (At != INDEX_NONE && bUeRest)
@@ -761,6 +763,14 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 			if (CrashCandidateUntil > 0) { CrashCandidateUntil = 0; Crash(TEXT("terrain"), FMath::Max(X, CrashCandidateSpeed)); }
 			else if (X >= 3.0 && bMoving) Crash(TEXT("terrain"), X);
 		}
+		break;
+	}
+	case SmvMav::MSG_EKF_STATUS_REPORT:
+	{
+		const SmvMav::FEkfStatus E = SmvMav::DecodeEkfStatus(F);
+		EkfFlags = E.Flags;
+		bEkfSeen = true;
+		Extra.Ekf = FMath::Max(FMath::Max(E.VelVar, E.PosHVar), FMath::Max(E.PosVVar, E.CompassVar));
 		break;
 	}
 	case SmvMav::MSG_EXTENDED_SYS_STATE:
@@ -872,6 +882,18 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	if (Name == TEXT("reset")) { BeginReset(); EmitResult(Rid, Name, true); return Rid; }
 	if (!Tcp || !bHeartbeatSeen) return Fail(TEXT("SITL hazır değil"));
 	const std::string Type = Session->SitlType;
+	// konum tahmini hazır değilken kalkış / konum isteyen kipte ARM: kuyruğa alınır (TickPosReady hazır olunca yürütür)
+	if (!bPosReady && NeedsPosition(Name))
+	{
+		const bool bWasQueued = !PendingCmd.IsEmpty();
+		PendingCmd = Name;
+		PendingParams = P;
+		PendingSince = FPlatformTime::Seconds();
+		Extra.bCmdQueued = true;
+		if (!bWasQueued) EmitEvent(TEXT("Hazırlanıyor: GPS/EKF konumu bekleniyor — hazır olunca komut kendiliğinden gönderilecek"), 5);
+		EmitResult(Rid, Name, true);
+		return Rid;
+	}
 	if (Name == TEXT("arm") || Name == TEXT("takeoff")) bUeRest = false;
 	if (Name == TEXT("arm") || Name == TEXT("disarm"))
 	{
@@ -1103,6 +1125,51 @@ void USmvLocalFlightLink::TickLaunch()
 	}
 }
 
+bool USmvLocalFlightLink::NeedsPosition(const FString& Cmd) const
+{
+	if (Session && Session->SitlType == "rover") return false;
+	if (Cmd == TEXT("takeoff")) return true;
+	if (Cmd != TEXT("arm") || ModeVehicle != TEXT("copter")) return false;
+	// ArduCopter: konum isteyen kiplerde ARM "Need Position Estimate" ile reddedilir (zorla ARM da geçmez)
+	static const TCHAR* PosModes[] = { TEXT("GUIDED"), TEXT("LOITER"), TEXT("AUTO"), TEXT("POSHOLD"), TEXT("RTL"), TEXT("CIRCLE"), TEXT("BRAKE"), TEXT("SMART_RTL"), TEXT("ZIGZAG"), TEXT("FOLLOW"), TEXT("AUTO_RTL") };
+	const FString M = Tele.Mode.ToUpper();
+	for (const TCHAR* X : PosModes) if (M == X) return true;
+	return false;
+}
+
+void USmvLocalFlightLink::TickPosReady(double Wall)
+{
+	if (!bHeartbeatSeen || !Tcp) { Extra.PosReady = Session && Session->SitlType == "rover" ? 1 : 0; return; }
+	// EKF_STATUS_REPORT: mutlak yatay konum var, sabit konum kipi / başlatılmamış değil; yoksa "EKFn IMUn is using GPS" metni
+	const bool bEkfOk = bEkfSeen ? ((EkfFlags & 0x10) != 0 && (EkfFlags & 0x80) == 0 && (EkfFlags & 0x400) == 0) : bEkfGpsText;
+	const bool bRaw = Tele.GpsFix >= 3 && bHomeKnown && bEkfOk;
+	if (!bRaw) { PosRawSince = 0; bPosReady = false; }
+	else if (PosRawSince <= 0) PosRawSince = Wall;
+	// oturma: ham koşuldan 2 sn sonra (ev / köken yerleşir; ilk saniyelerde ARM hâlâ reddedilebiliyor)
+	if (bRaw && !bPosReady && Wall - PosRawSince >= 2.0)
+	{
+		bPosReady = true;
+		EmitEvent(TEXT("GPS/EKF hazır: konum tahmini var"), 6);
+	}
+	Extra.PosReady = bPosReady ? 1 : 0;
+	if (PendingCmd.IsEmpty()) { Extra.bCmdQueued = false; return; }
+	if (bPosReady)
+	{
+		const FString C = PendingCmd;
+		const TSharedPtr<FJsonObject> Pp = PendingParams;
+		PendingCmd.Empty(); PendingParams.Reset();
+		Extra.bCmdQueued = false;
+		EmitEvent(C == TEXT("takeoff") ? TEXT("GPS/EKF hazır — kuyruktaki kalkış başlatılıyor") : TEXT("GPS/EKF hazır — kuyruktaki ARM gönderiliyor"), 5);
+		Command(C, Pp);
+	}
+	else if (Wall - PendingSince > 120.0)
+	{
+		PendingCmd.Empty(); PendingParams.Reset();
+		Extra.bCmdQueued = false;
+		EmitEvent(TEXT("GPS/EKF 120 sn içinde hazır olmadı; kuyruktaki komut iptal edildi"), 3);
+	}
+}
+
 void USmvLocalFlightLink::ForcedDisarm()
 {
 	if (bMotorCut) { CommandLong(218, 31.f, 0.f); bMotorCut = false; }
@@ -1145,6 +1212,9 @@ void USmvLocalFlightLink::BeginReset()
 	Tele.bArmed = false;
 	Tele.AltRel = 0;
 	Tele.bHasHome = false;
+	bHomeKnown = false;
+	bEkfSeen = false; bEkfGpsText = false; EkfFlags = 0; PosRawSince = 0; bPosReady = false;
+	PendingCmd.Empty(); PendingParams.Reset(); Extra.bCmdQueued = false; Extra.PosReady = 0;
 	LastPublishTbm = -1000;
 	LastTs = 0;
 	LastTsTbm = -1;

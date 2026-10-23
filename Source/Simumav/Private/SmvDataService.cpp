@@ -277,6 +277,8 @@ void USmvDataService::LoadLocal()
 				S.AlertGrade = SmvJson::Str(J, TEXT("alert_grade"));
 				S.GatesPassed = (int32)SmvJson::Num(J, TEXT("gates_passed"));
 				S.TargetScore = (int32)SmvJson::Num(J, TEXT("target_score"));
+				S.Label = SmvJson::Str(J, TEXT("label"));
+				S.When = SmvJson::Str(J, TEXT("when"));
 				FlightsCache.Add(S);
 			}
 		}

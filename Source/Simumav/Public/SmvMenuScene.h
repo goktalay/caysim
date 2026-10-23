@@ -48,12 +48,18 @@ public:
 	/** Dünya oluşturucu canlı 3B önizlemesi: parkurun prosedürel dünyası uzak bir noktada kurulur, önizleme yakalaması yörüngede döner */
 	void SetWorldPreview(const FSmvTrack& Track);
 	bool IsLive() const { return bLive; }
+	/** Canlı sahnenin haritası (Fab harita adı; yoksa boş → prosedürel arazi) */
+	const FText& GetMapName() const { return MapName; }
 
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> Capture;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UPointLightComponent> KeyLight;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UPointLightComponent> RimLight;
+	/** Stüdyo duvarında figürün/aracın arkasında yumuşak ışık halesi (siyah fon yerine derinlik) */
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UPointLightComponent> WallLight;
+	/** Menü kamerasının önünde süzülen ışık zerreleri (Niagara; varlık yoksa yok) */
+	UPROPERTY() TObjectPtr<class UNiagaraComponent> Motes;
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> PreviewRT;
 	UPROPERTY() TObjectPtr<ACaySimWorldSetup> WorldSetup;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> Terrain;
@@ -71,6 +77,8 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<class UStaticMeshComponent> StudioWall;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<class UStaticMeshComponent> StudioFloor;
 	void PlaceStudio(float FloorZ);
+	/** Anahtar / kenar ışığını konumlar; şiddet hedefe uzaklığın karesiyle ölçeklenir (uzak ışık figürü karartmasın) */
+	void PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt);
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> SnapFig;
 	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> DSnapActor;
@@ -93,6 +101,7 @@ private:
 	double ManualUntil = 0;
 	FString PilotKey;
 	bool bFabMap = false;
+	FText MapName;
 	double FabStartE = 0, FabStartN = 0;
 	TMap<int64, float> GroundCache;
 	float GroundAt(double E, double N);
@@ -104,6 +113,9 @@ private:
 	TArray<FDroneJob> DQueue;
 	FString DPending;
 	int32 DFrames = 0;
+	/** GLB gövdesi yüklendiği kare (−1 bekleniyor; modelsiz işte 0) */
+	int32 DGlbFrame = -1;
+	bool bDHasModel = false;
 	double LandAt = -100.0;
 	double WpLat = 0, WpLon = 0, WpSize = 4000;
 	void TickSnaps();

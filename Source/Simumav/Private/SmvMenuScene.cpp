@@ -23,6 +23,8 @@
 #include "Misc/ConfigCacheIni.h"
 #include "SmvFabContent.h"
 #include "Engine/LevelStreamingDynamic.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
 
 namespace
 {
@@ -68,6 +70,8 @@ ASmvMenuScene::ASmvMenuScene()
 	KeyLight->SetupAttachment(Root);
 	RimLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("RimLight"));
 	RimLight->SetupAttachment(Root);
+	WallLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("WallLight"));
+	WallLight->SetupAttachment(Root);
 	StudioWall = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StudioWall"));
 	StudioWall->SetupAttachment(Root);
 	StudioFloor = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StudioFloor"));
@@ -119,7 +123,7 @@ void ASmvMenuScene::BeginPlay()
 	SnapCap->ShowFlags = Capture->ShowFlags;
 	SnapCap->PostProcessSettings = Capture->PostProcessSettings;
 	SnapCap->PostProcessBlendWeight = 1.f;
-	for (UPointLightComponent* Lt : { KeyLight.Get(), RimLight.Get() })
+	for (UPointLightComponent* Lt : { KeyLight.Get(), RimLight.Get(), WallLight.Get() })
 	{
 		Lt->SetIntensityUnits(ELightUnits::Candelas);
 		Lt->SetAttenuationRadius(4000.f);
@@ -127,12 +131,20 @@ void ASmvMenuScene::BeginPlay()
 		Lt->SetLightingChannels(false, true, false);
 	}
 	KeyLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 40.f));
-	// stüdyo malzemeleri (koyu lacivert duvar, biraz açık zemin)
+	// stüdyo malzemeleri: lacivert duvar (hafif kendinden ışıklı — siyah fon olmasın) + parlak, yansıtan koyu zemin
 	if (UMaterialInterface* Sm = SmvSolidMat(StudioWall->GetMaterial(0)))
 	{
-		UMaterialInstanceDynamic* Mw = UMaterialInstanceDynamic::Create(Sm, this); SmvSetSolidColor(Mw, FLinearColor(0.012f, 0.022f, 0.05f)); StudioWall->SetMaterial(0, Mw);
-		UMaterialInstanceDynamic* Mf = UMaterialInstanceDynamic::Create(Sm, this); SmvSetSolidColor(Mf, FLinearColor(0.035f, 0.06f, 0.11f)); StudioFloor->SetMaterial(0, Mf);
+		UMaterialInstanceDynamic* Mw = UMaterialInstanceDynamic::Create(Sm, this); SmvSetSolidColor(Mw, FLinearColor(0.05f, 0.08f, 0.15f));
+		Mw->SetVectorParameterValue(TEXT("Emissive"), FLinearColor(0.012f, 0.022f, 0.05f));
+		StudioWall->SetMaterial(0, Mw);
+		UMaterialInstanceDynamic* Mf = UMaterialInstanceDynamic::Create(Sm, this); SmvSetSolidColor(Mf, FLinearColor(0.04f, 0.065f, 0.11f));
+		Mf->SetScalarParameterValue(TEXT("Roughness"), 0.16f);
+		Mf->SetScalarParameterValue(TEXT("Metallic"), 0.2f);
+		StudioFloor->SetMaterial(0, Mf);
 	}
+	WallLight->SetLightColor(FLinearColor(0.35f, 0.62f, 1.f));
+	WallLight->SetAttenuationRadius(1600.f);
+	WallLight->SetIntensity(SmvCfg(TEXT("PreviewWallLight"), 70.f));
 	PlaceStudio(0.f);
 	KeyLight->SetLightColor(FLinearColor(1.f, 0.96f, 0.9f));
 	RimLight->SetIntensity(SmvCfg(TEXT("PreviewLight"), 40.f) * 0.7f);
@@ -172,7 +184,8 @@ void ASmvMenuScene::BuildWorld()
 	FSmvTrack Tr;
 	Tr.Name = TEXT("Menu");
 	Tr.Lat = Lat0; Tr.Lon = Lon0; Tr.GroundMsl = GroundMsl;
-	Tr.TimeOfDay = TEXT("dusk");
+	// altın saat (gün batımından ~75 dk önce): sıcak, alçak güneş; araçlar ve harita belirgin
+	Tr.TimeOfDay = TEXT("golden");
 	Tr.World.Seed = 7;
 	Tr.World.SizeM = 4000.0;
 	Tr.World.MountainCount = 6;
@@ -182,7 +195,7 @@ void ASmvMenuScene::BuildWorld()
 	Tr.World.bRunway = true;
 	Tr.World.RunwayHeading = 70.0;
 	Tr.World.Water = 0.12;
-	Tr.World.Fog = 0.25;
+	Tr.World.Fog = 0.03;   // menüde pus en az (UDS Fog 0,2): arka plan sahnesi net görünsün
 	// Fab haritası (ini MenuMap = anahtar; boş → askeri üs / rafineri / orman önceliği) — yoksa prosedürel arazi
 	{
 		FString Want;
@@ -197,6 +210,7 @@ void ASmvMenuScene::BuildWorld()
 			bool bOk = false;
 			MenuLevel = ULevelStreamingDynamic::LoadLevelInstance(W, Pick->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
 			bFabMap = bOk && MenuLevel;
+			if (bFabMap) MapName = Pick->Name;
 			FabStartE = Pick->StartE; FabStartN = Pick->StartN;
 			UE_LOG(LogTemp, Log, TEXT("Menü sahnesi Fab haritası: %s (%s)"), *Pick->Level, bFabMap ? TEXT("yükleniyor") : TEXT("yüklenemedi"));
 		}
@@ -225,17 +239,36 @@ void ASmvMenuScene::BuildWorld()
 		Cc->bConstrainAspectRatio = false;
 		// sinematik son işlem: alan derinliği (odak = takip edilen araç; Tick'te), bloom, vinyet, hafif film greni ve sıcak-soğuk renk ayarı
 		FPostProcessSettings& Pp = Cc->PostProcessSettings;
-		Pp.bOverride_DepthOfFieldFstop = true; Pp.DepthOfFieldFstop = 2.2f;
+		// hafif alan derinliği (f/5,6: uzak plan yumuşar, araç ve yakın arazi net — f/2,2 sahneyi bulanıklaştırıyordu)
+		Pp.bOverride_DepthOfFieldFstop = true; Pp.DepthOfFieldFstop = 5.6f;
 		Pp.bOverride_DepthOfFieldSensorWidth = true; Pp.DepthOfFieldSensorWidth = 36.f;
 		Pp.bOverride_DepthOfFieldFocalDistance = true; Pp.DepthOfFieldFocalDistance = 2000.f;
-		Pp.bOverride_BloomIntensity = true; Pp.BloomIntensity = 1.1f;
-		Pp.bOverride_VignetteIntensity = true; Pp.VignetteIntensity = 0.55f;
-		Pp.bOverride_FilmGrainIntensity = true; Pp.FilmGrainIntensity = 0.12f;
+		Pp.bOverride_BloomIntensity = true; Pp.BloomIntensity = 0.8f;
+		Pp.bOverride_VignetteIntensity = true; Pp.VignetteIntensity = 0.3f;
+		Pp.bOverride_FilmGrainIntensity = true; Pp.FilmGrainIntensity = 0.04f;
+		// parlak ama okunaklı: pozlama biraz yukarı (kartların arkasındaki koyu degrade yalnız sol yarıda — SSmvBackdrop Cinematic)
+		Pp.bOverride_AutoExposureBias = true; Pp.AutoExposureBias = 0.6f;
+		Pp.bOverride_ColorContrast = true; Pp.ColorContrast = FVector4(1.f, 1.f, 1.f, 1.06f);
 		Pp.bOverride_ColorSaturation = true; Pp.ColorSaturation = FVector4(1.f, 1.f, 1.f, 1.08f);
 		Pp.bOverride_ColorGainShadows = true; Pp.ColorGainShadows = FVector4(0.92f, 0.98f, 1.08f, 1.f);
 		Pp.bOverride_ColorGainHighlights = true; Pp.ColorGainHighlights = FVector4(1.06f, 1.0f, 0.92f, 1.f);
 		Pp.bOverride_SceneFringeIntensity = true; Pp.SceneFringeIntensity = 0.6f;
 		Cc->PostProcessBlendWeight = 1.f;
+	}
+	// Niagara ışık zerreleri: derlemede motor şablonundan kopyalanan sistem (Scripts/Python/simumav_varliklar.py niagara_sablonu)
+	if (Cam)
+	{
+		if (UNiagaraSystem* Fx = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Simumav/FX/NS_SmvMotes.NS_SmvMotes"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			Motes = NewObject<UNiagaraComponent>(Cam);
+			Motes->SetAsset(Fx);
+			Motes->SetupAttachment(Cam->GetRootComponent());
+			Motes->SetRelativeLocation(FVector(900.0, 280.0, -40.0));
+			Motes->RegisterComponent();
+			Motes->Activate(true);
+			UE_LOG(LogSimumav, Log, TEXT("Menü sahnesi: Niagara zerreleri (%s)"), *Fx->GetPathName());
+		}
+		else UE_LOG(LogSimumav, Log, TEXT("Menü sahnesi: Niagara varlığı yok (NS_SmvMotes) — Slate zerreleri kullanılır"));
 	}
 	bLive = Flyer && Cam;
 	UE_LOG(LogSimumav, Log, TEXT("Menü 3B sahnesi kuruldu (%s)"), bLive ? TEXT("canlı") : TEXT("eksik"));
@@ -307,7 +340,7 @@ void ASmvMenuScene::SetPreview(const FString& Type, const FString& ModelKey, con
 	Preview->SetActorTickEnabled(false);
 	Preview->SetActorLocation(GSmvPreviewAt);
 	if (USmvMotorSynth* M = Preview->GetMotor()) M->Stop();
-	PreviewDistCm = FMath::Clamp(Preview->GetVisualRadiusM() * 100.f * 3.4f, 140.f, 2400.f);
+	PreviewDistCm = FMath::Clamp(Preview->GetVisualRadiusM() * 100.f / 0.2493f * 1.2f, 120.f, 4000.f);
 	Capture->ShowOnlyActors.Reset();
 	Capture->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
 	PlaceStudio(0.f);
@@ -408,7 +441,10 @@ void ASmvMenuScene::UpdateCamera(float Dt, const FVector& D, const FVector& Fwd)
 	if (!bCamInit || FVector::Dist(Want, CamPos) > 60000.0) { CamPos = Want; bCamInit = true; }
 	const float K = FMath::Clamp(Dt * 2.2f, 0.f, 1.f);
 	CamPos = FMath::Lerp(CamPos, Want, (double)K);
-	const FRotator WantRot = (Look - CamPos).Rotation();
+	// konu kadrajın sağ yarısında (sol yarı kartlarla kaplı): bakış sola kaydırılır, hafif yukarı
+	FRotator WantRot = (Look - CamPos).Rotation();
+	WantRot.Yaw -= 14.f;
+	WantRot.Pitch += 3.f;
 	CamRot = FMath::RInterpTo(CamRot, WantRot, Dt, 5.f);
 	Cam->SetActorLocationAndRotation(CamPos, CamRot);
 }
@@ -481,8 +517,7 @@ void ASmvMenuScene::Tick(float Dt)
 		Capture->FOVAngle = 28.f;
 		Capture->SetWorldLocationAndRotation(CamAt, (Target - CamAt).Rotation());
 		// tam boy figür: ışıklar 4–5 m uzakta (yakın ışık yüzü ve zemini patlatıyordu)
-		KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-420, 300, 380));
-		RimLight->SetWorldLocation(GSmvPreviewAt + FVector(380, -320, 340));
+		PlaceLights(GSmvPreviewAt + FVector(0, 0, 110), GSmvPreviewAt + FVector(-420, 300, 380), GSmvPreviewAt + FVector(380, -320, 340));
 		const double Now = FPlatformTime::Seconds();
 		if (Now - LastChannelFix > 1.0) { LastChannelFix = Now; ApplyPreviewChannels(); }
 	}
@@ -493,11 +528,15 @@ void ASmvMenuScene::Tick(float Dt)
 		const double Lk = FMath::Clamp((FPlatformTime::Seconds() - LandAt) / 1.6, 0.0, 1.0);
 		const double Drop = Lk < 1.0 ? FMath::Pow(1.0 - Lk, 3.0) * PreviewDistCm * 0.9 : 0.0;
 		Preview->SetActorLocationAndRotation(GSmvPreviewAt + FVector(0, 0, Drop), FRotator(0.f, PreviewYaw + (float)((1.0 - Lk) * 180.0), 0.f));
+		// kadraja sığdır (GLB gövdesi yüklenince yarıçap değişir): yatay FOV 28° → mesafe ≈ yarıçap / tan 14° × 1,2
+		{
+			const float Want = FMath::Clamp(Preview->GetVisualRadiusM() * 100.f / 0.2493f * 1.2f, 120.f, 4000.f);
+			PreviewDistCm = FMath::FInterpTo(PreviewDistCm, Want, Dt, 4.f);
+		}
 		const FVector CamAt = GSmvPreviewAt + FVector(-PreviewDistCm, 0.0, PreviewDistCm * 0.32);
 		StudioFloor->SetWorldLocation(GSmvPreviewAt + FVector(0.0, 0.0, -PreviewDistCm * 0.16));
 		Capture->SetWorldLocationAndRotation(CamAt, (GSmvPreviewAt - CamAt).Rotation());
-		KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-PreviewDistCm * 0.6, PreviewDistCm * 0.7, PreviewDistCm * 0.8));
-		RimLight->SetWorldLocation(GSmvPreviewAt + FVector(PreviewDistCm * 0.8, -PreviewDistCm * 0.5, PreviewDistCm * 0.4));
+		PlaceLights(GSmvPreviewAt, GSmvPreviewAt + FVector(-PreviewDistCm * 0.6, PreviewDistCm * 0.7, PreviewDistCm * 0.8), GSmvPreviewAt + FVector(PreviewDistCm * 0.8, -PreviewDistCm * 0.5, PreviewDistCm * 0.4));
 		const double Now = FPlatformTime::Seconds();
 		if (Now - LastChannelFix > 1.0) { LastChannelFix = Now; ApplyPreviewChannels(); }
 	}
@@ -533,8 +572,7 @@ void ASmvMenuScene::TickSnaps()
 			const FVector CamAt = At + FVector(-125.0, 0.0, 6.0);
 			SnapCap->TextureTarget = Rt->Get();
 			SnapCap->SetWorldLocationAndRotation(CamAt, (At - CamAt).Rotation());
-			KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-180, 160, 220));
-			RimLight->SetWorldLocation(GSmvPreviewAt + FVector(160, -120, 200));
+			PlaceLights(At, GSmvPreviewAt + FVector(-180, 160, 220), GSmvPreviewAt + FVector(160, -120, 200));
 			SnapCap->ShowOnlyActors.Reset();
 			SnapCap->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
 			SnapCap->ShowOnlyActors.Add(SnapFig);
@@ -590,26 +628,29 @@ void ASmvMenuScene::TickDroneSnaps()
 	if (DSnapActor)
 	{
 		++DFrames;
-		// 20. karede (model gelmeden siluet) ve 150. karede (GLB yüklendiyse model) çekilir
-		if (DFrames == 12 || DFrames == 90)
+		// 3. karede siluet (yer tutucu gövde) hemen çekilir; GLB gövdesi yüklenince 3 kare sonra yeniden çekilip iş biter
+		// (eski: 12. ve 90. kare — sırayla işlenen kuyrukta hangar şeridinde Cessna/VTOL küçük görüntüleri geç doluyordu)
+		const bool bGlbShot = DGlbFrame >= 0 && DFrames == DGlbFrame + 3;
+		const bool bDone = bGlbShot || (!bDHasModel && DFrames >= 4) || DFrames >= 240;
+		if (DFrames == 3 || bGlbShot || (bDone && !bGlbShot))
 		{
 			if (TObjectPtr<UTextureRenderTarget2D>* Rt = Snaps.Find(DPending))
 			{
 				const FVector At = GSmvPreviewAt;
-				const float D = FMath::Clamp(DSnapActor->GetVisualRadiusM() * 100.f * 3.0f, 120.f, 2400.f);
+				// kadraja sığdır: yatay FOV 26° (yarım açı tanjantı 0,231) + %15 pay
+				const float D = FMath::Clamp(DSnapActor->GetVisualRadiusM() * 100.f / 0.231f * 1.15f, 120.f, 4000.f);
 				const FVector CamAt = At + FVector(-D * 0.86, -D * 0.5, D * 0.36);
 				DSnapActor->SetActorHiddenInGame(false);
 				SnapCap->TextureTarget = Rt->Get();
 				SnapCap->SetWorldLocationAndRotation(CamAt, (At - CamAt).Rotation());
-				KeyLight->SetWorldLocation(At + FVector(-D * 0.6, D * 0.7, D * 0.8));
-				RimLight->SetWorldLocation(At + FVector(D * 0.8, -D * 0.5, D * 0.4));
+				PlaceLights(At, At + FVector(-D * 0.6, D * 0.7, D * 0.8), At + FVector(D * 0.8, -D * 0.5, D * 0.4));
 				SnapCap->ShowOnlyActors.Reset();
 				SnapCap->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
 				SnapCap->ShowOnlyActors.Add(DSnapActor);
 				SnapCap->CaptureScene();
 			}
 		}
-		if (DFrames >= 90) { DSnapActor->Destroy(); DSnapActor = nullptr; }
+		if (bDone) { DSnapActor->Destroy(); DSnapActor = nullptr; }
 		return;
 	}
 	if (DQueue.Num() == 0) return;
@@ -633,11 +674,16 @@ void ASmvMenuScene::TickDroneSnaps()
 	for (UPrimitiveComponent* Pc : Prims) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
 	DPending = Job.Key;
 	DFrames = 0;
+	DGlbFrame = -1;
+	bDHasModel = false;
 	if (USmvGameInstance* GI = USmvGameInstance::GetSmv(this))
 	{
 		TWeakObjectPtr<ASmvDroneActor> WP(DSnapActor);
+		TWeakObjectPtr<ASmvMenuScene> WS(this);
 		if (GI->GetData() && !Job.Model.IsEmpty())
-			GI->GetData()->FetchModelGlb(Job.Model, [WP](bool bOk, const TArray<uint8>& Bytes)
+		{
+			bDHasModel = true;
+			GI->GetData()->FetchModelGlb(Job.Model, [WP, WS](bool bOk, const TArray<uint8>& Bytes)
 			{
 				if (bOk && WP.IsValid())
 				{
@@ -645,7 +691,10 @@ void ASmvMenuScene::TickDroneSnaps()
 					TInlineComponentArray<UPrimitiveComponent*> Pr(WP.Get());
 					for (UPrimitiveComponent* Pc : Pr) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
 				}
+				// yüklenemese de iş bitsin (siluet kalır)
+				if (WS.IsValid() && WS->DSnapActor == WP.Get()) WS->DGlbFrame = WS->DFrames;
 			});
+		}
 	}
 }
 
@@ -725,11 +774,26 @@ void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
 	Capture->bCaptureEveryFrame = bPreviewOn;
 }
 
+void ASmvMenuScene::PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt)
+{
+	// temel şiddet 1,71 m uzaklık için ayarlıydı (Iris önizlemesi); uzak ışıkta ters kare telafisi
+	const float Base = SmvCfg(TEXT("PreviewLight"), 40.f);
+	auto K = [](const FVector& A, const FVector& B) { const float D = (float)FVector::Dist(A, B) / 171.f; return FMath::Clamp(D * D, 0.3f, 60.f); };
+	KeyLight->SetWorldLocation(KeyAt);
+	RimLight->SetWorldLocation(RimAt);
+	KeyLight->SetIntensity(Base * K(Target, KeyAt));
+	RimLight->SetIntensity(Base * 0.8f * K(Target, RimAt));
+	KeyLight->SetAttenuationRadius((float)FVector::Dist(Target, KeyAt) * 3.f);
+	RimLight->SetAttenuationRadius((float)FVector::Dist(Target, RimAt) * 3.f);
+}
+
 void ASmvMenuScene::PlaceStudio(float FloorZ)
 {
 	StudioWall->SetVisibility(true); StudioFloor->SetVisibility(true);
 	StudioWall->SetWorldLocationAndRotation(GSmvPreviewAt + FVector(2600.0, 0.0, 1500.0), FRotator::ZeroRotator);
 	StudioWall->SetWorldScale3D(FVector(0.2f, 120.f, 80.f));
+	// duvar halesi: figür/araç hizasında, duvarın 3 m önünde
+	WallLight->SetWorldLocation(GSmvPreviewAt + FVector(2300.0, 0.0, 160.0));
 	StudioFloor->SetWorldLocation(GSmvPreviewAt + FVector(0.0, 0.0, FloorZ - 1.0));
 	StudioFloor->SetWorldScale3D(FVector(16.f, 16.f, 0.02f));
 }

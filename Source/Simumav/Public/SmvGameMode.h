@@ -165,7 +165,10 @@ public:
 	void ConfirmUi(const FText& Title, const FText& Body, const FText& Yes, bool bDanger, TFunction<void()> OnYes);
 	bool IsRecording() const;
 	double RecSeconds() const;
-private:
+	/** Duman testi: bağlantı var mı + irtifa (AGL m), ARM, konum hazırlığı (−1/0/1) */
+		bool SmokeTele(float& OutAltRel, bool& bOutArmed, int32& OutPosReady) const;
+	private:
+		FString HudLang;
 	void TickDebris(float Dt);
 	void UpdateFpv(const FCaySimTelemetry& T, double Now);
 	FString RaceResultBadge;

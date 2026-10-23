@@ -288,7 +288,7 @@ int32 UCaySimHudWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, 
 	// ---- Sol alt: mod / ARM / G / THR / BAT / GPS ----
 	{
 		float Y = H - 150.f;
-		const float X = 24.f;
+		const float X = 24.f + LeftInset;
 		P.Text(T.Mode.IsEmpty() ? TEXT("---") : T.Mode, FVector2D(X, Y), -1, true); Y += 26;
 		P.Text(T.bArmed ? TEXT("ARM") : TEXT("SAFE"), FVector2D(X, Y), -1, false, T.bArmed ? FLinearColor::Transparent : FLinearColor(1.f, 0.6f, 0.2f)); Y += 20;
 		// yerel ad `LoadG`: NativePaint parametresi `G` (FGeometry) gölgelenmesin (C4457)
@@ -304,7 +304,7 @@ int32 UCaySimHudWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, 
 	// ---- Sağ alt: UTC / T+ / konum / HOME / GMB / gecikme ----
 	{
 		float Y = H - 150.f;
-		const float X = W - 24.f;
+		const float X = W - 24.f - RightInset;
 		const FDateTime Utc = Ctx.bReplay && Ctx.WallClock > 0 ? FDateTime::FromUnixTimestamp((int64)Ctx.WallClock) : FDateTime::UtcNow();
 		P.Text(Utc.ToString(TEXT("%H:%M:%S Z")), FVector2D(X, Y), 1); Y += 20;
 		const double Tp = Ctx.bReplay ? Ctx.WallClock - Ctx.T0 : FDateTime::UtcNow().ToUnixTimestamp() - Ctx.T0;
@@ -322,7 +322,7 @@ int32 UCaySimHudWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, 
 
 	// ---- Üst sağ: REC / CAM / FOV ----
 	{
-		const float X = W - 24.f;
+		const float X = W - 24.f - RightInset;
 		const bool bBlink = FMath::Fmod(FPlatformTime::Seconds(), 1.0) < 0.6;
 		if (Ctx.bReplay) P.Text(TEXT("REC ▸ PLAY"), FVector2D(X, 20), 1);
 		else if (bBlink) P.Text(TEXT("● REC"), FVector2D(X, 20), 1, false, FLinearColor::Red);
@@ -348,13 +348,14 @@ int32 UCaySimHudWidget::NativePaint(const FPaintArgs& Args, const FGeometry& G, 
 	// ---- Uyarılar (üst orta, kırmızı kutular) ----
 	{
 		TArray<FString> Warns;
-		if (Ctx.bCollision) Warns.Add(TEXT("ÇARPIŞMA"));
+		auto Lb = [this](int32 I, const TCHAR* Def) { return WarnLabels.IsValidIndex(I) && !WarnLabels[I].IsEmpty() ? WarnLabels[I] : FString(Def); };
+		if (Ctx.bCollision) Warns.Add(Lb(0, TEXT("ÇARPIŞMA")));
 		bool bRcEmpty = true;
 		for (int32 V : T.Rc) if (V > 0) { bRcEmpty = false; break; }
-		if (Ctx.bSitlMode && T.bArmed && bRcEmpty) Warns.Add(TEXT("RC YOK"));
-		if (T.BattPct >= 0.f && T.BattPct < 25.f) Warns.Add(TEXT("BATARYA"));
-		if (Ctx.bSitlMode && Ctx.bGcsEverConnected && !T.bGcsConnected) Warns.Add(TEXT("GCS KESİLDİ"));
-		if (T.bArmed && T.AltRel < 60.0 && T.Groundspeed > 3.f) Warns.Add(TEXT("ALÇAK"));
+		if (Ctx.bSitlMode && T.bArmed && bRcEmpty) Warns.Add(Lb(1, TEXT("RC YOK")));
+		if (T.BattPct >= 0.f && T.BattPct < 25.f) Warns.Add(Lb(2, TEXT("BATARYA")));
+		if (Ctx.bSitlMode && Ctx.bGcsEverConnected && !T.bGcsConnected) Warns.Add(Lb(3, TEXT("GCS KESİLDİ")));
+		if (T.bArmed && T.AltRel < 60.0 && T.Groundspeed > 3.f) Warns.Add(Lb(4, TEXT("ALÇAK")));
 		float Y = H * 0.2f;
 		const bool bBlink = FMath::Fmod(FPlatformTime::Seconds(), 0.8) < 0.4;
 		for (const FString& Wn : Warns)

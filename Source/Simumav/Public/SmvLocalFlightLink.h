@@ -108,6 +108,18 @@ private:
 	void Publish(bool bFromAttitude);
 	double HomeAltMsl = 0;
 	bool bHomeKnown = false;
+	// ---- konum hazırlığı (GPS fix + ev + EKF mutlak yatay konum) — "Arm: Need Position Estimate" önlenir ----
+	uint16 EkfFlags = 0;
+	bool bEkfSeen = false;
+	bool bEkfGpsText = false;      // STATUSTEXT "EKF3 IMU0 is using GPS" (EKF_STATUS_REPORT gelmezse yedek)
+	double PosRawSince = 0;        // ham koşulun sağlandığı an (oturma süresi için)
+	bool bPosReady = false;
+	/** Hazır olmadan gelen kalkış / ARM: kuyrukta bekler, hazır olunca kendiliğinden yürütülür */
+	FString PendingCmd;
+	TSharedPtr<FJsonObject> PendingParams;
+	double PendingSince = 0;
+	void TickPosReady(double Wall);
+	bool NeedsPosition(const FString& Cmd) const;
 
 	// ---- oturum mantığı ----
 	SmvCore::FSitlSession* Session = nullptr;

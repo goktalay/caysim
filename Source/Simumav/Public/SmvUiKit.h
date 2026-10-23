@@ -164,8 +164,10 @@ private:
 class SIMUMAV_API SSmvBackdrop : public SLeafWidget
 {
 public:
-	SLATE_BEGIN_ARGS(SSmvBackdrop) : _Opacity(1.f), _Drones(true), _Grid(true), _Tint(FLinearColor::Transparent), _Scene(0) {}
+	SLATE_BEGIN_ARGS(SSmvBackdrop) : _Opacity(1.f), _Drones(true), _Grid(true), _Tint(FLinearColor::Transparent), _Scene(0), _Cinematic(false) {}
 		SLATE_ATTRIBUTE(float, Opacity)
+		/** Sinematik kip (ana menü + canlı 3B sahne): yalnız sol yarıda koyu degrade + birkaç ışık zerresi; sahne net görünür */
+		SLATE_ATTRIBUTE(bool, Cinematic)
 		/** Bölüme özel sahne: 0 genel, 1 hangar, 2 brifing (mürettebat), 3 küre (parkur), 4 tarla (görev), 5 gökyüzü (uç) */
 		SLATE_ATTRIBUTE(int32, Scene)
 		SLATE_ARGUMENT(bool, Drones)
@@ -184,15 +186,16 @@ private:
 	TAttribute<int32> Scene;
 	bool bDrones = true, bGrid = true;
 	void PaintScene(int32 S, FSlateWindowElementList& Out, int32 L, const FGeometry& G, double T) const;
-	TAttribute<FLinearColor> Tint;
-};
+		TAttribute<FLinearColor> Tint;
+		TAttribute<bool> Cinematic;
+	};
 
 /** Düğme / kart: fare üzerindeyken parlar ve hafifçe büyür, basınca içe çöker; odak halkası (gezinme), ses geri bildirimi. */
 class SIMUMAV_API SSmvButton : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SSmvButton) : _Kind(ESmvBtn::Normal), _Icon(ESmvIcon::None), _MinWidth(0.f), _MinHeight(0.f), _Selected(false),
-		_Accent(FLinearColor(0.22f, 0.74f, 0.97f)), _FontSize(0), _LeftAlign(false) {}
+		_Accent(FLinearColor(0.22f, 0.74f, 0.97f)), _FontSize(0), _LeftAlign(false), _IntroDelay(0.f) {}
 		SLATE_ATTRIBUTE(FText, Text)
 		SLATE_ATTRIBUTE(FText, SubText)
 		SLATE_ARGUMENT(ESmvBtn, Kind)
@@ -204,6 +207,8 @@ public:
 		SLATE_ARGUMENT(int32, FontSize)
 		/** İçerik sola yaslı ve genişliği doldurur (liste öğeleri) */
 		SLATE_ARGUMENT(bool, LeftAlign)
+		/** Giriş animasyonu gecikmesi (sn): kartlar sırayla belirir ve aşağıdan kayarak yerine oturur */
+		SLATE_ARGUMENT(float, IntroDelay)
 		SLATE_ARGUMENT(TFunction<void()>, OnClick)
 		/** Kart içine özel içerik (Tile'da simgenin yerine; ör. 3B önizleme) */
 		SLATE_NAMED_SLOT(FArguments, Extra)
@@ -234,6 +239,7 @@ private:
 	bool bHover = false, bPressed = false, bNavFocus = false, bCauseNav = false;
 	float HoverA = 0.f, PressA = 0.f, FocusA = 0.f;
 	double BornAt = 0;
+	bool bSlideIn = false;
 	/** Fare konumu (kart içinde −1..1) — 3B eğilme ve parlama */
 	FVector2D MouseN = FVector2D::ZeroVector, TiltN = FVector2D::ZeroVector;
 };

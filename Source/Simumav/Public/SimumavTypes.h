@@ -369,6 +369,10 @@ struct SIMUMAV_API FSmvTeleExtra
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") double Vibe = -1;
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") double TerrainAgl = -100000;
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") bool bGcsConnected = false;
+	/** Konum hazırlığı (yerel SITL): −1 bilinmiyor (bulut), 0 GPS/EKF bekleniyor, 1 hazır */
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") int32 PosReady = -1;
+	/** Hazır olmadan verilen kalkış / ARM kuyrukta */
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") bool bCmdQueued = false;
 	static FSmvTeleExtra FromJson(const TSharedPtr<FJsonObject>& O);
 };
 
@@ -400,6 +404,9 @@ struct SIMUMAV_API FSmvFlightSummary
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") bool bServoTriggerFired = false;
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") double ServoTriggerAglM = 0;
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") double ServoTriggerDistM = 0;
+	/** Uçuş kaydı listesi için: "araç · parkur" ve yerel tarih (yerel kayıt; eski kayıtlarda boş) */
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FString Label;
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FString When;
 	/** Mevcut özetin tamamı (yerel kayıt / sunucu `summary`) */
 	FString RawJson;
 	static FSmvFlightSummary FromServerFlight(const TSharedPtr<FJsonObject>& Flight);

@@ -58,6 +58,19 @@ UStaticMeshComponent* ASmvPilotFigure::Part(USceneComponent* Parent, int32 Shape
 	return C;
 }
 
+UStaticMeshComponent* ASmvPilotFigure::Mat(UStaticMeshComponent* C, float Rough, float Metal, const FLinearColor& Emissive, const FRotator& Rot)
+{
+	if (!C) return C;
+	if (UMaterialInstanceDynamic* M = Cast<UMaterialInstanceDynamic>(C->GetMaterial(0)))
+	{
+		M->SetScalarParameterValue(TEXT("Roughness"), Rough);
+		M->SetScalarParameterValue(TEXT("Metallic"), Metal);
+		if (!Emissive.Equals(FLinearColor::Black)) M->SetVectorParameterValue(TEXT("Emissive"), Emissive);
+	}
+	if (!Rot.IsZero()) C->SetRelativeRotation(Rot);
+	return C;
+}
+
 void ASmvPilotFigure::Clear()
 {
 	for (TObjectPtr<UStaticMeshComponent>& P : Parts) if (P) P->DestroyComponent();
@@ -81,39 +94,63 @@ void ASmvPilotFigure::Build(const FSmvAvatar& A, bool bWithRc)
 	if (A.Outfit == TEXT("jacket")) { Legs = PfHex(TEXT("#1f2937"), Legs); }
 	else if (A.Outfit == TEXT("casual")) { Top = FMath::Lerp(Suit, FLinearColor::White, 0.35f); Sleeve = Top; Legs = PfHex(TEXT("#3b5b8a"), Legs); }
 	const FLinearColor Boot(0.06f, 0.06f, 0.07f);
-	// bacaklar + bot
-	for (float Y : { -10.f, 10.f })
+	const FLinearColor Glove = A.Outfit == TEXT("casual") ? Skin : FLinearColor(0.07f, 0.07f, 0.08f);
+	const FLinearColor Strap(0.09f, 0.1f, 0.11f), Metal(0.55f, 0.57f, 0.6f);
+	const FLinearColor LegsD = Legs * 0.72f, TopD = Top * 0.72f;
+	const float Lw = bF ? 0.9f : 1.f;
+	// bacaklar: bot (gövde + burun + taban), baldır, diz koruyucu, uyluk + cep
+	for (float Y0 : { -10.f, 10.f })
 	{
-		Part(Root, 1, FVector(0, Y * (bF ? 0.9f : 1.f), 42.f), FVector(15, 15, 82), Legs);
-		Part(Root, 0, FVector(4, Y * (bF ? 0.9f : 1.f), 5.f), FVector(26, 12, 10), Boot);
+		const float Y = Y0 * Lw;
+		Mat(Part(Root, 0, FVector(3, Y, 6.f), FVector(24, 11.5f, 11), Boot), 0.45f, 0.f);
+		Mat(Part(Root, 2, FVector(13.5f, Y, 5.f), FVector(11, 11.5f, 9), Boot), 0.4f, 0.f);
+		Part(Root, 0, FVector(3, Y, 0.8f), FVector(28, 12.5f, 1.6f), FLinearColor(0.02f, 0.02f, 0.02f));
+		Part(Root, 1, FVector(0, Y, 31.f), FVector(13, 13, 40), Legs);
+		Mat(Part(Root, 2, FVector(5.5f, Y, 51.f), FVector(9, 9, 10), LegsD), 0.5f, 0.f);
+		Part(Root, 1, FVector(0, Y, 71.f), FVector(16, 16, 42), Legs);
+		Part(Root, 0, FVector(1.5f, Y + (Y0 < 0 ? -7.6f : 7.6f), 69.f), FVector(9, 1.6f, 12), LegsD);   // uyluk cebi (yan)
 	}
-	// gövde (nefes için ayrı düğüm)
+	// gövde (nefes için ayrı düğüm): kalça, kemer + toka, karın, göğüs (omuzlara doğru genişler), göğüs takımı kayışları, fermuar, yaka
 	Torso->SetRelativeLocation(FVector::ZeroVector);
-	Part(Torso, 0, FVector(0, 0, 88.f), FVector(22, Wb * 0.85f + (bF ? 4.f : 0.f), 16), Legs);
-	Part(Torso, 1, FVector(0, 0, 112.f), FVector(24, Wb, 52), Top);
+	Part(Torso, 2, FVector(0, 0, 93.f), FVector(23, Wb * 0.95f + (bF ? 5.f : 0.f), 19), Legs);
+	Mat(Part(Torso, 1, FVector(0, 0, 100.f), FVector(24.5f, Wb * 0.9f + (bF ? 3.f : 0.f), 5), Strap), 0.4f, 0.f);
+	Mat(Part(Torso, 0, FVector(12.4f, 0, 100.f), FVector(1.5f, 6.5f, 4.2f), Metal), 0.25f, 0.9f);
+	Part(Torso, 1, FVector(0, 0, 110.f), FVector(22, Wb * (bF ? 0.74f : 0.82f), 18), Top);
+	Part(Torso, 2, FVector(0, 0, 126.f), FVector(25, Wb * 1.02f, 34), Top);
+	Part(Torso, 1, FVector(0, 0, 121.f), FVector(23.5f, Wb * 0.92f, 20), Top);
+	if (A.Outfit != TEXT("casual"))
+	{
+		for (int32 s = -1; s <= 1; s += 2) Mat(Part(Torso, 0, FVector(12.6f, s * 7.5f, 119.f), FVector(1.2f, 3.6f, 38), Strap, FRotator(0, 0, s * 16.f)), 0.45f, 0.f);
+		Mat(Part(Torso, 0, FVector(12.9f, 0, 113.f), FVector(1.4f, 13.f, 3.4f), Strap), 0.45f, 0.f);   // göğüs kayışı
+		Mat(Part(Torso, 0, FVector(13.2f, 0, 113.f), FVector(1.2f, 4.f, 4.f), Metal), 0.25f, 0.9f);   // kayış tokası
+	}
+	Mat(Part(Torso, 0, FVector(12.8f, -3.f, 124.f), FVector(0.8f, 1.4f, 26), Metal), 0.3f, 0.8f);   // fermuar
+	Part(Torso, 1, FVector(0, 0, 141.f), FVector(15, 15, 4.5f), TopD);
 	if (A.Outfit == TEXT("jacket"))
 	{
-		Part(Torso, 0, FVector(10, 0, 138.f), FVector(6, Wb * 0.55f, 6), FMath::Lerp(Top, FLinearColor::White, 0.4f));   // yaka
-		Part(Torso, 0, FVector(12.2f, 0, 112.f), FVector(1, 2, 44), FLinearColor(0.1f, 0.1f, 0.12f));                    // fermuar
+		Part(Torso, 0, FVector(10, 0, 139.f), FVector(6, Wb * 0.55f, 6), FMath::Lerp(Top, FLinearColor::White, 0.4f));   // yaka
 	}
-	if (A.Patch != TEXT("none") && !A.Patch.IsEmpty()) Part(Torso, 0, FVector(12.5f, Wb * 0.22f, 126.f), FVector(1, 6, 6), PatchC);
-	// omuzlar, kollar, eller
-	const float Sy = Wb * 0.5f + 3.f;
+	if (A.Patch != TEXT("none") && !A.Patch.IsEmpty()) Mat(Part(Torso, 0, FVector(12.9f, Wb * 0.25f, 129.f), FVector(1, 7, 6), PatchC), 0.5f, 0.f, PatchC * 0.15f);
+	// omuzlar, kollar (hafif A-duruşu), eldivenler; sol omuzda arma
+	const float Sy = Wb * 0.5f + 2.f;
 	for (int32 s = -1; s <= 1; s += 2)
 	{
-		Part(Torso, 2, FVector(0, s * Sy, 134.f), FVector(16, 16, 16), Sleeve);
+		Part(Torso, 2, FVector(0, s * Sy, 135.f), FVector(15, 15, 14), Sleeve);
 		if (bWithRc)
 		{
 			Part(Torso, 1, FVector(4, s * (Sy + 1.f), 120.f), FVector(11, 11, 28), Sleeve, FRotator(-30.f, 0, 0));
 			Part(Torso, 1, FVector(16, s * (Sy - 6.f), 106.f), FVector(10, 10, 26), A.Outfit == TEXT("casual") ? Skin : Sleeve, FRotator(-80.f, s * -15.f, 0));
-			Part(Torso, 2, FVector(27, s * 9.f, 106.f), FVector(9, 9, 9), Skin);
+			Mat(Part(Torso, 2, FVector(27, s * 9.f, 106.f), FVector(9, 8, 9), Glove), 0.5f, 0.f);
 		}
 		else
 		{
-			Part(Torso, 1, FVector(0, s * (Sy + 2.f), 118.f), FVector(11, 11, 30), Sleeve);
-			Part(Torso, 1, FVector(1, s * (Sy + 2.f), 92.f), FVector(10, 10, 26), A.Outfit == TEXT("casual") ? Skin : Sleeve);
-			Part(Torso, 2, FVector(1, s * (Sy + 2.f), 76.f), FVector(9, 9, 10), Skin);
+			Part(Torso, 1, FVector(0, s * (Sy + 2.5f), 120.f), FVector(11, 11, 30), Sleeve, FRotator(0, 0, s * -7.f));
+			Part(Torso, 2, FVector(0.5f, s * (Sy + 4.2f), 105.f), FVector(10, 10, 9), Sleeve);   // dirsek
+			Part(Torso, 1, FVector(1.5f, s * (Sy + 5.f), 93.f), FVector(10, 10, 24), A.Outfit == TEXT("casual") ? Skin : Sleeve, FRotator(-4.f, 0, s * -4.f));
+			Mat(Part(Torso, 1, FVector(1.5f, s * (Sy + 5.2f), 82.f), FVector(10.5f, 10.5f, 4), A.Outfit == TEXT("casual") ? Skin : Strap), 0.5f, 0.f);   // manşet
+			Mat(Part(Torso, 2, FVector(2.f, s * (Sy + 5.5f), 75.f), FVector(8.5f, 7.5f, 11), Glove), 0.55f, 0.f);
 		}
+		if (s < 0 && A.Patch != TEXT("none") && !A.Patch.IsEmpty()) Mat(Part(Torso, 0, FVector(0, s * (Sy + 7.9f), 126.f), FVector(6, 0.8f, 6), PatchC, FRotator(0, 0, s * -7.f)), 0.5f, 0.f, PatchC * 0.15f);
 	}
 	// RC kumanda (iki elle) + başparmaklar
 	if (bWithRc)
@@ -124,8 +161,8 @@ void ASmvPilotFigure::Build(const FSmvAvatar& A, bool bWithRc)
 		Part(Rc, 1, FVector(-2, 0, 9), FVector(1, 1, 12), FLinearColor(0.7f, 0.7f, 0.72f));      // anten
 		for (int32 s = -1; s <= 1; s += 2) Part(Rc, 1, FVector(0, s * 6.f, 7.5f), FVector(4, 4, 1), FLinearColor(0.3f, 0.3f, 0.32f));   // çubuk yuvası
 		ThumbL0 = FVector(0, -6.f, 9.f); ThumbR0 = FVector(0, 6.f, 9.f);
-		ThumbL = Part(Rc, 1, ThumbL0, FVector(3, 3, 4), Skin);
-		ThumbR = Part(Rc, 1, ThumbR0, FVector(3, 3, 4), Skin);
+		ThumbL = Part(Rc, 1, ThumbL0, FVector(3, 3, 4), Glove);
+		ThumbR = Part(Rc, 1, ThumbR0, FVector(3, 3, 4), Glove);
 	}
 	// boyun + baş
 	Part(Torso, 1, FVector(0, 0, 146.f), FVector(11, 11, 10), Skin);
@@ -137,7 +174,10 @@ void ASmvPilotFigure::Build(const FSmvAvatar& A, bool bWithRc)
 	else if (A.Face == TEXT("long")) Hs = FVector(19, 18, 27);
 	else if (A.Face == TEXT("heart")) Hs = FVector(21, 20, 24);
 	if (bF) Hs *= 0.95f;
-	if (A.Face == TEXT("square")) Part(Head, 0, FVector(0, 0, 0), Hs * 0.92f, Skin); else Part(Head, 2, FVector::ZeroVector, Hs, Skin);
+	if (A.Face == TEXT("square")) Mat(Part(Head, 0, FVector(0, 0, 0), Hs * 0.92f, Skin), 0.55f, 0.f); else Mat(Part(Head, 2, FVector::ZeroVector, Hs, Skin), 0.55f, 0.f);
+	// çene / yanak hacmi ve kulaklar (düz küre yerine insan başı silueti)
+	Mat(Part(Head, 2, FVector(1.2f, 0, -6.5f), FVector(Hs.X * 0.82f, Hs.Y * (bF ? 0.74f : 0.8f), Hs.Z * 0.52f), Skin), 0.55f, 0.f);
+	for (int32 s = -1; s <= 1; s += 2) Mat(Part(Head, 2, FVector(-0.5f, s * Hs.Y * 0.5f, 0.5f), FVector(3.5f, 2.2f, 6.f), Skin * 0.96f), 0.55f, 0.f);
 	const float Fx = Hs.X * 0.5f - 0.8f;
 	// gözler
 	FVector Es(3, 3, 3);
@@ -193,10 +233,19 @@ void ASmvPilotFigure::Build(const FSmvAvatar& A, bool bWithRc)
 	}
 	if (bHelmet)
 	{
-		Part(Head, 2, FVector(-0.5f, 0, 3.f), FVector(Hs.X + 5, Hs.Y + 5, Hs.Z + 3), Helmet);
-		const FLinearColor Vc = A.bMirror ? FMath::Lerp(Visor, FLinearColor::White, 0.25f) : Visor;
-		if (A.bVisorOpen) Part(Head, 2, FVector(5.f, 0, 12.f), FVector(10, Hs.Y + 2, 6), Vc, FRotator(-25.f, 0, 0));
-		else Part(Head, 2, FVector(Fx - 1.5f, 0, 1.5f), FVector(9, Hs.Y + 1, 11), Vc);
+		// pilot kaskı: parlak kabuk, kenar bandı, kulaklık çanakları, vizör rayları, NVG yuvası, çene kayışı; vizör (ayna: metalik, pürüzsüz)
+		Mat(Part(Head, 2, FVector(-1.f, 0, 4.f), FVector(Hs.X + 7, Hs.Y + 6.5f, Hs.Z + 4), Helmet), 0.22f, 0.15f);
+		Mat(Part(Head, 1, FVector(-1.5f, 0, -1.5f), FVector(Hs.X + 6.6f, Hs.Y + 6.2f, 1.6f), Helmet * 0.45f), 0.4f, 0.f, FLinearColor::Black, FRotator(-8.f, 0, 0));
+		for (int32 s = -1; s <= 1; s += 2)
+		{
+			Mat(Part(Head, 1, FVector(-0.5f, s * (Hs.Y * 0.5f + 3.2f), -1.f), FVector(9.5f, 9.5f, 3.f), Helmet * 0.6f, FRotator(0, 0, 90.f)), 0.35f, 0.1f);
+			Mat(Part(Head, 0, FVector(Fx - 2.f, s * (Hs.Y * 0.5f + 2.6f), 6.f), FVector(6.f, 1.2f, 2.2f), Metal), 0.3f, 0.85f, FLinearColor::Black, FRotator(-20.f, 0, 0));
+		}
+		Mat(Part(Head, 0, FVector(Hs.X * 0.5f + 2.f, 0, 12.5f), FVector(3.f, 5.f, 3.5f), Strap), 0.35f, 0.6f);   // NVG yuvası
+		if (!A.bVisorOpen) Part(Head, 0, FVector(1.f, 0, -12.5f), FVector(4.f, Hs.Y * 0.7f, 1.2f), Strap);       // çene kayışı
+		const FLinearColor Vc = A.bMirror ? FMath::Lerp(Visor, FLinearColor::White, 0.15f) : Visor;
+		if (A.bVisorOpen) Mat(Part(Head, 2, FVector(4.f, 0, 13.f), FVector(11, Hs.Y + 3.5f, 6.5f), Vc, FRotator(-25.f, 0, 0)), 0.06f, A.bMirror ? 0.85f : 0.3f);
+		else Mat(Part(Head, 2, FVector(Fx - 0.5f, 0, 2.f), FVector(10.5f, Hs.Y + 3.f, 12.5f), Vc), 0.05f, A.bMirror ? 0.85f : 0.3f, Vc * 0.04f);
 		if (A.Accessory == TEXT("crest")) Part(Head, 0, FVector(-1.f, 0, 16.f), FVector(16, 2, 4), PatchC);
 		if (A.Accessory == TEXT("stripe")) Part(Head, 0, FVector(-1.f, 0, 15.5f), FVector(26, 3, 1), PatchC);
 		if (A.Accessory == TEXT("antenna")) { Part(Head, 1, FVector(-4.f, 9.f, 18.f), FVector(1, 1, 14), FLinearColor(0.75f, 0.75f, 0.78f)); Part(Head, 2, FVector(-4.f, 9.f, 25.f), FVector(2.4f, 2.4f, 2.4f), FLinearColor(0.95f, 0.15f, 0.15f)); }

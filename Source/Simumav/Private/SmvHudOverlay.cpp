@@ -1,4 +1,5 @@
 #include "SmvHudOverlay.h"
+#include "SmvI18n.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
@@ -112,7 +113,7 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 		FSlateDrawElement::MakeLines(Out, Layer + 1, G.ToPaintGeometry(), Cross, ESlateDrawEffect::None, FLinearColor::White, true, 2.f);
 	}
 
-	if (State.bCrashed) SmvText(Out, Layer + 3, G, FVector2D(Sz.X * 0.5f - 150.f, Sz.Y * 0.45f), TEXT("ÇARPIŞMA"), 40, Red);
+	if (State.bCrashed) SmvText(Out, Layer + 3, G, FVector2D(Sz.X * 0.5f - 150.f, Sz.Y * 0.45f), FSmvI18n::T(TEXT("hud.w_crash")).ToString(), 40, Red);
 	if (!State.ProxLine.IsEmpty() && !State.bCrashed)
 	{
 		const FLinearColor Pc = State.ProxLevel >= 2 ? Red : Amber;
@@ -122,8 +123,8 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 	// bildirim (toast) kabukta gösterilir (SSmvShell::ShowToast) — burada çift çizilmez
 	if (!State.Paused.IsEmpty())
 	{
+		// karartma yeter: duraklatma penceresi "Simülasyon çalışmaya devam ediyor" der (metin pencerenin arkasında yarım kalıyordu)
 		SmvBox(Out, Layer + 3, G, FVector2D(0, 0), Sz, FLinearColor(0, 0, 0, 0.35f), W);
-		SmvText(Out, Layer + 4, G, FVector2D(Sz.X * 0.5f - 200.f, Sz.Y * 0.3f), State.Paused, 18, FLinearColor::White);
 	}
 	return Layer + 4;
 }

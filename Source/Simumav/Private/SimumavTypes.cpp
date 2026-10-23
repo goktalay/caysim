@@ -604,6 +604,8 @@ TSharedRef<FJsonObject> FSmvFlightSummary::ToJson() const
 	for (const FString& X : Badges) B.Add(MakeShared<FJsonValueString>(X));
 	O->SetArrayField(TEXT("badges"), B);
 	O->SetBoolField(TEXT("servo_trigger"), bServoTriggerFired);
+	if (!Label.IsEmpty()) O->SetStringField(TEXT("label"), Label);
+	if (!When.IsEmpty()) O->SetStringField(TEXT("when"), When);
 	return O;
 }
 

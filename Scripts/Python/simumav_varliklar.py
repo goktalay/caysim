@@ -275,6 +275,54 @@ def uds_dokum():
         unreal.log_warning(f"[simumav_varliklar] UDS dökümü başarısız: {e}")
 
 
+NIAGARA_HEDEF = "/Game/Simumav/FX/NS_SmvMotes"
+# ana menü sahnesi için havada süzülen ışık zerreleri: motorun Niagara eklentisindeki hazır sistem şablonlarından biri kopyalanır
+# (lisanslı içerik değil; Engine/Plugins/FX/Niagara). Tercih sırası ad parçasına göre; hiçbiri yoksa C++ Slate zerrelerinde kalır.
+NIAGARA_TERCIH = ("hangingparticulates", "hanging", "particulates", "ambient", "dust", "mote", "floating", "fountain")
+
+
+def niagara_sablonu():
+    if eal.does_asset_exist(NIAGARA_HEDEF) and not YENIDEN:
+        log(f"var: {NIAGARA_HEDEF}")
+        return
+    ar = unreal.AssetRegistryHelpers.get_asset_registry()
+    try:
+        ar.scan_paths_synchronous(["/Niagara"], True)
+    except Exception as e:  # noqa: BLE001
+        log(f"Niagara tarama: {e}")
+    adaylar = []
+    for kok in ("/Niagara",):
+        try:
+            for a in ar.get_assets_by_path(kok, recursive=True):
+                sinif = str(a.asset_class_path.asset_name) if hasattr(a, "asset_class_path") else str(a.asset_class)
+                if sinif == "NiagaraSystem":
+                    adaylar.append(str(a.package_name))
+        except Exception as e:  # noqa: BLE001
+            log(f"Niagara arama {kok}: {e}")
+    log(f"Niagara sistem şablonları ({len(adaylar)}): " + ", ".join(adaylar[:60]))
+    secilen = None
+    for t in NIAGARA_TERCIH:
+        for yol in adaylar:
+            if t in yol.rsplit("/", 1)[-1].lower():
+                secilen = yol
+                break
+        if secilen:
+            break
+    if not secilen:
+        log("Niagara şablonu bulunamadı — menü Slate zerreleriyle kalır (Niagara Examples Pack önerilir)")
+        return
+    if eal.does_asset_exist(NIAGARA_HEDEF):
+        eal.delete_asset(NIAGARA_HEDEF)
+    if not eal.does_directory_exist("/Game/Simumav/FX"):
+        eal.make_directory("/Game/Simumav/FX")
+    kopya = eal.duplicate_asset(secilen, NIAGARA_HEDEF)
+    if kopya:
+        eal.save_asset(NIAGARA_HEDEF)
+        log(f"Niagara şablonu kopyalandı: {secilen} → {NIAGARA_HEDEF}")
+    else:
+        log(f"Niagara şablonu kopyalanamadı: {secilen}")
+
+
 def arazi_malzemesi():
     m = malzeme("/Game/Simumav/Materials", "M_SmvTerrain")
     if m is None:
@@ -346,7 +394,7 @@ def harita():
 def main():
     arazi_malzemesi()
     parlak_malzeme()
-    for adim in (lambda: pbr_malzemesi("M_SmvPbr", False), lambda: pbr_malzemesi("M_SmvPbr2S", True), pervane_diski, hava_arazi_malzemesi):
+    for adim in (lambda: pbr_malzemesi("M_SmvPbr", False), lambda: pbr_malzemesi("M_SmvPbr2S", True), pervane_diski, hava_arazi_malzemesi, niagara_sablonu):
         try:
             adim()
         except Exception as e:  # noqa: BLE001 — eksik malzeme oyunu durdurmaz (yedek malzemeler)

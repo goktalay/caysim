@@ -282,6 +282,7 @@ void SSmvShell::Construct(const FArguments& InArgs)
 					return (Built == ESmvScreen::Menu || Built == ESmvScreen::Welcome) ? 0.30f : 0.80f;
 				})
 				.Tint_Lambda([]() { return SmvUi::ReducedMotion() ? FLinearColor::Transparent : SeasonColor(SeasonId()); })
+				.Cinematic_Lambda([this]() { return Scene() && Scene()->IsLive() && (Built == ESmvScreen::Menu || Built == ESmvScreen::Welcome); })
 				.Scene_Lambda([this]()
 				{
 					// bölüme özel arka plan (web bölüm arka planları): canlı 3B sahne varken menüde gizli kalır
@@ -1029,7 +1030,25 @@ TSharedRef<SWidget> SSmvShell::BuildScreen(ESmvScreen S)
 
 static TSharedRef<SWidget> SmvLogo(int32 Size)
 {
-	return SNew(SHorizontalBox)
+	// arkada nefes alan ışıltı + yavaş parlak süpürme (yazının arkasında)
+	TSharedRef<SSmvCanvas> Glow = SNew(SSmvCanvas).Size(FVector2D(1, 1)).Visibility(EVisibility::HitTestInvisible);
+	Glow->Painter = [](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		if (ReducedMotion()) return;
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		const float T = (float)FPlatformTime::Seconds();
+		const float P = 0.75f + 0.25f * FMath::Sin(T * 1.6f);
+		DrGlow(Out, L, G, FVector2D(Sz.X * 0.72f, Sz.Y * 0.55f), (float)Sz.Y * 1.25f, Accent().CopyWithNewOpacity(0.26f * P));
+		DrGlow(Out, L, G, FVector2D(Sz.X * 0.28f, Sz.Y * 0.55f), (float)Sz.Y * 1.0f, FLinearColor(1.f, 1.f, 1.f, 0.08f * P));
+		const float U = FMath::Fmod(T / 6.f, 1.f);
+		const float X = -0.2f * (float)Sz.X + U * 1.4f * (float)Sz.X;
+		DrSeg(Out, L + 1, G, FVector2D(X, -6.0), FVector2D(X - Sz.Y * 0.45f, Sz.Y + 6.0), FLinearColor(1.f, 1.f, 1.f, 0.07f * FMath::Sin(U * PI)), 16.f);
+	};
+	return SNew(SOverlay)
+		+ SOverlay::Slot()[Glow]
+		+ SOverlay::Slot()
+		[
+		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth()
 		[
 			SNew(STextBlock).Text(FText::FromString(TEXT("SIMU"))).Font(Font(Size, "Black", 120)).ColorAndOpacity(Fg())
@@ -1039,8 +1058,9 @@ static TSharedRef<SWidget> SmvLogo(int32 Size)
 		[
 			SNew(STextBlock).Text(FText::FromString(TEXT("MAV"))).Font(Font(Size, "Black", 120)).ColorAndOpacity(Accent())
 			.ShadowOffset(FVector2D(0, 3)).ShadowColorAndOpacity(Accent2().CopyWithNewOpacity(0.55f))
+		]
 		];
-}
+			}
 
 TSharedRef<SWidget> SSmvShell::Welcome()
 {
@@ -1172,13 +1192,15 @@ TSharedRef<SWidget> SSmvShell::Menu()
 	const FSmvPilot* Pl = Data() ? Data()->DefaultPilot() : nullptr;
 	const FSmvDrone* Dr = Data() ? Data()->DefaultDrone() : nullptr;
 
-	TSharedRef<SSmvButton> Hero = SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Play).Accent(Hex(0xfbbf24)).MinHeight(170.f)
+	TSharedRef<SSmvButton> Hero = SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Play).Accent(Hex(0xfbbf24)).MinHeight(170.f).IntroDelay(0.05f)
 		.Text(Tx(TEXT("menu.fly"))).SubText(Tx(TEXT("menu.fly_sub")))
 		.OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::FlyMode); });
 	DefaultFocus = Hero;
-	auto Tile = [](const FText& T, const FText& S, ESmvIcon I, uint32 Col, TFunction<void()> Fn) -> TSharedRef<SWidget>
+	// kartlar sırayla girer (soldan sağa, satır satır)
+	int32 TileN = 0;
+	auto Tile = [&TileN](const FText& T, const FText& S, ESmvIcon I, uint32 Col, TFunction<void()> Fn) -> TSharedRef<SWidget>
 	{
-		return SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(I).Accent(Hex(Col)).MinHeight(148.f).Text(T).SubText(S).OnClick(Fn);
+		return SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(I).Accent(Hex(Col)).MinHeight(148.f).Text(T).SubText(S).OnClick(Fn).IntroDelay(0.14f + 0.07f * (TileN++));
 	};
 	TSharedRef<SUniformGridPanel> Grid = SNew(SUniformGridPanel).SlotPadding(FMargin(7.f)).MinDesiredSlotHeight(150.f);
 	Grid->AddSlot(0, 0)[Tile(Tx(TEXT("menu.hangar")), Tx(TEXT("menu.hangar_sub")), ESmvIcon::Drone, 0x38bdf8, Go(ESmvScreen::Hangar))];
@@ -1189,9 +1211,10 @@ TSharedRef<SWidget> SSmvShell::Menu()
 	Grid->AddSlot(2, 1)[Tile(Tx(TEXT("menu.logbook")), Tx(TEXT("menu.logbook_sub")), ESmvIcon::Replay, 0xfb923c, Go(ESmvScreen::Logbook))];
 
 	TSharedRef<SHorizontalBox> Small = SNew(SHorizontalBox);
-	auto Sm = [&Small](const FText& T, ESmvIcon I, TFunction<void()> Fn, bool bDanger = false)
+	int32 SmN = 0;
+	auto Sm = [&Small, &SmN](const FText& T, ESmvIcon I, TFunction<void()> Fn, bool bDanger = false)
 	{
-		Small->AddSlot().AutoWidth().Padding(0, 0, 10, 0)[SNew(SSmvButton).Kind(bDanger ? ESmvBtn::Ghost : ESmvBtn::Normal).Icon(I).Text(T).OnClick(Fn)];
+		Small->AddSlot().AutoWidth().Padding(0, 0, 10, 0)[SNew(SSmvButton).Kind(bDanger ? ESmvBtn::Ghost : ESmvBtn::Normal).Icon(I).Text(T).OnClick(Fn).IntroDelay(0.6f + 0.04f * (SmN++))];
 	};
 	Sm(Tx(TEXT("menu.top10")), ESmvIcon::Trophy, Go(ESmvScreen::Leaderboard));
 	Sm(Tx(TEXT("menu.settings")), ESmvIcon::Gear, Go(ESmvScreen::Settings));
@@ -1312,7 +1335,9 @@ TSharedRef<SWidget> SSmvShell::Menu()
 			]
 			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 			[
-				SmvUi::Text(Self->Scene() && Self->Scene()->IsLive() ? Tx(TEXT("menu.live_proc")) : Tx(TEXT("menu.live_off")), 11, "Regular", Dim(), false)
+				SmvUi::Text(Self->Scene() && Self->Scene()->IsLive()
+					? FSmvI18n::Format(TEXT("menu.live_map"), { { TEXT("map"), Self->Scene()->GetMapName().IsEmpty() ? FSmvI18n::T(TEXT("menu.live_proc_map")).ToString() : Self->Scene()->GetMapName().ToString() } })
+					: Tx(TEXT("menu.live_off")), 11, "Regular", Dim(), false)
 			]
 		]
 	];
@@ -1767,7 +1792,7 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.ground")), Spin(&EditTrack.GroundMsl, -10000, 8000, 1))];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.radius")), Slider(&EditTrack.RadiusM, 200, 5000, 50, Mfmt))];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.world")), Chips(&EditTrack.WorldMode, { TEXT("procedural"), TEXT("real"), TEXT("google3d") },
-		{ Tx(TEXT("world.procedural")), Tx(TEXT("world.real")), Tx(TEXT("world.google3d")) }, { ESmvIcon::Map, ESmvIcon::Globe, ESmvIcon::Globe }, Re))];
+		{ Tx(TEXT("world.procedural")), Tx(TEXT("world.real")), Tx(TEXT("world.google3d")) }, { ESmvIcon::Map, ESmvIcon::Globe, ESmvIcon::Globe }, Re, 2))];   // dar sütun: 2 + 1 (taşıyordu)
 	Ed->AddSlot().AutoHeight().Padding(0, 14, 0, 6)[Section(Tx(TEXT("tracks.env")), Warn())];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.time")), Chips(&EditTrack.TimeOfDay, { TEXT("day"), TEXT("dusk"), TEXT("night") },
 		{ Tx(TEXT("time.day")), Tx(TEXT("time.dusk")), Tx(TEXT("time.night")) }, { ESmvIcon::Sun, ESmvIcon::Sunset, ESmvIcon::Moon }))];
@@ -2318,12 +2343,13 @@ TSharedRef<SWidget> SSmvShell::Wizard()
 		.OnClick([Self, N]() { if (Self->WizStep >= N - 1) Self->StartFromWizard(); else { Self->WizStep++; Self->Refresh(); } });
 	if (!DefaultFocus.IsValid()) DefaultFocus = Next;
 	TSharedRef<SWidget> Footer = SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Icon(ESmvIcon::Prev).Text(Tx(TEXT("tut.prev"))).IsEnabled(WizStep > 0).OnClick([Self]() { Self->WizStep = FMath::Max(0, Self->WizStep - 1); Self->Refresh(); })]
+		// son adımda "Başlat" büyük karttır: Geri düğmesi onunla birlikte dikey uzamasın (alta hizalı)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom)[SNew(SSmvButton).Icon(ESmvIcon::Prev).Text(Tx(TEXT("tut.prev"))).IsEnabled(WizStep > 0).OnClick([Self]() { Self->WizStep = FMath::Max(0, Self->WizStep - 1); Self->Refresh(); })]
 		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).HAlign(HAlign_Center)
 		[
 			SmvUi::Text(FText::FromString(Self->Flow->ValidateDraft()), 12, "Bold", Warn(), false)
 		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 10, 0)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(0, 0, 10, 0)
 		[
 			WizStep < N - 1 ? AsW<SSmvButton>(SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Play).Text(Tx(TEXT("wiz.quick"))).OnClick([Self]() { Self->StartFromWizard(); })) : SNullWidget::NullWidget
 		]
@@ -3335,7 +3361,13 @@ TSharedRef<SWidget> SSmvShell::Logbook()
 							SmvUi::Text(FSmvI18n::T(FString(TEXT("result.")) + S.Result), 11, "Bold", C, false)
 						]
 					]
-					+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(FText::FromString(S.FlightId), 12, "Regular", Fg(), false)]
+					// "araç · parkur" + tarih (eski kayıtlarda yalnız kimlik)
+					+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(S.Label.IsEmpty() ? S.FlightId : S.Label), 12, "Bold", Fg(), false)]
+						+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(S.When.IsEmpty() ? (S.Label.IsEmpty() ? FString() : S.FlightId) : S.When), 10, "Regular", Mute(), false)]
+					]
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%02d:%02d"), (int32)S.DurationS / 60, (int32)S.DurationS % 60)), 13, "Bold", Fg(), false)]
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%.2f km"), S.DistM / 1000.0)), 13, "Bold", Fg(), false)]
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0)[SmvUi::Text(FText::FromString(S.AlertScore >= 0 ? FString::Printf(TEXT("%s %d"), *S.AlertGrade, S.AlertScore) : FString(TEXT("—"))), 13, "Bold", Accent(), false)]
@@ -4436,25 +4468,37 @@ void SSmvShell::TickSmoke()
 	static const bool bSmoke = FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke"));
 	if (!bSmoke || !Flow.IsValid()) return;
 	const double Now = FPlatformTime::Seconds();
-	if (SmokeStep < 0) { SmokeStep = 0; SmokeAt = Now + 6.0; LogoAt = -100.0; FSmvUiPrefs::Get().bTutorialDone = true; FSmvUiPrefs::Get().bFlightTipsDone = true; if (bOverlay) CloseOverlay(); return; }
+	// -SmvSmokeLang=tr: arayüz dili (Türkçe tur; görüntüler Screenshots/Smoke_tr) · -SmvSmokeFlights=N: uçuş sayısı (0–3)
+	static FString SmokeLang;
+	static const bool bLang = FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeLang="), SmokeLang) && !SmokeLang.IsEmpty();
+	static int32 NFlights = -1;
+	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 3); }
+	if (SmokeStep < 0)
+	{
+		SmokeStep = 0; SmokeAt = Now + 12.0; LogoAt = -100.0;
+		FSmvUiPrefs::Get().bTutorialDone = true; FSmvUiPrefs::Get().bFlightTipsDone = true;
+		if (bLang) { FSmvI18n::SetLanguage(SmokeLang); Refresh(); UE_LOG(LogTemp, Display, TEXT("SMOKE lang %s"), *SmokeLang); }
+		if (bOverlay) CloseOverlay();
+		return;
+	}
 	if (Now < SmokeAt) return;
-	struct FStep { ESmvScreen Screen; int32 Wiz, Tab, Log; const TCHAR* Name; };
+	struct FStep { ESmvScreen Screen; int32 Wiz, Tab, Log; const TCHAR* Name; float Wait; };
 	static const FStep Steps[] = {
-		{ ESmvScreen::Menu, -1, -1, -1, TEXT("01_menu") }, { ESmvScreen::FlyMode, -1, -1, -1, TEXT("02_flymode") }, { ESmvScreen::Hangar, -1, -1, -1, TEXT("03_hangar") },
-		{ ESmvScreen::Crew, -1, -1, -1, TEXT("04_crew") }, { ESmvScreen::Tracks, -1, -1, -1, TEXT("05_tracks") }, { ESmvScreen::Missions, -1, -1, -1, TEXT("06_missions") },
-		{ ESmvScreen::Wizard, 0, -1, -1, TEXT("07_wiz0") }, { ESmvScreen::Wizard, 1, -1, -1, TEXT("07_wiz1") }, { ESmvScreen::Wizard, 2, -1, -1, TEXT("07_wiz2") },
-		{ ESmvScreen::Wizard, 3, -1, -1, TEXT("07_wiz3") }, { ESmvScreen::Wizard, 4, -1, -1, TEXT("07_wiz4") }, { ESmvScreen::Wizard, 5, -1, -1, TEXT("07_wiz5") },
-		{ ESmvScreen::Wizard, 6, -1, -1, TEXT("07_wiz6") }, { ESmvScreen::Wizard, 7, -1, -1, TEXT("07_wiz7") },
-		{ ESmvScreen::Settings, -1, 0, -1, TEXT("08_set0") }, { ESmvScreen::Settings, -1, 1, -1, TEXT("08_set1") }, { ESmvScreen::Settings, -1, 2, -1, TEXT("08_set2") },
-		{ ESmvScreen::Settings, -1, 3, -1, TEXT("08_set3") }, { ESmvScreen::Settings, -1, 4, -1, TEXT("08_set4") }, { ESmvScreen::Settings, -1, 5, -1, TEXT("08_set5") },
-		{ ESmvScreen::Settings, -1, 6, -1, TEXT("08_set6") }, { ESmvScreen::Logbook, -1, -1, 0, TEXT("09_logbook") }, { ESmvScreen::Logbook, -1, -1, 1, TEXT("09_achievements") },
-		{ ESmvScreen::Replay, -1, -1, -1, TEXT("10_replay") }, { ESmvScreen::Leaderboard, -1, -1, -1, TEXT("11_top10") }, { ESmvScreen::Account, -1, -1, -1, TEXT("12_account") },
-		{ ESmvScreen::Support, -1, -1, -1, TEXT("13_support") }, { ESmvScreen::FpvGallery, -1, -1, -1, TEXT("14_fpv") }, { ESmvScreen::Lobby, -1, -1, -1, TEXT("15_lobby") },
+		{ ESmvScreen::Menu, -1, -1, -1, TEXT("01_menu"), 3.5f }, { ESmvScreen::FlyMode, -1, -1, -1, TEXT("02_flymode"), 2.5f }, { ESmvScreen::Hangar, -1, -1, -1, TEXT("03_hangar"), 7.f },
+		{ ESmvScreen::Crew, -1, -1, -1, TEXT("04_crew"), 4.f }, { ESmvScreen::Tracks, -1, -1, -1, TEXT("05_tracks"), 3.f }, { ESmvScreen::Missions, -1, -1, -1, TEXT("06_missions"), 2.5f },
+		{ ESmvScreen::Wizard, 0, -1, -1, TEXT("07_wiz0"), 3.f }, { ESmvScreen::Wizard, 1, -1, -1, TEXT("07_wiz1"), 2.5f }, { ESmvScreen::Wizard, 2, -1, -1, TEXT("07_wiz2"), 2.5f },
+		{ ESmvScreen::Wizard, 3, -1, -1, TEXT("07_wiz3"), 2.5f }, { ESmvScreen::Wizard, 4, -1, -1, TEXT("07_wiz4"), 2.5f }, { ESmvScreen::Wizard, 5, -1, -1, TEXT("07_wiz5"), 2.5f },
+		{ ESmvScreen::Wizard, 6, -1, -1, TEXT("07_wiz6"), 2.5f }, { ESmvScreen::Wizard, 7, -1, -1, TEXT("07_wiz7"), 2.5f },
+		{ ESmvScreen::Settings, -1, 0, -1, TEXT("08_set0"), 2.5f }, { ESmvScreen::Settings, -1, 1, -1, TEXT("08_set1"), 2.5f }, { ESmvScreen::Settings, -1, 2, -1, TEXT("08_set2"), 2.5f },
+		{ ESmvScreen::Settings, -1, 3, -1, TEXT("08_set3"), 2.5f }, { ESmvScreen::Settings, -1, 4, -1, TEXT("08_set4"), 2.5f }, { ESmvScreen::Settings, -1, 5, -1, TEXT("08_set5"), 2.5f },
+		{ ESmvScreen::Settings, -1, 6, -1, TEXT("08_set6"), 2.5f }, { ESmvScreen::Logbook, -1, -1, 0, TEXT("09_logbook"), 2.5f }, { ESmvScreen::Logbook, -1, -1, 1, TEXT("09_achievements"), 2.5f },
+		{ ESmvScreen::Replay, -1, -1, -1, TEXT("10_replay"), 2.5f }, { ESmvScreen::Leaderboard, -1, -1, -1, TEXT("11_top10"), 2.5f }, { ESmvScreen::Account, -1, -1, -1, TEXT("12_account"), 2.5f },
+		{ ESmvScreen::Support, -1, -1, -1, TEXT("13_support"), 2.5f }, { ESmvScreen::FpvGallery, -1, -1, -1, TEXT("14_fpv"), 2.5f }, { ESmvScreen::Lobby, -1, -1, -1, TEXT("15_lobby"), 2.5f },
 	};
 	const int32 NS = UE_ARRAY_COUNT(Steps);
-	const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots/Smoke"));
+	const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke"))));
 	auto Shot = [&Dir](const FString& Name) { FScreenshotRequest::RequestScreenshot(Dir / (Name + TEXT(".png")), true, false); UE_LOG(LogTemp, Display, TEXT("SMOKE shot %s"), *Name); };
-	// adımlar: tek sayılı yarım adım = ekranı aç, çift = görüntü al
+	// ekranlar: çift yarım adım = ekranı aç, tek = görüntü al
 	const int32 I = SmokeStep / 2;
 	if (I < NS)
 	{
@@ -4467,24 +4511,69 @@ void SSmvShell::TickSmoke()
 			if (Flow->GetScreen() != S.Screen) Flow->SetScreen(S.Screen);
 			else Refresh();
 			if (S.Wiz >= 0 || S.Tab >= 0) Refresh();
-			SmokeAt = Now + 2.5;
+			SmokeAt = Now + S.Wait;
 		}
 		else { Shot(S.Name); SmokeAt = Now + 1.0; }
 		++SmokeStep;
 		return;
 	}
-	// uçuş: sihirbazdan başlat (yerel SITL), 18 sn bekle, iki görüntü, duraklat, bitir, özet
-	const int32 F = SmokeStep - NS * 2;
-	switch (F)
+	// uçuşlar (yerel SITL): Fab haritası + saat/hava; yer → kalkış (GPS/EKF hazır olunca kuyruktan) → ~10 m askı → (ilk uçuşta FPV/HUD, duraklatma, özet)
+	// Not: ekran görüntüsü sonraki karede çizilir — görüntü ile durum değiştiren eylem aynı adımda yapılmaz.
+	struct FFl { const TCHAR* Map; const TCHAR* Tod; const TCHAR* Wx; const TCHAR* Code; bool bFull; };
+	static const FFl Fls[] = {
+		{ TEXT("orman"), TEXT("dusk"), TEXT("rain"), TEXT("f1"), true },
+		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f2"), false },
+		{ TEXT("sehir"), TEXT("day"), TEXT("cloudy"), TEXT("f3"), false },
+	};
+	if (SmokeFl >= NFlights)
 	{
-	case 0: StartFromWizard(); SmokeAt = Now + 25.0; break;
-	case 1: Shot(TEXT("20_flight_a")); if (GameMode.IsValid()) GameMode->UiAction(TEXT("Takeoff"), FString()); SmokeAt = Now + 12.0; break;
-	case 2: Shot(TEXT("21_flight_b")); if (GameMode.IsValid()) GameMode->UiAction(TEXT("CamCycle"), FString()); SmokeAt = Now + 4.0; break;
-	case 3: Shot(TEXT("22_flight_cam")); if (GameMode.IsValid()) GameMode->TogglePause(); SmokeAt = Now + 2.5; break;
-	case 4: Shot(TEXT("23_pause")); SmokeAt = Now + 1.5; break;
-	case 5: if (GameMode.IsValid()) GameMode->TogglePause(); Flow->EndFlight(TEXT("user")); SmokeAt = Now + 8.0; break;
-	case 6: Shot(TEXT("24_summary")); SmokeAt = Now + 2.0; break;
-	default: UE_LOG(LogTemp, Display, TEXT("SMOKE done")); FPlatformMisc::RequestExit(false); SmokeAt = Now + 100.0; break;
+		UE_LOG(LogTemp, Display, TEXT("SMOKE done"));
+		FPlatformMisc::RequestExit(false);
+		SmokeAt = Now + 100.0;
+		return;
 	}
-	++SmokeStep;
+	const FFl& Fx = Fls[SmokeFl];
+	const FString Base = FString::Printf(TEXT("%d_%s"), 20 + SmokeFl * 5, Fx.Code);
+	float Alt = 0.f; bool bArmed = false; int32 Ready = -1;
+	const bool bTele = GameMode.IsValid() && GameMode->SmokeTele(Alt, bArmed, Ready);
+	switch (SmokeSub)
+	{
+	case 0:
+	{
+		if (Flow->GetScreen() != ESmvScreen::Menu && Flow->GetScreen() != ESmvScreen::Wizard) { Flow->SetScreen(ESmvScreen::Menu); SmokeAt = Now + 3.0; return; }
+		if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Fx.Map)) Flow->Draft.Track = FSmvFabContent::MakeTrack(*M);
+		else UE_LOG(LogTemp, Display, TEXT("SMOKE map %s yok — varsayılan parkur"), Fx.Map);
+		Flow->Draft.Track.TimeOfDay = Fx.Tod;
+		Flow->Draft.Track.Weather = Fx.Wx;
+		Flow->Draft.bHasMission = false;
+		UE_LOG(LogTemp, Display, TEXT("SMOKE flight %s map=%s tod=%s wx=%s"), Fx.Code, *Flow->Draft.Track.WorldMode, Fx.Tod, Fx.Wx);
+		StartFromWizard();
+		SmokeDeadline = Now + 90.0; SmokeAt = Now + 5.0; ++SmokeSub;
+		return;
+	}
+	case 1:
+		// bağlantı ve ilk tele bekle; sahne (harita akışı, gök) otursun
+		if (!bTele && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
+		SmokeAt = Now + 8.0; ++SmokeSub; return;
+	case 2: Shot(Base + TEXT("_ground")); SmokeAt = Now + 0.8; ++SmokeSub; return;
+	case 3:
+		UE_LOG(LogTemp, Display, TEXT("SMOKE takeoff (pos_ready=%d)"), Ready);
+		if (GameMode.IsValid()) GameMode->UiAction(TEXT("Takeoff"), FString());
+		SmokeDeadline = Now + 75.0; SmokeAt = Now + 1.0; ++SmokeSub; return;
+	case 4:
+		if (Alt < 8.5f && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
+		UE_LOG(LogTemp, Display, TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);
+		SmokeAt = Now + 4.0; ++SmokeSub; return;
+	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.bFull ? 6 : 11; return;
+	case 6: if (GameMode.IsValid()) GameMode->UiAction(TEXT("CamCycle"), FString()); SmokeAt = Now + 3.0; ++SmokeSub; return;
+	case 7: Shot(Base + TEXT("_fpv")); SmokeAt = Now + 0.8; ++SmokeSub; return;
+	case 8: if (GameMode.IsValid()) GameMode->TogglePause(); SmokeAt = Now + 2.0; ++SmokeSub; return;
+	case 9: Shot(TEXT("23_pause")); SmokeAt = Now + 0.8; ++SmokeSub; return;
+	case 10: if (GameMode.IsValid()) GameMode->TogglePause(); SmokeAt = Now + 1.0; ++SmokeSub; return;
+	case 11:
+		UE_LOG(LogTemp, Display, TEXT("SMOKE end %s alt=%.1f"), Fx.Code, Alt);
+		Flow->EndFlight(TEXT("user")); SmokeAt = Now + 8.0; ++SmokeSub; return;
+	case 12: if (Fx.bFull) Shot(TEXT("24_summary")); SmokeAt = Now + 1.5; ++SmokeSub; return;
+	default: ++SmokeFl; SmokeSub = 0; SmokeAt = Now + 0.5; return;
+	}
 }

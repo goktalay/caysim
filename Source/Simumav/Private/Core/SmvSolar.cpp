@@ -118,6 +118,8 @@ namespace SmvCore
 		auto Wrap = [](double H) { H = std::fmod(H, 24.0); return H < 0 ? H + 24.0 : H; };
 		if (Tod && std::strcmp(Tod, "night") == 0) return bNormal ? Wrap(D.Sunset + 2.5) : 23.0;
 		if (Tod && std::strcmp(Tod, "dusk") == 0) return bNormal ? Wrap(D.Sunset - 20.0 / 60.0) : 19.5;
+		// altın saat: güneş batıdan ~8–10° yüksekte (ana menü sahnesi)
+		if (Tod && std::strcmp(Tod, "golden") == 0) return bNormal ? Wrap(D.Sunset - 75.0 / 60.0) : 17.0;
 		if (Tod && std::strcmp(Tod, "dawn") == 0) return bNormal ? Wrap(D.Sunrise + 10.0 / 60.0) : 6.0;
 		return bNormal ? Wrap(D.SolarNoon + 1.0) : 13.0;
 	}

@@ -273,6 +273,8 @@ void USmvFlow::HandleSummary(const FSmvFlightSummary& In)
 		return;
 	}
 	LastSummary = In;
+	if (LastSummary.Label.IsEmpty()) LastSummary.Label = LastRequest.Drone.Name + (LastRequest.Track.Name.IsEmpty() ? FString() : TEXT(" · ") + LastRequest.Track.Name);
+	if (LastSummary.When.IsEmpty()) LastSummary.When = FDateTime::Now().ToString(TEXT("%Y-%m-%d %H:%M"));
 	if (SummaryAugmenter) SummaryAugmenter(LastSummary);
 	DataObj->AddFlightRecord(LastSummary);
 	LastReplayFile = SmvReplay::Save(LastRequest, LastSummary, LastPath);

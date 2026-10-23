@@ -44,6 +44,9 @@ struct FSmvFlightUiState
 	float AltRel = 0, AltMsl = 0, Gs = 0, As = 0, Climb = 0, Throttle = 0, BattV = 0, BattPct = -1, Speedup = 1;
 	float DistHome = 0;
 	int32 GpsFix = 0, Sats = -1;
+	/** Konum hazırlığı: −1 bilinmiyor, 0 GPS/EKF bekleniyor, 1 hazır; kalkış/ARM kuyrukta */
+	int32 PosReady = -1;
+	bool bCmdQueued = false;
 	bool bFuel = false, bElec = false;
 	float FuelPct = 0, FuelL = 0, RangeKm = 0, ElecPct = 0, ElecV = 0, ElecW = 0, ElecMin = -1;
 	float MaxKmh = 80;              // hız kadranı ölçeği
@@ -97,6 +100,9 @@ public:
 	const FSmvFlightUiState& State() const { return St; }
 
 	void TogglePanel() { bPanel = !bPanel; }
+	/** HUD yerleşimi: sağ üst dron paneli / sol alt sanal kumanda açık mı */
+	bool IsPanelOpen() const { return bPanel; }
+	bool SticksShown() const { return bSticks; }
 	void ToggleSticks() { bSticks = !bSticks; }
 	void ToggleModeMenu();
 	bool IsRadialOpen() const { return bModeMenu; }

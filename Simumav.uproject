@@ -62,6 +62,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "Niagara",
+			"Enabled": true
+		},
+		{
 			"Name": "RawInput",
 			"Enabled": true,
 			"PlatformAllowList": [ "Win64" ]

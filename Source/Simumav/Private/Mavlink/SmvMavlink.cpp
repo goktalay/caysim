@@ -27,6 +27,7 @@ namespace SmvMav
 		{ MSG_DISTANCE_SENSOR, 85, 39 },
 		{ MSG_BATTERY_STATUS, 154, 54 },
 		{ MSG_WIND, 1, 12 },
+		{ MSG_EKF_STATUS_REPORT, 71, 26 },
 		{ MSG_HOME_POSITION, 104, 60 },
 		{ MSG_EXTENDED_SYS_STATE, 130, 2 },
 		{ MSG_STATUSTEXT, 83, 54 },
@@ -258,6 +259,13 @@ namespace SmvMav
 	{
 		FReader R(F.Payload); FExtendedSysState M;
 		M.VtolState = R.U8(); M.LandedState = R.U8();
+		return M;
+	}
+
+	FEkfStatus DecodeEkfStatus(const FFrame& F)
+	{
+		FReader R(F.Payload); FEkfStatus M;
+		M.VelVar = R.F32(); M.PosHVar = R.F32(); M.PosVVar = R.F32(); M.CompassVar = R.F32(); M.TerrainVar = R.F32(); M.Flags = R.U16();
 		return M;
 	}
 

@@ -701,6 +701,7 @@ void SSmvBackdrop::Construct(const FArguments& A)
 	bDrones = A._Drones;
 	bGrid = A._Grid;
 	Tint = A._Tint;
+	Cinematic = A._Cinematic;
 	SetVisibility(EVisibility::HitTestInvisible);
 }
 
@@ -753,6 +754,22 @@ int32 SSmvBackdrop::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FS
 	const float W = (float)Sz.X, H = (float)Sz.Y;
 	const float Op = FMath::Clamp(Opacity.Get(1.f), 0.f, 1.f);
 	const double T = Now();
+	if (Cinematic.Get(false))
+	{
+		// sol yarı: kartların okunması için koyu degrade (sağ yarı sahneye açık); alt kenarda hafif kararma; birkaç sıcak ışık zerresi
+		DrGradient(Out, L, G, FVector2D::ZeroVector, FVector2D(W * 0.66f, H), { { 0.f, Hex(0x050a16, 0.78f) }, { 0.55f, Hex(0x050a16, 0.52f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, false);
+		DrGradient(Out, L, G, FVector2D(0, H * 0.78f), FVector2D(W, H * 0.22f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, FLinearColor(0, 0, 0, 0.45f) } }, true);
+		for (int32 i = 0; i < 28; ++i)
+		{
+			const float x = W * (0.45f + 0.55f * SmvHash(i, 1));
+			const float Sp = 4.f + SmvHash(i, 2) * 10.f;
+			const float y = H - FMath::Fmod(SmvHash(i, 3) * H + (float)T * Sp, H);
+			const float Tw = 0.3f + 0.7f * (0.5f + 0.5f * FMath::Sin((float)T * (0.7f + SmvHash(i, 4)) + i));
+			const float R = 1.2f + SmvHash(i, 5) * 2.2f;
+			DrBox(Out, L + 1, G, FVector2D(x, y), FVector2D(R, R), Hex(0xffd59a).CopyWithNewOpacity(0.35f * Tw), Circle());
+		}
+		return L + 2;
+	}
 	// zemin degradesi
 	DrGradient(Out, L, G, FVector2D::ZeroVector, Sz, { { 0.f, Bg2().CopyWithNewOpacity(Op) }, { 0.55f, Bg().CopyWithNewOpacity(Op * 0.92f) }, { 1.f, Light() ? Hex(0xd8e2f3, Op) : Hex(0x04060c, Op) } }, true);
 	// ışık lekeleri
@@ -824,7 +841,8 @@ int32 SSmvBackdrop::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FS
 			const float x = (float)(-0.15 + 1.3 * U) * W;
 			const float y = H * (0.22f + 0.16f * d) + FMath::Sin((float)T * 0.6f + d) * H * 0.025f;
 			const float Tilt = 0.12f * FMath::Sin((float)T * 0.4f + d);
-			const float A = FMath::Clamp((float)FMath::Min(U, 1.0 - U) * 8.f, 0.f, 1.f) * (0.35f + 0.25f * Depth);
+			// içerik panellerinin arkasında dikkat dağıtmasın (yarı saydam satırlardan görünüyordu): sönük
+			const float A = FMath::Clamp((float)FMath::Min(U, 1.0 - U) * 8.f, 0.f, 1.f) * (0.18f + 0.14f * Depth);
 			SmvDroneSil(Out, L + 3, G, FVector2D(x, y), 14.f + 18.f * Depth, Tilt, A, T, d * 7);
 			// iz
 			DrGradient(Out, L + 3, G, FVector2D(x - 160.f * Depth, y - 1.f), FVector2D(140.f * Depth, 2.f),
@@ -936,7 +954,7 @@ void SSmvBackdrop::PaintScene(int32 S, FSlateWindowElementList& Out, int32 L, co
 		for (int32 i = 0; i < 3; ++i)
 		{
 			const float X = (float)FMath::Fmod(T * (40.0 + i * 25.0) + i * 500.0, (double)W + 200.0) - 100.f;
-			DrIcon(Out, L + 1, G, ESmvIcon::Plane, FVector2D(X, H * (0.2f + 0.15f * i)), 28.f + i * 8.f, Hex(0xcfe7ff, 0.3f), 2.f);
+			DrIcon(Out, L + 1, G, ESmvIcon::Plane, FVector2D(X, H * (0.2f + 0.15f * i)), 28.f + i * 8.f, Hex(0xcfe7ff, 0.12f), 2.f);
 		}
 		(void)A2;
 	}
@@ -953,7 +971,8 @@ void SSmvButton::Construct(const FArguments& A)
 	Selected = A._Selected;
 	AccentCol = A._Accent;
 	OnClick = A._OnClick;
-	BornAt = FPlatformTime::Seconds();
+	BornAt = FPlatformTime::Seconds() + FMath::Max(0.f, A._IntroDelay);
+	bSlideIn = A._IntroDelay > 0.f;
 	const bool bTile = Kind == ESmvBtn::Tile || Kind == ESmvBtn::Hero;
 	const int32 Fs = A._FontSize > 0 ? A._FontSize : (Kind == ESmvBtn::Hero ? 30 : bTile ? 17 : 13);
 	SSmvButton* Self = this;
@@ -1029,14 +1048,16 @@ void SSmvButton::Tick(const FGeometry& G, const double InNow, const float Dt)
 	PressA = FMath::Lerp(PressA, bPressed ? 1.f : 0.f, FMath::Clamp(Dt * 20.f, 0.f, 1.f));
 	FocusA = FMath::Lerp(FocusA, bNavFocus && (bCauseNav || PadActive()) ? 1.f : 0.f, K);
 	const float Gain = Kind == ESmvBtn::Hero ? 0.035f : Kind == ESmvBtn::Tile ? 0.04f : 0.02f;
-	const float Intro = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - BornAt) * 4.f, 0.f, 1.f);
+	const float Intro = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - BornAt) * (bSlideIn ? 2.6f : 4.f), 0.f, 1.f);
 	const float S = (1.f + Gain * HoverA - 0.03f * PressA) * FMath::Lerp(0.96f, 1.f, Intro);
+	// sıralı giriş: aşağıdan kayma (ease-out)
+	const float Slide = bSlideIn ? FMath::Pow(1.f - Intro, 3.f) * 26.f : 0.f;
 	// kart 3B eğilme (web en çok ±9°): fareye göre kayma (shear) ile perspektif hissi
 	const bool bTiltKind = (Kind == ESmvBtn::Tile || Kind == ESmvBtn::Hero) && !ReducedMotion();
 	TiltN = FMath::Lerp(TiltN, bTiltKind && bHover ? MouseN : FVector2D::ZeroVector, (double)K);
 	const float Tx = (float)TiltN.X * 0.035f, Ty = (float)TiltN.Y * 0.035f;
-	if (FMath::Abs(S - 1.f) > 0.0005f || FMath::Abs(Tx) + FMath::Abs(Ty) > 0.0005f)
-		SetRenderTransform(FSlateRenderTransform(FMatrix2x2f(S, -Ty * S, Tx * S, S), FVector2f(0.f, 0.f)));
+	if (FMath::Abs(S - 1.f) > 0.0005f || FMath::Abs(Tx) + FMath::Abs(Ty) > 0.0005f || Slide > 0.01f)
+		SetRenderTransform(FSlateRenderTransform(FMatrix2x2f(S, -Ty * S, Tx * S, S), FVector2f(0.f, Slide)));
 	else SetRenderTransform(TOptional<FSlateRenderTransform>());
 	SetRenderOpacity(FMath::Lerp(0.f, 1.f, Intro));
 }

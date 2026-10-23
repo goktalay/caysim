@@ -1968,11 +1968,12 @@ TSharedRef<SWidget> SSmvFlightUi::GtPanel()
 	auto HazirCol = [this](int32 Part) -> FLinearColor
 	{
 		// 0 kenar, 1 zemin, 2 yazı — hazir / ucusta / bilinmiyor / kayıt
-		const int32 K = St.bReplay ? 2 : !St.bTele ? 2 : St.bArmed ? 1 : 0;
-		static const FLinearColor Tab[3][3] = {
+		const int32 K = St.bReplay ? 2 : !St.bTele ? 2 : St.bArmed ? 1 : St.PosReady == 0 ? 3 : 0;
+		static const FLinearColor Tab[4][3] = {
 			{ FLinearColor::FromSRGBColor(FColor(76, 175, 80, 140)), FLinearColor::FromSRGBColor(FColor(76, 175, 80, 31)), FLinearColor::FromSRGBColor(FColor(0x8f, 0xe3, 0x9a)) },
 			{ FLinearColor::FromSRGBColor(FColor(90, 170, 255, 140)), FLinearColor::FromSRGBColor(FColor(90, 170, 255, 31)), FLinearColor::FromSRGBColor(FColor(0x9f, 0xca, 0xff)) },
-			{ FLinearColor::FromSRGBColor(FColor(140, 150, 160, 89)), FLinearColor::FromSRGBColor(FColor(6, 8, 9, 255)), FLinearColor::FromSRGBColor(FColor(0xc2, 0xcb, 0xd6)) } };
+			{ FLinearColor::FromSRGBColor(FColor(140, 150, 160, 89)), FLinearColor::FromSRGBColor(FColor(6, 8, 9, 255)), FLinearColor::FromSRGBColor(FColor(0xc2, 0xcb, 0xd6)) },
+			{ FLinearColor::FromSRGBColor(FColor(251, 191, 36, 140)), FLinearColor::FromSRGBColor(FColor(251, 191, 36, 31)), FLinearColor::FromSRGBColor(FColor(0xfc, 0xd3, 0x4d)) } };
 		return Tab[K][Part];
 	};
 	TSharedRef<SWidget> Ust = SNew(SHorizontalBox)
@@ -1991,6 +1992,13 @@ TSharedRef<SWidget> SSmvFlightUi::GtPanel()
 						if (St.bReplay) return FSmvI18n::T(TEXT("pn.replay"));
 						if (!St.bTele) return FSmvI18n::T(TEXT("pn.starting"));
 						if (St.bArmed) return FText::FromString(TEXT("ARMED · ") + FSmvI18n::T(St.bRover ? TEXT("pn.driving") : TEXT("pn.flying")).ToString());
+						if (St.PosReady == 0)
+						{
+							// GPS/EKF konum tahmini bekleniyor (ARM "Need Position Estimate" ile reddedilirdi); kalkış basıldıysa kuyrukta
+							const int32 Dots = 1 + (int32)FMath::Fmod(FPlatformTime::Seconds() * 2.0, 3.0);
+							return FText::FromString(FSmvI18n::T(TEXT("pn.preparing")).ToString() + FString::ChrN(Dots, TEXT('.'))
+								+ (St.bCmdQueued ? TEXT(" · ") + FSmvI18n::T(TEXT("pn.queued")).ToString() : FString()));
+						}
 						return FText::FromString(TEXT("DISARMED · ") + FSmvI18n::T(St.bRover ? TEXT("pn.ready_rover") : TEXT("pn.ready")).ToString());
 					})
 				]
@@ -2029,7 +2037,7 @@ TSharedRef<SWidget> SSmvFlightUi::GtPanel()
 	Tiles->AddSlot(1, 1)[GtTile(TEXT("mode"), Tx(TEXT("pn.t_mode")), [this]() { return St.Mode.IsEmpty() ? FString(TEXT("—")) : St.Mode; }, nullptr, nullptr, [this]() { ToggleModeMenu(); })];
 	Tiles->AddSlot(2, 1)[GtTile(TEXT("fan"), Tx(TEXT("pn.t_type")), [this]() { return St.ModeKind.ToUpper(); }, [this]() { return FString(St.bReplay ? TEXT("REPLAY") : TEXT("SITL")); }, [this]() { return Soluk; }, nullptr)];
 	Tiles->AddSlot(3, 1)[GtTile(TEXT("takeoff"), Tx(TEXT("pn.t_cmd")),
-		[this]() { return St.bRover ? FSmvI18n::T(TEXT("pn.c_hold")).ToString() : (St.bArmed && St.AltRel > 1.f ? FSmvI18n::T(TEXT("pn.c_land")).ToString() : FSmvI18n::T(TEXT("pn.c_takeoff")).ToString()); }, nullptr,
+		[this]() { return St.bRover ? FSmvI18n::T(TEXT("pn.c_hold")).ToString() : (St.bArmed && St.AltRel > 1.f ? FSmvI18n::T(TEXT("pn.c_land")).ToString() : St.bCmdQueued ? FSmvI18n::T(TEXT("pn.c_queued")).ToString() : FSmvI18n::T(TEXT("pn.c_takeoff")).ToString()); }, nullptr,
 		[this]() { return St.bArmed && St.AltRel > 1.f ? Uyari : Iyi; },
 		[this]()
 		{

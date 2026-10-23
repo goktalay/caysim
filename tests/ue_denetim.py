@@ -55,6 +55,7 @@ MOTOR = {
     'Engine/DirectionalLight.h': 'Engine', 'Engine/SkyLight.h': 'Engine',
     'Components/SynthComponent.h': 'AudioMixer',
     'ProceduralMeshComponent.h': 'ProceduralMeshComponent',
+    'NiagaraComponent.h': 'Niagara', 'NiagaraSystem.h': 'Niagara',
     'EnhancedInputComponent.h': 'EnhancedInput', 'EnhancedInputSubsystems.h': 'EnhancedInput', 'InputMappingContext.h': 'EnhancedInput',
     'InputAction.h': 'EnhancedInput', 'InputModifiers.h': 'EnhancedInput',
     'Blueprint/UserWidget.h': 'UMG',

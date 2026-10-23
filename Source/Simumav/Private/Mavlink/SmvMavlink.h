@@ -34,6 +34,7 @@ namespace SmvMav
 		MSG_DISTANCE_SENSOR = 132,
 		MSG_BATTERY_STATUS = 147,
 		MSG_WIND = 168,
+		MSG_EKF_STATUS_REPORT = 193,
 		MSG_HOME_POSITION = 242,
 		MSG_EXTENDED_SYS_STATE = 245,
 		MSG_STATUSTEXT = 253,
@@ -161,6 +162,8 @@ namespace SmvMav
 	struct FBatteryStatus { int32_t CurrentConsumed = -1, EnergyConsumed = -1; int16_t Temperature = 0; uint16_t Voltages[10] = {}; int16_t CurrentBattery = -1; uint8_t Id = 0; int8_t Remaining = -1; };
 	struct FWind { float Direction = 0, Speed = 0, SpeedZ = 0; };
 	struct FExtendedSysState { uint8_t VtolState = 0, LandedState = 0; };
+	/** EKF_STATUS_REPORT: varyanslar (normalleştirilmiş) + EKF_STATUS_FLAGS (0x10 POS_HORIZ_ABS, 0x80 CONST_POS_MODE, 0x400 UNINITIALIZED) */
+	struct FEkfStatus { float VelVar = 0, PosHVar = 0, PosVVar = 0, CompassVar = 0, TerrainVar = 0; uint16_t Flags = 0; };
 
 	FHeartbeat DecodeHeartbeat(const FFrame& F);
 	FSysStatus DecodeSysStatus(const FFrame& F);
@@ -177,6 +180,7 @@ namespace SmvMav
 	FBatteryStatus DecodeBatteryStatus(const FFrame& F);
 	FWind DecodeWind(const FFrame& F);
 	FExtendedSysState DecodeExtendedSysState(const FFrame& F);
+	FEkfStatus DecodeEkfStatus(const FFrame& F);
 
 	// ---- gönderilecek mesaj yükleri ----
 	std::vector<uint8_t> PackHeartbeatGcs();

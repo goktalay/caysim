@@ -62,6 +62,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|HUD") int32 FontSize = 13;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|HUD") bool bShowFlightPathVector = true;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|HUD") bool bShowCornerFrames = true;
+	/** Üstte başka arayüz katmanı olan bölgeler (px): sol alt blok sağa (sanal kumanda), sağ bloklar sola (dron paneli) kaydırılır */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|HUD") float LeftInset = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|HUD") float RightInset = 0.f;
+	/** Uyarı etiketleri (dil): çarpışma, RC yok, batarya, GCS kesildi, alçak — boşsa Türkçe varsayılan */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|HUD") TArray<FString> WarnLabels;
 
 protected:
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,

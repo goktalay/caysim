@@ -52,5 +52,7 @@ private:
 	FVector ThumbL0 = FVector::ZeroVector, ThumbR0 = FVector::ZeroVector;
 	/** Parça: şekil 0 küp, 1 silindir, 2 küre, 3 koni; konum/ölçek cm (ebeveyne göre) */
 	UStaticMeshComponent* Part(USceneComponent* Parent, int32 Shape, const FVector& Pos, const FVector& SizeCm, const FLinearColor& Color, const FRotator& Rot = FRotator::ZeroRotator);
+	/** Parça malzemesi: pürüzlülük / metaliklik / ışıma (kask, vizör, kayış, toka). Rot verilirse parça döndürülür. */
+	static UStaticMeshComponent* Mat(UStaticMeshComponent* C, float Rough, float Metal, const FLinearColor& Emissive = FLinearColor::Black, const FRotator& Rot = FRotator::ZeroRotator);
 	void Clear();
 };

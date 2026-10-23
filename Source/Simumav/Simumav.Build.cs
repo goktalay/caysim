@@ -51,7 +51,9 @@ public class Simumav : ModuleRules
 			"ImageWrapper",
 			"Projects",
 			// Fab dron gövdesi /Game/Fab/Drone altında adı bilinmeden aranır (SmvFabContent)
-			"AssetRegistry"
+			"AssetRegistry",
+			// ana menü sahnesi: motor Niagara şablonundan kopyalanan ışık zerreleri (/Game/Simumav/FX/NS_SmvMotes; yoksa atlanır)
+			"Niagara"
 		});
 
 		// Steam başlatma OnlineSubsystemSteam eklentisiyle yapılır (DefaultEngine.ini); modül yalnız OSS arayüzlerini kullanır.
