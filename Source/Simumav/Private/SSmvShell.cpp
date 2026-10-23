@@ -516,7 +516,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 			if (Built == ESmvScreen::Tracks && Data()->Tracks().Num()) EditTrack = Data()->DefaultTrack() ? *Data()->DefaultTrack() : Data()->Tracks()[0];
 			if (Built == ESmvScreen::Leaderboard) Flow->FetchLeaderboard();
 			if (Built == ESmvScreen::Support) { Sup.OpenId.Empty(); Sup.Detail.Reset(); SupLoad(); }
-			if (Built == ESmvScreen::Replay) { RepList = SmvReplay::List(); RepLoaded.Empty(); RepSelect(0); }
+			if (Built == ESmvScreen::Replay) { RepList = SmvReplay::List(); RepLoaded.Empty(); RepSelect(FMath::Clamp(RepSel, 0, FMath::Max(0, RepList.Num() - 1))); }
 			if (Built == ESmvScreen::Wizard) WizStep = 0;
 			FSmvUiSound::Play(ESmvSnd::Open);
 		}
@@ -1198,6 +1198,37 @@ TSharedRef<SWidget> SSmvShell::Menu()
 	Sm(Tx(TEXT("menu.account")), ESmvIcon::User, Go(ESmvScreen::Account));
 	Sm(Tx(TEXT("menu.help")), ESmvIcon::Help, [Self]() { Self->ToggleHelp(); });
 	Sm(Tx(TEXT("support.help")), ESmvIcon::Info, Go(ESmvScreen::Support));
+	// son uçuşlar: en yeni 4 kayıt, rota küçük haritasıyla (tıkla → Kayıtlar)
+	TSharedRef<SVerticalBox> RecentRow = SNew(SVerticalBox);
+	{
+		MenuRecent = SmvReplay::List();
+		if (MenuRecent.Num() > 4) MenuRecent.SetNum(4);
+		if (MenuRecent.Num())
+		{
+			RecentRow->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("menu.recent")), Accent3())];
+			TSharedRef<SHorizontalBox> Hr = SNew(SHorizontalBox);
+			for (int32 i = 0; i < MenuRecent.Num(); ++i)
+			{
+				FSmvFlightRequest Rq;
+				FSmvReplayInfo Info;
+				if (!SmvReplay::Load(MenuRecent[i].File, Rq, MenuRecentFrames[i], &Info)) continue;
+				MenuRecent[i] = Info;
+				const FString When = Info.Created.Left(16).Replace(TEXT("T"), TEXT(" "));
+				Hr->AddSlot().AutoWidth().Padding(0, 0, 10, 0)
+				[
+					SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Accent3()).OnClick([F, Self, i]() { if (F.IsValid()) { Self->RepSel = i; F->SetScreen(ESmvScreen::Replay); } })
+					.Extra()
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight()[RouteMap(&MenuRecentFrames[i], 196.f, 92.f)]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 6, 0, 0)[SmvUi::Text(FText::FromString(Info.Drone + (Info.Track.IsEmpty() ? FString() : TEXT(" · ") + Info.Track)), 11, "Bold", Fg(), false)]
+						+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s · %02d:%02d · %.2f km"), *When, (int32)Info.DurationS / 60, (int32)Info.DurationS % 60, Info.DistM / 1000.0)), 9, "Regular", Dim(), false)]
+					]
+				];
+			}
+			RecentRow->AddSlot().AutoHeight()[Hr];
+		}
+	}
 	Sm(Tx(TEXT("menu.quit")), ESmvIcon::Power, [Self = this, G = GameMode]()
 	{
 		Self->Confirm(FSmvI18n::T(TEXT("dlg.quit_title")), FSmvI18n::T(TEXT("dlg.quit_body")), FSmvI18n::T(TEXT("dlg.yes_quit")), true,
@@ -1298,6 +1329,7 @@ TSharedRef<SWidget> SSmvShell::Menu()
 				+ SVerticalBox::Slot().AutoHeight().Padding(7, 0, 7, 7)[Hero]
 				+ SVerticalBox::Slot().AutoHeight()[Grid]
 				+ SVerticalBox::Slot().AutoHeight().Padding(7, 14, 0, 0)[Small]
+				+ SVerticalBox::Slot().AutoHeight().Padding(7, 22, 0, 0)[RecentRow]
 			]
 			+ SHorizontalBox::Slot().FillWidth(0.38f).VAlign(VAlign_Top).Padding(0, 20, 0, 0)
 			[

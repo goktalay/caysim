@@ -144,6 +144,9 @@ private:
 	TSharedPtr<class SSmvTileMap> TrackMap;
 	/** Kayıttan oynatma ekranı durumu */
 	TArray<FSmvReplayInfo> RepList;
+	/** Ana menü: son uçuşlar şeridi (rota küçük haritaları) */
+	TArray<FSmvReplayInfo> MenuRecent;
+	TArray<FSmvReplayFrame> MenuRecentFrames[4];
 	int32 RepSel = 0;
 	TArray<FSmvReplayFrame> RepFrames;
 	FSmvFlightRequest RepReq;

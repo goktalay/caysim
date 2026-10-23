@@ -1057,6 +1057,7 @@
  "menu.missions_sub": "Couloir, pulvérisation, relevé, FPV",
  "menu.pilot": "PILOTE",
  "menu.quit": "Déconnexion",
+ "menu.recent": "Vols récents",
  "menu.settings": "Paramètres",
  "menu.sitl_missing": "Fichiers SITL locaux introuvables — vérifiez les fichiers sur Steam ou connectez-vous et choisissez « Voler dans le cloud ».",
  "menu.sitl_ok": "Physique locale prête (ArduPilot SITL 4.7.2).",

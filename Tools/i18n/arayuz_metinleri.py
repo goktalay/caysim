@@ -551,4 +551,5 @@ U = {
  'spec.payload': ('Faydalı yük', 'Payload', 'Nutzlast', 'Charge utile', 'Carga útil', 'Полезная нагрузка', 'الحمولة'),
  'spec.physics': ('SITL fiziği', 'SITL physics', 'SITL-Physik', 'Physique SITL', 'Física SITL', 'Физика SITL', 'فيزياء SITL'),
  'spec.span': ('Açıklık', 'Span', 'Spannweite', 'Envergure', 'Envergadura', 'Размах', 'الباع'),
+ 'menu.recent': ('Son uçuşlar', 'Recent flights', 'Letzte Flüge', 'Vols récents', 'Vuelos recientes', 'Последние полёты', 'الرحلات الأخيرة'),
 }

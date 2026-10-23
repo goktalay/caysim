@@ -1057,6 +1057,7 @@
  "menu.missions_sub": "ممر، رش، مسح، FPV",
  "menu.pilot": "الطيار",
  "menu.quit": "تسجيل الخروج",
+ "menu.recent": "الرحلات الأخيرة",
  "menu.settings": "الإعدادات",
  "menu.sitl_missing": "ملفات SITL المحلية غير موجودة — تحقّق من ملفات اللعبة في Steam أو سجّل الدخول واختر «الطيران في السحابة».",
  "menu.sitl_ok": "الفيزياء المحلية جاهزة (ArduPilot SITL 4.7.2).",

@@ -1057,6 +1057,7 @@
  "menu.missions_sub": "Corredor, fumigación, levantamiento, FPV",
  "menu.pilot": "PILOTO",
  "menu.quit": "Cerrar sesión",
+ "menu.recent": "Vuelos recientes",
  "menu.settings": "Ajustes",
  "menu.sitl_missing": "Faltan los archivos SITL locales — verifica los archivos en Steam o inicia sesión y elige «Volar en la nube».",
  "menu.sitl_ok": "Física local lista (ArduPilot SITL 4.7.2).",

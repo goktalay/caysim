@@ -1057,6 +1057,7 @@
  "menu.missions_sub": "Коридор, опрыскивание, съёмка, FPV",
  "menu.pilot": "ПИЛОТ",
  "menu.quit": "Выйти",
+ "menu.recent": "Последние полёты",
  "menu.settings": "Настройки",
  "menu.sitl_missing": "Локальные файлы SITL не найдены — проверьте файлы игры в Steam или войдите и выберите «Полёт в облаке».",
  "menu.sitl_ok": "Локальная физика готова (ArduPilot SITL 4.7.2).",

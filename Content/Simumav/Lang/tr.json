@@ -1057,6 +1057,7 @@
  "menu.missions_sub": "Koridor, ilaçlama, tarama, FPV",
  "menu.pilot": "PİLOT",
  "menu.quit": "Çıkış",
+ "menu.recent": "Son uçuşlar",
  "menu.settings": "Ayarlar",
  "menu.sitl_missing": "Yerel SITL dosyaları bulunamadı — Steam'de oyun dosyalarını doğrula ya da giriş yapıp \"Bulutta uç\"u seç.",
  "menu.sitl_ok": "Yerel fizik hazır (ArduPilot SITL 4.7.2).",

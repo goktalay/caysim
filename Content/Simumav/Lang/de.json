@@ -1057,6 +1057,7 @@
  "menu.missions_sub": "Korridor, Sprühen, Vermessung, FPV",
  "menu.pilot": "PILOT",
  "menu.quit": "Abmelden",
+ "menu.recent": "Letzte Flüge",
  "menu.settings": "Einstellungen",
  "menu.sitl_missing": "Lokale SITL-Dateien fehlen — Spieldateien in Steam prüfen oder anmelden und „In der Cloud fliegen“ wählen.",
  "menu.sitl_ok": "Lokale Physik bereit (ArduPilot SITL 4.7.2).",
