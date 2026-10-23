@@ -580,10 +580,10 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 	{
 		// omuz kamerası (web shoulderCam): pilottan drona doğrultuda 1,05 m geri, 0,55 m sağ, göz + 0,18 m; drona bakar
 		if (!bHasPilot) { CamPos = Pos - Body.Vector() * 1200.f + FVector(0, 0, 300.f); CamRot = (Pos - CamPos).Rotation(); break; }
-		FVector D = Pos - PilotBase; D.Z = 0;
-		D = D.IsNearlyZero() ? FVector(1, 0, 0) : D.GetSafeNormal();
-		const FVector Rt = FVector::CrossProduct(FVector::UpVector, D).GetSafeNormal() * -1.0;
-		CamPos = PilotBase - D * 105.f + Rt * 55.f + FVector(0, 0, PilotEyeCm + 18.f);
+		FVector Dir = Pos - PilotBase; Dir.Z = 0;
+		Dir = Dir.IsNearlyZero() ? FVector(1, 0, 0) : Dir.GetSafeNormal();
+		const FVector Rt = FVector::CrossProduct(FVector::UpVector, Dir).GetSafeNormal() * -1.0;
+		CamPos = PilotBase - Dir * 105.f + Rt * 55.f + FVector(0, 0, PilotEyeCm + 18.f);
 		CamRot = FMath::RInterpTo(GetActorRotation(), (Pos - CamPos).Rotation(), Dt, 6.f);
 		break;
 	}
