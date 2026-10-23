@@ -89,7 +89,7 @@ namespace SmvCore
 			bHasT = true; TMs = T; PrevServo = Servo;
 			return Out;
 		}
-		const double Dt = (T - TMs) / 1000.0;
+		const double Dt = (double)(T - TMs) / 1000.0;
 		TMs = T;
 		if (Dt <= 0 || Dt > 5.0) { PrevServo = Servo; return Out; }
 		TimeS += Dt;

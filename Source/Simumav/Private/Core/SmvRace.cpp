@@ -81,7 +81,7 @@ namespace SmvCore
 		if (!Starts.empty())
 		{
 			for (const FStart& S : Starts) { Bx += S.X; By += S.Y; }
-			Bx /= Starts.size(); By /= Starts.size();
+			Bx /= (double)Starts.size(); By /= (double)Starts.size();
 		}
 		std::vector<FRing> Out;
 		double Px = Bx, Py = By;

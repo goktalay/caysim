@@ -25,3 +25,5 @@ Paketler/
 *.pak
 # Yerel sırlar
 Config/UserSecrets.ini
+# Yerel ArduPilot SITL ikilileri — CI/indirme betiği sha256 doğrulayarak getirir (Tools/sitl/sitl-indir.ps1)
+ThirdParty/ArduPilotSITL/Win64/

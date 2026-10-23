@@ -1,0 +1,88 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "Simulation",
+	"Description": "Simumav — Steam için Unreal Engine 5 dron uçuş simülatörü (simumav.com eşi; ArduPilot SITL fiziği). CAYSIM (HEPGO kurumsal istemcisi) aynı projede kalır.",
+	"Modules": [
+		{
+			"Name": "CaySim",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"UMG",
+				"HTTP",
+				"WebSockets",
+				"Json",
+				"JsonUtilities"
+			]
+		},
+		{
+			"Name": "Simumav",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"CaySim",
+				"OnlineSubsystem",
+				"AudioMixer",
+				"ProceduralMeshComponent"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "CesiumForUnreal",
+			"Enabled": true,
+			"Optional": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/87b0d05800a545d49bf858ef3458c4f7"
+		},
+		{
+			"Name": "OnlineSubsystem",
+			"Enabled": true
+		},
+		{
+			"Name": "OnlineSubsystemUtils",
+			"Enabled": true
+		},
+		{
+			"Name": "OnlineSubsystemSteam",
+			"Enabled": true
+		},
+		{
+			"Name": "SteamSockets",
+			"Enabled": true
+		},
+		{
+			"Name": "ProceduralMeshComponent",
+			"Enabled": true
+		},
+		{
+			"Name": "RawInput",
+			"Enabled": true,
+			"PlatformAllowList": [ "Win64" ]
+		},
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": true,
+			"TargetAllowList": [ "Editor" ]
+		},
+		{
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true,
+			"TargetAllowList": [ "Editor" ]
+		},
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [ "Editor" ]
+		},
+		{
+			"Name": "glTFRuntime",
+			"Enabled": false,
+			"Optional": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/glTFRuntime"
+		}
+	],
+	"TargetPlatforms": [ "Windows" ]
+}

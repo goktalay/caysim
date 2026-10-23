@@ -1,0 +1,120 @@
+# Simumav — Windows derleme / paketleme (şirket bilgisayarı: GitHub self-hosted runner, etiketler self-hosted,windows,unreal)
+# Güvenlik: depo özeldir; dış PR'lardan (fork) bu iş akışı ÇALIŞMAZ (aşağıdaki koşul + depo ayarı "Require approval for all outside collaborators").
+# Kurulum: docs/derleme-windows.md. Değişkenler (Settings → Secrets and variables → Actions):
+#   vars.UE_ROOT          ör. C:\Program Files\Epic Games\UE_5.8   (yoksa bu varsayılan)
+#   vars.STEAM_APP_ID     gerçek App ID (yoksa 480 = Spacewar geliştirme)
+#   vars.STEAM_DEPOT_ID   Windows depot kimliği (Steam yükleme için)
+#   secrets.STEAM_USERNAME, secrets.STEAM_CONFIG_VDF (base64; steamcmd oturum dosyası) — yoksa Steam yükleme adımı ATLANIR
+#   secrets.CESIUM_ION_TOKEN (isteğe bağlı; pakete gömülecek Cesium ion belirteci — yalnız Simumav uygulamasına kısıtlı belirteç kullanın)
+name: build-windows
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore: [ 'docs/**', '**.md' ]
+  workflow_dispatch:
+    inputs:
+      steam_upload:
+        description: "Steam'e yükle (beta dalı)"
+        type: boolean
+        default: false
+      steam_branch:
+        description: "Steam dalı (boş = varsayılan dala yükleme yapılmaz, yalnız beta)"
+        type: string
+        default: "beta"
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # fork PR'larından asla; yalnız bu depodaki push/manuel tetik
+    if: github.event_name != 'pull_request' && github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, unreal]
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      UE_ROOT: ${{ vars.UE_ROOT != '' && vars.UE_ROOT || 'C:\Program Files\Epic Games\UE_5.8' }}
+      STEAM_APP_ID: ${{ vars.STEAM_APP_ID != '' && vars.STEAM_APP_ID || '480' }}
+      ARCHIVE_DIR: ${{ github.workspace }}\Paketler
+    steps:
+      - name: Depoyu al (LFS dahil)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          clean: false
+
+      - name: Ortam denetimi
+        run: |
+          if (-not (Test-Path "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat")) { throw "Unreal Engine bulunamadı: $env:UE_ROOT (vars.UE_ROOT)" }
+          Write-Host "UE: $env:UE_ROOT"
+          git lfs version
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name, Used, Free
+
+      - name: Yerel ArduPilot SITL ikililerini indir ve doğrula (sha256)
+        run: pwsh -File Tools/sitl/sitl-indir.ps1
+
+      - name: Steam App ID / Cesium belirteci
+        env:
+          CESIUM_ION_TOKEN: ${{ secrets.CESIUM_ION_TOKEN }}
+        run: |
+          Set-Content -NoNewline -Path steam_appid.txt -Value $env:STEAM_APP_ID
+          (Get-Content Config/DefaultEngine.ini) -replace '^SteamDevAppId=.*', "SteamDevAppId=$env:STEAM_APP_ID" | Set-Content Config/DefaultEngine.ini
+          if ($env:CESIUM_ION_TOKEN) {
+            Add-Content Config/DefaultGame.ini "`r`n[/Script/CaySim.CaySimWorldSetup]`r`nCesiumIonToken=$env:CESIUM_ION_TOKEN"
+            Write-Host "Cesium ion belirteci pakete eklendi (değer yazdırılmadı)"
+          }
+
+      - name: Editor ikilileri (UBT)
+        run: |
+          & "$env:UE_ROOT\Engine\Build\BatchFiles\Build.bat" SimumavEditor Win64 Development -Project="$PWD\Simumav.uproject" -WaitMutex -NoHotReload
+          if ($LASTEXITCODE -ne 0) { throw "Editor derlemesi başarısız ($LASTEXITCODE)" }
+
+      - name: Varlıkları koddan üret (Editor Python, headless)
+        run: |
+          $env:SIMUMAV_EDITOR_ACIK = "0"
+          & "$env:UE_ROOT\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "$PWD\Simumav.uproject" -ExecutePythonScript="$PWD\Scripts\Python\simumav_varliklar.py" -unattended -nop4 -nosplash -NullRHI -stdout -FullStdOutLogOutput
+          if (-not (Test-Path "Content/Maps/SimumavMain.umap")) { throw "Harita üretilemedi (Content/Maps/SimumavMain.umap)" }
+
+      - name: Paketle — Development
+        run: |
+          & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -iostore -archive -archivedirectory="$env:ARCHIVE_DIR\Development" -utf8output -unattended
+          if ($LASTEXITCODE -ne 0) { throw "BuildCookRun Development başarısız ($LASTEXITCODE)" }
+
+      - name: Paketle — Shipping
+        run: |
+          & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Shipping -build -cook -stage -pak -iostore -prereqs -archive -archivedirectory="$env:ARCHIVE_DIR\Shipping" -utf8output -unattended -nodebuginfo
+          if ($LASTEXITCODE -ne 0) { throw "BuildCookRun Shipping başarısız ($LASTEXITCODE)" }
+          # Shipping'de Steam istemcisi uygulamayı kendi kimliğiyle başlatır; geliştirme testleri için steam_appid.txt paket köküne de konur
+          Copy-Item steam_appid.txt "$env:ARCHIVE_DIR\Shipping\Windows\" -Force
+
+      - name: Artefakt — Development
+        uses: actions/upload-artifact@v4
+        with:
+          name: Simumav-Win64-Development-${{ github.sha }}
+          path: Paketler/Development/Windows
+          retention-days: 7
+
+      - name: Artefakt — Shipping
+        uses: actions/upload-artifact@v4
+        with:
+          name: Simumav-Win64-Shipping-${{ github.sha }}
+          path: Paketler/Shipping/Windows
+          retention-days: 14
+
+      - name: Steam'e yükle (steamcmd + app_build vdf)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.steam_upload }}
+        env:
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_CONFIG_VDF: ${{ secrets.STEAM_CONFIG_VDF }}
+          STEAM_DEPOT_ID: ${{ vars.STEAM_DEPOT_ID }}
+          STEAM_BRANCH: ${{ inputs.steam_branch }}
+        run: |
+          if (-not $env:STEAM_USERNAME -or -not $env:STEAM_CONFIG_VDF -or -not $env:STEAM_DEPOT_ID -or $env:STEAM_APP_ID -eq '480') {
+            Write-Host "Steam yükleme ATLANDI: STEAM_USERNAME / STEAM_CONFIG_VDF sırları, STEAM_DEPOT_ID ve gerçek STEAM_APP_ID gerekli (docs/steam-yayin.md)."
+            exit 0
+          }
+          pwsh -File Tools/steam/steam-yukle.ps1 -AppId $env:STEAM_APP_ID -DepotId $env:STEAM_DEPOT_ID -Content "$env:ARCHIVE_DIR\Shipping\Windows" -Branch $env:STEAM_BRANCH -Desc "Simumav $env:GITHUB_SHA"

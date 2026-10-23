@@ -1,0 +1,26 @@
+{
+  "aciklama": "Simumav misafir kip fiziği: ArduPilot SITL Windows (cygwin) ikilileri — Mission Planner'ın kullandığı derlemeler. Sürüm SABİTLENİR; sha256 uyuşmazsa indirme REDDEDİLİR. Kaynak klasör (CopterStable) zamanla güncellenir → uyuşmazlıkta bu dosyayı yeni sürümle güncelleyin ya da dosyaları kendi deponuzda (ör. GitHub sürüm eki / R2) aynalayıp base_url'yi değiştirin.",
+  "surum": "4.7.2",
+  "git_commit": "fbd0a3160c90a557c24ce4c38c16975532652536",
+  "kaynak_kodu": "https://github.com/ArduPilot/ardupilot/tree/fbd0a3160c90a557c24ce4c38c16975532652536",
+  "lisans": "GPL-3.0-or-later (ArduPilot); cygwin1.dll LGPL-3.0; GCC çalışma zamanı kitaplıkları GPL-3.0 + GCC Runtime Library Exception; libiconv/libintl LGPL",
+  "base_url": "https://firmware.ardupilot.org/Tools/MissionPlanner/sitl/CopterStable/",
+  "olculdu": "2026-10-23",
+  "dosyalar": [
+    { "ad": "ArduCopter.elf", "hedef": "ArduCopter.exe", "boyut": 10960003, "sha256": "ab0dd325620501f91b24b1d55e20ad41750961c060bc67e306f7071e9f0b390c" },
+    { "ad": "ArduHeli.elf", "hedef": "ArduHeli.exe", "boyut": 10998538, "sha256": "c23edab9cb1ca183bf223544cd74eed3a24be667e03323df6bd6a08101ba0ad6" },
+    { "ad": "ArduPlane.elf", "hedef": "ArduPlane.exe", "boyut": 10941384, "sha256": "8efc03f8c72433ef19db028f0c59a62ff3b48a67b680d94bed084b5e19fb798c" },
+    { "ad": "ArduRover.elf", "hedef": "ArduRover.exe", "boyut": 10231529, "sha256": "286ee576d4c2138eecd9025b7630cd9137aba4d43753237657bfa410a7e09607" },
+    { "ad": "cygatomic-1.dll", "hedef": "cygatomic-1.dll", "boyut": 89614, "sha256": "87f4cf57db1befe777b3e22e3cc4e81b2dbcff386a587e7f3d265f706340bb15" },
+    { "ad": "cyggcc_s-1.dll", "hedef": "cyggcc_s-1.dll", "boyut": 111118, "sha256": "002738f3cf6e984a8454af4204dd55d65780664d0fca8b4971a8f1e6c85ccd73" },
+    { "ad": "cyggcc_s-seh-1.dll", "hedef": "cyggcc_s-seh-1.dll", "boyut": 142867, "sha256": "f9a352fa9215ceb9a35b67ef8c7f178906a9dcc40b3819182b63f93fecb4faea" },
+    { "ad": "cyggomp-1.dll", "hedef": "cyggomp-1.dll", "boyut": 159261, "sha256": "46b4dd8bbc76ea82b50ac3f70397cd295896e23ae4bf0a1a7a013769599bf00c" },
+    { "ad": "cygiconv-2.dll", "hedef": "cygiconv-2.dll", "boyut": 1104915, "sha256": "e433ab6680eb509b5395f637137775dacebbc6e1ed3b564474aa87f0ca35379a" },
+    { "ad": "cygintl-8.dll", "hedef": "cygintl-8.dll", "boyut": 108051, "sha256": "9d0c063a226965e61664bdd9b771b5d0ee16b5214720b6f0086868e04fe67cdc" },
+    { "ad": "cygquadmath-0.dll", "hedef": "cygquadmath-0.dll", "boyut": 509966, "sha256": "75c70089e945bb5530eff463391383d6edc125b0b992ea29769a71c371d8c88e" },
+    { "ad": "cygssp-0.dll", "hedef": "cygssp-0.dll", "boyut": 10766, "sha256": "d32da41f13052d0fe4ee3fa1be11823425a8a73d1979df5a4e55280539009133" },
+    { "ad": "cygstdc++-6.dll", "hedef": "cygstdc++-6.dll", "boyut": 2316819, "sha256": "a2d175169715f7fd69d40a581dc7c6502bc2bb75601b77a03baef6ce41da8f32" },
+    { "ad": "cygwin1.dll", "hedef": "cygwin1.dll", "boyut": 3245621, "sha256": "959048d1407074097af021708d87bdf5ac1a8f107ff963c8950cd6dc8f21afaf" },
+    { "ad": "git.txt", "hedef": "ARDUPILOT_GIT.txt", "boyut": 355, "sha256": "065caf05167599bb7c4e8ebe79fff3906c431b53c5024e8829cfc5794066e2d6" }
+  ]
+}

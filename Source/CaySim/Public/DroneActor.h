@@ -54,6 +54,14 @@ public:
 	/** Kayıttan oynatma: tamponu atlayıp doğrudan poz uygula. */
 	void ApplyPoseDirect(const FCaySimPose& Pose);
 
+	/** Zaman kaynağı (Unix sn, `tele.ts` ile aynı ölçek). Verilmezse HEPGO istemcisinin sunucu saati ya da yerel UTC kullanılır.
+	 *  Simumav: bulut uçuşunda sunucu saati tahmini, yerel SITL'de yerel UTC. */
+	void SetClockSource(TFunction<double()> InClock) { Clock = MoveTemp(InClock); }
+	/** Ham GLB baytlarını yükler (glTFRuntime varsa; yoksa yer tutucu kalır). Simumav model önbelleği kullanır. */
+	void LoadGlbBytes(const TArray<uint8>& Bytes) { LoadGlb(Bytes); }
+	/** Modelin dahili yer tutucu gövde ile mi çizildiği. */
+	bool IsUsingPlaceholder() const { return GltfActor == nullptr; }
+
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dron") FCaySimTelemetry GetLatestTelemetry() const { return Latest; }
 	/** Render edilen (enterpolasyonlu) yönelim — HUD bunu kullanır (web `sim.getPose()` karşılığı). */
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dron") void GetRenderedPose(float& RollRad, float& PitchRad, float& YawRad) const;
@@ -107,24 +115,28 @@ protected:
 	/** glTF'den yüklenen gövdenin kökü (glTFRuntime). */
 	UPROPERTY() TObjectPtr<AActor> GltfActor;
 
+	/** Yer tutucu gövde (alt sınıflar kendi gövdesini kurabilir — Simumav prosedürel gövde). */
+	virtual void BuildPlaceholder();
+	void BuildPlaceholderProps(int32 Count, float ArmM);
+	ECaySimDroneType DroneType = ECaySimDroneType::Multirotor;
+	float GroundOffsetM = 0.f; // gövde alt noktası (model sınır kutusu)
+
 private:
 	FTelemetryBuffer Buffer;
 	FCaySimTelemetry Latest;
 	FCaySimPose Rendered;
-	ECaySimDroneType DroneType = ECaySimDroneType::Multirotor;
 	FCaySimModelInfo Model;
+	TFunction<double()> Clock;
+	double NowSeconds() const;
 	TWeakObjectPtr<UHepgoClient> Hepgo;
 	TWeakObjectPtr<AActor> GeoActor;
 	ICaySimGeoTransform* Geo = nullptr;
 	bool bOnGround = true;
 	float PropPhase = 0.f;
-	float GroundOffsetM = 0.f; // gövde alt noktası (model sınır kutusu)
 
 	void ApplyPose(const FCaySimPose& Pose);
 	void AnimateProps(float Dt, float ThrottlePct, bool bArmed);
 	void AnimateSurfaces(const TArray<int32>& Rc);
-	void BuildPlaceholder();
-	void BuildPlaceholderProps(int32 Count, float ArmM);
 	void ApplyOrient(const FCaySimModelOrient& Orient);
 	void LoadGlb(const TArray<uint8>& Bytes);
 	static FVector AxisFromString(const FString& S);

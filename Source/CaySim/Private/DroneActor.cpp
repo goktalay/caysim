@@ -216,8 +216,7 @@ void ACaySimDroneActor::BuildPlaceholderProps(int32 Count, float ArmM)
 void ACaySimDroneActor::PushTelemetry(const FCaySimTelemetry& Tele)
 {
 	Latest = Tele;
-	const double LocalNow = Hepgo.IsValid() ? Hepgo->NowServer() : FPlatformTime::Seconds();
-	Buffer.Push(Tele, LocalNow);
+	Buffer.Push(Tele, NowSeconds());
 }
 
 void ACaySimDroneActor::ApplyPoseDirect(const FCaySimPose& Pose)
@@ -309,13 +308,18 @@ void ACaySimDroneActor::AnimateSurfaces(const TArray<int32>& Rc)
 	if (Rudder) Rudder->SetRelativeRotation(FRotator(0, Rud * SurfaceMaxDeg, 0));
 }
 
+double ACaySimDroneActor::NowSeconds() const
+{
+	if (Clock) return Clock();
+	return Hepgo.IsValid() ? Hepgo->NowServer() : UHepgoClient::LocalUnixNow();
+}
+
 void ACaySimDroneActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	if (!Buffer.IsEmpty())
 	{
-		const double Now = Hepgo.IsValid() ? Hepgo->NowServer() : FPlatformTime::Seconds();
-		ApplyPose(Buffer.Sample(Now));
+		ApplyPose(Buffer.Sample(NowSeconds()));
 	}
 	AnimateProps(DeltaSeconds, Rendered.Throttle, Latest.bArmed);
 	if (DroneType == ECaySimDroneType::FixedWing || DroneType == ECaySimDroneType::Vtol) AnimateSurfaces(Latest.Rc);

@@ -15,6 +15,15 @@ namespace SmvCore
 		// parm satırı: tam duyarlık (icept PARM 6+ basamak içerir; rover değerleri {:g} ile aynı çıkar)
 		char B[64];
 		std::snprintf(B, sizeof(B), "%.10g", V);
+		for (char* C = B; *C; ++C) if (*C == ',') *C = '.';   // ondalık virgüllü yerel ayar olsa da SITL nokta bekler
+		return B;
+	}
+
+	static std::string Fixed(double V, int N)
+	{
+		char B[64];
+		std::snprintf(B, sizeof(B), "%.*f", N, V);
+		for (char* C = B; *C; ++C) if (*C == ',') *C = '.';
 		return B;
 	}
 
@@ -62,7 +71,7 @@ namespace SmvCore
 		char Home[160];
 		double Yaw = std::fmod(S.HomeHeading, 360.0);
 		if (Yaw < 0) Yaw += 360.0;
-		std::snprintf(Home, sizeof(Home), "%.7f,%.7f,%.1f,%g", S.HomeLat, S.HomeLon, S.HomeAlt, Yaw);
+		std::snprintf(Home, sizeof(Home), "%s,%s,%s,%s", Fixed(S.HomeLat, 7).c_str(), Fixed(S.HomeLon, 7).c_str(), Fixed(S.HomeAlt, 1).c_str(), Num(Yaw).c_str());
 		// Tuzak C: --base-port, -I'dan önce; -I kullanılmaz
 		return { "--model", Model, "--home", Home, "--base-port", std::to_string(S.BasePort), "--defaults", DefaultsPath, "--sysid", std::to_string(S.SysId) };
 	}

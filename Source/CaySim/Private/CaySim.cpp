@@ -15,4 +15,5 @@ void FCaySimModule::ShutdownModule()
 	UE_LOG(LogCaySim, Log, TEXT("CaySim modülü kapatıldı"));
 }
 
-IMPLEMENT_PRIMARY_GAME_MODULE(FCaySimModule, CaySim, "CaySim");
+// Birincil oyun modülü artık Simumav; CaySim ortak çalışma zamanı modülüdür
+IMPLEMENT_MODULE(FCaySimModule, CaySim);
