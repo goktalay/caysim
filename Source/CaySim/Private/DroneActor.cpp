@@ -258,28 +258,33 @@ void ACaySimDroneActor::ApplyPose(const FCaySimPose& Pose)
 		Loc = bEnuXNorth ? FVector(Enu.Y, Enu.X, Enu.Z) * 100.0 : FVector(Enu.X, -Enu.Y, Enu.Z) * 100.0;
 	}
 
-	// Yer ile kesişmeyi engelle (gövde altı)
-	double Ground;
-	if (Geo && Geo->SampleGroundHeight(Pose.Lat, Pose.Lon, Ground))
-	{
-		const double Hw = Geo->MslToWorldHeight(Pose.Lat, Pose.Lon, Pose.AltMsl);
-		bOnGround = (Hw - Ground) < 0.5 + FMath::Abs(GroundOffsetM);
-		if (Hw + GroundOffsetM < Ground)
-		{
-			const FVector Lifted = Geo->GeoToUnreal(Pose.Lon, Pose.Lat, Ground - GroundOffsetM);
-			Loc = Lifted;
-		}
-	}
-	else
-	{
-		bOnGround = Pose.AltRel < 0.5 + FMath::Abs(GroundOffsetM);
-	}
-
 	const float Roll = bInvertRoll ? -Pose.Roll : Pose.Roll;
 	const float Pitch = bInvertPitch ? -Pose.Pitch : Pose.Pitch;
 	const FRotator Local = CaySimGeo::NedToUnrealRotator(Roll, Pitch, Pose.Yaw, bEnuXNorth);
 	// Cesium: yerel ENU çerçevesi dünya eğriliğiyle döner → önce ENU→Unreal, sonra gövde yönelimi
 	const FQuat WorldRot = EnuRot * Local.Quaternion();
+
+	// Konum çözümü: alt sınıf gerçek çarpışma sorgularıyla çözebilir (Simumav: gövde süpürmesi); yoksa yer kesişimi düzeltmesi
+	if (!ResolveRenderLocation(Pose, EnuRot, WorldRot, Loc))
+	{
+		// Yer ile kesişmeyi engelle (gövde altı)
+		double Ground;
+		if (Geo && Geo->SampleGroundHeight(Pose.Lat, Pose.Lon, Ground))
+		{
+			const double Hw = Geo->MslToWorldHeight(Pose.Lat, Pose.Lon, Pose.AltMsl);
+			bOnGround = (Hw - Ground) < 0.5 + FMath::Abs(GroundOffsetM);
+			if (Hw + GroundOffsetM < Ground)
+			{
+				const FVector Lifted = Geo->GeoToUnreal(Pose.Lon, Pose.Lat, Ground - GroundOffsetM);
+				Loc = Lifted;
+			}
+		}
+		else
+		{
+			bOnGround = Pose.AltRel < 0.5 + FMath::Abs(GroundOffsetM);
+		}
+	}
+
 	Root->SetWorldLocationAndRotation(Loc, WorldRot);
 }
 

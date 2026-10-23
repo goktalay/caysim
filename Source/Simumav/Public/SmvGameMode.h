@@ -1,6 +1,6 @@
 // Simumav oyun kipi — arayüz kabuğunu (SSmvShell) açar; akış Uçuş'a geçince sahneyi kurar: dünya (Cesium gerçek arazi / prosedürel),
 // dron, pilot piyonu, HUD, halkalar/kapılar, hedefler, yerel yarış botları ya da çevrim içi rakipler, uçuş uyarıları, ses; bağlantı
-// olaylarını dağıtır; çarpışmayı 3B dünyadan algılar (bina/su kesin, arazi aday — sunucu kuralı).
+// olaylarını dağıtır; çarpışmayı Unreal fizik sorgularıyla algılar (gövde süpürmesi, SmvPhysics) ve engel sensörlerini SITL'e iletir.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -31,6 +31,8 @@ class ASmvFpvCourseActor;
 class ASmvPilotFigure;
 class SSmvShell;
 class SWidget;
+struct FSmvContactEvent;
+class ULevel;
 namespace SmvCore { class FGpws; class FRingTracker; class FDogfight; class FBotPilot; struct FRing; }
 
 UCLASS()
@@ -194,7 +196,17 @@ private:
 	void UpdateRace(float Dt);
 	void UpdateTargets();
 	void UpdateHud();
-	void DetectCollision();
+	/** Gerçek fizik: dron gövde çözücüsünün temas olayları (çarpışma → SITL crash, sürtünme → olay), engel sensörleri → SITL, HUD yakınlık */
+	void TickPhysics(float Dt);
+	void HandleContact(const FSmvContactEvent& E);
+	/** Akışla gelen her seviye (Fab haritası, alt seviyeler, LevelInstance, şehir binaları): kapalı çarpışmaları aç + günlük */
+	void HandleLevelAdded(ULevel* Level, UWorld* InWorld);
+	FDelegateHandle LevelAddedHandle;
+	TArray<TWeakObjectPtr<ULevel>> PhysPreparedLevels;
+	void PreparePhysicsLevel(ULevel* Level);
+	double LastSensorAt = 0, LastGrazeEventAt = 0;
+	FString ProxLine;
+	int32 ProxLevel = 0;
 	void AugmentSummary(FSmvFlightSummary& S);
 	void PushEvent(const FString& Text, int32 Sev);
 	void FreeRace();

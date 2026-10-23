@@ -21,6 +21,7 @@ class UPoseableMeshComponent;
 class USmvMotorSynth;
 class UAudioComponent;
 class ICaySimGeoTransform;
+class FSmvContactSolver;
 
 UCLASS()
 class SIMUMAV_API ASmvDroneActor : public ACaySimDroneActor
@@ -42,9 +43,17 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	/** Fab dron gövdesi (skeletal) kullanılıyor mu. */
 	bool IsUsingFabBody() const { return FabMesh != nullptr || FabStatic != nullptr; }
+	/** Oyuncu dronu: gerçek çarpışma (UE fizik sorguları; SmvPhysics). Hayalet/rakip/hedef dronlarda kapalı kalır. */
+	void EnablePhysicsContact(bool bOn);
+	/** Çarpışma çözücüsü (kapalıysa null) — GameMode temas olaylarını buradan alır, yok sayılacak aktörleri buraya yazar. */
+	FSmvContactSolver* GetContactSolver() const { return Solver; }
+	/** Görünürlük ölçeği (gövde ×2,5; kara aracı ×1). */
+	float GetVisScale() const { return VisScale; }
+	virtual void BeginDestroy() override;
 
 protected:
 	virtual void BuildPlaceholder() override;
+	virtual bool ResolveRenderLocation(const FCaySimPose& Pose, const FQuat& EnuRot, const FQuat& WorldRot, FVector& InOutLoc) override;
 	/** Fab quad gövdesi (SmvFabContent::LoadDroneMesh); pervane kemikleri ARM'lıyken döner. */
 	UPROPERTY() TObjectPtr<UPoseableMeshComponent> FabMesh;
 	/** Fab gövdesi iskeletsizse (statik ağ) */
@@ -89,6 +98,10 @@ private:
 	float SynthShare = 1.f;
 	/** Yumuşatılmış gaz (Fab motor sesi perdesi) */
 	float EngineThr = 0.f;
+	/** Fizik çarpışma çözücüsü (ham işaretçi: tam tür yalnız .cpp'de; BeginDestroy'da silinir) */
+	FSmvContactSolver* Solver = nullptr;
+	/** Gövde çarpışma şekli: görünen gövdenin aktör uzayı sınırlarından kutu bileşimi (pervane diskleri dahil) */
+	void RebuildPhysicsShape();
 };
 
 UCLASS()

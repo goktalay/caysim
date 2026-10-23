@@ -34,6 +34,7 @@
 #include "SmvTargets.h"
 #include "SmvSitlConfig.h"
 #include "SmvFabContent.h"
+#include "SmvPhysics.h"
 #include "Engine/LevelStreamingDynamic.h"
 #include "Engine/Level.h"
 #include "Engine/DirectionalLight.h"
@@ -117,12 +118,15 @@ void ASmvGameMode::BeginPlay()
 		FSmvUiSound::SetSink([WG](int32 Kind) { if (WG.IsValid()) WG->PlayUiSound(Kind); });
 	}
 	ApplyUiPrefs();
+	// akışla gelen seviyeler (Fab haritası + alt seviyeler + LevelInstance + şehir binaları): kapalı çarpışmaları aç
+	LevelAddedHandle = FWorldDelegates::LevelAddedToWorld.AddUObject(this, &ASmvGameMode::HandleLevelAdded);
 	HandleScreen(Flow->GetScreen());
 }
 
 void ASmvGameMode::EndPlay(const EEndPlayReason::Type Reason)
 {
 	FSmvUiSound::SetSink(nullptr);
+	if (LevelAddedHandle.IsValid()) { FWorldDelegates::LevelAddedToWorld.Remove(LevelAddedHandle); LevelAddedHandle.Reset(); }
 	if (MenuScene) { MenuScene->Destroy(); MenuScene = nullptr; }
 	StopScene();
 	if (Flow.IsValid())
@@ -294,6 +298,9 @@ void ASmvGameMode::BuildScene()
 	Drone->SetGeoTransformActor(WorldSetup);
 	Drone->Setup(S, nullptr);
 	Drone->ConfigureVisual(Req.Drone.Type, Req.Drone.ModelKey, SmvColor(Req.Drone.Color));
+	// gerçek çarpışma: gövde şekli her karede SITL pozuna süpürülür (SmvPhysics); hayalet/hedef dronlarda kapalı
+	Drone->EnablePhysicsContact(true);
+	ProxLine.Reset(); ProxLevel = 0; LastSensorAt = 0; LastGrazeEventAt = 0;
 	TWeakObjectPtr<ASmvGameMode> Weak(this);
 	if (USmvFlightLink* L = Link())
 	{
@@ -829,7 +836,11 @@ void ASmvGameMode::HandleAction(FName A)
 	{
 		if (bMatch && Flow->GetMatch()->Current().Kind == TEXT("dogfight")) { HandleToast(FSmvI18n::T(TEXT("flight.no_reset_dogfight")).ToString(), 4); return; }
 		const double Now = FPlatformTime::Seconds();
-		if (Now - LastReset < 2.0) { Command(TEXT("reset")); bCrashed = false; LastReset = 0; }
+		if (Now - LastReset < 2.0)
+		{
+			Command(TEXT("reset")); bCrashed = false; LastReset = 0;
+			if (Drone && Drone->GetContactSolver()) Drone->GetContactSolver()->Reset();
+		}
 		else { LastReset = Now; HandleToast(FSmvI18n::T(TEXT("flight.reset_confirm")).ToString(), 4); }
 	}
 	else if (A == TEXT("SpeedUp") || A == TEXT("SpeedDown"))
@@ -887,7 +898,7 @@ void ASmvGameMode::Tick(float Dt)
 	if (!bScene) return;
 	if (EndAt > 0 && FPlatformTime::Seconds() >= EndAt) { EndAt = 0; if (Flow.IsValid()) Flow->EndFlight(EndReasonPending); }
 	if (VideoRec.IsValid() && VideoRec->IsOn()) VideoRec->Tick(Dt);
-	DetectCollision();
+	TickPhysics(Dt);
 	TickDebris(Dt);
 	UpdateRace(Dt);
 	UpdateTargets();
@@ -918,30 +929,114 @@ void ASmvGameMode::Tick(float Dt)
 	UpdateHud();
 }
 
-void ASmvGameMode::DetectCollision()
+// ---------------------------------------------------------------------------
+// gerçek fizik: temas olayları, engel sensörleri (SmvPhysics; docs/fizik-carpisma.md)
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::TickPhysics(float /*Dt*/)
 {
-	if (!Drone || bCrashed || !Link()) return;
-	const FVector Pos = Drone->GetActorLocation();
-	if (!bHasLastPos) { LastDronePos = Pos; bHasLastPos = true; return; }
-	const FCaySimTelemetry& T = Link()->LastTele();
-	const float Spd = FMath::Max(T.Groundspeed, FMath::Abs(T.Climb));
-	FHitResult Hit;
-	FCollisionQueryParams Q(TEXT("SmvCrash"), true, Drone);
-	for (const TObjectPtr<ASmvDroneActor>& G : Ghosts) Q.AddIgnoredActor(G);
-	for (const TObjectPtr<ASmvDroneActor>& G : TargetActors) Q.AddIgnoredActor(G);
-	static double LastSent = 0;
-	if (T.bArmed && Spd > 1.5f && FVector::DistSquared(Pos, LastDronePos) > 1.f
-		&& GetWorld()->LineTraceSingleByChannel(Hit, LastDronePos, Pos, ECC_Visibility, Q) && FPlatformTime::Seconds() - LastSent > 3.0)
+	FSmvContactSolver* Sol = Drone ? Drone->GetContactSolver() : nullptr;
+	if (!Sol) return;
+	// sorgularda yok sayılanlar: hayalet/rakip/hedef dronlar, 3B pilot, enkaz, pilot piyonu
+	TArray<TWeakObjectPtr<AActor>>& Ig = Sol->IgnoreList();
+	Ig.Reset();
+	for (const TObjectPtr<ASmvDroneActor>& G : Ghosts) if (G) Ig.Add(G.Get());
+	for (const TObjectPtr<ASmvDroneActor>& G : TargetActors) if (G) Ig.Add(G.Get());
+	for (const TObjectPtr<AActor>& Db : Debris) if (Db) Ig.Add(Db.Get());
+	if (PilotFigure) Ig.Add(PilotFigure.Get());
+	if (ASmvPilotPawn* Pw = GetPilot()) Ig.Add(Pw);
+	for (const FSmvContactEvent& E : Sol->DrainEvents()) HandleContact(E);
+
+	const FSmvPhysicsSettings& PS = FSmvPhysicsSettings::Get();
+	const int32 Dbg = FSmvPhysicsSettings::DebugLevel();
+	const FVector P = Drone->GetActorLocation();
+	const FQuat Rot = Drone->GetActorQuat();
+	if (Dbg >= 1) Sol->DrawDebug(GetWorld(), P, Rot);
+	const double Now = FPlatformTime::Seconds();
+	if (Now - LastSensorAt < 1.0 / PS.SensorHz) return;
+	LastSensorAt = Now;
+	const FQuat Enu = WorldSetup ? WorldSetup->EnuToUnrealRotation(P) : FQuat::Identity;
+	const FCollisionQueryParams Q = SmvPhysics::MakeQuery(TEXT("SmvSensor"), Drone, &Ig);
+	FSmvSensorScan Scan;
+	SmvPhysics::Scan(GetWorld(), P, Rot, Enu, Q, Scan, Dbg >= 2);
+	if (!Scan.bValid) return;
+	USmvFlightLink* L = Link();
+	if (L && PS.bSitlSensors && L->AcceptsRangeSensors())
 	{
-		LastSent = FPlatformTime::Seconds();
-		const UPrimitiveComponent* C = Hit.GetComponent();
-		const FString Kind = C && C->ComponentHasTag(TEXT("building")) ? TEXT("building") : C && C->ComponentHasTag(TEXT("water")) ? TEXT("water") : TEXT("terrain");
-		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
-		P->SetStringField(TEXT("kind"), Kind);
-		P->SetNumberField(TEXT("speed"), Spd);
-		Command(TEXT("crash"), P);
+		FSmvRangeScan R;
+		R.DownM = Scan.DownM; R.UpM = Scan.UpM; R.SectorM = Scan.SectorM;
+		R.DownMaxM = PS.RngMaxM; R.ProxMaxM = PS.ProxMaxM;
+		L->SendRangeSensors(R);
 	}
-	LastDronePos = Pos;
+	// HUD yakınlık (yalnız gösterge): en yakın yatay engel ya da tavan
+	ProxLine.Reset(); ProxLevel = 0;
+	const bool bAir = L && (L->LastTele().bArmed || L->LastTele().AltRel > 1.0);
+	if (bAir && Scan.NearestM >= 0 && Scan.NearestM < PS.ProxWarnM)
+	{
+		const float B = Scan.NearestBearingDeg;
+		const TCHAR* Dir = B < 22.5f || B >= 337.5f ? TEXT("ÖN") : B < 67.5f ? TEXT("SAĞ ÖN") : B < 112.5f ? TEXT("SAĞ") : B < 157.5f ? TEXT("SAĞ ARKA")
+			: B < 202.5f ? TEXT("ARKA") : B < 247.5f ? TEXT("SOL ARKA") : B < 292.5f ? TEXT("SOL") : TEXT("SOL ÖN");
+		ProxLine = FString::Printf(TEXT("ENGEL %.1f m · %s"), Scan.NearestM, Dir);
+		ProxLevel = Scan.NearestM < 2.f ? 2 : 1;
+	}
+	if (bAir && Scan.UpM >= 0 && Scan.UpM < FMath::Min(PS.ProxWarnM, 3.f))
+	{
+		ProxLine += FString::Printf(TEXT("%sTAVAN %.1f m"), ProxLine.IsEmpty() ? TEXT("") : TEXT("   "), Scan.UpM);
+		ProxLevel = FMath::Max(ProxLevel, Scan.UpM < 1.5f ? 2 : 1);
+	}
+}
+
+void ASmvGameMode::HandleContact(const FSmvContactEvent& E)
+{
+	UE_LOG(LogSimumav, Log, TEXT("Fizik teması: %s"), *E.Describe());
+	USmvFlightLink* L = Link();
+	if (!L) return;
+	const double Now = FPlatformTime::Seconds();
+	if (Now - SceneT0 < 2.0) return;   // sahne kurulumu / ilk tele yerleşimi
+	const FCaySimTelemetry& T = L->LastTele();
+	if (E.bRestDisarm)
+	{
+		if (L->Backend() == ESmvFlightBackend::LocalSitl && !bCrashed) Command(TEXT("land_rest"));
+		return;
+	}
+	if (SmvCore::ContactIsCrash(E.Class))
+	{
+		if (bCrashed) return;
+		// kolsuz ve yavaş (yerde itilen / sürüklenen) araç çarpışma sayılmaz; kolsuz düşen araç (≥ 3 m/s) sayılır
+		if (!T.bArmed && E.Speed < 3.0) return;
+		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+		P->SetStringField(TEXT("kind"), E.Kind);
+		P->SetNumberField(TEXT("speed"), FMath::RoundToDouble(E.Speed * 10.0) / 10.0);
+		P->SetBoolField(TEXT("physics"), true);
+		P->SetStringField(TEXT("class"), UTF8_TO_TCHAR(SmvCore::ContactName(E.Class)));
+		P->SetNumberField(TEXT("vn"), FMath::RoundToDouble(E.Vn * 100.0) / 100.0);
+		P->SetNumberField(TEXT("vt"), FMath::RoundToDouble(E.Vt * 100.0) / 100.0);
+		P->SetNumberField(TEXT("normal_z"), FMath::RoundToDouble(E.Nz * 100.0) / 100.0);
+		P->SetStringField(TEXT("object"), E.Actor);
+		Command(TEXT("crash"), P);
+		return;
+	}
+	if ((E.Class == SmvCore::EContact::Graze || E.Class == SmvCore::EContact::CeilingTouch) && Now - LastGrazeEventAt > 2.0)
+	{
+		LastGrazeEventAt = Now;
+		PushEvent(FString::Printf(TEXT("TEMAS: %s (%s) %.1f m/s — yüzeyden itildi"),
+			E.Class == SmvCore::EContact::CeilingTouch ? TEXT("tavan") : TEXT("yanal sürtünme"), *E.Kind, E.Speed), 4);
+	}
+}
+
+void ASmvGameMode::HandleLevelAdded(ULevel* Level, UWorld* InWorld)
+{
+	if (!bScene || !Level || InWorld != GetWorld() || Level->IsPersistentLevel()) return;
+	PreparePhysicsLevel(Level);
+}
+
+void ASmvGameMode::PreparePhysicsLevel(ULevel* Level)
+{
+	if (!Level) return;
+	for (const TWeakObjectPtr<ULevel>& L : PhysPreparedLevels) if (L.Get() == Level) return;
+	PhysPreparedLevels.RemoveAll([](const TWeakObjectPtr<ULevel>& L) { return !L.IsValid(); });
+	PhysPreparedLevels.Add(Level);
+	UE_LOG(LogSimumav, Log, TEXT("Fizik seviye hazırlığı — %s"), *SmvPhysics::PrepareLevelCollision(Level));
 }
 
 void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
@@ -1254,6 +1349,7 @@ void ASmvGameMode::UpdateHud()
 	}
 	if (FPlatformTime::Seconds() < ToastUntil) { S.Toast = ToastText; S.ToastSeverity = ToastSev; }
 	S.bCrashed = bCrashed;
+	S.ProxLine = ProxLine; S.ProxLevel = ProxLevel;
 	if (bPauseMenu) S.Paused = FSmvI18n::T(TEXT("flight.paused_hint")).ToString();
 	// PiP artık uçuş arayüzünde (sürükle / boyutlandır); HUD katmanı çizmez
 	UTextureRenderTarget2D* PipRt = S.Pip;
@@ -1522,28 +1618,28 @@ void ASmvGameMode::PlaceFabLevels()
 		}
 	}
 	for (AActor* A : Drop) A->Destroy();
+	// gerçek çarpışma: kalkış araması ve uçuş öncesi kapalı çarpışmaları aç (seviye eklenince zaten yapılır; burada eksik kalan olmasın)
+	for (ULevel* L : Levels) PreparePhysicsLevel(L);
 	if (!Box.IsValid)
 	{
 		UE_LOG(LogSimumav, Warning, TEXT("Fab haritası boş görünüyor (statik ağ yok)"));
 		return;
 	}
-	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvFabGround), true);
+	FCollisionQueryParams Q = SmvPhysics::MakeQuery(TEXT("SmvFabGround"), Drone, nullptr);
 	const double ZTop = Box.Max.Z + 100.0, ZBot = Box.Min.Z - 100.0;
-	auto Down = [&](double X, double Y, FHitResult& H) { return W->LineTraceSingleByChannel(H, FVector(X, Y, ZTop), FVector(X, Y, ZBot), ECC_WorldStatic, Q); };
-	auto IsLand = [](const FHitResult& H) { return H.GetComponent() && H.GetComponent()->GetClass()->GetName().Contains(TEXT("Landscape")); };
-	// zemin + üstü açık mı (ilk isabet yukarıdan; 6 m çevresi düz)
+	const ECollisionChannel Ch = FSmvPhysicsSettings::Get().Channel;
+	auto Down = [&](double X, double Y, FHitResult& H) { return W->LineTraceSingleByChannel(H, FVector(X, Y, ZTop), FVector(X, Y, ZBot), Ch, Q); };
+	// kalkış noktası FİZİKLE: aşağı ışın → zemin, yukarı küre süpürmesi → üstü açık (tavan/dal), araç boyutunda kapsül → boşluk, çevre düzlüğü
+	const float SpotR = Drone ? Drone->GetVisualRadiusM() * 100.f : 150.f;
+	const float SpotH = FMath::Max(80.f, SpotR * 0.6f);
+	int32 Rejected = 0;
+	FString LastWhy;
 	auto Clear = [&](double X, double Y, double& OutZ) -> bool
 	{
-		FHitResult H;
-		if (!Down(X, Y, H) || H.ImpactNormal.Z < 0.95) return false;
-		if (bLandscape && !IsLand(H)) return false;
-		for (const FVector2D& O : { FVector2D(600, 0), FVector2D(-600, 0), FVector2D(0, 600), FVector2D(0, -600) })
-		{
-			FHitResult H2;
-			if (!Down(X + O.X, Y + O.Y, H2) || FMath::Abs(H2.ImpactPoint.Z - H.ImpactPoint.Z) > (bLandscape ? 120.0 : 60.0)) return false;
-		}
-		OutZ = H.ImpactPoint.Z;
-		return true;
+		FString Why;
+		const bool bOk = SmvPhysics::EvaluateSpot(W, X, Y, ZTop, ZBot, SpotR, SpotH, bLandscape, Q, OutZ, &Why);
+		if (!bOk) { ++Rejected; LastWhy = Why; }
+		return bOk;
 	};
 	const FSmvMapDef* Def = FSmvMapRegistry::Find(FabMapKey);
 	FVector Start = Box.GetCenter();
@@ -1565,14 +1661,18 @@ void ASmvGameMode::PlaceFabLevels()
 			bFound = true;
 		}
 	}
-	// 2) haritanın PlayerStart'ı — altında zemin ve üstü açıksa (bina içindeki başlangıç dron için uygun değil)
+	// 2) haritanın PlayerStart'ı — altında zemin, üstü açık ve araç sığıyorsa (bina içindeki başlangıç dron için uygun değil)
 	for (int32 i = 0; i < PlayerStarts.Num() && !bFound; ++i)
 	{
-		const FVector P = PlayerStarts[i];
-		FHitResult Hd, Hu;
-		if (!W->LineTraceSingleByChannel(Hd, P + FVector(0, 0, 200), P - FVector(0, 0, 5000), ECC_WorldStatic, Q)) continue;
-		if (W->LineTraceSingleByChannel(Hu, Hd.ImpactPoint + FVector(0, 0, 150), Hd.ImpactPoint + FVector(0, 0, 6000), ECC_WorldStatic, Q)) continue;
-		Start = Hd.ImpactPoint; Zg = Hd.ImpactPoint.Z; How = TEXT("PlayerStart"); bFound = true;
+		const FVector Ps = PlayerStarts[i];
+		double Z = 0;
+		FString Why;
+		if (!SmvPhysics::EvaluateSpot(W, Ps.X, Ps.Y, Ps.Z + 200.0, Ps.Z - 5000.0, SpotR, SpotH, false, Q, Z, &Why))
+		{
+			UE_LOG(LogSimumav, Log, TEXT("PlayerStart (%.0f, %.0f) kalkışa uygun değil: %s"), Ps.X, Ps.Y, *Why);
+			continue;
+		}
+		Start = FVector(Ps.X, Ps.Y, Z); Zg = Z; How = TEXT("PlayerStart (fizik denetimi)"); bFound = true;
 	}
 	// 3) merkeze en yakın düz, üstü açık zemin (20 m adımlı halkalar, 300 m'ye dek)
 	for (int32 r = 0; r <= 15 && !bFound; ++r)
@@ -1602,8 +1702,9 @@ void ASmvGameMode::PlaceFabLevels()
 	}
 	const FVector Off(-Start.X, -Start.Y, -Zg);
 	for (ULevel* L : Levels) L->ApplyWorldOffset(Off, false);
-	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi (%s): %d seviye, kutu %s, kalkış (%.0f, %.0f, %.0f) — %s; %d gök/ışık aktörü kaldırıldı"),
-		*FabMapKey, Levels.Num(), *Box.GetSize().ToString(), Start.X, Start.Y, Zg, *How, Drop.Num());
+	if (Drone && Drone->GetContactSolver()) Drone->GetContactSolver()->Reset();   // harita kaydı: dron yeni geometriye ışınlanır (olay yok)
+	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi (%s): %d seviye, kutu %s, kalkış (%.0f, %.0f, %.0f) — %s; %d gök/ışık aktörü kaldırıldı; fizik kalkış araması %d aday eledi (son: %s)"),
+		*FabMapKey, Levels.Num(), *Box.GetSize().ToString(), Start.X, Start.Y, Zg, *How, Drop.Num(), Rejected, LastWhy.IsEmpty() ? TEXT("-") : *LastWhy);
 	if (Def && Def->bDecor) SpawnFabDecor(FVector::ZeroVector, true);
 }
 

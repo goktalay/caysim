@@ -44,7 +44,10 @@ merkeze en yakın düz ve üstü açık zemin (arazili haritada Landscape üstü
 merkezi aranır; tablodaki `StartE/StartN` kaydırması eklenir. Bu nokta SITL ev konumuna (orijin), oradaki zemin Z=0'a
 oturtulur. Haritanın kendi güneş/gök/sis aktörleri kaldırılır (gök Ultra Dynamic Sky'dan gelir).
 
-**Fizik notu:** SITL düz zemin bilir; harita binaları/ağaçları görseldir (dron içlerinden geçebilir).
+**Fizik:** harita binaları, ağaçları ve arazisi gerçek çarpışmadır (Unreal fizik sorguları; `docs/fizik-carpisma.md`). Derlemede
+basit çarpışması olmayan ağlara `UseComplexAsSimple` yazılır (`Scripts/Python/fab_carpisma.py`; günlükte paket başına "carpismasiz ag
+sayisi"), oyunda her seviye eklenince kapalı bileşen çarpışmaları (ISM/HISM/Foliage) açılır. Kalkış noktası adayları fizikle
+denetlenir (zemin, üstü açık, araç boyutunda boşluk). SITL yine düz zemin bilir: ev konumundan alçak arazide dron havada "inmiş" görünür.
 
 ## Gök, hava, ses
 

@@ -41,6 +41,8 @@ public:
 	virtual bool IsReady() const override { return bHeartbeatSeen; }
 	virtual FString MissionPlannerInfo() const override;
 	virtual ESmvFlightBackend Backend() const override { return ESmvFlightBackend::LocalSitl; }
+	virtual bool AcceptsRangeSensors() const override { return Tcp != nullptr && bHeartbeatSeen && (bSensRng || bSensPrx); }
+	virtual void SendRangeSensors(const FSmvRangeScan& Scan) override;
 
 	/** Mission Planner UDP çıkışı (ayarlardan; Start'tan önce). */
 	void SetMissionPlannerOut(bool bEnable, const FString& Host, int32 Port) { bMpOut = bEnable; MpHost = Host; MpPort = Port; }
@@ -120,6 +122,10 @@ private:
 	double LaunchT0 = 0;
 	bool bMotorCut = false;
 	bool bCrashed = false;
+	/** Fizik sensörleri (UE ışın izleri → DISTANCE_SENSOR / OBSTACLE_DISTANCE) ve SITL parametreleri (RNGFND1 / PRX1 / AVOID) */
+	bool bSensRng = false, bSensPrx = false, bSensAvoid = true;
+	/** Araç UE'de yapı/arazi üstünde durdu, motorlar durduruldu (SITL zemini daha aşağıda): SITL "Hit ground" çarpışma sayılmaz */
+	bool bUeRest = false;
 	double CrashCandidateUntil = 0;
 	double CrashCandidateSpeed = 0;
 	double FirstArmWall = 0;

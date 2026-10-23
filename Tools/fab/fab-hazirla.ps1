@@ -9,6 +9,9 @@
 #  b) VaultCache\FabLibrary\<ürün>\fbx|obj → Editor Python (Scripts/Python/fab_import.py) ile /Game/Fab/<hedef>.
 #     Dron ürünleri /Game/Fab/Drone (oyun çalışma anında buradan yükler). Kaynak imzası değişmedikçe yeniden aktarılmaz.
 #  c) VaultCache\<paket>\data\Content (Launcher'ın indirdiği UE paketleri) → proje Content\<paket> (a ile aynı kural).
+#  e) Fizik çarpışması: uçuş haritalarının (ve şehir ağ klasörlerinin) statik ağlarında basit çarpışma yoksa Editor Python
+#     (Scripts/Python/fab_carpisma.py) CollisionTraceFlag=UseComplexAsSimple yazar; paket başına "carpismasiz ag sayisi" günlüğe.
+#     Düzeltilen dosyalar robocopy /XO ile sonraki kopyalamada ezilmez; harita/paket imzası değişmedikçe adım atlanır.
 #  d) Config/DefaultGame.ini (yalnız çalışma kopyası; checkout her derlemede sıfırlar):
 #       DirectoriesToAlwaysCook "Fab" (içe aktarılan gövdeler + motor sesi kopyaları; yalnız yumuşak yolla yüklenir), "UltraDynamicSky"
 #       MapsToCook: YALNIZ uçuş haritaları KAYIT TABLOSUNDAKİ (Source/Simumav/Private/SmvMapRegistry.cpp) haritalar + alt seviyeleri
@@ -33,7 +36,8 @@ $kopyalanan = New-Object System.Collections.ArrayList   # Content altı göreli 
 $paketler = New-Object System.Collections.ArrayList     # üst düzey paket klasörleri (harita aramak için)
 
 function Kopyala([string]$kaynak, [string]$hedef) {
-	robocopy $kaynak $hedef /MIR /R:1 /W:1 /NP /NFL /NDL /NJH /XJ | Select-Object -Last 6 | ForEach-Object { if ("$_".Trim()) { Write-Host "    $_" } }
+	# /XO: hedefte daha yeni olan dosya (fab_carpisma.py'nin duzelttigi ag) kaynaktan ezilmez; kaynak guncellenirse kopyalanir
+	robocopy $kaynak $hedef /MIR /XO /R:1 /W:1 /NP /NFL /NDL /NJH /XJ | Select-Object -Last 6 | ForEach-Object { if ("$_".Trim()) { Write-Host "    $_" } }
 	$rc = $LASTEXITCODE
 	if ($rc -ge 8) { Uyari "robocopy hata kodu $rc : $kaynak"; return $false }
 	return $true
@@ -246,6 +250,55 @@ try {
 		if (HaritaVar $g) { [void]$pisirilecek.Add($g); Bilgi "sehir bina seviyesi: $g" } else { Uyari "sehir bina seviyesi yok: $g" }
 	}
 	foreach ($h in $pisirilecek) { $satirlar += "+MapsToCook=(FilePath=`"$h`")" }
+	# ---------------- e) fizik carpismasi (statik aglar) ----------------
+	$carpKlasor = @()
+	foreach ($y in [regex]::Matches((Blok 'SEHIR-AG-KLASORLERI'), '"(/Game/[^"]+)"')) { $g = $y.Groups[1].Value; if (Test-Path -LiteralPath (DiskYolu $g)) { $carpKlasor += $g } }
+	if (Test-Path -LiteralPath (Join-Path $content 'Fab\Props')) { $carpKlasor += '/Game/Fab/Props' }
+	if ($pisirilecek.Count -gt 0 -or $carpKlasor.Count -gt 0) {
+		function CarpImza {
+			$n = 0; $t = [int64]0
+			foreach ($k in $kopyalanan) {
+				$d = Join-Path $content $k
+				if (Test-Path -LiteralPath $d -PathType Container) {
+					foreach ($f in (Get-ChildItem -LiteralPath $d -Recurse -File -Filter *.uasset -ErrorAction SilentlyContinue)) { $n++; $t += $f.Length + $f.LastWriteTimeUtc.Ticks % 1000003 }
+				}
+			}
+			return "v1|$($pisirilecek -join ';')|$($carpKlasor -join ';')|$n|$t"
+		}
+		$carpDamga = Join-Path $content 'Fab\.carpisma-imza'
+		$imzaOnce = CarpImza
+		$eskiImza = if (Test-Path -LiteralPath $carpDamga) { (Get-Content -LiteralPath $carpDamga -Raw).Trim() } else { '' }
+		if ($eskiImza -eq $imzaOnce) {
+			Bilgi "fizik carpismasi: haritalar ve paketler degismemis - atlandi (onceki sonuc: Content\Fab\.carpisma-sonuc.json)"
+			$eskiSonuc = Join-Path $content 'Fab\.carpisma-sonuc.json'
+			if (Test-Path -LiteralPath $eskiSonuc) { Get-Content -LiteralPath $eskiSonuc -Raw -Encoding UTF8 | Write-Host }
+		} else {
+			$editor = Join-Path $UeRoot 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
+			if (-not (Test-Path -LiteralPath $editor)) { Uyari "editor yok: $editor - carpisma hazirligi atlandi" }
+			else {
+				$gYol = Join-Path $env:TEMP 'fab-carpisma-girdi.json'
+				$sYol = Join-Path $env:TEMP 'fab-carpisma-sonuc.json'
+				Remove-Item -LiteralPath $sYol -ErrorAction SilentlyContinue
+				ConvertTo-Json -InputObject @{ haritalar = @($pisirilecek); klasorler = @($carpKlasor) } -Depth 3 | Set-Content -LiteralPath $gYol -Encoding UTF8
+				$env:FAB_CARPISMA_GIRDI = $gYol
+				$env:FAB_CARPISMA_SONUC = $sYol
+				$env:SIMUMAV_EDITOR_ACIK = '0'
+				$betik = Join-Path $Proje 'Scripts\Python\fab_carpisma.py'
+				Bilgi "fizik carpismasi: $($pisirilecek.Count) harita + $($carpKlasor.Count) klasor statik aglari denetleniyor (Editor Python)"
+				$ddc = @($env:UE_ZEN_ARGS -split ' ' | Where-Object { $_ })
+				& $editor $uproject "-ExecutePythonScript=$betik" -unattended -nop4 -nosplash -NullRHI -stdout -FullStdOutLogOutput @ddc 2>&1 | ForEach-Object {
+					$l = "$_"
+					if ($l -match 'fab_carpisma') { Write-Host "    $l" }
+				}
+				Bilgi "editor cikis kodu: $LASTEXITCODE"
+				if (Test-Path -LiteralPath $sYol) {
+					New-Item -ItemType Directory -Force -Path (Split-Path $carpDamga) | Out-Null
+					Copy-Item -LiteralPath $sYol -Destination (Join-Path $content 'Fab\.carpisma-sonuc.json') -Force
+					Set-Content -LiteralPath $carpDamga -Value (CarpImza) -Encoding UTF8
+				} else { Uyari "carpisma hazirligi sonucu yok (editor betigi calismadi?)" }
+			}
+		}
+	}
 	$haritalar = @()
 	if ($satirlar.Count -gt 0 -or $haritalar.Count -gt 0) {
 		$ek = @('', '; ---- fab-hazirla.ps1 (derleme aninda; depoda yok) ----', '[/Script/UnrealEd.ProjectPackagingSettings]') + $satirlar

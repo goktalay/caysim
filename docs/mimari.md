@@ -44,7 +44,7 @@ Bu depo iki ürünü tek Unreal projesinde (`Simumav.uproject`, UE 5.8) taşır:
 | `USmvFlow` | ekran durum makinesi, sihirbaz taslağı, uçuş başlat/bitir, özet + başarım değerlendirmesi, liderlik, karşılaşma |
 | `USmvFlightLink` / `USmvLocalFlightLink` / `USmvCloudFlightLink` | fizik bağlantısı (yerel SITL / sunucu) |
 | `USmvMatchClient` | çevrim içi salon, YZ karşılaşması, `pos` → rakip aktörleri |
-| `ASmvGameMode` | sahne: CAYSIM `ACaySimWorldSetup` (Cesium/düz) + `ASmvProcTerrain`, `ASmvDroneActor`, kapılar, hedefler, yerel botlar, GPWS, ses, çarpışma |
+| `ASmvGameMode` | sahne: CAYSIM `ACaySimWorldSetup` (Cesium/düz) + `ASmvProcTerrain`, `ASmvDroneActor`, kapılar, hedefler, yerel botlar, GPWS, ses, çarpışma (gerçek fizik: `SmvPhysics`, `docs/fizik-carpisma.md`) |
 | `ASmvPilotPawn` | 7 kamera kipi, PiP, görüntü tipi, Enhanced Input (kodla) → RC kanalları, eylemler |
 | `USmvHudOverlay` + CAYSIM `UCaySimHudWidget` | HUD (NativePaint; UMG varlığı yok) |
 | `SSmvShell` | tüm menüler (Slate, kodla) |

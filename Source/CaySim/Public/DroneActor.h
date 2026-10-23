@@ -121,6 +121,10 @@ protected:
 	void BuildPlaceholderProps(int32 Count, float ArmM);
 	ECaySimDroneType DroneType = ECaySimDroneType::Multirotor;
 	float GroundOffsetM = 0.f; // gövde alt noktası (model sınır kutusu)
+	/** Render konumu çözümü (her poz uygulamasında). Alt sınıf gerçek çarpışma sorgularıyla InOutLoc'u düzeltip true döndürürse
+	 *  taban sınıfın yer kesişimi düzeltmesi (zemin yüksekliği örneği) atlanır. EnuRot: yerel ENU → Unreal; WorldRot: gövde yönelimi. */
+	virtual bool ResolveRenderLocation(const FCaySimPose& /*Pose*/, const FQuat& /*EnuRot*/, const FQuat& /*WorldRot*/, FVector& /*InOutLoc*/) { return false; }
+	void SetOnGroundState(bool bOn) { bOnGround = bOn; }
 
 private:
 	FTelemetryBuffer Buffer;

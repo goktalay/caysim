@@ -130,7 +130,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Servo tetik "Dinle" | `flightsim_servotrig.js` | Duraklatma → Gelişmiş | ✓ | — |
 | Hedef sembolojisi / kilit (yalnız HUD + puan) | `flightsim_targets.js` | ✓ | ✓ | — |
 | Yer kontrol radar/EO pencereleri | `flightsim_gcs_ui.js` | Sahada istasyon + kafes kule (EO tareti, 4 sn'de dönen radar anteni); uçuşta sol altta RADAR PPI (tarama izi, menzil halkaları, temaslar, tıkla-seç → EO izler / hedefse kilit) ve EO penceresi (taret kamerası, otomatik yakınlaştırma, gündüz/termal/gece, AZ/EL/MZL OSD); Y / U ile aç-kapa | ✓ | P2 |
-| Çarpışma efekti (patlama, sarsıntı) | `flightsim3d.js` | Çarpma: darbe sesi, ekran parlaması, kamera sarsıntısı, savrulan enkaz parçaları | ✓ | P2 |
+| Çarpışma efekti (patlama, sarsıntı) | `flightsim3d.js` | Çarpma: darbe sesi, ekran parlaması, kamera sarsıntısı, savrulan enkaz parçaları. Algılama web'deki AABB/yükseklik bandı yerine Unreal fiziği: gövde süpürmesi, temas sınıfı (sürtünme / sert / tavan / iniş / düşüş / su), yerelde SITL'e kesin `crash` + zorla disarm, sürtünmede yüzeyden itme, aşağı menzil bulucu + 360° yakınlık SITL'e (RNGFND1 / PRX1 / AVOID), HUD yakınlık satırı (`docs/fizik-carpisma.md`) | ✓ | P2 |
 | Giriş sekansı 3-2-1-BAŞLA | `flightsim_intro.js` | Sayaç + halka + parkur adı + bip; kamera 100 m / 80 m sarmalla takip konumuna iner (yarış dışı) | ✓ | P2 |
 | Esc → çıkış onayı / duraklatma | `session.js` | Duraklatma menüsü (SITL sürer): devam, RTL, sıfırla, yardım, hızlı ayarlar (Mode 1–4, ses, kokpit), gelişmiş (servo, MP), uçuşu bitir | ✓ | — |
 

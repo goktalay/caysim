@@ -38,6 +38,8 @@ struct FSmvHudState
 	bool bOsd = false; FString OsdLeft, OsdRight, OsdCenter;
 	FString Toast; int32 ToastSeverity = 6;
 	bool bCrashed = false;
+	// fizik yakınlık uyarısı (yalnız gösterge): "ENGEL 3,2 m · SAĞ ÖN"; 1 dikkat (amber), 2 uyarı (kırmızı)
+	FString ProxLine; int32 ProxLevel = 0;
 	FString Paused;            // boş değilse duraklatma ipucu
 };
 

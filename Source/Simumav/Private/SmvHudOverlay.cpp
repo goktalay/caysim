@@ -113,6 +113,12 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 	}
 
 	if (State.bCrashed) SmvText(Out, Layer + 3, G, FVector2D(Sz.X * 0.5f - 150.f, Sz.Y * 0.45f), TEXT("ÇARPIŞMA"), 40, Red);
+	if (!State.ProxLine.IsEmpty() && !State.bCrashed)
+	{
+		const FLinearColor Pc = State.ProxLevel >= 2 ? Red : Amber;
+		SmvBox(Out, Layer + 2, G, FVector2D(Sz.X * 0.5f - 160.f, Sz.Y * 0.74f), FVector2D(320.f, 30.f), FLinearColor(0, 0, 0, 0.55f), W);
+		SmvText(Out, Layer + 3, G, FVector2D(Sz.X * 0.5f - 150.f, Sz.Y * 0.74f + 5.f), State.ProxLine, 14, Pc, false);
+	}
 	// bildirim (toast) kabukta gösterilir (SSmvShell::ShowToast) — burada çift çizilmez
 	if (!State.Paused.IsEmpty())
 	{

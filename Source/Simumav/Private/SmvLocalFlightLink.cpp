@@ -6,6 +6,8 @@
 #include "SmvPower.h"
 #include "SmvTargets.h"
 #include "SmvRace.h"
+#include "SmvCollision.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 #include "IPAddress.h"
@@ -134,7 +136,19 @@ bool USmvLocalFlightLink::LaunchSitl(bool bClean)
 		FM.DeleteDirectory(*FPaths::Combine(WorkDir, TEXT("APM"), TEXT("scripts")), false, true);
 	}
 	const FString Parm = FPaths::Combine(WorkDir, TEXT("varsayilan.parm"));
-	const std::string Text = SmvCore::DefaultsParmText(*Session);
+	std::string Text = SmvCore::DefaultsParmText(*Session);
+	// fizik sensörleri (UE ışın izleri MAVLink ile gelir): RNGFND1 / PRX1 / AVOID — yeniden başlatma gerektiren parametreler, bu yüzden
+	// açılış dosyasında. Kullanıcının kayıtlı parametresi aynı adı taşıyorsa onunki kalır.
+	if (bSensRng || bSensPrx)
+	{
+		Text += "# SIMUMAV fizik sensorleri (UE isin izleri -> DISTANCE_SENSOR / OBSTACLE_DISTANCE)\n";
+		for (const auto& Kv : SmvCore::PhysicsSensorParams(Session->SitlType, bSensAvoid))
+		{
+			bool bUser = false;
+			for (const auto& U : Session->UserParams) if (U.first == Kv.first) bUser = true;
+			if (!bUser) Text += Kv.first + " " + std::string(TCHAR_TO_UTF8(*FString::SanitizeFloat(Kv.second, 0))) + "\n";
+		}
+	}
 	FFileHelper::SaveStringToFile(FString(UTF8_TO_TCHAR(Text.c_str())), *Parm, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 	// cygwin ikilisi ileri eğik çizgili Windows yolunu kabul eder
 	FString ParmArg = Parm;
@@ -284,6 +298,18 @@ void USmvLocalFlightLink::Start(const FSmvFlightRequest& Request)
 	Session->Launch.AzimuthDeg = Req.Launch.AimAzDeg;
 	for (const TPair<FString, double>& Kv : Req.Drone.Params) Session->UserParams.push_back({ std::string(TCHAR_TO_UTF8(*Kv.Key)), Kv.Value });
 	ModeVehicle = UTF8_TO_TCHAR(SmvCore::ModeVehicle(Type).c_str());
+	{
+		bool bSens = true;
+		bSensAvoid = true;
+		if (GConfig)
+		{
+			GConfig->GetBool(TEXT("/Script/Simumav.SmvPhysics"), TEXT("SitlSensors"), bSens, GGameIni);
+			GConfig->GetBool(TEXT("/Script/Simumav.SmvPhysics"), TEXT("SitlAvoid"), bSensAvoid, GGameIni);
+		}
+		bSensRng = bSens && SmvCore::PhysicsHasRangefinder(Type);
+		bSensPrx = bSens && SmvCore::PhysicsHasProximity(Type);
+		bUeRest = false;
+	}
 	VehicleMavType = (uint8)(ModeVehicle == TEXT("plane") ? 1 : ModeVehicle == TEXT("rover") ? 10 : 2);
 
 	// güç ayarı: dron önerisi → istek → tip varsayılanı (flightsim_power.dogrula)
@@ -711,7 +737,12 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		EmitEvent(Text, S.Severity);
 		// "SIM Hit ground at X m/s" — SITL fiziği yere çarptı
 		int32 At = Text.Find(TEXT("Hit ground at"));
-		if (At != INDEX_NONE)
+		if (At != INDEX_NONE && bUeRest)
+		{
+			// araç UE'de yapı/arazi üstünde duruyor; SITL kendi (daha alçak) zeminine indi — çarpışma değil
+			EmitEvent(TEXT("SITL zemin teması yok sayıldı: araç 3B dünyada yüzey üstünde duruyor"), 6);
+		}
+		else if (At != INDEX_NONE)
 		{
 			const double X = FCString::Atod(*Text.Mid(At + 13).TrimStart());
 			const bool bMoving = Tele.AltRel >= 1.0 || Tele.Groundspeed >= 3.f;
@@ -827,6 +858,7 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	if (Name == TEXT("reset")) { BeginReset(); EmitResult(Rid, Name, true); return Rid; }
 	if (!Tcp || !bHeartbeatSeen) return Fail(TEXT("SITL hazır değil"));
 	const std::string Type = Session->SitlType;
+	if (Name == TEXT("arm") || Name == TEXT("takeoff")) bUeRest = false;
 	if (Name == TEXT("arm") || Name == TEXT("disarm"))
 	{
 		if (Name == TEXT("arm") && bMotorCut) { CommandLong(218, 31.f, 0.f); bMotorCut = false; }
@@ -889,7 +921,13 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	{
 		const FString Kind = SmvJson::Str(P, TEXT("kind"), TEXT("terrain"));
 		const double Spd = SmvJson::Num(P, TEXT("speed"), Tele.Groundspeed);
-		if (Kind == TEXT("terrain"))
+		if (SmvJson::Bool(P, TEXT("physics"), false))
+		{
+			// Unreal fizik sorgusu (gövde süpürmesi) gerçek geometriye değdi: arazi dahil KESİN (SITL'in düz zemini 3B araziyi bilmez,
+			// "Hit ground" teyidi beklenmez). Sunucu (bulut) kuralı değişmedi: orada arazi adaydır.
+			Crash(Kind, Spd);
+		}
+		else if (Kind == TEXT("terrain"))
 		{
 			// arazi: aday — 3 sn içinde SITL "Hit ground" derse kesinleşir (flightsim_mission.carpisma)
 			CrashCandidateUntil = FPlatformTime::Seconds() + 3.0;
@@ -911,6 +949,14 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 			if (!E.Reason.empty()) M->SetStringField(TEXT("reason"), UTF8_TO_TCHAR(E.Reason.c_str()));
 			EmitMessage(M);
 		}
+	}
+	else if (Name == TEXT("land_rest"))
+	{
+		// UE: araç yapı/arazi üstüne indi ve SITL hâlâ alçalıyor (SITL zemini daha aşağıda) — otopilotun iniş algılayıcısı gerçek yüzeyde
+		// motorları keserdi; burada zorla disarm + SITL'in kendi zeminine düşüşü çarpışma sayılmaz
+		bUeRest = true;
+		ForcedDisarm();
+		EmitEvent(TEXT("Yüzey üstüne iniş (3B fizik): motorlar durduruldu"), 5);
 	}
 	else if (Name == TEXT("camera") || Name == TEXT("gpws"))
 	{
@@ -1050,6 +1096,7 @@ void USmvLocalFlightLink::BeginReset()
 	bHeartbeatSeen = false;
 	bAfterReset = true;
 	bCrashed = false;
+	bUeRest = false;
 	CrashCandidateUntil = 0;
 	LaunchPhase.Empty();
 	Timed.Reset();
@@ -1066,6 +1113,41 @@ void USmvLocalFlightLink::BeginReset()
 	EmitEvent(TEXT("Sıfırla: SITL yeniden başlatılıyor (parametreler ve görev korunur)"), 5);
 	EmitState(TEXT("BASLIYOR"));
 	if (!LaunchSitl(false)) { EmitState(TEXT("HATA")); bResetting = false; }
+}
+
+// ---------------------------------------------------------------------------
+// fizik sensörleri → SITL (MAVLink; ArduPilot RNGFND1_TYPE=10, PRX1_TYPE=2)
+// ---------------------------------------------------------------------------
+
+void USmvLocalFlightLink::SendRangeSensors(const FSmvRangeScan& Scan)
+{
+	if (!Tcp || !bHeartbeatSeen) return;
+	const uint32 Tbm = (uint32)FMath::Max<int64>(0, Tele.Tbm);
+	const uint16 MinCm = (uint16)FMath::RoundToInt(Scan.MinM * 100.f);
+	if (bSensRng)
+	{
+		// aşağı (yön 25 = PITCH_270): RNGFND1 — irtifa tutma / yüzey izleme / iniş gerçek zemine (çatı, ağaç, arazi) göre
+		const uint16 Max = (uint16)FMath::RoundToInt(Scan.DownMaxM * 100.f);
+		const std::vector<uint8_t> P = SmvMav::PackDistanceSensor(Tbm, MinCm, Max, SmvCore::RangeToCm(Scan.DownM, Scan.MinM, Scan.DownMaxM), 0, 0, 25);
+		SendFrame(SmvMav::MSG_DISTANCE_SENSOR, P.data(), (int32)P.size());
+	}
+	if (bSensPrx)
+	{
+		const uint16 Max = (uint16)FMath::RoundToInt(Scan.ProxMaxM * 100.f);
+		// yukarı (yön 24 = PITCH_90): AP_Proximity tavan mesafesi
+		const std::vector<uint8_t> U = SmvMav::PackDistanceSensor(Tbm, MinCm, Max, SmvCore::RangeToCm(Scan.UpM, Scan.MinM, Scan.ProxMaxM), 0, 1, 24);
+		SendFrame(SmvMav::MSG_DISTANCE_SENSOR, U.data(), (int32)U.size());
+		if (Scan.SectorM.Num() > 0)
+		{
+			double D[72];
+			const int32 N = FMath::Min(72, Scan.SectorM.Num());
+			for (int32 i = 0; i < N; ++i) D[i] = Scan.SectorM[i];
+			uint16_t Arr[72];
+			SmvCore::ObstacleArray(D, N, Scan.MinM, Scan.ProxMaxM, Arr);
+			const std::vector<uint8_t> O = SmvMav::PackObstacleDistance((uint64_t)Tbm * 1000ull, Arr, MinCm, Max, 360.f / (float)N, 0.f, 12);
+			SendFrame(SmvMav::MSG_OBSTACLE_DISTANCE, O.data(), (int32)O.size());
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------

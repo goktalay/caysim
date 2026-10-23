@@ -12,6 +12,17 @@
 #include "SimumavTypes.h"
 #include "SmvFlightLink.generated.h"
 
+/** Fizik sensörleri (UE ışın izleri; SmvPhysics::Scan) — otopilota iletilecek ölçümler. Mesafe m, −1 = menzil içinde engel yok. */
+struct FSmvRangeScan
+{
+	float DownM = -1.f;          // aşağı menzil bulucu (gövde ekseni)
+	float UpM = -1.f;            // yukarı
+	TArray<float> SectorM;       // 360° yakınlık: 0 = burun, saat yönünde eşit aralık (72 × 5° ya da 8 × 45°)
+	float MinM = 0.2f;
+	float DownMaxM = 40.f;
+	float ProxMaxM = 30.f;
+};
+
 UCLASS(Abstract)
 class SIMUMAV_API USmvFlightLink : public UObject
 {
@@ -37,6 +48,9 @@ public:
 	/** Mission Planner bağlantı bilgisi (ör. "UDP 127.0.0.1:14550 çıkışı" ya da "TCP simumav.com:15612"). */
 	virtual FString MissionPlannerInfo() const { return FString(); }
 	virtual ESmvFlightBackend Backend() const PURE_VIRTUAL(USmvFlightLink::Backend, return ESmvFlightBackend::LocalSitl;);
+	/** Fizik sensörleri otopilota iletilebiliyor mu (yalnız yerel SITL: MAVLink DISTANCE_SENSOR / OBSTACLE_DISTANCE). */
+	virtual bool AcceptsRangeSensors() const { return false; }
+	virtual void SendRangeSensors(const FSmvRangeScan& /*Scan*/) {}
 
 	const FSmvFlightInfo& Info() const { return FlightInfo; }
 	const FSmvFlightRequest& RequestData() const { return Req; }

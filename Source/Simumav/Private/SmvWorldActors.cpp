@@ -19,6 +19,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h"
+#include "SmvPhysics.h"
 
 namespace
 {
@@ -275,6 +276,86 @@ void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& Model
 		EngineAudio->Stop();
 	}
 	BuildPlaceholder();
+	RebuildPhysicsShape();
+}
+
+// ---------------------------------------------------------------------------
+// gerçek çarpışma (SmvPhysics): görünen gövdenin şekli her karede SITL pozuna süpürülür
+// ---------------------------------------------------------------------------
+
+void ASmvDroneActor::EnablePhysicsContact(bool bOn)
+{
+	if (bOn && !FSmvPhysicsSettings::Get().bEnabled) bOn = false;
+	if (!bOn) { delete Solver; Solver = nullptr; return; }
+	if (!Solver) Solver = new FSmvContactSolver();
+	RebuildPhysicsShape();
+}
+
+void ASmvDroneActor::BeginDestroy()
+{
+	delete Solver;
+	Solver = nullptr;
+	Super::BeginDestroy();
+}
+
+void ASmvDroneActor::RebuildPhysicsShape()
+{
+	if (!Solver) return;
+	// aktör uzayında görünür bileşenlerin sınırları (pervaneler, kızaklar, kanatlar dahil)
+	FBox B(ForceInit);
+	const FTransform ActorTm = GetActorTransform();
+	TInlineComponentArray<UPrimitiveComponent*> Prims(this);
+	for (UPrimitiveComponent* P : Prims)
+	{
+		if (!P || !P->IsVisible()) continue;
+		const FBoxSphereBounds Lb = P->CalcBounds(P->GetComponentTransform().GetRelativeTransform(ActorTm));
+		if (Lb.BoxExtent.GetMax() > 0.5) B += Lb.GetBox();
+	}
+	const double R = FMath::Max(30.0, (double)VisRadiusM * 100.0);
+	if (!B.IsValid || B.GetExtent().GetMax() < 5.0 || B.GetExtent().GetMax() > 5000.0)
+		B = FBox(FVector(-R, -R, FMath::Min(-5.0, (double)GroundOffsetM * 100.0)), FVector(R, R, FMath::Max(15.0, R * 0.25)));
+	// ölçek (ShapeScale): kutu merkez çevresinde küçülür, alt yüzey (iniş takımı) yerinde kalır
+	const double Sc = FSmvPhysicsSettings::Get().ShapeScale;
+	const FVector Ext = B.GetExtent() * Sc;
+	const FVector Ctr(B.GetCenter().X, B.GetCenter().Y, B.Min.Z + Ext.Z);
+	TArray<FSmvBodyBox> Boxes;
+	SmvCore::EVehicleClass Veh = SmvCore::EVehicleClass::Vertical;
+	if (SmvType == TEXT("plane") || SmvType == TEXT("vtol") || SmvType == TEXT("interceptor"))
+	{
+		Veh = SmvCore::EVehicleClass::Plane;
+		// gövde (burundan kuyruğa, ince) + kanat (açıklık boyunca, yassı) — sınır kutusundan oranla
+		FSmvBodyBox Fus; Fus.Center = Ctr; Fus.Half = FVector(Ext.X, FMath::Max(8.0, Ext.Y * 0.12), Ext.Z);
+		FSmvBodyBox Wing; Wing.Center = Ctr + FVector(0, 0, Ext.Z * 0.2); Wing.Half = FVector(FMath::Max(10.0, Ext.X * 0.28), Ext.Y, FMath::Max(4.0, Ext.Z * 0.3));
+		Boxes.Add(Fus);
+		Boxes.Add(Wing);
+	}
+	else if (SmvType == TEXT("rover"))
+	{
+		Veh = SmvCore::EVehicleClass::Rover;
+		// tekerlekler zemine değer → kutu tabanı %15 yukarıda (zemin teması çarpışma değil; duvar/su temasları sayılır)
+		FSmvBodyBox RoverBox; RoverBox.Center = Ctr + FVector(0, 0, Ext.Z * 0.15); RoverBox.Half = FVector(Ext.X, Ext.Y, Ext.Z * 0.85);
+		Boxes.Add(RoverBox);
+	}
+	else
+	{
+		// çok rotor / heli / FPV: pervane disklerini kapsayan yassı kutu (kollar + diskler) + gövde/kızak çekirdeği
+		FSmvBodyBox Disc; Disc.Center = Ctr + FVector(0, 0, Ext.Z * 0.35); Disc.Half = FVector(Ext.X, Ext.Y, FMath::Max(4.0, Ext.Z * 0.65));
+		FSmvBodyBox Core; Core.Center = Ctr; Core.Half = FVector(FMath::Max(6.0, Ext.X * 0.45), FMath::Max(6.0, Ext.Y * 0.45), Ext.Z);
+		Boxes.Add(Disc);
+		Boxes.Add(Core);
+	}
+	Solver->Configure(Boxes, Veh);
+	UE_LOG(LogSimumav, Log, TEXT("Fizik gövdesi (%s): sınır %.0f×%.0f×%.0f cm, ölçek %.2f, %d kutu"), *SmvType, Ext.X * 2, Ext.Y * 2, Ext.Z * 2, Sc, Boxes.Num());
+}
+
+bool ASmvDroneActor::ResolveRenderLocation(const FCaySimPose& Pose, const FQuat& EnuRot, const FQuat& WorldRot, FVector& InOutLoc)
+{
+	if (!Solver || !GetWorld()) return false;
+	const FCaySimTelemetry T = GetLatestTelemetry();
+	const FVector VelMs = EnuRot.RotateVector(CaySimGeo::NedVelocityToUnreal(FVector(T.Vn, T.Ve, T.Vd), bEnuXNorth)) / 100.0;
+	InOutLoc = Solver->Resolve(GetWorld(), this, InOutLoc, WorldRot, EnuRot, VelMs, T.bArmed);
+	SetOnGroundState(Solver->IsOnFloor() || Pose.AltRel < 0.3);
+	return true;
 }
 
 void ASmvDroneActor::BuildPlaceholder()

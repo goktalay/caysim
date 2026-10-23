@@ -66,4 +66,5 @@ Durum: **yapıldı** = kodu yazıldı (derlenmedi — şirket bilgisayarında il
 
 Lumen GI + yansıma (donanım ışın izleme açık), Nanite (prosedürel ağlar için planlandı), Sanal Gölge Haritaları, SkyAtmosphere + VolumetricCloud +
 ExponentialHeightFog + DirectionalLight + SkyLight (gerçek zamanlı yakalama) — `Config/DefaultEngine.ini` ve CAYSIM `ACaySimWorldSetup`. TSR
-(r.AntiAliasingMethod=4). Chaos fiziği kullanılmaz; çarpışma yalnız ışın izleme ile algılanır ve SITL'e `crash` olarak bildirilir.
+(r.AntiAliasingMethod=4). Uçuş dinamiği SITL'dedir (Chaos rijit cisim benzetimi kullanılmaz); çarpışma Chaos sahne sorgularıyla (gövde süpürmesi,
+MTD, ışın sensörleri) algılanır, SITL'e `crash` / `land_rest` ve MAVLink `DISTANCE_SENSOR` / `OBSTACLE_DISTANCE` olarak iletilir — `docs/fizik-carpisma.md`.
