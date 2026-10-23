@@ -56,7 +56,7 @@ https://github.com/rdeioris/glTFRuntime (MIT) → `Plugins/glTFRuntime/`. Varsa 
 mkdir C:\src; cd C:\src
 git clone https://github.com/goktalay/caysim.git
 cd caysim
-pwsh -File Tools/sitl/sitl-indir.ps1        # yerel ArduPilot SITL 4.7.2 (sha256 doğrulamalı) → ThirdParty/ArduPilotSITL/Win64
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools/sitl/sitl-indir.ps1        # yerel ArduPilot SITL 4.7.2 (sha256 doğrulamalı) → ThirdParty/ArduPilotSITL/Win64
 ```
 
 ### 1.8 Paylaşımlı DDC (Derived Data Cache)
@@ -124,7 +124,7 @@ Ardından `Simumav.uproject` → Editor → *Play (Standalone Game)*. Steam iste
 | `Unable to find plugin 'CesiumForUnreal'` | Eklenti *Optional*; motor eklenti dizini bulunamıyorsa `Plugins/CesiumForUnreal` altına koyun |
 | `C4456/C4458` gölgeleme hatası | Yerel değişken adı üye/üst kapsamla çakışıyor → yeniden adlandırın (UE bunu hata sayar) |
 | `MakeLines` aşırı yük hatası | `TArray<FVector2D>` → `TArray<FVector2f>` (CAYSIM `HudWidget.cpp`'deki eski kullanımlar) |
-| "SITL dosyaları yok" | `pwsh -File Tools/sitl/sitl-indir.ps1`; pakette `Simumav\ThirdParty\ArduPilotSITL\Win64\ArduCopter.exe` olmalı |
+| "SITL dosyaları yok" | `powershell -NoProfile -ExecutionPolicy Bypass -File Tools/sitl/sitl-indir.ps1`; pakette `Simumav\ThirdParty\ArduPilotSITL\Win64\ArduCopter.exe` olmalı |
 | SITL başlıyor ama bağlanmıyor | Güvenlik duvarı 127.0.0.1:15670–17660 TCP; `Saved\Simumav\SitlRun\<port>\sitl.log` |
 | CI'da "SHA256 UYUŞMAZ" | firmware.ardupilot.org klasörü güncellenmiş → `Tools/sitl/sitl-manifest.json`'u bilinçli güncelleyin ya da ayna (`-BaseUrl`) |
 | Harita üretilemedi (CI) | PythonScriptPlugin + EditorScriptingUtilities açık mı; `Saved\Logs` |

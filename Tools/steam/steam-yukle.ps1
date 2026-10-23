@@ -1,4 +1,4 @@
-# Simumav — Steam'e yükleme (steamcmd). Oturum: STEAM_USERNAME + STEAM_CONFIG_VDF (base64 config.vdf; Steam Guard tek seferlik
+﻿# Simumav — Steam'e yükleme (steamcmd). Oturum: STEAM_USERNAME + STEAM_CONFIG_VDF (base64 config.vdf; Steam Guard tek seferlik
 # girişten sonra alınır — docs/steam-yayin.md). Şifre ve oturum dosyası günlüğe yazılmaz.
 param(
     [Parameter(Mandatory = $true)][string]$AppId,
@@ -7,6 +7,9 @@ param(
     [string]$Branch = "beta",
     [string]$Desc = "Simumav"
 )
+# Windows PowerShell 5.1 uyumu: TLS 1.2 zorunlu (varsayılan TLS 1.0 olabilir), ilerleme çubuğu indirmeyi çok yavaşlatır
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = "SilentlyContinue"
 $ErrorActionPreference = "Stop"
 $kok = Join-Path $env:RUNNER_TEMP "steamcmd"
 if (-not (Test-Path "$kok\steamcmd.exe")) {

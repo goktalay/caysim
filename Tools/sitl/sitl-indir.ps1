@@ -1,9 +1,12 @@
-# Simumav — yerel SITL ikililerini sabit sürüm + sha256 doğrulamasıyla indirir (CI ve geliştirici makinesi).
+﻿# Simumav — yerel SITL ikililerini sabit sürüm + sha256 doğrulamasıyla indirir (CI ve geliştirici makinesi).
 # Kullanım:  pwsh -File Tools/sitl/sitl-indir.ps1 [-Hedef ThirdParty/ArduPilotSITL/Win64] [-BaseUrl <ayna>]
 param(
     [string]$Hedef = (Join-Path $PSScriptRoot "..\..\ThirdParty\ArduPilotSITL\Win64"),
     [string]$BaseUrl = ""
 )
+# Windows PowerShell 5.1 uyumu: TLS 1.2 zorunlu (varsayılan TLS 1.0 olabilir), ilerleme çubuğu indirmeyi çok yavaşlatır
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = "SilentlyContinue"
 $ErrorActionPreference = "Stop"
 $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $PSScriptRoot "sitl-manifest.json") | ConvertFrom-Json
 if (-not $BaseUrl) { $BaseUrl = $manifest.base_url }

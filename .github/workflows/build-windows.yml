@@ -35,7 +35,8 @@ jobs:
     timeout-minutes: 360
     defaults:
       run:
-        shell: pwsh
+        # Windows PowerShell 5.1 (her Windows'ta var; runner servisi Store/kullanıcı kurulumu pwsh'ı göremeyebilir). Betikler UTF-8 BOM'lu.
+        shell: powershell
     env:
       UE_ROOT: ${{ vars.UE_ROOT != '' && vars.UE_ROOT || 'C:\Program Files\Epic Games\UE_5.8' }}
       STEAM_APP_ID: ${{ vars.STEAM_APP_ID != '' && vars.STEAM_APP_ID || '480' }}
@@ -55,7 +56,7 @@ jobs:
           Get-PSDrive -PSProvider FileSystem | Format-Table Name, Used, Free
 
       - name: Yerel ArduPilot SITL ikililerini indir ve doğrula (sha256)
-        run: pwsh -File Tools/sitl/sitl-indir.ps1
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File Tools/sitl/sitl-indir.ps1
 
       - name: Steam App ID / Cesium belirteci
         env:
@@ -117,4 +118,4 @@ jobs:
             Write-Host "Steam yükleme ATLANDI: STEAM_USERNAME / STEAM_CONFIG_VDF sırları, STEAM_DEPOT_ID ve gerçek STEAM_APP_ID gerekli (docs/steam-yayin.md)."
             exit 0
           }
-          pwsh -File Tools/steam/steam-yukle.ps1 -AppId $env:STEAM_APP_ID -DepotId $env:STEAM_DEPOT_ID -Content "$env:ARCHIVE_DIR\Shipping\Windows" -Branch $env:STEAM_BRANCH -Desc "Simumav $env:GITHUB_SHA"
+          powershell -NoProfile -ExecutionPolicy Bypass -File Tools/steam/steam-yukle.ps1 -AppId $env:STEAM_APP_ID -DepotId $env:STEAM_DEPOT_ID -Content "$env:ARCHIVE_DIR\Shipping\Windows" -Branch $env:STEAM_BRANCH -Desc "Simumav $env:GITHUB_SHA"
