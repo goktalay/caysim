@@ -213,6 +213,11 @@ namespace SmvCore
 			const std::set<std::string> U = UserNames(S);
 			for (auto& P : LayoutParams(S.Airframe)) if (!U.count(P.first)) O << P.first << " " << Num(P.second) << "\n";
 		}
+		// Çerçeve eşlemesi (HEPGO drone_sitl.CERCEVE_PARM, 2026-10-23): SITL "--model +" fiziği motorları ARTI dizer; FRAME_TYPE yazılmazsa
+		// ArduCopter varsayılanı X (1) kalır → kontrolcü 45° kaymış motorlara karıştırır, askıda ~16 Hz ±2° salınım. Kayıtlı parametrelerden
+		// SONRA yazılır (gerçek X dronun kaydı sanal fiziği bozmasın). hexa modeli altılı artı → FRAME_CLASS 2.
+		if (S.SitlType == "multirotor") O << "# SIMUMAV cerceve (--model +)\nFRAME_CLASS 1\nFRAME_TYPE 0\n";
+		else if (S.SitlType == "hexarotor") O << "# SIMUMAV cerceve (--model hexa)\nFRAME_CLASS 2\nFRAME_TYPE 0\n";
 		return O.str();
 	}
 
@@ -232,7 +237,8 @@ namespace SmvCore
 		FParamList P;
 		const std::set<std::string> U = UserNames(S);
 		// 4. kayıtlı parametreler (sensör adları hariç)
-		for (auto& Kv : S.UserParams) if (!IsSensorName(Kv.first)) P.push_back(Kv);
+		const bool bCok = (S.SitlType == "multirotor" || S.SitlType == "hexarotor");
+		for (auto& Kv : S.UserParams) if (!IsSensorName(Kv.first) && !(bCok && (Kv.first == "FRAME_CLASS" || Kv.first == "FRAME_TYPE"))) P.push_back(Kv);
 		// 5. rüzgâr
 		P.push_back({ "SIM_WIND_SPD", GustWindSpeed(S.WindMs, S.WindGust, 0) });
 		P.push_back({ "SIM_WIND_DIR", S.WindDir });
