@@ -102,7 +102,16 @@ namespace
 
 	const TArray<FString>& SmvTypes()
 	{
-		static const TArray<FString> T = { TEXT("multirotor"), TEXT("fpv"), TEXT("plane"), TEXT("vtol"), TEXT("interceptor"), TEXT("heli"), TEXT("rover") };
+		// sabit sıra + katalogda bulunan yeni tipler (araç ajanı yeni tip eklerse kendiliğinden görünür)
+		static TArray<FString> T;
+		static int32 Seen = -1;
+		const TArray<FSmvCatalogModel>& Cat = USmvDataService::Catalog();
+		if (Seen != Cat.Num())
+		{
+			Seen = Cat.Num();
+			T = { TEXT("multirotor"), TEXT("fpv"), TEXT("plane"), TEXT("vtol"), TEXT("interceptor"), TEXT("heli"), TEXT("rover") };
+			for (const FSmvCatalogModel& M : Cat) if (!M.Type.IsEmpty()) T.AddUnique(M.Type);
+		}
 		return T;
 	}
 
