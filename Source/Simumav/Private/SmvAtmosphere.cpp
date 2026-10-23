@@ -204,7 +204,8 @@ namespace
 		if (W == TEXT("rain")) return { 9.0, 2.5, 0.0, 0.9, 0.0, 6, 0, 2.5, 0.02 };
 		if (W == TEXT("fog")) return { 5.0, 8.0, 0.0, 0.35, 0.0, 0, 0, 0, 0.06 };
 		if (W == TEXT("snow")) return { 8.5, 3.0, 0.0, 0.2, 0.85, 0, 6, 0, 0.025 };
-		return { 2.0, FMath::Clamp(Fog01 * 10.0, 0.3, 4.0), 0.8, 0.0, 0.0, 0, 0, 0, 0.002 + Fog01 * 0.01 };
+		// açık hava: hafif pus (UDS Fog 0–10; duman testinde 2,0 + toz 0,8 ufku fazla soldurdu)
+		return { 2.0, FMath::Clamp(Fog01 * 5.0, 0.2, 2.5), 0.3, 0.0, 0.0, 0, 0, 0, 0.002 + Fog01 * 0.01 };
 	}
 
 	struct FWhen { int32 Y, M, D; double LocalH, Tz, UtcH; };
