@@ -54,6 +54,13 @@ jobs:
           Write-Host "UE: $env:UE_ROOT"
           git lfs version
           Get-PSDrive -PSProvider FileSystem | Format-Table Name, Used, Free
+          # DDC: etkilesimli bir editor acikken yerel Zen sunucusu o kullanicinin profilinde calisir ve NETWORK SERVICE onun
+          # dosyalarini okuyamaz (Nanite "StreamablePages" cokmesi). CI kendi dosya sistemi DDC'sini kullanir.
+          $base = Get-Content "$env:UE_ROOT\Engine\Config\BaseEngine.ini" -Raw
+          $ddc = ''
+          foreach ($g in @('InstalledNoZenLocalFallback', 'NoZenLocalFallback')) { if ($base -match ('(?m)^\[' + $g + '\]')) { $ddc = "-ddc=$g"; break } }
+          Write-Host "DDC: $(if ($ddc) { $ddc } else { 'varsayilan (Zen)' })"
+          Add-Content -Path $env:GITHUB_ENV -Value "UE_DDC_ARG=$ddc"
 
       - name: Yerel ArduPilot SITL ikililerini indir ve doğrula (sha256)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File Tools/sitl/sitl-indir.ps1
@@ -85,19 +92,22 @@ jobs:
       - name: Varlıkları koddan üret (Editor Python, headless)
         run: |
           $env:SIMUMAV_EDITOR_ACIK = "0"
-          & "$env:UE_ROOT\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "$PWD\Simumav.uproject" -ExecutePythonScript="$PWD\Scripts\Python\simumav_varliklar.py" -unattended -nop4 -nosplash -NullRHI -stdout -FullStdOutLogOutput
+          $ddc = @(); if ($env:UE_DDC_ARG) { $ddc = @($env:UE_DDC_ARG) }
+          & "$env:UE_ROOT\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "$PWD\Simumav.uproject" -ExecutePythonScript="$PWD\Scripts\Python\simumav_varliklar.py" -unattended -nop4 -nosplash -NullRHI -stdout -FullStdOutLogOutput @ddc
           if (-not (Test-Path "Content/Maps/SimumavMain.umap")) { throw "Harita uretilemedi (Content/Maps/SimumavMain.umap)" }
 
       - name: Paketle — Development
         run: |
           . .\Tools\ci\kilit.ps1
-          $rc = Invoke-KilitTekrar { & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -iostore -archive -archivedirectory="$env:ARCHIVE_DIR\Development" -utf8output -unattended }
+          $ddc = @(); if ($env:UE_DDC_ARG) { $ddc = @($env:UE_DDC_ARG) }
+          $rc = Invoke-KilitTekrar { & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -iostore -archive -archivedirectory="$env:ARCHIVE_DIR\Development" -utf8output -unattended @ddc }
           if ($rc -ne 0) { throw "BuildCookRun Development basarisiz ($rc)" }
 
       - name: Paketle — Shipping
         run: |
           . .\Tools\ci\kilit.ps1
-          $rc = Invoke-KilitTekrar { & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Shipping -build -cook -stage -pak -iostore -prereqs -archive -archivedirectory="$env:ARCHIVE_DIR\Shipping" -utf8output -unattended -nodebuginfo }
+          $ddc = @(); if ($env:UE_DDC_ARG) { $ddc = @($env:UE_DDC_ARG) }
+          $rc = Invoke-KilitTekrar { & "$env:UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="$PWD\Simumav.uproject" -noP4 -platform=Win64 -clientconfig=Shipping -build -cook -stage -pak -iostore -prereqs -archive -archivedirectory="$env:ARCHIVE_DIR\Shipping" -utf8output -unattended -nodebuginfo @ddc }
           if ($rc -ne 0) { throw "BuildCookRun Shipping basarisiz ($rc)" }
           # Shipping'de Steam istemcisi uygulamayi kendi kimligiyle baslatir; gelistirme testleri icin steam_appid.txt paket kokune de konur
           Copy-Item steam_appid.txt "$env:ARCHIVE_DIR\Shipping\Windows\" -Force
