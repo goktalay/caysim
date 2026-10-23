@@ -96,6 +96,15 @@ private:
 	TSharedRef<SWidget> Logbook();
 	TSharedRef<SWidget> Settings();
 	TSharedRef<SWidget> Account();
+	TSharedRef<SWidget> FlyMode();
+	TSharedRef<SWidget> FpvGallery();
+	TSharedRef<SWidget> ReplayScreen();
+	TSharedRef<SWidget> Support();
+	double SummaryAt = 0;
+	FString FpvSel, FpvDroneId;
+	FSmvFpvCfg FpvEdit;
+	/** FPV parkuru kuş bakışı çizimi */
+	TSharedRef<SWidget> FpvMap(const FString& CourseId, float W, float H);
 
 	// sihirbaz adımları
 	TSharedRef<SWidget> WizVehicle();

@@ -15,6 +15,7 @@
 #include "SSmvShell.h"
 #include "SSmvFlightUi.h"
 #include "SmvMenuScene.h"
+#include "SmvFpvActor.h"
 #include "SmvMusicSynth.h"
 #include "SmvUiPrefs.h"
 #include "SmvUiKit.h"
@@ -363,6 +364,29 @@ void ASmvGameMode::BuildScene()
 	{
 		Flow->GetMatch()->OnPositions.AddUObject(this, &ASmvGameMode::HandleMatchPositions);
 	}
+	// ---- hazır FPV parkuru (zaman denemesi) ----
+	FpvEndAt = 0;
+	if (Flow->Fpv.IsActive())
+	{
+		if (const FSmvFpvCourse* Fc = SmvFpv::Find(Flow->Fpv.CourseId))
+		{
+			FActorSpawnParameters Sp;
+			Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			FpvActor = W->SpawnActor<ASmvFpvCourseActor>(ASmvFpvCourseActor::StaticClass(), FTransform::Identity, Sp);
+			if (FpvActor)
+			{
+				TWeakObjectPtr<ASmvGameMode> WG(this);
+				FpvActor->Init(*Fc, Flow->Fpv, [WG](double E, double N, double Up)
+				{
+					ASmvGameMode* G = WG.Get();
+					if (!G) return FVector(E * 100.0, -N * 100.0, Up * 100.0);
+					double La, Lo;
+					SmvCore::LatLon(G->Req.Track.Lat, G->Req.Track.Lon, E, N, La, Lo);
+					return G->Geo(La, Lo, G->GroundMsl + Up);
+				}, Req.Drone.Type);
+			}
+		}
+	}
 	UE_LOG(LogSimumav, Log, TEXT("Sahne kuruldu: %s / %s (%s)"), *Req.Drone.Name, *Req.Track.Name, *Req.Track.WorldMode);
 }
 
@@ -373,7 +397,7 @@ void ASmvGameMode::FreeRace()
 	delete Dogfight; Dogfight = nullptr;
 	for (FBot& B : Bots) { delete B.Pilot; delete B.Tracker; }
 	Bots.Reset();
-	bRaceStarted = bRaceDone = false;
+	bRaceStarted = bRaceDone = false; MyFinishT = -1;
 	RaceResultBadge.Empty();
 }
 
@@ -495,6 +519,7 @@ void ASmvGameMode::StopScene()
 	for (TObjectPtr<ASmvDroneActor>& G : TargetActors) if (G) G->Destroy();
 	Gates.Reset(); Ghosts.Reset(); TargetActors.Reset(); GhostIndex.Reset();
 	if (Drone) { Drone->Destroy(); Drone = nullptr; }
+	if (FpvActor) { FpvActor->Destroy(); FpvActor = nullptr; }
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
 	ClearFabWorld();
 	if (WorldSetup) { WorldSetup->Destroy(); WorldSetup = nullptr; }
@@ -924,6 +949,7 @@ void ASmvGameMode::UpdateRace(float Dt)
 			if (E.Kind == "finish")
 			{
 				PushEvent(FString::Printf(TEXT("BİTİŞ %.1f sn"), Tt), 5);
+				MyFinishT = Tt;
 				bool bFirst = true;
 				for (const FBot& B : Bots) if (B.FinishT >= 0) bFirst = false;
 				if (Flow->Race.Kind == TEXT("rings") && !bRaceDone) { bRaceDone = true; if (bFirst && Bots.Num()) RaceResultBadge = TEXT("race_win"); }
@@ -1029,6 +1055,7 @@ void ASmvGameMode::UpdateHud()
 	const FCaySimTelemetry& T = L->LastTele();
 	const FSmvTeleExtra& X = L->LastExtra();
 	const FSmvSettings& Set = GI->GetData()->Settings();
+	UpdateFpv(T, FPlatformTime::Seconds());
 	if (Hud)
 	{
 		FCaySimHudContext Ctx;
@@ -1165,6 +1192,33 @@ void ASmvGameMode::UpdateHud()
 		U.TrackName = Req.Track.Name;
 		U.WindMs = (float)Req.Track.WindMs; U.WindDir = (float)Req.Track.WindDir; U.WindGust = (float)Req.Track.WindGust;
 		U.bIntroAllowed = Flow->Race.Kind == TEXT("none") && !(Flow->GetMatch() && Flow->GetMatch()->HasMatch());
+		if (FpvActor && FpvActor->GetTracker())
+		{
+			const FSmvFpvTracker& Tk = *FpvActor->GetTracker();
+			const double Now = FPlatformTime::Seconds();
+			U.bFpv = true;
+			U.bFpvFinished = Tk.Finished();
+			U.FpvLap = Tk.Lap(); U.FpvLaps = Tk.Cfg().Laps;
+			U.FpvNext = Tk.NextIndex() + 1; U.FpvTotalCp = Tk.Total();
+			U.FpvLapT = Tk.LapStart() >= 0 && !Tk.Finished() ? (float)(Now - Tk.LapStart()) : 0.f;
+			U.FpvBest = (float)Tk.BestLap();
+			U.FpvTotal = Tk.Finished() ? (float)Tk.TotalS() : (float)(Now - SceneT0 - 3.7 + Tk.Penalty());
+			U.FpvPen = (float)Tk.Penalty(); U.FpvDist = (float)Tk.DistNext();
+			U.FpvMisses = Tk.Misses(); U.FpvHits = Tk.Hits();
+			const double Gd = FpvActor->GhostDelta();
+			U.FpvGhost = Gd > 1e8 ? 1e9f : (float)Gd;
+			U.FpvSectorCount = FMath::Max(1, Tk.Course().Sectors);
+			if (Tk.SectorTimes().Num())
+			{
+				const TArray<double>& Cur = Tk.SectorTimes().Last();
+				const FSmvFpvRecord& Rec = FpvActor->GetRecord();
+				for (int32 k = 0; k < Cur.Num(); ++k)
+				{
+					const double* Best = Tk.BestSectors().Find(k + 1);
+					U.FpvSectors.Add(Best && FMath::IsNearlyEqual(*Best, Cur[k], 1e-3) ? (Rec.TotalS < 0 ? 2 : 1) : 3);
+				}
+			}
+		}
 		if (Pw)
 		{
 			U.PadRight = Pw->GetPadRight();
@@ -1196,6 +1250,42 @@ void ASmvGameMode::AugmentSummary(FSmvFlightSummary& S)
 		if (MyTracker->Finished()) S.Laps = FMath::Max(S.Laps, 1);
 	}
 	if (!RaceResultBadge.IsEmpty()) S.Badges.AddUnique(RaceResultBadge);
+	// podyum + oyun puanı (yerel yarış / it dalaşı)
+	if (Flow.IsValid())
+	{
+		Flow->LastPodium.Reset();
+		Flow->LastScore = -1;
+		Flow->LastRaceKind = Flow->Race.Kind;
+		if (MyTracker && Rings && Rings->Num() && Flow->Race.Kind == TEXT("rings"))
+		{
+			FSmvPodiumRow Me;
+			Me.Name = Req.Pilot.Name.IsEmpty() ? FString(TEXT("Pilot")) : Req.Pilot.Name;
+			Me.Passed = MyTracker->Passed(); Me.Total = Rings->Num(); Me.FinishT = MyTracker->Finished() ? MyFinishT : -1; Me.bMe = true;
+			Flow->LastPodium.Add(Me);
+			for (const FBot& B : Bots)
+			{
+				if (!B.Tracker) continue;
+				FSmvPodiumRow R; R.Name = B.Name; R.Passed = B.Tracker->Passed(); R.Total = Rings->Num(); R.FinishT = B.FinishT;
+				Flow->LastPodium.Add(R);
+			}
+			Flow->LastPodium.Sort([](const FSmvPodiumRow& A, const FSmvPodiumRow& B)
+			{
+				const bool Fa = A.FinishT >= 0, Fb = B.FinishT >= 0;
+				if (Fa != Fb) return Fa;
+				if (Fa) return A.FinishT < B.FinishT;
+				return A.Passed > B.Passed;
+			});
+			int32 Rank = 1;
+			for (int32 i = 0; i < Flow->LastPodium.Num(); ++i) if (Flow->LastPodium[i].bMe) Rank = i + 1;
+			const bool bFin = Me.FinishT >= 0;
+			Flow->LastScore = Me.Passed * 100 + (bFin ? 250 + (Rank == 1 ? 150 : Rank == 2 ? 100 : Rank == 3 ? 50 : 0) : 0);
+		}
+		else if (Dogfight)
+		{
+			const bool bWon = RaceResultBadge == TEXT("dogfight_win");
+			Flow->LastScore = (bWon ? 1000 : 0) + (bPlayerChaser ? FMath::Min(500, FMath::RoundToInt(Dogfight->HoldS() * 100.0)) : 0);
+		}
+	}
 	if (Flow.IsValid() && Flow->GetMatch() && Flow->GetMatch()->HasMatch())
 	{
 		USmvGameInstance* GI = USmvGameInstance::GetSmv(this);
@@ -1627,4 +1717,71 @@ void ASmvGameMode::PlayUiSound(int32 Kind)
 		return;
 	}
 	if (UiTones) UiTones->Blip(Kind);
+}
+
+// ---------------------------------------------------------------------------
+// hazır FPV parkuru: yarış başlangıcı (giriş sekansı sonrası), kapı / çarpma olayları, hayalet, bitiş ve süre sınırı
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::UpdateFpv(const FCaySimTelemetry& T, double Now)
+{
+	if (!FpvActor || !Flow.IsValid()) return;
+	const double Fs = Now - SceneT0;
+	if (!FpvActor->IsRacing())
+	{
+		if (Fs >= 3.7 && T.Lat != 0.0) { FpvActor->StartRace(Now); PushEvent(FSmvI18n::T(TEXT("fpv.go")).ToString(), 5); }
+		return;
+	}
+	const FSmvFpvTracker* Tk = FpvActor->GetTracker();
+	if (FpvEndAt > 0)
+	{
+		if (Now >= FpvEndAt) { FpvEndAt = 0; Flow->EndFlight(TEXT("fpv_finish")); }
+		return;
+	}
+	if (!Tk || T.Lat == 0.0) return;
+	double X, Y;
+	SmvCore::Enu(Req.Track.Lat, Req.Track.Lon, T.Lat, T.Lon, X, Y);
+	for (const FSmvFpvEvent& E : FpvActor->Feed(X, Y, T.AltRel, T.Heading, Now))
+	{
+		auto Fmt = [](double S) { return FString::Printf(TEXT("%d:%05.2f"), (int32)(S / 60.0), FMath::Fmod(S, 60.0)); };
+		if (E.Kind == TEXT("ring")) { if (Tones) Tones->Blip(1); }
+		else if (E.Kind == TEXT("miss")) PushEvent(FSmvI18n::Format(TEXT("fpv.missed"), { { TEXT("s"), FString::Printf(TEXT("%.0f"), E.PenS) } }).ToString(), 4);
+		else if (E.Kind == TEXT("hit")) PushEvent(E.PenS > 0 ? FSmvI18n::Format(TEXT("fpv.hit"), { { TEXT("s"), FString::Printf(TEXT("%.0f"), E.PenS) } }).ToString() : FSmvI18n::T(TEXT("fpv.hit0")).ToString(), 3);
+		else if (E.Kind == TEXT("reset")) { Command(TEXT("reset")); PushEvent(FSmvI18n::T(TEXT("fpv.reset")).ToString(), 4); }
+		else if (E.Kind == TEXT("wrong_way")) PushEvent(FSmvI18n::T(TEXT("fpv.wrong")).ToString(), 4);
+		else if (E.Kind == TEXT("sector") && E.bBest) PushEvent(FSmvI18n::T(TEXT("fpv.sector_best")).ToString(), 5);
+		else if (E.Kind == TEXT("lap"))
+		{
+			PushEvent(FSmvI18n::Format(TEXT("fpv.lap_done"), { { TEXT("n"), FString::FromInt(E.Lap) }, { TEXT("t"), Fmt(E.S) } }).ToString(), 5);
+			if (E.bBest && E.Lap > 1) PushEvent(FSmvI18n::T(TEXT("fpv.best_lap_new")).ToString(), 5);
+		}
+		else if (E.Kind == TEXT("finish"))
+		{
+			if (Tones) Tones->Blip(4);
+			PushEvent(FSmvI18n::Format(TEXT("fpv.finished"), { { TEXT("t"), Fmt(E.TotalS) } }).ToString(), 5);
+			const double PrevPb = FpvActor->GetRecord().TotalS;
+			const bool bPb = FpvActor->SaveIfRecord();
+			if (bPb) PushEvent(FSmvI18n::T(TEXT("fpv.new_pb")).ToString(), 5);
+			USmvFlow::FFpvResult& R = Flow->LastFpv;
+			R = USmvFlow::FFpvResult();
+			R.bValid = true; R.bFinished = true; R.bNewPb = bPb; R.PrevPbS = PrevPb;
+			R.CourseId = FpvActor->GetCourse().Id; R.Laps = Tk->Cfg().Laps;
+			R.TotalS = Tk->TotalS(); R.PenS = Tk->Penalty(); R.BestLapS = Tk->BestLap();
+			R.Misses = Tk->Misses(); R.Hits = Tk->Hits();
+			R.LapTimes = Tk->Laps(); R.Sectors = Tk->SectorTimes();
+			R.Score = SmvFpv::Score(FpvActor->GetCourse(), R.TotalS, R.Laps);
+			FpvEndAt = Now + 4.0;
+		}
+	}
+	FpvActor->UpdateGhost(Now);
+	// süre sınırı
+	if (!Tk->Finished() && Fs > 3.7 + Tk->Cfg().TimeLimitMin * 60.0)
+	{
+		USmvFlow::FFpvResult& R = Flow->LastFpv;
+		R = USmvFlow::FFpvResult();
+		R.bValid = true; R.bFinished = false; R.CourseId = FpvActor->GetCourse().Id; R.Laps = Tk->Cfg().Laps;
+		R.PenS = Tk->Penalty(); R.BestLapS = Tk->BestLap(); R.Misses = Tk->Misses(); R.Hits = Tk->Hits();
+		R.LapTimes = Tk->Laps(); R.Sectors = Tk->SectorTimes();
+		FpvEndAt = Now + 0.5;
+	}
 }

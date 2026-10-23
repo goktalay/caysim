@@ -496,8 +496,13 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		[
 			Intro()
 		]
-		// ilk uçuş ipuçları
+		// FPV parkuru şeridi
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 14.f, 0.f, 0.f)
+		[
+			FpvBar()
+		]
+		// ilk uçuş ipuçları
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 104.f, 0.f, 0.f)
 		[
 			Tips()
 		]
@@ -1333,6 +1338,46 @@ TSharedRef<SWidget> SSmvFlightUi::WindCard()
 		DrText(Out, L + 3, G, St.WindGust > 0.05f ? FString::Printf(TEXT("%s %.1f"), *Loc(TEXT("fui.gust")), St.WindGust) : Loc(TEXT("fui.wind")), FVector2D(X, 34.f), Font(8, true), Dim, -1);
 		DrText(Out, L + 3, G, FString::Printf(TEXT("%s %+.1f · %s %+.1f"), *Loc(Head >= 0.f ? TEXT("fui.headwind") : TEXT("fui.tailwind")), FMath::Abs(Head),
 			*Loc(TEXT("fui.crosswind")), Cross), FVector2D(X, 54.f), Mono(8), FMath::Abs(Cross) > 6.f ? Amber : Txt, -1);
+	};
+	return Box;
+}
+
+// ---------------------------------------------------------------------------
+// FPV parkuru şeridi (web fpv_race HUD): tur, tur süresi, en iyi tur, sıradaki kapı + mesafe, sektör kutuları, toplam, ceza, hayalet farkı
+// ---------------------------------------------------------------------------
+
+TSharedRef<SWidget> SSmvFlightUi::FpvBar()
+{
+	TSharedRef<SSmvPaintBox> Box = SNew(SSmvPaintBox).Size(FVector2D(700.f, 82.f)).Visibility(EVisibility::HitTestInvisible);
+	Box->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		using namespace SmvFuiDraw;
+		using namespace SmvFuiTheme;
+		if (!St.bFpv || St.bMenuOpen) return;
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		DrRect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor::White, &CardBrush);
+		auto Tm = [](float S) { return S < 0.f ? FString(TEXT("—")) : FString::Printf(TEXT("%d:%05.2f"), (int32)(S / 60.f), FMath::Fmod(S, 60.f)); };
+		DrText(Out, L + 1, G, FString::Printf(TEXT("%s %d/%d"), *Loc(TEXT("fpv.lap")), FMath::Max(1, St.FpvLap), St.FpvLaps), FVector2D(16.f, 18.f), Font(9, true), Dim, -1);
+		DrText(Out, L + 1, G, St.bFpvFinished ? Tm(St.FpvTotal) : Tm(St.FpvLapT), FVector2D(16.f, 44.f), Mono(18), Txt, -1);
+		DrText(Out, L + 1, G, FString::Printf(TEXT("%s %s"), *Loc(TEXT("fpv.best")), *Tm(St.FpvBest)), FVector2D(16.f, 68.f), Mono(8), Accent, -1);
+		const float Cx = (float)Sz.X * 0.5f;
+		DrText(Out, L + 1, G, St.bFpvFinished ? Loc(TEXT("fpv.completed")) : FSmvI18n::Format(TEXT("fpv.next_gate"), { { TEXT("i"), FString::FromInt(St.FpvNext) }, { TEXT("n"), FString::FromInt(St.FpvTotalCp) } }).ToString(),
+			FVector2D(Cx, 18.f), Font(10, true), Green, 0);
+		if (!St.bFpvFinished) DrText(Out, L + 1, G, FString::Printf(TEXT("%.0f m"), St.FpvDist), FVector2D(Cx, 38.f), Mono(10), Txt, 0);
+		const int32 Ns = FMath::Max(1, St.FpvSectorCount);
+		const float Bw = 34.f, Gap = 4.f, X0 = Cx - (Ns * Bw + (Ns - 1) * Gap) * 0.5f;
+		for (int32 k = 0; k < Ns; ++k)
+		{
+			const int32 Cc = St.FpvSectors.IsValidIndex(k) ? St.FpvSectors[k] : 0;
+			const FLinearColor Col = Cc == 1 ? FLinearColor(0.66f, 0.33f, 0.97f) : Cc == 2 ? Green : Cc == 3 ? Amber : FLinearColor(1, 1, 1, 0.12f);
+			DrRect(Out, L + 1, G, FVector2D(X0 + k * (Bw + Gap), 54.f), FVector2D(Bw, 14.f), Col, &ChipBrush);
+			DrText(Out, L + 2, G, FString::Printf(TEXT("S%d"), k + 1), FVector2D(X0 + k * (Bw + Gap) + Bw * 0.5f, 61.f), Font(7, true), FLinearColor(0.05f, 0.05f, 0.08f), 0);
+		}
+		const float Rx = (float)Sz.X - 16.f;
+		DrText(Out, L + 1, G, FString::Printf(TEXT("%s %s"), *Loc(TEXT("fpv.total")), *Tm(St.FpvTotal)), FVector2D(Rx, 18.f), Mono(9), Txt, 1);
+		DrText(Out, L + 1, G, FString::Printf(TEXT("%s +%.0f s · %d / %d"), *Loc(TEXT("fpv.pen")), St.FpvPen, St.FpvMisses, St.FpvHits), FVector2D(Rx, 40.f), Mono(8), St.FpvPen > 0.f ? Amber : Dim, 1);
+		if (St.FpvGhost < 1e8f)
+			DrText(Out, L + 1, G, FString::Printf(TEXT("%s %+.2f"), *Loc(TEXT("fpv.ghost_hud")), St.FpvGhost), FVector2D(Rx, 64.f), Mono(10), St.FpvGhost <= 0.f ? Green : Red, 1);
 	};
 	return Box;
 }

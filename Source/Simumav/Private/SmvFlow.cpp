@@ -130,6 +130,7 @@ void USmvFlow::ImportGuest()
 void USmvFlow::NewDraft()
 {
 	Draft = FSmvFlightRequest();
+	Fpv = FSmvFpvCfg();
 	if (const FSmvDrone* D = DataObj->DefaultDrone()) Draft.Drone = *D;
 	if (const FSmvPilot* P = DataObj->DefaultPilot()) Draft.Pilot = *P;
 	if (const FSmvTrack* T = DataObj->DefaultTrack()) Draft.Track = *T;
@@ -147,7 +148,35 @@ FString USmvFlow::ValidateDraft() const
 	if (Draft.Backend == ESmvFlightBackend::LocalSitl && !USmvLocalFlightLink::SitlAvailable()) return FSmvI18n::T(TEXT("wizard.err_no_sitl")).ToString();
 	if (Race.Kind != TEXT("none") && (Draft.Drone.Type == TEXT("rover"))) return FSmvI18n::T(TEXT("wizard.err_race_rover")).ToString();
 	if (Race.Kind == TEXT("dogfight") && Race.Bots != 1) return FSmvI18n::T(TEXT("wizard.err_dogfight_bots")).ToString();
+	if (Fpv.IsActive())
+	{
+		const FString& Ty = Draft.Drone.Type;
+		if (Ty != TEXT("multirotor") && Ty != TEXT("fpv") && Ty != TEXT("heli")) return FSmvI18n::T(TEXT("fpv.type_warn")).ToString();
+		if (Draft.Backend == ESmvFlightBackend::Cloud) return FSmvI18n::T(TEXT("fpv.local_only")).ToString();
+	}
 	return FString();
+}
+
+FSmvTrack USmvFlow::MakeFpvTrack(const FSmvFpvCourse& C, const FSmvTrack& Base)
+{
+	FSmvTrack T;
+	T.Id = FString(TEXT("fpv:")) + C.Id;
+	T.Name = C.Name().ToString();
+	T.Lat = Base.Lat; T.Lon = Base.Lon; T.GroundMsl = Base.GroundMsl;
+	T.RadiusM = 1000;
+	const bool bIndoor = C.EnvSky == TEXT("indoor");
+	T.WindMs = bIndoor ? 0.0 : 1.5; T.WindGust = 0; T.WindDir = 270;
+	T.TimeOfDay = C.EnvTime == TEXT("night") ? TEXT("night") : C.EnvTime == TEXT("dusk") ? TEXT("dusk") : TEXT("day");
+	T.Weather = TEXT("clear");
+	T.WorldMode = TEXT("procedural");
+	T.World.Seed = 4000 + C.Difficulty * 7 + C.Id.Len();
+	T.World.SizeM = 4000;
+	T.World.TreeDensity = 0; T.World.BuildingCount = 0; T.World.bRunway = false; T.World.Water = 0;
+	T.World.MountainCount = bIndoor ? 0 : (C.bCanyon || C.bHill ? 8 : 3);
+	T.World.MountainHeight = C.bCanyon ? 600 : 300;
+	T.World.Fog = C.EnvFog;
+	T.World.RunwayHeading = C.StartYaw;
+	return T;
 }
 
 void USmvFlow::StartFlight()
@@ -156,6 +185,7 @@ void USmvFlow::StartFlight()
 	if (!Err.IsEmpty()) { Toast(Err, 3); return; }
 	bEnding = false;
 	LastSummary = FSmvFlightSummary();
+	LastFpv = FFpvResult();
 	if (Draft.Backend == ESmvFlightBackend::Cloud)
 	{
 		USmvCloudFlightLink* L = NewObject<USmvCloudFlightLink>(this);

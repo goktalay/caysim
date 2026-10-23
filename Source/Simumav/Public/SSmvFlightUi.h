@@ -57,6 +57,15 @@ struct FSmvFlightUiState
 	FString TrackName;
 	/** Parkur rüzgârı (m/s, nereden esdiği derece, esinti m/s) — rüzgâr göstergesi */
 	float WindMs = 0.f, WindDir = 0.f, WindGust = 0.f;
+	/** FPV parkuru zaman denemesi şeridi */
+	bool bFpv = false, bFpvFinished = false;
+	int32 FpvLap = 0, FpvLaps = 0, FpvNext = 0, FpvTotalCp = 0, FpvMisses = 0, FpvHits = 0;
+	float FpvLapT = 0.f, FpvBest = -1.f, FpvTotal = 0.f, FpvPen = 0.f, FpvDist = 0.f;
+	/** hayalete göre fark (sn; + geride); çok büyükse yok */
+	float FpvGhost = 1e9f;
+	/** sektör renkleri bu tur: 1 genel en iyi (mor), 2 kişisel en iyi (yeşil), 3 yavaş (sarı) */
+	TArray<int32> FpvSectors;
+	int32 FpvSectorCount = 1;
 	TArray<FString> Modes;
 	double FlightS = 0;
 	bool bHideGauges = false;       // FPV / gimbal HUD açıkken kadranlar gizli (web)
@@ -113,6 +122,7 @@ private:
 	TSharedRef<SWidget> Intro();
 	TSharedRef<SWidget> Tips();
 	TSharedRef<SWidget> WindCard();
+	TSharedRef<SWidget> FpvBar();
 	TSharedRef<SWidget> Sticks();
 	TSharedRef<SWidget> Feed();
 	TSharedRef<SWidget> Btn(TAttribute<FText> Label, TFunction<void()> OnClick, TFunction<FLinearColor()> Color, float MinW = 0.f);

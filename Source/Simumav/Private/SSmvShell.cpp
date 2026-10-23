@@ -11,6 +11,7 @@
 #include "SmvFabContent.h"
 #include "SmvMenuScene.h"
 #include "SmvUiPrefs.h"
+#include "SmvFpv.h"
 #include "SmvI18n.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
@@ -361,7 +362,12 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 		DefaultFocus.Reset();
 		TabStep = nullptr;
 		bPreviewVisible = false;
-		Content->SetContent(BuildScreen(Built));
+		// Arapça: sağdan sola yerleşim (yatay kutular, hizalamalar aynalanır)
+		Content->SetContent(SNew(SBox).FlowDirectionPreference(FSmvI18n::IsRtl() ? EFlowDirectionPreference::RightToLeft : EFlowDirectionPreference::LeftToRight)
+			[
+				BuildScreen(Built)
+			]);
+		if (Built == ESmvScreen::Summary) SummaryAt = FPlatformTime::Seconds();
 		bWantFocus = true;
 		// ilk açılış tanıtımı (ana menüye ilk girişte)
 		if (Built == ESmvScreen::Menu && !FSmvUiPrefs::Get().bTutorialDone && !bOverlay) OpenTutorial();
@@ -814,6 +820,10 @@ TSharedRef<SWidget> SSmvShell::BuildScreen(ESmvScreen S)
 	case ESmvScreen::Logbook: return Logbook();
 	case ESmvScreen::Settings: return Settings();
 	case ESmvScreen::Account: return Account();
+	case ESmvScreen::FlyMode: return FlyMode();
+	case ESmvScreen::FpvGallery: return FpvGallery();
+	case ESmvScreen::Replay: return ReplayScreen();
+	case ESmvScreen::Support: return Support();
 	}
 	return SNullWidget::NullWidget;
 }
@@ -969,7 +979,7 @@ TSharedRef<SWidget> SSmvShell::Menu()
 
 	TSharedRef<SSmvButton> Hero = SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Play).Accent(Hex(0xfbbf24)).MinHeight(170.f)
 		.Text(Tx(TEXT("menu.fly"))).SubText(Tx(TEXT("menu.fly_sub")))
-		.OnClick([F]() { if (F.IsValid()) { F->NewDraft(); F->SetScreen(ESmvScreen::Wizard); } });
+		.OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::FlyMode); });
 	DefaultFocus = Hero;
 	auto Tile = [](const FText& T, const FText& S, ESmvIcon I, uint32 Col, TFunction<void()> Fn) -> TSharedRef<SWidget>
 	{
@@ -2088,6 +2098,116 @@ TSharedRef<SWidget> SSmvShell::Summary()
 		]
 	];
 	B->AddSlot().AutoHeight().Padding(0, 14, 0, 0)[G];
+	// podyum + oyun puanı (yarış / it dalaşı)
+	if (Flow->LastScore >= 0)
+	{
+		const int32 Score = Flow->LastScore;
+		const double At = SummaryAt;
+		B->AddSlot().AutoHeight().Padding(6, 16, 0, 0)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 14, 0)[Icon(ESmvIcon::Trophy, 34.f, Warn())]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(Tx(TEXT("summary.score")), 11, "Bold", Dim(), false)]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(STextBlock).Font(Font(34, "Black")).ColorAndOpacity(Warn())
+					.Text_Lambda([Score, At]()
+					{
+						const float K = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - At) / 1.6f, 0.f, 1.f);
+						return FText::AsNumber(FMath::RoundToInt(Score * (1.f - FMath::Pow(1.f - K, 3.f))));
+					})
+				]
+			]
+		];
+	}
+	if (Flow->LastPodium.Num() > 1)
+	{
+		const TArray<FSmvPodiumRow>& P = Flow->LastPodium;
+		TSharedRef<SHorizontalBox> Pod = SNew(SHorizontalBox);
+		const int32 Order[3] = { 1, 0, 2 };   // 2. · 1. · 3.
+		const float Heights[3] = { 90.f, 130.f, 64.f };
+		const uint32 Cols[3] = { 0xcbd5e1, 0xfbbf24, 0xd97706 };
+		for (int32 k = 0; k < 3; ++k)
+		{
+			const int32 Ix = Order[k];
+			if (!P.IsValidIndex(Ix)) continue;
+			const FSmvPodiumRow& R = P[Ix];
+			Pod->AddSlot().AutoWidth().VAlign(VAlign_Bottom).Padding(0, 0, 8, 0)
+			[
+				SNew(SBox).WidthOverride(170.f)
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[Icon(R.bMe ? ESmvIcon::Pilot : ESmvIcon::Drone, 30.f, R.bMe ? Accent() : Dim())]
+					+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 4)[SmvUi::Text(FText::FromString(R.Name), 12, "Bold", R.bMe ? Accent() : Fg(), false)]
+					+ SVerticalBox::Slot().AutoHeight()
+					[
+						SNew(SBox).HeightOverride(Heights[Ix])
+						[
+							SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(Hex(Cols[Ix], 0.85f)).HAlign(HAlign_Center).VAlign(VAlign_Center)
+							[
+								SNew(STextBlock).Text(FText::AsNumber(Ix + 1)).Font(Font(30, "Black")).ColorAndOpacity(Hex(0x111827))
+							]
+						]
+					]
+				]
+			];
+		}
+		B->AddSlot().AutoHeight().Padding(6, 16, 0, 0)[Pod];
+		for (int32 i = 0; i < P.Num(); ++i)
+		{
+			const FSmvPodiumRow& R = P[i];
+			const FString T = R.FinishT >= 0 ? FString::Printf(TEXT("%d:%05.2f"), (int32)(R.FinishT / 60), FMath::Fmod(R.FinishT, 60.0)) : Tx(TEXT("summary.dnf")).ToString();
+			B->AddSlot().AutoHeight().Padding(6, 3, 0, 0)
+			[
+				SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(R.bMe ? Accent().CopyWithNewOpacity(0.15f) : Card()).Padding(FMargin(14.f, 6.f))
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 14, 0)[SmvUi::Text(FText::AsNumber(i + 1), 13, "Bold", Warn(), false)]
+					+ SHorizontalBox::Slot().FillWidth(1.f)[SmvUi::Text(FText::FromString(R.Name), 13, R.bMe ? "Bold" : "Regular", Fg(), false)]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(14, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%d / %d"), R.Passed, R.Total)), 12, "Regular", Dim(), false)]
+					+ SHorizontalBox::Slot().AutoWidth()[SmvUi::Text(FText::FromString(T), 13, "Bold", Fg(), false)]
+				]
+			];
+		}
+	}
+	// FPV zaman denemesi sonucu
+	if (Flow->LastFpv.bValid)
+	{
+		const USmvFlow::FFpvResult& Fr = Flow->LastFpv;
+		auto Tm = [](double V) { return V < 0 ? FString(TEXT("—")) : FString::Printf(TEXT("%d:%05.2f"), (int32)(V / 60.0), FMath::Fmod(V, 60.0)); };
+		const FSmvFpvCourse* Co = SmvFpv::Find(Fr.CourseId);
+		TSharedRef<SVerticalBox> Fv = SNew(SVerticalBox);
+		Fv->AddSlot().AutoHeight()[Section(FText::FromString(FString::Printf(TEXT("%s · %s"), *Tx(TEXT("fpv.result_tt")).ToString(), Co ? *Co->Name().ToString() : *Fr.CourseId)), Hex(0xf472b6))];
+		Fv->AddSlot().AutoHeight().Padding(0, 8, 0, 0)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 18, 0)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(Tx(TEXT("fpv.total_time")), 11, "Bold", Dim(), false)]
+				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(Fr.bFinished ? Tm(Fr.TotalS) : Tx(TEXT("fpv.dnf")).ToString())).Font(Font(30, "Black")).ColorAndOpacity(Fg())]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				Fr.bNewPb
+				? AsW<SBorder>(SNew(SBorder).BorderImage(Round(14.f)).BorderBackgroundColor(Hex(0xa855f7, 0.35f)).Padding(FMargin(14.f, 6.f))[SmvUi::Text(Tx(TEXT("fpv.new_pb")), 14, "Black", FLinearColor::White, false)])
+				: SmvUi::Text(Fr.PrevPbS > 0 ? FSmvI18n::Format(TEXT("fpv.pb_keep"), { { TEXT("t"), Tm(Fr.PrevPbS) }, { TEXT("d"), FString::Printf(TEXT("%+.2f s"), Fr.TotalS - Fr.PrevPbS) } }) : Tx(TEXT("fpv.pb_first")), 12, "Regular", Dim(), false)
+			]
+		];
+		Fv->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s %s · %s %d · %s %d · %s +%.1f s · %s %d"),
+			*Tx(TEXT("fpv.best_lap")).ToString(), *Tm(Fr.BestLapS), *Tx(TEXT("fpv.misses")).ToString(), Fr.Misses, *Tx(TEXT("fpv.hits")).ToString(), Fr.Hits,
+			*Tx(TEXT("fpv.penalty")).ToString(), Fr.PenS, *Tx(TEXT("summary.score")).ToString(), Fr.Score)), 12, "Regular", Fg())];
+		for (int32 i = 0; i < Fr.LapTimes.Num(); ++i)
+		{
+			FString Secs;
+			if (Fr.Sectors.IsValidIndex(i)) for (int32 k = 0; k < Fr.Sectors[i].Num(); ++k) Secs += FString::Printf(TEXT("   S%d %.2f"), k + 1, Fr.Sectors[i][k]);
+			Fv->AddSlot().AutoHeight().Padding(0, 3, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s %d   %s%s"), *Tx(TEXT("fpv.lap")).ToString(), i + 1, *Tm(Fr.LapTimes[i]), *Secs)), 12, "Mono", Fg(), false)];
+		}
+		B->AddSlot().AutoHeight().Padding(6, 14, 0, 0)[Glass(Fv, FMargin(18.f))];
+	}
 	if (S.Badges.Num()) B->AddSlot().AutoHeight().Padding(6, 12, 0, 0)[Badges];
 	if (S.bServoTriggerFired) B->AddSlot().AutoHeight().Padding(6, 12, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s · %.1f m AGL · %.0f m"), *Tx(TEXT("summary.servo_fired")).ToString(), S.ServoTriggerAglM, S.ServoTriggerDistM)), 12, "Bold", Warn())];
 	B->AddSlot().AutoHeight().Padding(6, 12, 0, 0)[SmvUi::Text(Client() && Client()->IsLoggedIn() && F->Draft.Backend == ESmvFlightBackend::Cloud ? Tx(TEXT("summary.cloud_saved")) : Tx(TEXT("summary.local_saved")), 10, "Regular", Mute())];
@@ -2668,6 +2788,208 @@ TSharedRef<SWidget> SSmvShell::SetLink()
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.mp_port")), SliderI(&S.MpUdpPort, 1024, 65535, 1))];
 	V->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[SmvUi::Text(Tx(TEXT("settings.mp_note")), 10, "Regular", Mute())];
 	return V;
+}
+
+// ---------------------------------------------------------------------------
+// "Nasıl uçmak istersin?" (web fly/index.js)
+// ---------------------------------------------------------------------------
+
+TSharedRef<SWidget> SSmvShell::FlyMode()
+{
+	TWeakObjectPtr<USmvFlow> F = Flow;
+	SSmvShell* Self = this;
+	const bool bIn = Client() && Client()->IsLoggedIn();
+	TSharedRef<SSmvButton> Solo = SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Plane).Accent(Hex(0xfbbf24)).MinHeight(220.f)
+		.Text(Tx(TEXT("fly.solo"))).SubText(Tx(TEXT("fly.solo_sub")))
+		.OnClick([F]() { if (F.IsValid()) { F->NewDraft(); F->Race.Kind = TEXT("none"); F->SetScreen(ESmvScreen::Wizard); } });
+	DefaultFocus = Solo;
+	TSharedRef<SUniformGridPanel> G = SNew(SUniformGridPanel).SlotPadding(FMargin(8.f)).MinDesiredSlotHeight(220.f);
+	G->AddSlot(0, 0)[Solo];
+	G->AddSlot(1, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Fpv).Accent(Hex(0xf472b6)).MinHeight(220.f)
+		.Text(Tx(TEXT("fly.fpv"))).SubText(Tx(TEXT("fly.fpv_sub"))).OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::FpvGallery); })];
+	G->AddSlot(2, 0)[SNew(SSmvButton).Kind(ESmvBtn::Tile).Icon(ESmvIcon::Match).Accent(Hex(0x34d399)).MinHeight(220.f)
+		.Text(Tx(TEXT("fly.multi"))).SubText(Tx(bIn ? TEXT("fly.multi_sub") : TEXT("fly.multi_login"))).OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Lobby); })];
+	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
+	V->AddSlot().AutoHeight()[G];
+	// yapay zekâya karşı bandı
+	V->AddSlot().AutoHeight().Padding(8, 8, 8, 0)
+	[
+		SNew(SBorder).BorderImage(Round(16.f)).BorderBackgroundColor(Accent2().CopyWithNewOpacity(0.12f)).Padding(FMargin(20.f, 14.f))
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 14, 0)[Icon(ESmvIcon::Drone, 34.f, Accent2())]
+			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(Tx(TEXT("fly.ai")), 16, "Bold", Fg(), false)]
+				+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(Tx(TEXT("fly.ai_sub")), 11, "Regular", Dim(), false)]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)[Btn(Tx(TEXT("race.rings")), [F]() { if (F.IsValid()) { F->NewDraft(); F->Race.Kind = TEXT("rings"); F->SetScreen(ESmvScreen::Wizard); } }, false, true, ESmvIcon::Route)]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Btn(Tx(TEXT("race.dogfight")), [F]() { if (F.IsValid()) { F->NewDraft(); F->Race.Kind = TEXT("dogfight"); F->Race.Bots = 1; F->SetScreen(ESmvScreen::Wizard); } }, false, true, ESmvIcon::Match)]
+		]
+	];
+	// davet kodu
+	V->AddSlot().AutoHeight().Padding(8, 12, 8, 0)
+	[
+		Glass(SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 14, 0)[SmvUi::Text(Tx(TEXT("fly.invite")), 13, "Bold", Fg(), false)]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)[TextEdit(&MatchCode, false, Tx(TEXT("lobby.code")), 160.f)]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)[TextEdit(&MatchPassword, true, Tx(TEXT("lobby.password")), 160.f)]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Btn(Tx(TEXT("lobby.join_btn")), [F, Self]()
+			{
+				if (!F.IsValid()) return;
+				if (!(Self->Client() && Self->Client()->IsLoggedIn())) { F->SetScreen(ESmvScreen::Login); return; }
+				F->EnsureMatchClient();
+				if (F->GetMatch()) { F->GetMatch()->Join(Self->MatchCode, Self->MatchPassword); F->SetScreen(ESmvScreen::Lobby); }
+			}, false, true, ESmvIcon::Next)]
+			+ SHorizontalBox::Slot().FillWidth(1.f)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				F.IsValid() && F->GetMatch() && F->GetMatch()->HasMatch()
+				? Btn(Tx(TEXT("fly.back_lobby")), [F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Lobby); }, true, true, ESmvIcon::Match)
+				: SNullWidget::NullWidget
+			], FMargin(20.f, 12.f))
+	];
+	return Page(Tx(TEXT("fly.title")), Tx(TEXT("fly.sub")), ESmvIcon::Play, V);
+}
+
+// ---------------------------------------------------------------------------
+// hazır FPV parkurları (web fly/fpv.js galerisi)
+// ---------------------------------------------------------------------------
+
+TSharedRef<SWidget> SSmvShell::FpvMap(const FString& CourseId, float Wd, float Ht)
+{
+	TSharedRef<SSmvCanvas> C = SNew(SSmvCanvas).Size(FVector2D(Wd, Ht)).Visibility(EVisibility::HitTestInvisible);
+	C->Painter = [CourseId](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		const FSmvFpvCourse* Co = SmvFpv::Find(CourseId);
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		DrBox(Out, L, G, FVector2D::ZeroVector, Sz, Hex(0x0b1424, 0.95f), Round(12.f));
+		if (!Co) return;
+		const double Span = FMath::Max(Co->Size.X, Co->Size.Y) * 1.15;
+		const double K = FMath::Min(Sz.X, Sz.Y) / FMath::Max(Span, 10.0);
+		const FVector2D Ctr = Sz * 0.5;
+		auto M = [&](double X, double Y) { return Ctr + FVector2D(X * K, -Y * K); };
+		Out.PushClip(FSlateClippingZone(G));
+		for (const FSmvFpvObst& E : Co->Obstacles)
+		{
+			if (!E.bVis) continue;
+			const FLinearColor Cl = SmvFpv::MatColor(E.Mat).CopyWithNewOpacity(0.55f);
+			if (E.T == TEXT("box"))
+			{
+				const FVector R = SmvFpv::Right(E.Yaw) * (E.W * 0.5), F = SmvFpv::Forward(E.Yaw) * (E.D * 0.5);
+				const FVector Cc(E.X, E.Y, 0);
+				const FVector Pts[4] = { Cc - R - F, Cc + R - F, Cc + R + F, Cc - R + F };
+				DrLine(Out, L + 1, G, { M(Pts[0].X, Pts[0].Y), M(Pts[1].X, Pts[1].Y), M(Pts[2].X, Pts[2].Y), M(Pts[3].X, Pts[3].Y), M(Pts[0].X, Pts[0].Y) }, Cl, 1.2f);
+			}
+			else if (E.T == TEXT("cyl") || E.T == TEXT("sph"))
+			{
+				const float Rr = FMath::Max(1.5f, (float)(E.R * K));
+				DrBox(Out, L + 1, G, M(E.X, E.Y) - FVector2D(Rr, Rr), FVector2D(2 * Rr, 2 * Rr), Cl, Circle());
+			}
+			else if (E.T == TEXT("pipe")) DrSeg(Out, L + 1, G, M(E.A.X, E.A.Y), M(E.B.X, E.B.Y), Cl, FMath::Max(1.f, (float)(E.R * 2 * K)));
+		}
+		// yarış hattı (kapı merkezleri sırayla) + kapılar
+		TArray<FVector2D> Line;
+		for (const FSmvFpvGate& Gt : Co->Gates) Line.Add(M(Gt.X, Gt.Y));
+		if (Line.Num()) Line.Add(Line[0]);
+		DrLine(Out, L + 2, G, Line, Accent().CopyWithNewOpacity(0.35f), 1.5f);
+		for (int32 i = 0; i < Co->Gates.Num(); ++i)
+		{
+			const FSmvFpvGate& Gt = Co->Gates[i];
+			const FLinearColor Gc = i == 0 ? Accent3() : Hex(0xf472b6);
+			const FVector R = SmvFpv::Right(Gt.Yaw) * (Gt.W * 0.5);
+			const FVector Cc(Gt.X, Gt.Y, 0);
+			DrSeg(Out, L + 3, G, M(Cc.X - R.X, Cc.Y - R.Y), M(Cc.X + R.X, Cc.Y + R.Y), Gc, 3.f);
+			DrText(Out, L + 4, G, i == 0 ? FString(TEXT("S/F")) : FString::FromInt(i), M(Gt.X, Gt.Y) + FVector2D(0, -9), Font(8, "Bold"), Fg(), 0);
+		}
+		DrBox(Out, L + 3, G, M(Co->StartX, Co->StartY) - FVector2D(4, 4), FVector2D(8, 8), Warn(), Circle());
+		Out.PopClip();
+	};
+	return C;
+}
+
+TSharedRef<SWidget> SSmvShell::FpvGallery()
+{
+	SSmvShell* Self = this;
+	TWeakObjectPtr<USmvFlow> F = Flow;
+	const TArray<FSmvFpvCourse>& Cs = SmvFpv::Courses();
+	if (Cs.Num() == 0) return Page(Tx(TEXT("fpv.gallery")), Tx(TEXT("fpv.tt_open_d")), ESmvIcon::Fpv, SmvUi::Text(Tx(TEXT("fpv.load_err")), 13, "Regular", Danger()));
+	if (!SmvFpv::Find(FpvSel)) { FpvSel = Cs[0].Id; FpvEdit = FSmvFpvCfg(); FpvEdit.CourseId = FpvSel; FpvEdit.Laps = Cs[0].Laps; }
+	const FSmvFpvCourse& Sel = *SmvFpv::Find(FpvSel);
+	auto Stars = [](int32 D) { return FString::Printf(TEXT("%d/5"), D); };
+	TSharedRef<SUniformGridPanel> G = SNew(SUniformGridPanel).SlotPadding(FMargin(6.f)).MinDesiredSlotWidth(250.f);
+	for (int32 i = 0; i < Cs.Num(); ++i)
+	{
+		const FSmvFpvCourse& C = Cs[i];
+		const FString Id = C.Id;
+		const FSmvFpvRecord Rec = SmvFpv::LoadRecord(C.Id, C.Laps);
+		const FString Sub = FString::Printf(TEXT("%s · %s\n%d %s · %d %s · %.0f m%s"), *C.VenueName().ToString(), *Stars(C.Difficulty), C.Laps, *Tx(TEXT("fpv.laps")).ToString(),
+			C.GateCount, *Tx(TEXT("fpv.gates")).ToString(), C.LengthM, Rec.TotalS > 0 ? *FString::Printf(TEXT(" · %s %.2f s"), *Tx(TEXT("fpv.my_best")).ToString(), Rec.TotalS) : TEXT(""));
+		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Hex(0xf472b6)).Selected(C.Id == FpvSel).MinHeight(230.f)
+			.Text(C.Name()).SubText(FText::FromString(Sub))
+			.OnClick([Self, Id, C]() { Self->FpvSel = Id; Self->FpvEdit = FSmvFpvCfg(); Self->FpvEdit.CourseId = Id; Self->FpvEdit.Laps = C.Laps; Self->Refresh(); })
+			.Extra()[SNew(SBox).WidthOverride(236.f).HeightOverride(110.f)[FpvMap(C.Id, 236.f, 110.f)]];
+		if (C.Id == FpvSel) DefaultFocus = B;
+		G->AddSlot(i % 2, i / 2)[B];
+	}
+	// sağ: ayrıntı + kurallar + araç
+	FpvEdit.CourseId = Sel.Id;
+	TArray<FString> Ids; TArray<FText> Ls;
+	if (Data()) for (const FSmvDrone& D : Data()->Drones()) if (D.Type == TEXT("multirotor") || D.Type == TEXT("fpv") || D.Type == TEXT("heli")) { Ids.Add(D.Id); Ls.Add(FText::FromString(FString::Printf(TEXT("%s (%s)"), *D.Name, *FSmvI18n::T(FString(TEXT("type.")) + D.Type).ToString()))); }
+	if (!Ids.Contains(FpvDroneId)) FpvDroneId = Ids.Num() ? Ids[0] : FString();
+	const FSmvFpvRecord Rec = SmvFpv::LoadRecord(Sel.Id, FpvEdit.Laps);
+	auto Sec = [](double V) { return FString::Printf(TEXT("%.0f s"), V); };
+	TSharedRef<SVerticalBox> R = SNew(SVerticalBox);
+	R->AddSlot().AutoHeight()[SNew(SBox).WidthOverride(520.f).HeightOverride(300.f)[FpvMap(Sel.Id, 520.f, 300.f)]];
+	R->AddSlot().AutoHeight().Padding(0, 10, 0, 2)[Title(Sel.Name(), 22)];
+	R->AddSlot().AutoHeight()[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s · %s %s · %.0f m · %d %s · %s: %s"), *Sel.VenueName().ToString(), *Tx(TEXT("fpv.difficulty")).ToString(),
+		*Stars(Sel.Difficulty), Sel.LengthM, Sel.GateCount, *Tx(TEXT("fpv.gates")).ToString(), *Tx(TEXT("fpv.kinds")).ToString(),
+		*FString::JoinBy(Sel.Kinds, TEXT(", "), [](const FString& K) { return FSmvI18n::T(FString(TEXT("fpv.k_")) + K).ToString(); }))), 11, "Regular", Dim())];
+	R->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[SmvUi::Text(Rec.TotalS > 0
+		? FSmvI18n::Format(TEXT("fpv.pb_keep"), { { TEXT("t"), FString::Printf(TEXT("%.2f s"), Rec.TotalS) }, { TEXT("d"), Rec.Date } })
+		: Tx(TEXT("fpv.no_record")), 12, "Bold", Warn())];
+	R->AddSlot().AutoHeight().Padding(0, 12, 0, 6)[Section(Tx(TEXT("fpv.rules")), Hex(0xf472b6))];
+	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.laps")), SliderI(&FpvEdit.Laps, 1, 10))];
+	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.crash_rule")), Chips(&FpvEdit.CrashRule, { TEXT("penalty"), TEXT("reset"), TEXT("continue") },
+		{ Tx(TEXT("fpv.rule_penalty")), Tx(TEXT("fpv.rule_reset")), Tx(TEXT("fpv.rule_continue")) }, {}, nullptr, 3))];
+	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.crash_pen")), Slider(&FpvEdit.CrashPenS, 0, 30, 0.5, Sec))];
+	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.miss_pen")), Slider(&FpvEdit.MissPenS, 0, 30, 0.5, Sec))];
+	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.time_limit")), SliderI(&FpvEdit.TimeLimitMin, 2, 30, 1, [](double V) { return FString::Printf(TEXT("%d dk"), (int32)V); }))];
+	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.ghost")), Toggle(&FpvEdit.bGhost), Tx(TEXT("fpv.ghost_d")))];
+	R->AddSlot().AutoHeight().Padding(0, 2)[Row(Tx(TEXT("fpv.vehicle")), Ids.Num() ? Cycle(&FpvDroneId, Ids, Ls, nullptr, 280.f) : SmvUi::Text(Tx(TEXT("fpv.type_warn")), 11, "Regular", Warn()))];
+	R->AddSlot().AutoHeight().Padding(0, 14, 0, 0)
+	[
+		SNew(SSmvButton).Kind(ESmvBtn::Hero).Icon(ESmvIcon::Play).Accent(Hex(0xf472b6)).Text(Tx(TEXT("fpv.start_tt"))).IsEnabled(Ids.Num() > 0)
+		.OnClick([F, Self]()
+		{
+			if (!F.IsValid() || !Self->Data()) return;
+			const FSmvFpvCourse* C = SmvFpv::Find(Self->FpvSel);
+			if (!C) return;
+			F->NewDraft();
+			for (const FSmvDrone& D : Self->Data()->Drones()) if (D.Id == Self->FpvDroneId) F->Draft.Drone = D;
+			F->Draft.Backend = ESmvFlightBackend::LocalSitl;
+			F->Draft.Track = USmvFlow::MakeFpvTrack(*C, F->Draft.Track);
+			F->Race.Kind = TEXT("none");
+			F->Fpv = Self->FpvEdit;
+			F->Fpv.CourseId = C->Id;
+			Self->SaveSettingsQuiet();
+			F->StartFlight();
+		})
+	];
+	return Page(Tx(TEXT("fpv.gallery")), Tx(TEXT("fpv.tt_open_d")), ESmvIcon::Fpv, SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 20, 0)[G]
+		+ SHorizontalBox::Slot().AutoWidth()[Glass(R, FMargin(20.f))]);
+}
+
+TSharedRef<SWidget> SSmvShell::ReplayScreen()
+{
+	return Page(Tx(TEXT("menu.logbook")), Tx(TEXT("menu.logbook_sub")), ESmvIcon::Replay, SmvUi::Text(Tx(TEXT("logbook.empty")), 13, "Regular", Mute()));
+}
+
+TSharedRef<SWidget> SSmvShell::Support()
+{
+	return Page(Tx(TEXT("support.title")), Tx(TEXT("support.sub")), ESmvIcon::Help, SmvUi::Text(Tx(TEXT("support.sub")), 13, "Regular", Mute()));
 }
 
 #undef LOCTEXT_NAMESPACE

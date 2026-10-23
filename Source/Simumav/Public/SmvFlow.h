@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "SimumavTypes.h"
+#include "SmvFpv.h"
 #include "SmvFlow.generated.h"
 
 class USimumavClient;
@@ -16,7 +17,24 @@ class USmvMatchClient;
 UENUM(BlueprintType)
 enum class ESmvScreen : uint8
 {
-	Welcome, Login, Menu, Hangar, Crew, Tracks, Missions, Wizard, Loading, Flight, Summary, Lobby, Leaderboard, Logbook, Settings, Account
+	Welcome, Login, Menu, Hangar, Crew, Tracks, Missions, Wizard, Loading, Flight, Summary, Lobby, Leaderboard, Logbook, Settings, Account,
+	/** "Nasıl uçmak istersin?" (tek / FPV parkuru / çok oyunculu / yapay zekâ) */
+	FlyMode,
+	/** Hazır FPV parkurları galerisi (zaman denemesi) */
+	FpvGallery,
+	/** Kayıttan oynatma */
+	Replay,
+	/** Destek: sorun bildir / taleplerim */
+	Support
+};
+
+/** Yarış sonu sırası (uçuş özeti podyumu) */
+struct FSmvPodiumRow
+{
+	FString Name;
+	int32 Passed = 0, Total = 0;
+	double FinishT = -1;
+	bool bMe = false;
 };
 
 /** Yerel karşılaşma (misafir): yapay zekâ pilotlarla halka yarışı / it dalaşı. Çevrim içi karşılaşmada sunucu hakemdir (USmvMatchClient). */
@@ -66,6 +84,10 @@ public:
 	// ---- sihirbaz ----
 	FSmvFlightRequest Draft;
 	FSmvLocalRace Race;
+	/** Hazır FPV parkuru zaman denemesi (boş CourseId = yok) */
+	FSmvFpvCfg Fpv;
+	/** FPV parkuru için sanal parkur (pist merkezi = başlangıç pedi; düz prosedürel dünya, ortam parkurdan) */
+	static FSmvTrack MakeFpvTrack(const FSmvFpvCourse& C, const FSmvTrack& Base);
 	void NewDraft();
 	/** Taslağı doğrular; hata metni (boş = geçerli). */
 	FString ValidateDraft() const;
@@ -77,6 +99,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Simumav") USmvFlightLink* GetLink() const { return Link; }
 	USmvMatchClient* GetMatch() const { return Match; }
 	FSmvFlightSummary LastSummary;
+	/** Son yarışın sırası ve oyun puanı (web match: halka 100, bitiren 250 + sıra 150/100/50; it dalaşı kazanan 1000 + tutma ×100 ≤ 500) */
+	TArray<FSmvPodiumRow> LastPodium;
+	int32 LastScore = -1;
+	FString LastRaceKind;
+	/** Son FPV zaman denemesi sonucu */
+	struct FFpvResult
+	{
+		bool bValid = false, bFinished = false, bNewPb = false;
+		FString CourseId;
+		int32 Laps = 0, Misses = 0, Hits = 0, Score = 0;
+		double TotalS = -1, PenS = 0, BestLapS = -1, PrevPbS = -1;
+		TArray<double> LapTimes;
+		TArray<TArray<double>> Sectors;
+	} LastFpv;
 	FString LoadingText;
 	/** GameMode özet ekler (GPWS, halkalar, yarış sonucu) — bulut özetine üstün gelmez, eksikleri tamamlar. */
 	TFunction<void(FSmvFlightSummary&)> SummaryAugmenter;

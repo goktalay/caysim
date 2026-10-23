@@ -26,6 +26,7 @@ class USmvToneSynth;
 class USmvMusicSynth;
 class USoundBase;
 class ASmvMenuScene;
+class ASmvFpvCourseActor;
 class SSmvShell;
 class SWidget;
 namespace SmvCore { class FGpws; class FRingTracker; class FDogfight; class FBotPilot; struct FRing; }
@@ -125,6 +126,11 @@ private:
 	double RaceStartWall = 0;
 	bool bRaceStarted = false;
 	bool bRaceDone = false;
+	double MyFinishT = -1;
+	/** Hazır FPV parkuru (zaman denemesi) */
+	UPROPERTY() TObjectPtr<ASmvFpvCourseActor> FpvActor;
+	double FpvEndAt = 0;
+	void UpdateFpv(const FCaySimTelemetry& T, double Now);
 	FString RaceResultBadge;
 	// yerel botlar
 	struct FBot { SmvCore::FBotPilot* Pilot = nullptr; SmvCore::FRingTracker* Tracker = nullptr; FString Name; double FinishT = -1; };
