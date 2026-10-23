@@ -135,6 +135,10 @@ private:
 	/** Parkur haritası: kip (konum / halka düzenleyici), arama metni */
 	FString MapMode = TEXT("pick"), MapQuery;
 	uint32 WorldPrevHash = 0;
+	/** Duman testi (-SmvSmoke): ekranları sırayla açar, her birinde ekran görüntüsü alır (Saved/Screenshots/Smoke), uçuş + duraklatma + özet, çıkış */
+	int32 SmokeStep = -1;
+	double SmokeAt = 0;
+	void TickSmoke();
 	double WorldPrevAt = 0;
 	bool bWorldPrevDirty = false;
 	TSharedPtr<class SSmvTileMap> TrackMap;

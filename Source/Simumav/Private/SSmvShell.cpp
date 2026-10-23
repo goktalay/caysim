@@ -525,6 +525,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 		// ilk açılış tanıtımı (ana menüye ilk girişte)
 		if (Built == ESmvScreen::Menu && !FSmvUiPrefs::Get().bTutorialDone && !bOverlay) OpenTutorial();
 	}
+	TickSmoke();
 	// dünya oluşturucu canlı önizlemesi: parametre değişince 0,6 sn sonra yeniden kur
 	if (Built == ESmvScreen::Tracks && MapMode == TEXT("3d"))
 	{
@@ -4349,3 +4350,64 @@ TSharedRef<SWidget> SSmvShell::Support()
 }
 
 #undef LOCTEXT_NAMESPACE
+
+// ---------------------------------------------------------------------------
+// duman testi (-SmvSmoke): runner'da paketlenmiş oyunu açıp her ekranın görüntüsünü alır
+// ---------------------------------------------------------------------------
+
+void SSmvShell::TickSmoke()
+{
+	static const bool bSmoke = FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke"));
+	if (!bSmoke || !Flow.IsValid()) return;
+	const double Now = FPlatformTime::Seconds();
+	if (SmokeStep < 0) { SmokeStep = 0; SmokeAt = Now + 6.0; LogoAt = -100.0; FSmvUiPrefs::Get().bTutorialDone = true; FSmvUiPrefs::Get().bFlightTipsDone = true; if (bOverlay) CloseOverlay(); return; }
+	if (Now < SmokeAt) return;
+	struct FStep { ESmvScreen Screen; int32 Wiz, Tab, Log; const TCHAR* Name; };
+	static const FStep Steps[] = {
+		{ ESmvScreen::Menu, -1, -1, -1, TEXT("01_menu") }, { ESmvScreen::FlyMode, -1, -1, -1, TEXT("02_flymode") }, { ESmvScreen::Hangar, -1, -1, -1, TEXT("03_hangar") },
+		{ ESmvScreen::Crew, -1, -1, -1, TEXT("04_crew") }, { ESmvScreen::Tracks, -1, -1, -1, TEXT("05_tracks") }, { ESmvScreen::Missions, -1, -1, -1, TEXT("06_missions") },
+		{ ESmvScreen::Wizard, 0, -1, -1, TEXT("07_wiz0") }, { ESmvScreen::Wizard, 1, -1, -1, TEXT("07_wiz1") }, { ESmvScreen::Wizard, 2, -1, -1, TEXT("07_wiz2") },
+		{ ESmvScreen::Wizard, 3, -1, -1, TEXT("07_wiz3") }, { ESmvScreen::Wizard, 4, -1, -1, TEXT("07_wiz4") }, { ESmvScreen::Wizard, 5, -1, -1, TEXT("07_wiz5") },
+		{ ESmvScreen::Wizard, 6, -1, -1, TEXT("07_wiz6") }, { ESmvScreen::Wizard, 7, -1, -1, TEXT("07_wiz7") },
+		{ ESmvScreen::Settings, -1, 0, -1, TEXT("08_set0") }, { ESmvScreen::Settings, -1, 1, -1, TEXT("08_set1") }, { ESmvScreen::Settings, -1, 2, -1, TEXT("08_set2") },
+		{ ESmvScreen::Settings, -1, 3, -1, TEXT("08_set3") }, { ESmvScreen::Settings, -1, 4, -1, TEXT("08_set4") }, { ESmvScreen::Settings, -1, 5, -1, TEXT("08_set5") },
+		{ ESmvScreen::Settings, -1, 6, -1, TEXT("08_set6") }, { ESmvScreen::Logbook, -1, -1, 0, TEXT("09_logbook") }, { ESmvScreen::Logbook, -1, -1, 1, TEXT("09_achievements") },
+		{ ESmvScreen::Replay, -1, -1, -1, TEXT("10_replay") }, { ESmvScreen::Leaderboard, -1, -1, -1, TEXT("11_top10") }, { ESmvScreen::Account, -1, -1, -1, TEXT("12_account") },
+		{ ESmvScreen::Support, -1, -1, -1, TEXT("13_support") }, { ESmvScreen::FpvGallery, -1, -1, -1, TEXT("14_fpv") }, { ESmvScreen::Lobby, -1, -1, -1, TEXT("15_lobby") },
+	};
+	const int32 NS = UE_ARRAY_COUNT(Steps);
+	const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots/Smoke"));
+	auto Shot = [&Dir](const FString& Name) { FScreenshotRequest::RequestScreenshot(Dir / (Name + TEXT(".png")), true, false); UE_LOG(LogTemp, Display, TEXT("SMOKE shot %s"), *Name); };
+	// adımlar: tek sayılı yarım adım = ekranı aç, çift = görüntü al
+	const int32 I = SmokeStep / 2;
+	if (I < NS)
+	{
+		const FStep& S = Steps[I];
+		if (SmokeStep % 2 == 0)
+		{
+			if (S.Wiz >= 0) WizStep = S.Wiz;
+			if (S.Tab >= 0) SetTab = S.Tab;
+			if (S.Log >= 0) LogTab = S.Log;
+			if (Flow->GetScreen() != S.Screen) Flow->SetScreen(S.Screen);
+			else Refresh();
+			if (S.Wiz >= 0 || S.Tab >= 0) Refresh();
+			SmokeAt = Now + 2.5;
+		}
+		else { Shot(S.Name); SmokeAt = Now + 1.0; }
+		++SmokeStep;
+		return;
+	}
+	// uçuş: sihirbazdan başlat (yerel SITL), 18 sn bekle, iki görüntü, duraklat, bitir, özet
+	const int32 F = SmokeStep - NS * 2;
+	switch (F)
+	{
+	case 0: StartFromWizard(); SmokeAt = Now + 25.0; break;
+	case 1: Shot(TEXT("20_flight_a")); if (GameMode.IsValid()) GameMode->UiAction(TEXT("Takeoff"), FString()); SmokeAt = Now + 12.0; break;
+	case 2: Shot(TEXT("21_flight_b")); if (GameMode.IsValid()) GameMode->UiAction(TEXT("CamCycle"), FString()); SmokeAt = Now + 4.0; break;
+	case 3: Shot(TEXT("22_flight_cam")); if (GameMode.IsValid()) GameMode->TogglePause(); SmokeAt = Now + 2.5; break;
+	case 4: Shot(TEXT("23_pause")); if (GameMode.IsValid()) GameMode->TogglePause(); Flow->EndFlight(TEXT("user")); SmokeAt = Now + 8.0; break;
+	case 5: Shot(TEXT("24_summary")); SmokeAt = Now + 2.0; break;
+	default: UE_LOG(LogTemp, Display, TEXT("SMOKE done")); FPlatformMisc::RequestExit(false); SmokeAt = Now + 100.0; break;
+	}
+	++SmokeStep;
+}

@@ -1,0 +1,61 @@
+# Simumav - duman testi (yalniz okur; depoyu degistirmez): runner diskindeki son paketlenmis oyunu -SmvSmoke ile acar.
+# Oyun her ekrani sirayla acip ekran goruntusu alir (Saved/Screenshots/Smoke), yerel SITL ile kisa ucus + duraklatma + ozet,
+# sonra kapanir. Goruntuler ve gunluk artefakt olarak yuklenir. Runner masaustu oturumu olmadan GPU cizimi yapamiyorsa
+# goruntu klasoru bos kalir; gunlukte D3D hatasi gorunur.
+name: smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: "Development ya da Shipping"
+        type: string
+        default: "Development"
+      wait:
+        description: "En uzun bekleme (sn)"
+        type: string
+        default: "420"
+
+jobs:
+  smoke:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, unreal]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Oyunu calistir
+        env:
+          CFG: ${{ inputs.config }}
+          WAIT: ${{ inputs.wait }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $base = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
+          Write-Host ("Paket: " + $base)
+          if (-not (Test-Path $base)) { Write-Host "Paket yok"; Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'Paketler') -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }; exit 1 }
+          $exe = Get-ChildItem $base -Filter *.exe -File | Select-Object -First 1
+          Write-Host ("Exe: " + $exe.FullName)
+          $shots = Join-Path $base 'Simumav\Saved\Screenshots'
+          if (Test-Path $shots) { Remove-Item $shots -Recurse -Force -ErrorAction SilentlyContinue }
+          Write-Host ("Oturum: " + [Environment]::UserInteractive + " / " + $env:USERNAME + " / session " + (Get-Process -Id $PID).SessionId)
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList '-SmvSmoke','-windowed','-ResX=1600','-ResY=900','-log','-unattended' -PassThru
+          $deadline = (Get-Date).AddSeconds([int]$env:WAIT)
+          while (-not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
+          if (-not $p.HasExited) { Write-Host "Zaman asimi: kapatiliyor"; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          $out = Join-Path $env:RUNNER_TEMP 'smoke'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          if (Test-Path $shots) { Copy-Item -Recurse -Force $shots (Join-Path $out 'Screenshots') }
+          $logs = Join-Path $base 'Simumav\Saved\Logs'
+          if (Test-Path $logs) { Copy-Item -Recurse -Force $logs (Join-Path $out 'Logs') }
+          Get-ChildItem $out -Recurse -File | ForEach-Object { Write-Host ($_.FullName + "  " + $_.Length) }
+          $log = Get-ChildItem (Join-Path $out 'Logs') -Filter *.log -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|Error|D3D|RHI' | Select-Object -First 120 | ForEach-Object { Write-Host $_.Line } }
+      - name: Artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ inputs.config }}
+          path: ${{ runner.temp }}/smoke
+          if-no-files-found: warn
+          retention-days: 7
