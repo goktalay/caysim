@@ -63,6 +63,8 @@ public:
 	int32 NumSpinners() const { return Parts.FilterByPredicate([](const FPart& P) { return P.Kind == EKind::Spinner; }).Num(); }
 	int32 NumSurfaces() const { return Parts.FilterByPredicate([](const FPart& P) { return P.Kind == EKind::Surface; }).Num(); }
 	FString Summary() const { return BuildSummary; }
+	/** Gece / alacakaranlık: seyir ışıklarına küçük, gölgesiz nokta ışıklar eklenir (gündüz yalnız parlayan küreler). Atmosfer kurulumu ayarlar. */
+	static void SetNightLighting(bool bOn) { bNightLighting = bOn; }
 
 private:
 	enum class EKind : uint8 { Spinner, Surface, Wheel, Steer, Light, Static };
@@ -96,6 +98,7 @@ private:
 	FString BuildSummary;
 	float RotorSpool = 0.f;   // helikopter rotor devri 0..1
 	double TimeS = 0;
+	static bool bNightLighting;
 
 	FPart& AddPart(const FString& Name, EKind Kind);
 	void FinishSpinners();

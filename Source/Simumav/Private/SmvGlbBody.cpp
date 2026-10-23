@@ -86,6 +86,8 @@ namespace
 	};
 }
 
+bool USmvGlbBody::bNightLighting = false;
+
 USmvGlbBody::USmvGlbBody()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -175,46 +177,51 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 		for (const SmvCore::FGlbPrimitive& G : M.Meshes[Nd.Mesh].Prims)
 		{
 			const int32 Pi = NodePart[i];
-			const int64 Key = ((int64)(Pi + 1) << 20) | (int64)(G.Material + 1);
+			// normalsiz ağ (Gazebo STL türevleri): üçgen yönleri tutarsız olabilir → düz gölgeleme (köşeler ayrılır) + iki yüzlü malzeme
+			const bool bFlat = G.Nrm.empty();
+			const int64 Key = ((int64)(Pi + 1) << 20) | (int64)((G.Material + 1) & 0x7FFFF) | (bFlat ? 0x80000 : 0);
 			FSection& S = Sections.FindOrAdd(Key);
-			const int32 Base = S.V.Num();
 			const int32 Nv = (int32)G.Pos.size() / 3;
+			TArray<FVector> Pw;
+			Pw.SetNumUninitialized(Nv);
 			for (int32 v = 0; v < Nv; ++v)
 			{
 				double W[3];
 				SmvCore::FGlbModel::TransformPoint(Nd.World, &G.Pos[v * 3], W);
-				const FVector P = ToUe(W);
-				S.V.Add(P);
-				Bounds += P;
-				if (Pi != INDEX_NONE) PartPts[Pi].Add(P);
-				if (!G.Nrm.empty())
-				{
-					double Dn[3];
-					SmvCore::FGlbModel::TransformDir(Nd.World, &G.Nrm[v * 3], Dn);
-					S.N.Add(ToUeDir(Dn));
-				}
-				else S.N.Add(FVector::ZeroVector);
-				S.Uv.Add(G.Uv.empty() ? FVector2D::ZeroVector : FVector2D(G.Uv[v * 2], G.Uv[v * 2 + 1]));
+				Pw[v] = ToUe(W);
+				Bounds += Pw[v];
+				if (Pi != INDEX_NONE) PartPts[Pi].Add(Pw[v]);
 			}
-			// eksen değişimi (x, z, y) aynalamadır → sarım ters çevrilir; ayna dönüşümlü düğümde bir kez daha
+			auto Uv = [&G](uint32 v) { return G.Uv.empty() ? FVector2D::ZeroVector : FVector2D(G.Uv[v * 2], G.Uv[v * 2 + 1]); };
+			if (bFlat)
+			{
+				for (size_t t = 0; t + 2 < G.Idx.size(); t += 3)
+				{
+					// eksen değişimi (x, z, y) aynalamadır → sarım ters (ayna dönüşümlü düğümde bir kez daha)
+					const uint32 I0 = G.Idx[t], I1 = bMirror ? G.Idx[t + 1] : G.Idx[t + 2], I2 = bMirror ? G.Idx[t + 2] : G.Idx[t + 1];
+					const FVector Fn = FVector::CrossProduct(Pw[I1] - Pw[I0], Pw[I2] - Pw[I0]).GetSafeNormal();
+					const int32 B = S.V.Num();
+					for (const uint32 I : { I0, I1, I2 }) { S.V.Add(Pw[I]); S.N.Add(Fn); S.Uv.Add(Uv(I)); }
+					S.T.Add(B); S.T.Add(B + 1); S.T.Add(B + 2);
+					++Tris;
+				}
+				continue;
+			}
+			const int32 Base = S.V.Num();
+			for (int32 v = 0; v < Nv; ++v)
+			{
+				S.V.Add(Pw[v]);
+				double Dn[3];
+				SmvCore::FGlbModel::TransformDir(Nd.World, &G.Nrm[v * 3], Dn);
+				S.N.Add(ToUeDir(Dn));
+				S.Uv.Add(Uv((uint32)v));
+			}
 			for (size_t t = 0; t + 2 < G.Idx.size(); t += 3)
 			{
 				const int32 A = Base + (int32)G.Idx[t], B = Base + (int32)G.Idx[t + 1], C = Base + (int32)G.Idx[t + 2];
 				if (bMirror) { S.T.Add(A); S.T.Add(B); S.T.Add(C); }
 				else { S.T.Add(A); S.T.Add(C); S.T.Add(B); }
 				++Tris;
-			}
-			if (G.Nrm.empty())
-			{
-				// normal yok: yüz normallerinin köşe ortalaması
-				for (int32 t = 0; t < S.T.Num(); t += 3)
-				{
-					if (S.T[t] < Base) continue;
-					const FVector& A = S.V[S.T[t]]; const FVector& B = S.V[S.T[t + 1]]; const FVector& C = S.V[S.T[t + 2]];
-					const FVector Fn = FVector::CrossProduct(B - A, C - A);
-					S.N[S.T[t]] += Fn; S.N[S.T[t + 1]] += Fn; S.N[S.T[t + 2]] += Fn;
-				}
-				for (int32 v = Base; v < S.N.Num(); ++v) S.N[v] = S.N[v].GetSafeNormal();
 			}
 		}
 	}
@@ -374,13 +381,14 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 		return T;
 	};
 	TMap<int32, UMaterialInstanceDynamic*> MatCache;
-	auto MatOf = [&](int32 Mi) -> UMaterialInterface*
+	auto MatOf = [&](int32 Mi, bool bTwoSided) -> UMaterialInterface*
 	{
-		if (UMaterialInstanceDynamic** F = MatCache.Find(Mi)) return *F;
+		const int32 CacheKey = Mi * 2 + (bTwoSided ? 1 : 0);
+		if (UMaterialInstanceDynamic** F = MatCache.Find(CacheKey)) return *F;
 		SmvCore::FGlbMaterial Gm;
 		if (Mi >= 0 && Mi < (int32)M.Materials.size()) Gm = M.Materials[Mi];
 		else { Gm.BaseColor[0] = Gm.BaseColor[1] = Gm.BaseColor[2] = 0.6f; Gm.Metallic = 0.1f; Gm.Roughness = 0.6f; }
-		UMaterialInterface* Parent = (Gm.bDoubleSided && Pbr2S) ? Pbr2S : Pbr ? Pbr : Basic;
+		UMaterialInterface* Parent = ((Gm.bDoubleSided || bTwoSided) && Pbr2S) ? Pbr2S : Pbr ? Pbr : Basic;
 		if (!Parent) return nullptr;
 		UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Parent, this);
 		const FLinearColor C(Gm.BaseColor[0], Gm.BaseColor[1], Gm.BaseColor[2], Gm.BaseColor[3]);
@@ -395,7 +403,7 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 			D->SetScalarParameterValue(TEXT("UseTex"), 1.f);
 		}
 		Mids.Add(D);
-		MatCache.Add(Mi, D);
+		MatCache.Add(CacheKey, D);
 		return D;
 	};
 
@@ -405,7 +413,8 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 	for (TPair<int64, FSection>& Kv : Sections)
 	{
 		const int32 Pi = (int32)(Kv.Key >> 20) - 1;
-		const int32 Mi = (int32)(Kv.Key & 0xFFFFF) - 1;
+		const int32 Mi = (int32)(Kv.Key & 0x7FFFF) - 1;
+		const bool bFlat = (Kv.Key & 0x80000) != 0;
 		FSection& S = Kv.Value;
 		if (S.T.Num() == 0) continue;
 		UProceduralMeshComponent*& Pmc = Pmcs.FindOrAdd(Pi + 1);
@@ -432,7 +441,7 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 			Mids.Add(D);
 			Mat = D;
 		}
-		else Mat = MatOf(Mi);
+		else Mat = MatOf(Mi, bFlat);
 		if (Mat) Pmc->SetMaterial(Si, Mat);
 		++Sec;
 	}
@@ -451,17 +460,17 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 			AddNavLight(TEXT("nav_tail"), FVector(Bounds.Min.X, C.Y, C.Z), FLinearColor::White, false);
 			AddNavLight(TEXT("beacon"), FVector(C.X, C.Y, Bounds.Max.Z), FLinearColor(1.f, 0.05f, 0.03f), true);
 		}
-		else
+		else if (bNightLighting)
 		{
 			for (FPart& P : Parts)
 			{
-				if (P.Kind != EKind::Light || !P.Pivot) continue;
+				if (P.Kind != EKind::Light || !P.Pivot || P.Name.ToLower().Contains(TEXT("tail"))) continue;
 				UPointLightComponent* Lc = NewObject<UPointLightComponent>(GetOwner(), NAME_None);
 				Lc->SetupAttachment(P.Pivot);
 				Lc->SetIntensityUnits(ELightUnits::Candelas);
-				Lc->SetIntensity(P.bBeacon ? 0.f : 12.f);
+				Lc->SetIntensity(P.bBeacon ? 0.f : 3.f);
 				Lc->SetLightColor(P.LightColor);
-				Lc->SetAttenuationRadius(350.f);
+				Lc->SetAttenuationRadius(250.f);
 				Lc->SetCastShadows(false);
 				Lc->RegisterComponent();
 				P.Light = Lc;
@@ -522,12 +531,13 @@ void USmvGlbBody::AddNavLight(const FString& Name, const FVector& PosCm, const F
 		}
 		Owned.Add(S);
 	}
+	if (!bNightLighting || Name == TEXT("nav_tail")) return;   // gündüz yalnız parlayan küre (yerel ışık sayısı / VSM sınırı)
 	UPointLightComponent* Lc = NewObject<UPointLightComponent>(GetOwner(), NAME_None);
 	Lc->SetupAttachment(Pv);
 	Lc->SetIntensityUnits(ELightUnits::Candelas);
-	Lc->SetIntensity(bBeacon ? 0.f : 12.f);
+	Lc->SetIntensity(bBeacon ? 0.f : 3.f);
 	Lc->SetLightColor(Color);
-	Lc->SetAttenuationRadius(350.f);
+	Lc->SetAttenuationRadius(250.f);
 	Lc->SetCastShadows(false);
 	Lc->RegisterComponent();
 	P.Light = Lc;
@@ -739,7 +749,7 @@ void USmvGlbBody::Animate(float Dt, const FSmvGlbInputs& In)
 			P.Pivot->SetRelativeRotation(FQuat(P.Axis, FMath::DegreesToRadians(Steer * 28.f)));
 			break;
 		case EKind::Light:
-			if (P.Light && P.bBeacon) P.Light->SetIntensity(In.bArmed && bNightBlink ? 60.f : 0.f);
+			if (P.Light && P.bBeacon) P.Light->SetIntensity(In.bArmed && bNightBlink ? 20.f : 0.f);
 			break;
 		default:
 			break;

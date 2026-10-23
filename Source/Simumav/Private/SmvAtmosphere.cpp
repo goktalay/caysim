@@ -2,6 +2,7 @@
 #include "SimumavModule.h"
 #include "SmvSolar.h"
 #include "SmvWorldActors.h"
+#include "SmvGlbBody.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Components/DirectionalLightComponent.h"
@@ -19,6 +20,7 @@
 #include "Engine/Engine.h"
 #include "UObject/EnumProperty.h"
 #include "UObject/UnrealType.h"
+#include "Misc/PackageName.h"
 
 namespace
 {
@@ -140,17 +142,38 @@ namespace
 
 	UClass* UdsClass(const TCHAR* IniKey, const TCHAR* AssetName)
 	{
+		// sınıf bir kez bulununca kök kümesine alınır (menü sahnesinden uçuşa geçişte GC'den sonra yeniden aramada bulunamıyordu)
+		static TMap<FString, UClass*> Cache;
+		if (UClass** F = Cache.Find(AssetName)) return *F;
+		UClass* Out = nullptr;
 		FString Path;
-		if (GConfig && GConfig->GetString(GSec, IniKey, Path, GGameIni) && !Path.IsEmpty())
-			if (UClass* C = LoadClass<AActor>(nullptr, *Path)) return C;
-		TArray<FAssetData> Assets;
-		IAssetRegistry::GetChecked().GetAssetsByPath(FName(TEXT("/Game/UltraDynamicSky")), Assets, true);
-		for (const FAssetData& A : Assets)
+		if (GConfig && GConfig->GetString(GSec, IniKey, Path, GGameIni) && !Path.IsEmpty()) Out = LoadClass<AActor>(nullptr, *Path);
+		const FString Known = FString::Printf(TEXT("/Game/UltraDynamicSky/Blueprints/%s.%s_C"), AssetName, AssetName);
+		if (!Out) Out = FindObject<UClass>(nullptr, *Known);
+		if (!Out && FPackageName::DoesPackageExist(FString::Printf(TEXT("/Game/UltraDynamicSky/Blueprints/%s"), AssetName))) Out = LoadClass<AActor>(nullptr, *Known);
+		int32 Seen = 0;
+		if (!Out)
 		{
-			if (A.AssetName.ToString() != AssetName) continue;
-			if (UClass* C = LoadClass<AActor>(nullptr, *FString::Printf(TEXT("%s.%s_C"), *A.PackageName.ToString(), AssetName))) return C;
+			TArray<FAssetData> Assets;
+			IAssetRegistry::GetChecked().GetAssetsByPath(FName(TEXT("/Game/UltraDynamicSky")), Assets, true);
+			Seen = Assets.Num();
+			for (const FAssetData& A : Assets)
+			{
+				if (A.AssetName.ToString() != AssetName) continue;
+				Out = LoadClass<AActor>(nullptr, *FString::Printf(TEXT("%s.%s_C"), *A.PackageName.ToString(), AssetName));
+				if (Out) break;
+			}
 		}
-		return nullptr;
+		if (Out)
+		{
+			Out->AddToRoot();
+			Cache.Add(AssetName, Out);
+		}
+		else
+		{
+			UE_LOG(LogSimumav, Log, TEXT("Atmosfer: %s sınıfı bulunamadı (%s; /Game/UltraDynamicSky altında %d varlık)"), AssetName, *Known, Seen);
+		}
+		return Out;
 	}
 
 	UObject* WeatherPreset(const TArray<FString>& Names)
@@ -311,6 +334,7 @@ bool FSmvAtmosphere::Apply(UWorld* W, const FSmvAtmosphereCfg& Cfg, TArray<AActo
 	if (!W) return false;
 	const int32 Q = Cfg.Quality >= 0 ? FMath::Clamp(Cfg.Quality, 0, 4) : CurrentQuality();
 	ApplyCVars(Q);
+	USmvGlbBody::SetNightLighting(Cfg.TimeOfDay == TEXT("night") || Cfg.TimeOfDay == TEXT("dusk"));
 	const FWx X = WeatherOf(Cfg.Weather, Cfg.Fog01);
 	const FWhen T = WhenOf(Cfg);
 	// rüzgâr: SITL SIM_WIND_DIR rüzgârın estiği yön (kuzeyden) → bulutların gittiği yön; Unreal: X doğu, Y güney → yaw = pusula − 90
