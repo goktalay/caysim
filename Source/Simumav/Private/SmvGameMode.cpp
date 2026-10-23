@@ -1272,6 +1272,25 @@ void ASmvGameMode::PlaceFabLevels()
 				Drop.Add(A);
 				continue;
 			}
+			// gök kubbesi/küresi ağları (ör. US_Military MM_Sky; ağ ya da malzeme adında "Sky") — Ultra Dynamic Sky'ı örtmesin
+			bool bSkyMesh = false;
+			{
+				TInlineComponentArray<UStaticMeshComponent*> SkyComps(A);
+				for (UStaticMeshComponent* SC : SkyComps)
+				{
+					if (!SC || !SC->GetStaticMesh()) continue;
+					const FString Mn = SC->GetStaticMesh()->GetName().ToLower();
+					const UMaterialInterface* Mat = SC->GetMaterial(0);
+					const FString Mt = Mat ? Mat->GetName().ToLower() : FString();
+					const bool bNamed = (Mn.Contains(TEXT("sky")) && !Mn.Contains(TEXT("scraper"))) || ((Mt.StartsWith(TEXT("mm_sky")) || Mt.StartsWith(TEXT("m_sky")) || Mt.StartsWith(TEXT("mi_sky"))));
+					if (bNamed || SC->Bounds.GetBox().GetSize().GetMax() > 2.0e6) { bSkyMesh = true; break; }
+				}
+			}
+			if (bSkyMesh)
+			{
+				Drop.Add(A);
+				continue;
+			}
 			if (A->IsA<APlayerStart>()) PlayerStarts.Add(A->GetActorLocation());
 			if (Cn.Contains(TEXT("Landscape"))) bLandscape = true;
 			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
