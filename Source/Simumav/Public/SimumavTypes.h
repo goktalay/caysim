@@ -288,6 +288,19 @@ struct SIMUMAV_API FSmvTarget
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bCw = true;
 };
 
+/** Yer kontrol sahası (§26): istasyon, radar (1–50 km), elektro-optik (0,5–15 km) — kalkış noktasının yanında kule. */
+USTRUCT(BlueprintType)
+struct SIMUMAV_API FSmvSite
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bStation = false;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bRadar = false;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double RadarKm = 20;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bEo = false;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double EoKm = 5;
+	bool Any() const { return bStation || bRadar || bEo; }
+};
+
 /** Uç sihirbazının çıktısı → `POST /api/fly/start` gövdesi ya da yerel oturum. */
 USTRUCT(BlueprintType)
 struct SIMUMAV_API FSmvFlightRequest
@@ -305,6 +318,7 @@ struct SIMUMAV_API FSmvFlightRequest
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Camera = TEXT("day");
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") TArray<FSmvTarget> Targets;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double TargetRadiusM = 25;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FSmvSite Site;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bRecordBin = true;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") ESmvFlightBackend Backend = ESmvFlightBackend::LocalSitl;
 	/** Bulut isteği gövdesi (`drone_id/pilot_id/track_id/...`). */

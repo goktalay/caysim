@@ -2136,9 +2136,9 @@ TSharedRef<SWidget> SSmvShell::Wizard()
 	WizSpeed = FString::SanitizeFloat(R.Speedup);
 	WizStickMode = FString::FromInt(Data()->Settings().StickMode);
 	WizDevice = Data()->Settings().InputDevice;
-	static const TCHAR* StepKeys[] = { TEXT("wiz.s_vehicle"), TEXT("wiz.s_map"), TEXT("wiz.s_env"), TEXT("wiz.s_control"), TEXT("wiz.s_rules"), TEXT("wiz.s_adv"), TEXT("wiz.s_go") };
-	static const ESmvIcon StepIcons[] = { ESmvIcon::Drone, ESmvIcon::Map, ESmvIcon::Sun, ESmvIcon::Gamepad, ESmvIcon::Flag, ESmvIcon::Gear, ESmvIcon::Play };
-	const int32 N = 7;
+	static const TCHAR* StepKeys[] = { TEXT("wiz.s_vehicle"), TEXT("wiz.s_map"), TEXT("wiz.s_env"), TEXT("wiz.s_control"), TEXT("wiz.s_rules"), TEXT("wiz.s_gcs"), TEXT("wiz.s_adv"), TEXT("wiz.s_go") };
+	static const ESmvIcon StepIcons[] = { ESmvIcon::Drone, ESmvIcon::Map, ESmvIcon::Sun, ESmvIcon::Gamepad, ESmvIcon::Flag, ESmvIcon::Shield, ESmvIcon::Gear, ESmvIcon::Play };
+	const int32 N = 8;
 	WizStep = FMath::Clamp(WizStep, 0, N - 1);
 	TabStep = [Self, N](int32 D) { Self->WizStep = FMath::Clamp(Self->WizStep + D, 0, N - 1); Self->Refresh(); };
 	// adım çubuğu
@@ -2163,7 +2163,8 @@ TSharedRef<SWidget> SSmvShell::Wizard()
 	case 2: Body = WizEnv(); break;
 	case 3: Body = WizControl(); break;
 	case 4: Body = WizRules(); break;
-	case 5: Body = WizAdvanced(); break;
+	case 5: Body = WizGcs(); break;
+	case 6: Body = WizAdvanced(); break;
 	default: Body = WizSummary(); break;
 	}
 	TSharedRef<SSmvButton> Next = SNew(SSmvButton).Kind(WizStep == N - 1 ? ESmvBtn::Hero : ESmvBtn::Primary).MinWidth(200.f)
@@ -2549,6 +2550,48 @@ TSharedRef<SWidget> SSmvShell::WizAdvanced()
 	return SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 18, 0)[Glass(L, FMargin(20.f))]
 		+ SHorizontalBox::Slot().FillWidth(1.f)[Glass(Rt, FMargin(20.f))];
+}
+
+TSharedRef<SWidget> SSmvShell::WizGcs()
+{
+	SSmvShell* Self = this;
+	FSmvSite& Si = Flow->Draft.Site;
+	auto Km = [](double V) { return FString::Printf(TEXT("%.1f km"), V); };
+	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
+	V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(FText::FromString(FSmvI18n::T(TEXT("site.title")).ToString() + TEXT("  ·  ") + FSmvI18n::T(TEXT("site.optional")).ToString()), Accent3())];
+	V->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[SmvUi::Text(Tx(TEXT("site.desc")), 11, "Regular", Dim())];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("site.station")), Toggle(&Si.bStation, [Self]() { Self->Refresh(); }), Tx(TEXT("site.station_desc")))];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("site.radar")), Toggle(&Si.bRadar, [Self]() { Self->Refresh(); }), Tx(TEXT("site.radar_desc")))];
+	if (Si.bRadar) V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("site.coverage")), Slider(&Si.RadarKm, 1, 50, 1, Km))];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("site.eo")), Toggle(&Si.bEo, [Self]() { Self->Refresh(); }), Tx(TEXT("site.eo_desc")))];
+	if (Si.bEo) V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("site.zoom_range")), Slider(&Si.EoKm, 0.5, 15, 0.5, Km))];
+	V->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[SmvUi::Text(FText::FromString(FSmvI18n::T(TEXT("site.radar_title")).ToString() + TEXT(" · ") + FSmvI18n::T(TEXT("site.eo_title")).ToString()), 10, "Regular", Mute())];
+	// şematik (kuzey yukarı): kalkış, istasyon, kule, kapsama
+	TSharedRef<SSmvCanvas> Sch = SNew(SSmvCanvas).Size(FVector2D(360, 360));
+	Sch->Painter = [Self](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		if (!Self->Flow.IsValid()) return;
+		const FSmvSite& S = Self->Flow->Draft.Site;
+		const double Hd = FMath::DegreesToRadians(Self->Flow->Draft.Track.World.RunwayHeading);
+		const FVector2D Sz = FVector2D(G.GetLocalSize()), C = Sz * 0.5;
+		DrBox(Out, L, G, FVector2D::ZeroVector, Sz, Hex(0x0b1222, 0.9f), Round(14.f));
+		const float K = (float)Sz.X / 260.f;   // ~260 m alan
+		auto P = [&](double F, double R) { const double E = F * FMath::Sin(Hd) + R * FMath::Cos(Hd), N = F * FMath::Cos(Hd) - R * FMath::Sin(Hd); return C + FVector2D(E, -N) * K; };
+		DrSeg(Out, L + 1, G, P(-60, 0), P(110, 0), FLinearColor(1, 1, 1, 0.25f), 6.f);   // pist / kalkış ekseni
+		DrBox(Out, L + 2, G, P(0, 0) - FVector2D(7, 7), FVector2D(14, 14), Accent(), Circle());
+		DrText(Out, L + 3, G, FSmvI18n::T(TEXT("site.pad")).ToString(), P(0, 0) + FVector2D(0, 16), Font(9, "Bold"), Accent(), 0);
+		if (S.bStation) { DrBox(Out, L + 2, G, P(-40, 55) - FVector2D(10, 5), FVector2D(20, 10), Accent3(), nullptr); DrText(Out, L + 3, G, FSmvI18n::T(TEXT("site.station_short")).ToString(), P(-40, 55) + FVector2D(0, 14), Font(9, "Bold"), Accent3(), 0); }
+		if (S.bRadar || S.bEo)
+		{
+			DrBox(Out, L + 2, G, P(-40, 85) - FVector2D(6, 6), FVector2D(12, 12), Warn(), nullptr);
+			DrText(Out, L + 3, G, FSmvI18n::T(TEXT("site.tower")).ToString(), P(-40, 85) + FVector2D(0, 14), Font(9, "Bold"), Warn(), 0);
+			if (S.bRadar) DrArc(Out, L + 1, G, P(-40, 85), (float)C.X - 6.f, 0.f, 360.f, Hex(0x34d399, 0.5f), 1.5f);
+		}
+		DrText(Out, L + 3, G, FSmvI18n::T(TEXT("site.schema")).ToString(), FVector2D(10, 14), Font(9, "Bold"), Dim(), -1);
+	};
+	return SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 18, 0)[Glass(V, FMargin(20.f))]
+		+ SHorizontalBox::Slot().AutoWidth()[Glass(Sch, FMargin(14.f))];
 }
 
 TSharedRef<SWidget> SSmvShell::WizSummary()

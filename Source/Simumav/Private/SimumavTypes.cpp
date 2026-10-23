@@ -466,6 +466,16 @@ TSharedRef<FJsonObject> FSmvFlightRequest::ToStartJson() const
 		T->SetNumberField(TEXT("radius_m"), FMath::Clamp(TargetRadiusM, 5.0, 200.0));
 		O->SetObjectField(TEXT("targets"), T);
 	}
+	if (Site.Any())
+	{
+		TSharedRef<FJsonObject> Si = MakeShared<FJsonObject>();
+		Si->SetBoolField(TEXT("station"), Site.bStation);
+		Si->SetBoolField(TEXT("radar"), Site.bRadar);
+		Si->SetNumberField(TEXT("radar_km"), FMath::RoundToDouble(FMath::Clamp(Site.RadarKm, 1.0, 50.0) * 100.0) / 100.0);
+		Si->SetBoolField(TEXT("eo"), Site.bEo);
+		Si->SetNumberField(TEXT("eo_km"), FMath::RoundToDouble(FMath::Clamp(Site.EoKm, 0.5, 15.0) * 100.0) / 100.0);
+		O->SetObjectField(TEXT("site"), Si);
+	}
 	if (Drone.Type == TEXT("rover") && !Drone.Drive.IsEmpty()) O->SetStringField(TEXT("drive"), Drone.Drive);
 	return O;
 }

@@ -165,6 +165,7 @@ private:
 	TSharedRef<SWidget> WizControl();
 	TSharedRef<SWidget> WizRules();
 	TSharedRef<SWidget> WizAdvanced();
+	TSharedRef<SWidget> WizGcs();
 	TSharedRef<SWidget> WizSummary();
 	void StartFromWizard();
 

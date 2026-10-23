@@ -90,7 +90,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | "Nasıl uçmak istersin?" (tek / FPV / çok oyunculu) | `fly/index.js` | "Nasıl uçmak istersin?" ekranı: tek uçuş / FPV parkuru / çok oyunculu / yapay zekâ rakip | ✓ | P1 |
 | Adımlı tek oyunculu sihirbaz | `fly/wizard.js` | 7 adım: Araç (3B önizleme + statlar + pilot) → Harita (kartlar, önizleme görseli) → Ortam (saat, hava, rüzgâr pusulası; UDS'ye gider) → Kumanda (Mode 1–4 şemalı kartlar, cihaz, expo) → Görev ve kurallar (görev, yarış/it dalaşı, hedefler) → Gelişmiş (kalkış, güç, kamera, hız, arka uç, .BIN) → Özet + BAŞLAT; LB/RB / Q-E adım; "Hemen başlat" | ✓ | — |
 | Kalkış yöntemleri + rüzgâr önerisi | `wizard.js` | Yöntemler ve aralıklar + rüzgâra karşı kalkış önerisi (baş/yan/kuyruk bileşeni, uygun değilse amber; "Rüzgâra karşı çevir" pist yönünü ayarlar) | ✓ | P2 |
-| Yer kontrol (radar/EO) adımı | `wizard.js` | — | ✗ | P2 |
+| Yer kontrol (radar/EO) adımı | `wizard.js` | Sihirbaz 6. adım "Yer kontrol": istasyon / radar (1–50 km) / EO (0,5–15 km) seçimi + kuzey-yukarı yerleşim şeması; bulut isteğinde site gövdesi | ✓ | P2 |
 | Kamera türü + termal paleti, gösterge tasarımı, grafik ön ayarı | `wizard.js` | Kamera türü + termal paleti (beyaz-sıcak / siyah-sıcak / ironbow; renk tablosu LUT), gösterge tasarımı ve grafik ön ayarı Ayarlar'da | ✓ | P2 |
 | Video kaydı (WebM) | `wizard.js` | Video kaydı: sihirbaz anahtarı + uçuşta ● REC düğmesi (süre sayacı); 15 kare/sn, ≤ 1280 px MJPEG AVI → Saved/Simumav/Videos | ✓ | P2 |
 
@@ -129,7 +129,7 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Grafik ▾ (ön ayarlar, FPS, kare sınırı, özel kaydırıcılar) | `flightsim_gfx.js` | Ayarlar → Görüntü: 5 ön ayar kartı + otomatik algılama + çözünürlük, pencere kipi, VSync, kare sınırı, ölçek, 8 ayrıntı kaydırıcısı | ✓ | — |
 | Servo tetik "Dinle" | `flightsim_servotrig.js` | Duraklatma → Gelişmiş | ✓ | — |
 | Hedef sembolojisi / kilit (yalnız HUD + puan) | `flightsim_targets.js` | ✓ | ✓ | — |
-| Yer kontrol radar/EO pencereleri | `flightsim_gcs_ui.js` | — | ✗ | P2 |
+| Yer kontrol radar/EO pencereleri | `flightsim_gcs_ui.js` | Sahada istasyon + kafes kule (EO tareti, 4 sn'de dönen radar anteni); uçuşta sol altta RADAR PPI (tarama izi, menzil halkaları, temaslar, tıkla-seç → EO izler / hedefse kilit) ve EO penceresi (taret kamerası, otomatik yakınlaştırma, gündüz/termal/gece, AZ/EL/MZL OSD); Y / U ile aç-kapa | ✓ | P2 |
 | Çarpışma efekti (patlama, sarsıntı) | `flightsim3d.js` | Çarpma: darbe sesi, ekran parlaması, kamera sarsıntısı, savrulan enkaz parçaları | ✓ | P2 |
 | Giriş sekansı 3-2-1-BAŞLA | `flightsim_intro.js` | Sayaç + halka + parkur adı + bip; kamera 100 m / 80 m sarmalla takip konumuna iner (yarış dışı) | ✓ | P2 |
 | Esc → çıkış onayı / duraklatma | `session.js` | Duraklatma menüsü (SITL sürer): devam, RTL, sıfırla, yardım, hızlı ayarlar (Mode 1–4, ses, kokpit), gelişmiş (servo, MP), uçuşu bitir | ✓ | — |

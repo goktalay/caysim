@@ -141,11 +141,20 @@ private:
 	TArray<FVector> DebrisVel;
 	double DebrisGroundZ = 0, DebrisUntil = 0;
 	void CrashFx();
+	UPROPERTY() TObjectPtr<class ASmvSiteActor> Site;
+	bool bRadarOn = true, bEoOn = true;
+	int32 EoSel = 0;          // 0 = kendi İHA, i>0 = hedef i
+	int32 EoTypeIdx = 0;      // 0 gündüz, 1 termal, 2 gece
+	uint32 EoFrame = 0;
+	void UpdateSite(struct FSmvFlightUiState& U);
 	double PathAt = 0, PathT0 = 0;
 	TUniquePtr<FSmvVideoRec> VideoRec;
 public:
 	/** Video kaydını aç/kapat (uçuş arayüzü düğmesi) */
 	void ToggleVideo();
+	/** Radar ekranında temas seç (EO izler; hedefse kilit) */
+	void RadarPick(int32 Id);
+	void CycleEoType();
 	bool IsRecording() const;
 	double RecSeconds() const;
 private:

@@ -19,6 +19,7 @@
 #include "SmvPilotFigure.h"
 #include "SmvSpeech.h"
 #include "SmvVideoRec.h"
+#include "SmvSiteActor.h"
 #include "Engine/StaticMeshActor.h"
 #include "SmvMusicSynth.h"
 #include "SmvUiPrefs.h"
@@ -386,6 +387,26 @@ void ASmvGameMode::BuildScene()
 	{
 		Flow->GetMatch()->OnPositions.AddUObject(this, &ASmvGameMode::HandleMatchPositions);
 	}
+	// ---- yer kontrol sahası (istasyon / radar / EO) ----
+	if (Req.Site.Any())
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Site = W->SpawnActor<ASmvSiteActor>(ASmvSiteActor::StaticClass(), FTransform::Identity, Sp);
+		if (Site)
+		{
+			TWeakObjectPtr<ASmvGameMode> WG(this);
+			Site->Build(Req.Site, Req.Track.World.RunwayHeading, [WG](double E, double N, double Up)
+			{
+				ASmvGameMode* G = WG.Get();
+				if (!G) return FVector(E * 100.0, -N * 100.0, Up * 100.0);
+				double La, Lo;
+				SmvCore::LatLon(G->Req.Track.Lat, G->Req.Track.Lon, E, N, La, Lo);
+				return G->Geo(La, Lo, G->GroundMsl + Up);
+			});
+		}
+		EoSel = 0; EoTypeIdx = 0; bRadarOn = bEoOn = true;
+	}
 	// ---- hazır FPV parkuru (zaman denemesi) ----
 	FpvEndAt = 0;
 	if (Flow->Fpv.IsActive())
@@ -544,6 +565,7 @@ void ASmvGameMode::StopScene()
 	if (Drone) { Drone->Destroy(); Drone = nullptr; }
 	if (FpvActor) { FpvActor->Destroy(); FpvActor = nullptr; }
 	if (PilotFigure) { PilotFigure->Destroy(); PilotFigure = nullptr; }
+	if (Site) { Site->Destroy(); Site = nullptr; }
 	for (TObjectPtr<AActor>& Db : Debris) if (Db) Db->Destroy();
 	Debris.Reset(); DebrisVel.Reset();
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
@@ -719,6 +741,8 @@ void ASmvGameMode::HandleAction(FName A)
 	if (A == TEXT("Pause") && Shell.IsValid() && Shell->IsOverlayOpen()) { Shell->ToggleHelp(); return; }
 	if (A == TEXT("Help")) { if (Shell.IsValid()) Shell->ToggleHelp(); return; }
 	if (A == TEXT("Cockpit")) { if (FlightUi.IsValid()) FlightUi->ToggleCockpit(); return; }
+	if (A == TEXT("Radar")) { bRadarOn = !bRadarOn; FSmvUiSound::Play(ESmvSnd::Toggle); return; }
+	if (A == TEXT("Eo")) { bEoOn = !bEoOn; FSmvUiSound::Play(ESmvSnd::Toggle); return; }
 	if (A == TEXT("Pause")) { TogglePause(); return; }
 	if (A == TEXT("Panel")) { if (FlightUi.IsValid()) FlightUi->TogglePanel(); return; }
 	if (A == TEXT("Sticks")) { if (FlightUi.IsValid()) FlightUi->ToggleSticks(); return; }
@@ -1291,6 +1315,7 @@ void ASmvGameMode::UpdateHud()
 		U.bMenuOpen = bPauseMenu;
 		U.Pip = PipRt;
 		U.PipLabel = ASmvPilotPawn::ModeLabel(ESmvCamMode::Gimbal);
+		UpdateSite(U);
 		FlightUi->SetState(U);
 	}
 }
@@ -1926,3 +1951,76 @@ void ASmvGameMode::ToggleVideo()
 
 bool ASmvGameMode::IsRecording() const { return VideoRec.IsValid() && VideoRec->IsOn(); }
 double ASmvGameMode::RecSeconds() const { return VideoRec.IsValid() ? VideoRec->Seconds() : 0.0; }
+
+// ---------------------------------------------------------------------------
+// yer kontrol sahası: radar temasları (kule merkezli ENU), EO izleme ve yakalama
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::UpdateSite(FSmvFlightUiState& U)
+{
+	if (!Site) return;
+	U.bRadar = Req.Site.bRadar; U.bEo = Req.Site.bEo;
+	U.bRadarOn = bRadarOn; U.bEoOn = bEoOn;
+	U.RadarKm = (float)Req.Site.RadarKm; U.EoKm = (float)Req.Site.EoKm;
+	U.Sweep = (float)Site->SweepDeg();
+	const FVector Base = Site->GetActorLocation();
+	auto Enu = [&Base](const FVector& Wp) { const FVector D = (Wp - Base) / 100.0; return FVector(D.X, -D.Y, D.Z); };
+	TArray<TPair<int32, FVector>> Objs;   // id → dünya
+	if (Drone) Objs.Add(TPair<int32, FVector>(0, Drone->GetActorLocation()));
+	for (int32 i = 0; i < TargetActors.Num(); ++i) if (TargetActors[i]) Objs.Add(TPair<int32, FVector>(i + 1, TargetActors[i]->GetActorLocation()));
+	for (int32 i = 0; i < Ghosts.Num(); ++i) if (Ghosts[i]) Objs.Add(TPair<int32, FVector>(100 + i, Ghosts[i]->GetActorLocation()));
+	U.Blips.Reset();
+	const double Cov = Req.Site.RadarKm * 1000.0;
+	FVector EoTargetW = FVector::ZeroVector;
+	bool bEoHas = false;
+	for (const TPair<int32, FVector>& O : Objs)
+	{
+		const FVector E = Enu(O.Value);
+		if (FVector2D(E.X, E.Y).Size() > Cov) continue;
+		FSmvFlightUiState::FBlip B;
+		B.E = (float)E.X; B.N = (float)E.Y; B.Alt = (float)E.Z; B.Id = O.Key; B.bOwn = O.Key == 0; B.bSel = O.Key == EoSel;
+		U.Blips.Add(B);
+		if (O.Key == EoSel) { EoTargetW = O.Value; bEoHas = true; }
+	}
+	if (!bEoHas && Drone) { EoTargetW = Drone->GetActorLocation(); bEoHas = EoSel == 0; }
+	if (!Req.Site.bEo) return;
+	static const TCHAR* Types[] = { TEXT("site.day"), TEXT("site.thermal"), TEXT("site.night") };
+	U.EoType = FSmvI18n::T(Types[FMath::Clamp(EoTypeIdx, 0, 2)]).ToString();
+	U.EoRt = Site->GetEoTarget();
+	if (!bEoHas) { U.EoState = FSmvI18n::T(TEXT("site.eo_idle")).ToString(); return; }
+	const FVector From = Site->EoWorld();
+	const double Rng = FVector::Dist(From, EoTargetW) / 100.0;
+	const FVector D = EoTargetW - From;
+	const double Az = FMath::Fmod(FMath::RadiansToDegrees(FMath::Atan2(D.X, -D.Y)) + 360.0, 360.0);
+	const double El = FMath::RadiansToDegrees(FMath::Atan2(D.Z, FVector2D(D.X, D.Y).Size()));
+	U.EoInfo = FString::Printf(TEXT("%s %05.1f°  %s %+05.1f°  %s %.0f m"), *FSmvI18n::T(TEXT("site.az")).ToString(), Az, *FSmvI18n::T(TEXT("site.el")).ToString(), El, *FSmvI18n::T(TEXT("site.rng")).ToString(), Rng);
+	if (Rng > Req.Site.EoKm * 1000.0) { U.EoState = FSmvI18n::T(TEXT("site.eo_out")).ToString(); return; }
+	U.EoState = FSmvI18n::T(TEXT("site.eo_track")).ToString() + (EoSel == 0 ? TEXT(" · ") + FSmvI18n::T(TEXT("site.own")).ToString() : FString::Printf(TEXT(" · T%d"), EoSel));
+	// otomatik yakınlaştırma: hedef ~8 m'lik alanı doldursun
+	const float Fov = FMath::Clamp((float)FMath::RadiansToDegrees(2.0 * FMath::Atan(8.0 / FMath::Max(1.0, Rng))), 0.35f, 48.f);
+	U.EoFov = Fov;
+	const bool bCap = bEoOn && (++EoFrame % 2 == 0);
+	if (bCap && (EoFrame % 60 == 2))
+	{
+		FPostProcessSettings P;
+		if (EoTypeIdx == 1) { P.bOverride_ColorSaturation = true; P.ColorSaturation = FVector4(0, 0, 0, 1); P.bOverride_ColorContrast = true; P.ColorContrast = FVector4(1.8f, 1.8f, 1.8f, 1.f); }
+		else if (EoTypeIdx == 2) { P.bOverride_ColorSaturation = true; P.ColorSaturation = FVector4(0, 0, 0, 1); P.bOverride_ColorGain = true; P.ColorGain = FVector4(0.35f, 1.f, 0.4f, 1.f); P.bOverride_AutoExposureBias = true; P.AutoExposureBias = 3.f; }
+		Site->SetEoPost(P);
+	}
+	Site->AimEo(EoTargetW, Fov, bCap);
+}
+
+void ASmvGameMode::RadarPick(int32 Id)
+{
+	EoSel = Id;
+	if (Id > 0 && Id < 100)
+	{
+		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+		P->SetStringField(TEXT("action"), TEXT("lock"));
+		P->SetNumberField(TEXT("i"), Id);
+		Command(TEXT("engage"), P);
+	}
+	FSmvUiSound::Play(ESmvSnd::Click);
+}
+
+void ASmvGameMode::CycleEoType() { EoTypeIdx = (EoTypeIdx + 1) % 3; EoFrame = 1; FSmvUiSound::Play(ESmvSnd::Toggle); }

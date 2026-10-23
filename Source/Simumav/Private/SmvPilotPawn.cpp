@@ -107,7 +107,7 @@ void ASmvPilotPawn::BuildInput()
 		TEXT("CamCycle"), TEXT("CamType"), TEXT("Hud"), TEXT("Pip"), TEXT("Panel"), TEXT("Sticks"), TEXT("ModeMenu"), TEXT("SpeedUp"), TEXT("SpeedDown"),
 		TEXT("Mode1"), TEXT("Mode2"), TEXT("Mode3"), TEXT("MotorCut"), TEXT("GimbalUp"), TEXT("GimbalDown"),
 		TEXT("Cam1"), TEXT("Cam2"), TEXT("Cam3"), TEXT("Cam4"), TEXT("Cam5"), TEXT("Cam6"), TEXT("Cam7"), TEXT("Ch5Up"), TEXT("Ch5Down"), TEXT("ThrCenter"),
-		TEXT("Help"), TEXT("Cockpit") };
+		TEXT("Help"), TEXT("Cockpit"), TEXT("Radar"), TEXT("Eo") };
 	for (const FName& B : Btn) MakeAction(B, 0);
 	MapAllKeys();
 }
@@ -152,6 +152,8 @@ void ASmvPilotPawn::MapAllKeys()
 	MapKey(TEXT("ModeMenu"), EKeys::F);          MapKey(TEXT("ModeMenu"), EKeys::Gamepad_Special_Left);
 	MapKey(TEXT("Help"), EKeys::F1);
 	MapKey(TEXT("Cockpit"), EKeys::G);
+	MapKey(TEXT("Radar"), EKeys::Y);
+	MapKey(TEXT("Eo"), EKeys::U);
 	MapKey(TEXT("Lock"), EKeys::Tab);            MapKey(TEXT("Lock"), EKeys::Gamepad_RightTrigger);
 	MapKey(TEXT("Ack"), EKeys::B);               MapKey(TEXT("Ack"), EKeys::Gamepad_FaceButton_Right);
 	MapKey(TEXT("Pause"), EKeys::Escape);        MapKey(TEXT("Pause"), EKeys::Gamepad_Special_Right);

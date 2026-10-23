@@ -574,6 +574,14 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		[
 			RecChip()
 		]
+		// yer kontrol: radar + EO pencereleri (sol, sanal çubukların üstünde)
+		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(14.f, 0.f, 0.f, 236.f)
+		[
+			SNew(SHorizontalBox)
+			.Visibility_Lambda([this]() { return St.bMenuOpen ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(0, 0, 10, 0)[RadarWindow()]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom)[EoWindow()]
+		]
 		// kayıttan oynatma şeridi
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 14.f, 0.f, 0.f)
 		[
@@ -1585,5 +1593,123 @@ TSharedRef<SWidget> SSmvFlightUi::RecChip()
 				const bool bBlink = FMath::Fmod(FPlatformTime::Seconds(), 1.0) < 0.6;
 				return bOn ? (bBlink ? FLinearColor(0.95f, 0.25f, 0.25f, 1.f) : FLinearColor(0.7f, 0.2f, 0.2f, 1.f)) : FLinearColor(0.55f, 0.6f, 0.68f, 0.75f);
 			}, 70.f)
+		];
+}
+
+// ---------------------------------------------------------------------------
+// yer kontrol: RADAR (PPI; 4 sn tarama, menzil halkaları, temaslar; tıkla → seç) ve EO (taret kamerası + OSD)
+// ---------------------------------------------------------------------------
+
+TSharedRef<SWidget> SSmvFlightUi::RadarWindow()
+{
+	using namespace SmvFuiDraw;
+	using namespace SmvFuiTheme;
+	const FLinearColor Ph(0.35f, 1.f, 0.45f, 1.f);
+	TSharedRef<SSmvPaintBox> Scope = SNew(SSmvPaintBox).Size(FVector2D(250, 250));
+	Scope->Painter = [this, Ph](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		const FVector2D Sz = FVector2D(G.GetLocalSize()), C = Sz * 0.5;
+		const float R = (float)FMath::Min(Sz.X, Sz.Y) * 0.5f - 8.f;
+		DrRect(Out, L, G, C - FVector2D(R, R), FVector2D(2 * R, 2 * R), FLinearColor(0.01f, 0.06f, 0.03f, 0.92f), &CircleBrush);
+		for (int32 k = 1; k <= 4; ++k) DrArc(Out, L + 1, G, C, R * k / 4.f, 0.f, 360.f, Ph.CopyWithNewOpacity(0.22f), 1.f);
+		DrSeg(Out, L + 1, G, C - FVector2D(R, 0), C + FVector2D(R, 0), Ph.CopyWithNewOpacity(0.12f), 1.f);
+		DrSeg(Out, L + 1, G, C - FVector2D(0, R), C + FVector2D(0, R), Ph.CopyWithNewOpacity(0.12f), 1.f);
+		// tarama hüzmesi (iz bırakan)
+		for (int32 k = 0; k < 24; ++k)
+		{
+			const float A = FMath::DegreesToRadians(St.Sweep - k * 1.5f - 90.f);
+			DrSeg(Out, L + 2, G, C, C + FVector2D(FMath::Cos(A), FMath::Sin(A)) * R, Ph.CopyWithNewOpacity(0.5f * (1.f - k / 24.f)), k == 0 ? 2.f : 1.5f);
+		}
+		const float Km = FMath::Max(1.f, St.RadarKm);
+		DrText(Out, L + 3, G, FString::Printf(TEXT("%.0f km"), Km), C + FVector2D(R * 0.72f, -R * 0.72f), Mono(8), Ph.CopyWithNewOpacity(0.7f), 0);
+		DrText(Out, L + 3, G, TEXT("N"), C + FVector2D(0, -R + 8), Font(8, true), Ph, 0);
+		int32 Tn = 0;
+		for (const FSmvFlightUiState::FBlip& B : St.Blips)
+		{
+			const FVector2D P = C + FVector2D(B.E, -B.N) / (Km * 1000.f) * R;
+			const FLinearColor Col = B.bOwn ? FLinearColor(0.3f, 0.85f, 1.f, 1.f) : B.Id < 100 ? FLinearColor(1.f, 0.3f, 0.25f, 1.f) : FLinearColor(1.f, 0.75f, 0.2f, 1.f);
+			DrRect(Out, L + 4, G, P - FVector2D(4, 4), FVector2D(8, 8), Col, &CircleBrush);
+			if (B.bSel) DrArc(Out, L + 5, G, P, 9.f, 0.f, 360.f, FLinearColor::White, 1.5f);
+			if (!B.bOwn) { ++Tn; DrText(Out, L + 5, G, B.Id < 100 ? FString::Printf(TEXT("T%d"), B.Id) : FString::Printf(TEXT("B%d"), B.Id - 99), P + FVector2D(7, -7), Mono(7), Col, -1); }
+		}
+		DrText(Out, L + 5, G, Tn ? FSmvI18n::Format(TEXT("site.targets_n"), { { TEXT("n"), FString::FromInt(Tn) } }).ToString() : FSmvI18n::T(TEXT("site.no_contact")).ToString(),
+			FVector2D(8, Sz.Y - 10), Mono(8), Ph.CopyWithNewOpacity(0.8f), -1);
+	};
+	Scope->OnDrag = [this](const FGeometry& G, const FVector2D& P, int32 Phase)
+	{
+		if (Phase != 0) return;
+		const FVector2D Sz = FVector2D(G.GetLocalSize()), C = Sz * 0.5;
+		const float R = (float)FMath::Min(Sz.X, Sz.Y) * 0.5f - 8.f, Km = FMath::Max(1.f, St.RadarKm);
+		int32 Best = -1; double Bd = 16.0;
+		for (const FSmvFlightUiState::FBlip& B : St.Blips)
+		{
+			const double D = FVector2D::Distance(C + FVector2D(B.E, -B.N) / (Km * 1000.f) * R, P);
+			if (D < Bd) { Bd = D; Best = B.Id; }
+		}
+		if (Best >= 0 && GM.IsValid()) GM->RadarPick(Best);
+	};
+	return SNew(SBorder)
+		.Visibility_Lambda([this]() { return St.bRadar && St.bRadarOn ? EVisibility::Visible : EVisibility::Collapsed; })
+		.BorderImage(&CardBrush).Padding(0.f)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SBorder).BorderImage(&HeadBrush).Padding(FMargin(10.f, 4.f))
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SNew(STextBlock).Text_Lambda([]() { return FSmvI18n::T(TEXT("site.scr_radar")); }).Font(Font(9, true)).ColorAndOpacity(FLinearColor(0.35f, 1.f, 0.45f, 1.f))]
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(STextBlock).Text_Lambda([]() { return FSmvI18n::T(TEXT("site.click_pick")); }).Font(Font(7)).ColorAndOpacity(Dim)]
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(2.f)[Scope]
+		];
+}
+
+TSharedRef<SWidget> SSmvFlightUi::EoWindow()
+{
+	using namespace SmvFuiDraw;
+	using namespace SmvFuiTheme;
+	EoBrush.DrawAs = ESlateBrushDrawType::Image;
+	TSharedRef<SSmvPaintBox> View = SNew(SSmvPaintBox).Size(FVector2D(384, 240));
+	View->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		const FVector2D Sz = FVector2D(G.GetLocalSize()), C = Sz * 0.5;
+		DrRect(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor(0.f, 0.f, 0.f, 0.9f));
+		const bool bTrack = St.EoRt && St.EoState.Contains(FSmvI18n::T(TEXT("site.eo_track")).ToString());
+		if (St.EoRt && bTrack)
+		{
+			if (EoBrush.GetResourceObject() != St.EoRt) { EoBrush.SetResourceObject(St.EoRt); EoBrush.ImageSize = FVector2D(640, 400); }
+			FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &EoBrush, ESlateDrawEffect::None, FLinearColor::White);
+		}
+		const FLinearColor O(0.4f, 1.f, 0.5f, 0.9f);
+		// nişangâh + köşe parantezleri
+		DrSeg(Out, L + 2, G, C - FVector2D(30, 0), C - FVector2D(8, 0), O, 1.5f); DrSeg(Out, L + 2, G, C + FVector2D(8, 0), C + FVector2D(30, 0), O, 1.5f);
+		DrSeg(Out, L + 2, G, C - FVector2D(0, 30), C - FVector2D(0, 8), O, 1.5f); DrSeg(Out, L + 2, G, C + FVector2D(0, 8), C + FVector2D(0, 30), O, 1.5f);
+		for (int32 k = 0; k < 4; ++k)
+		{
+			const FVector2D Q((k & 1) ? Sz.X - 12 : 12, (k & 2) ? Sz.Y - 12 : 12), Dx((k & 1) ? -18 : 18, 0), Dy(0, (k & 2) ? -18 : 18);
+			DrSeg(Out, L + 2, G, Q, Q + Dx, O, 1.5f); DrSeg(Out, L + 2, G, Q, Q + Dy, O, 1.5f);
+		}
+		DrText(Out, L + 3, G, St.EoState, FVector2D(16, 22), Mono(9), O, -1);
+		DrText(Out, L + 3, G, St.EoType + FString::Printf(TEXT("  FOV %.2f°"), St.EoFov), FVector2D(Sz.X - 16, 22), Mono(9), O, 1);
+		DrText(Out, L + 3, G, St.EoInfo, FVector2D(C.X, Sz.Y - 20), Mono(9), O, 0);
+	};
+	View->OnDrag = [this](const FGeometry&, const FVector2D&, int32 Phase) { if (Phase == 0 && GM.IsValid()) GM->CycleEoType(); };
+	return SNew(SBorder)
+		.Visibility_Lambda([this]() { return St.bEo && St.bEoOn ? EVisibility::Visible : EVisibility::Collapsed; })
+		.BorderImage(&CardBrush).Padding(0.f)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SBorder).BorderImage(&HeadBrush).Padding(FMargin(10.f, 4.f))
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SNew(STextBlock).Text_Lambda([]() { return FSmvI18n::T(TEXT("site.scr_eo")); }).Font(Font(9, true)).ColorAndOpacity(FLinearColor(0.4f, 1.f, 0.5f, 1.f))]
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(STextBlock).Text_Lambda([]() { return FSmvI18n::T(TEXT("site.eo_type")); }).Font(Font(7)).ColorAndOpacity(Dim)]
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(2.f)[View]
 		];
 }

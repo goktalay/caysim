@@ -116,6 +116,8 @@ const TArray<FSmvBindDef>& FSmvUiPrefs::Bindable()
 		{ TEXT("Panel"), EKeys::P, FKey(), TEXT("bind.panel") },
 		{ TEXT("Sticks"), EKeys::V, FKey(), TEXT("bind.sticks") },
 		{ TEXT("Cockpit"), EKeys::G, FKey(), TEXT("bind.cockpit") },
+		{ TEXT("Radar"), EKeys::Y, FKey(), TEXT("site.radar_title") },
+		{ TEXT("Eo"), EKeys::U, FKey(), TEXT("site.eo_title") },
 		{ TEXT("SpeedUp"), EKeys::Add, FKey(), TEXT("bind.speed_up") },
 		{ TEXT("SpeedDown"), EKeys::Subtract, FKey(), TEXT("bind.speed_down") },
 		{ TEXT("GimbalUp"), EKeys::PageUp, FKey(), TEXT("bind.gimbal_up") },

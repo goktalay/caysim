@@ -64,6 +64,13 @@ struct FSmvFlightUiState
 	bool bFpv = false, bFpvFinished = false;
 	/** Kayıttan oynatma şeridi */
 	bool bReplay = false;
+	/** Yer kontrol sahası: radar PPI + EO penceresi */
+	struct FBlip { float E = 0, N = 0, Alt = 0; int32 Id = 0; bool bOwn = false, bSel = false; };
+	bool bRadar = false, bEo = false, bRadarOn = true, bEoOn = true;
+	float RadarKm = 20.f, EoKm = 5.f, Sweep = 0.f, EoFov = 48.f;
+	TArray<FBlip> Blips;
+	class UTextureRenderTarget2D* EoRt = nullptr;
+	FString EoState, EoInfo, EoType;
 	float ReplayT = 0.f, ReplayDur = 0.f, ReplaySpeed = 1.f;
 	int32 FpvLap = 0, FpvLaps = 0, FpvNext = 0, FpvTotalCp = 0, FpvMisses = 0, FpvHits = 0;
 	float FpvLapT = 0.f, FpvBest = -1.f, FpvTotal = 0.f, FpvPen = 0.f, FpvDist = 0.f;
@@ -136,6 +143,9 @@ private:
 	TSharedRef<SWidget> PipWindow();
 	TSharedRef<SWidget> ReplayBar();
 	TSharedRef<SWidget> RecChip();
+	TSharedRef<SWidget> RadarWindow();
+	TSharedRef<SWidget> EoWindow();
+	FSlateBrush EoBrush;
 	FSlateBrush PipBrush;
 	FVector2D PipDragAbs = FVector2D::ZeroVector, PipStart = FVector2D::ZeroVector;
 	int32 PipDragMode = 0;   // 1 taşı, 2 boyutlandır

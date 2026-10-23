@@ -435,4 +435,5 @@ U = {
  'map.not_found': ('Yer bulunamadı', 'Place not found', 'Ort nicht gefunden', 'Lieu introuvable', 'Lugar no encontrado', 'Место не найдено', 'لم يُعثر على المكان'),
  'map.search': ('Ara', 'Search', 'Suchen', 'Rechercher', 'Buscar', 'Найти', 'بحث'),
  'map.search_ph': ('Yer ara (ör. Kalecik, Ankara)', 'Search place (e.g. Kalecik, Ankara)', 'Ort suchen (z. B. Kalecik, Ankara)', 'Rechercher un lieu (ex. Kalecik, Ankara)', 'Buscar lugar (p. ej. Kalecik, Ankara)', 'Поиск места (напр. Kalecik, Ankara)', 'ابحث عن مكان (مثل Kalecik، أنقرة)'),
+ 'wiz.s_gcs': ('Yer kontrol', 'Ground control', 'Bodenkontrolle', 'Contrôle au sol', 'Control de tierra', 'Наземный пункт', 'المحطة الأرضية'),
 }
