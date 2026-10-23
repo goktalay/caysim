@@ -44,7 +44,7 @@ namespace SmvSpeech
 		ISpVoice* V = Voice();
 		if (!V || Text.IsEmpty()) return;
 		FString Esc = Text.Replace(TEXT("&"), TEXT("&amp;")).Replace(TEXT("<"), TEXT("&lt;")).Replace(TEXT(">"), TEXT("&gt;"));
-		const FString Xml = FString::Printf(TEXT("<lang langid=\\"%s\\">%s%s</lang>"), LangId(Lang), DelayMs > 0 ? *FString::Printf(TEXT("<silence msec=\\"%d\\"/>"), DelayMs) : TEXT(""), *Esc);
+		const FString Xml = FString::Printf(TEXT("<lang langid='%s'>%s%s</lang>"), LangId(Lang), DelayMs > 0 ? *FString::Printf(TEXT("<silence msec='%d'/>"), DelayMs) : TEXT(""), *Esc);
 		V->SetVolume((USHORT)FMath::Clamp(FMath::RoundToInt(Volume * 100.f), 0, 100));
 		V->Speak(*Xml, SPF_ASYNC | SPF_PURGEBEFORESPEAK | SPF_IS_XML, nullptr);
 	}
