@@ -626,7 +626,9 @@ ASmvDroneActor* ASmvMenuScene::SpawnFlyer(const FString& Type, const FLinearColo
 	S.Model.Orient.Scale = 1.f;
 	D->Setup(S, nullptr);
 	// katalogdan bu tipin varsayılan modeli (dinamik: yeni modeller kendiliğinden)
-	const FString Model = USmvDataService::DefaultModelFor(Type);
+	FString Model = USmvDataService::DefaultModelFor(Type);
+	if (Type == TEXT("plane") && USmvDataService::FindModel(TEXT("smv:caymaz"))) Model = TEXT("smv:caymaz");
+	if (Type == TEXT("vtol") && USmvDataService::FindModel(TEXT("smv:caymaz_vtol"))) Model = TEXT("smv:caymaz_vtol");
 	D->ConfigureVisual(Type, Model, Color);
 	D->SetActorTickEnabled(false);   // konumu biz sürüyoruz (telemetri yok)
 	if (USmvMotorSynth* M = D->GetMotor()) M->Stop();

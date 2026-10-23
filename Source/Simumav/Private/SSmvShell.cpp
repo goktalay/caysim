@@ -1358,6 +1358,37 @@ TSharedRef<SWidget> SSmvShell::Hangar()
 	Mid->AddSlot().AutoHeight().Padding(4, 0)[StatBar(Tx(TEXT("stat.durability")), Stats[2], Warn())];
 	Mid->AddSlot().AutoHeight().Padding(4, 0)[StatBar(Tx(TEXT("stat.agility")), Stats[3], Accent2())];
 	if (Cm && !Cm->Desc.IsEmpty()) Mid->AddSlot().AutoHeight().Padding(4, 10, 0, 0)[SNew(SBox).WidthOverride(540.f)[SmvUi::Text(FText::FromString(Cm->Desc), 11, "Regular", Dim())]];
+	// katalog teknik verileri (araç kataloğu: kütle, açıklık, hız, dayanım, faydalı yük, motor, batarya, SITL modeli)
+	if (Cm)
+	{
+		TArray<TPair<FString, FString>> Spec;
+		auto AddS = [&Spec](const TCHAR* K, const FString& V) { if (!V.IsEmpty()) Spec.Add(TPair<FString, FString>(FSmvI18n::T(K).ToString(), V)); };
+		if (Cm->MassKg > 0) AddS(TEXT("spec.mass"), FString::Printf(TEXT("%.1f kg"), Cm->MassKg));
+		if (Cm->SpanM > 0) AddS(TEXT("spec.span"), FString::Printf(TEXT("%.2f m"), Cm->SpanM));
+		if (Cm->LengthM > 0) AddS(TEXT("spec.length"), FString::Printf(TEXT("%.2f m"), Cm->LengthM));
+		if (Cm->CruiseKmh > 0) AddS(TEXT("spec.cruise"), FString::Printf(TEXT("%.0f km/h"), Cm->CruiseKmh));
+		if (Cm->MaxKmh > 0) AddS(TEXT("spec.max"), FString::Printf(TEXT("%.0f km/h"), Cm->MaxKmh));
+		if (Cm->EnduranceMin > 0) AddS(TEXT("spec.endurance"), FString::Printf(TEXT("%.0f min"), Cm->EnduranceMin));
+		if (Cm->PayloadKg > 0) AddS(TEXT("spec.payload"), FString::Printf(TEXT("%.1f kg"), Cm->PayloadKg));
+		if (Cm->Motors > 0) AddS(TEXT("spec.motors"), FString::FromInt(Cm->Motors));
+		AddS(TEXT("spec.battery"), Cm->Battery);
+		AddS(TEXT("spec.physics"), Cm->Physics.IsEmpty() ? Cm->SitlModel : Cm->Physics);
+		if (Spec.Num())
+		{
+			TSharedRef<SUniformGridPanel> SpG = SNew(SUniformGridPanel).SlotPadding(FMargin(4.f));
+			for (int32 k = 0; k < Spec.Num(); ++k)
+				SpG->AddSlot(k % 3, k / 3)
+				[
+					SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(Card()).Padding(FMargin(10.f, 6.f))
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(Spec[k].Key), 9, "Regular", Mute(), false)]
+						+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(Spec[k].Value), 12, "Bold", Fg())]
+					]
+				];
+			Mid->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[SNew(SBox).WidthOverride(560.f)[SpG]];
+		}
+	}
 
 	// sağ: düzenleyici
 	auto Pw = [](double V) { return V < 0 ? FSmvI18n::T(TEXT("power.default")).ToString() : FString::Printf(TEXT("%.0f"), V); };
