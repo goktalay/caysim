@@ -56,6 +56,9 @@ struct SIMUMAV_API FSmvUiPrefs
 	float Shape(float V, int32 Axis, float FallbackExpo) const;
 	/** Bağlıysa pitch = roll */
 	void SyncLink();
+	/** Son uçuşta ölçülen tüketim (★ Önerilen): dron kimliği → km/L, W (yoksa −1) */
+	static void SetMeasured(const FString& DroneId, double KmPerL, double W);
+	static bool GetMeasured(const FString& DroneId, double& KmPerL, double& W);
 	/** Bayram / mevsim teması: auto | off */
 	FString Season = TEXT("auto");
 	/** Tuş atamaları: "kb.<Eylem>" / "pad.<Eylem>" → FKey adı */

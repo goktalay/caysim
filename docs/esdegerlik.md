@@ -49,13 +49,13 @@ Durum: **✓** var (kod yazıldı) · **◐** kısmi · **✗** yok · **—** k
 | Özellik | Web | UE | Durum | Plan |
 |---|---|---|---|---|
 | Seçili dronun sürekli dönen 3B modeli | `hangar/index.js` | `ASmvMenuScene` önizleme yakalaması (render hedefi; yalnız araç, kendi ışıkları) + döner platform | ✓ | — |
-| Dron şeridi (mini 3B kartlar) | `hangar/index.js` | Liste kartları (tür simgesi, renk vurgusu, ★ varsayılan) | ◐ | P2 |
+| Dron şeridi (mini 3B kartlar) | `hangar/index.js` | Hangar üstünde yatay dron şeridi: mini 3B kartlar (menü sahnesinde çekilen anlık görüntü; model yüklenince yenilenir), ★ varsayılan, seçili vurgulu | ✓ | P2 |
 | Tür seçimi + 4 stat çubuğu (hız/menzil/dayanıklılık/çeviklik) | `hangar/index.js` | Aynı değerler, animasyonlu çubuklar | ✓ | — |
 | Model kartları (GLB / PROC), kontrol düzeni, sürüş | `bridge.py GLB_MODELS` | Seçici + çipler (katalog sunucuyla aynı anahtarlar) | ✓ | — |
 | 10 renk örneği + ad | `hangar/index.js` | ✓ (+ #rrggbb) | ✓ | — |
-| "Hangara indi" animasyonu | `hangar/index.js` | Kaydedildi bildirimi | ◐ | P2 |
+| "Hangara indi" animasyonu | `hangar/index.js` | Yeni dron kaydedilince önizlemede yukarıdan dönerek süzülüp iner + "Hangara indi" bildirimi | ✓ | P2 |
 | Güç ve yakıt düzenleyici (aralıklar) | `fly/power.js` | Kaydırıcılar (−1 = varsayılan) | ✓ | — |
-| "★ Önerilen" (son uçuşta ölçülen) | `fly/power.js` | — | ✗ | P2 |
+| "★ Önerilen" (son uçuşta ölçülen) | `fly/power.js` | Son uçuşta ölçülen tüketim (km/L, ortalama W) dron başına saklanır; sihirbazda "★ Önerilen" düğmesi tek tıkla uygular | ✓ | P2 |
 
 ## 5. Mürettebat / pilot oluşturucu
 

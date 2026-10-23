@@ -8,6 +8,7 @@
 #include "SmvMatchClient.h"
 #include "SmvSteam.h"
 #include "SmvI18n.h"
+#include "SmvUiPrefs.h"
 #include "Engine/GameInstance.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -275,6 +276,12 @@ void USmvFlow::HandleSummary(const FSmvFlightSummary& In)
 	if (SummaryAugmenter) SummaryAugmenter(LastSummary);
 	DataObj->AddFlightRecord(LastSummary);
 	LastReplayFile = SmvReplay::Save(LastRequest, LastSummary, LastPath);
+	// ★ Önerilen: son uçuşta ölçülen tüketim (yakıt km/L, ortalama elektrik gücü W)
+	{
+		const double Kml = (LastSummary.FuelUsedL > 0.01 && LastSummary.DistM > 100) ? (LastSummary.DistM / 1000.0) / LastSummary.FuelUsedL : -1.0;
+		const double Wt = (LastSummary.WhUsed > 0.01 && LastSummary.DurationS > 30) ? LastSummary.WhUsed / (LastSummary.DurationS / 3600.0) : -1.0;
+		if (Kml > 0 || Wt > 0) FSmvUiPrefs::SetMeasured(LastRequest.Drone.Id, Kml, Wt);
+	}
 	EvaluateAchievements(LastSummary);
 	SetScreen(ESmvScreen::Summary);
 }

@@ -1131,6 +1131,8 @@
  "power.km_per_l": "Consumo (km/L)",
  "power.mah": "Batería (mAh)",
  "power.max_speed": "Velocidad máx. (m/s; −1 = ninguna)",
+ "power.recommended": "★ Recomendado (medido en el último vuelo)",
+ "power.recommended_applied": "Consumo recomendado aplicado",
  "power.w": "Potencia electrónica (W)",
  "power.wizard_hint": "Sustituye el ajuste del dron para este vuelo (−1 = ajuste del dron).",
  "q.cinematic": "Cinemático",

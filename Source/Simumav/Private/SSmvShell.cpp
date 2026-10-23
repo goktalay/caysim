@@ -1334,7 +1334,19 @@ TSharedRef<SWidget> SSmvShell::Hangar()
 		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(Tx(TEXT("common.save")), [Self]()
 		{
-			Self->Data()->SaveDrone(Self->EditDrone, FSmvDone::CreateLambda([Self](bool bOk, const FString& M) { Self->Toast(bOk ? FSmvI18n::T(TEXT("common.saved")).ToString() : M, bOk ? 6 : 3); Self->Refresh(); }));
+			const bool bWasNew = Self->EditDrone.Id.IsEmpty();
+			Self->Data()->SaveDrone(Self->EditDrone, FSmvDone::CreateLambda([Self, bWasNew](bool bOk, const FString& M)
+			{
+				if (bOk && bWasNew)
+				{
+					// "hangara indi": yeni dron önizlemede yukarıdan süzülerek iner
+					if (Self->Data()->Drones().Num()) Self->EditDrone = Self->Data()->Drones().Last();
+					if (ASmvMenuScene* Sc = Self->Scene()) Sc->PlayLanding();
+					Self->Toast(Self->EditDrone.Name + TEXT(" — ") + FSmvI18n::T(TEXT("hangar.landed")).ToString(), 6);
+				}
+				else Self->Toast(bOk ? FSmvI18n::T(TEXT("common.saved")).ToString() : M, bOk ? 6 : 3);
+				Self->Refresh();
+			}));
 		}, true, true, ESmvIcon::Save)]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(Tx(TEXT("common.make_default")), [Self]() { Self->Data()->SetDefault(TEXT("drone"), Self->EditDrone.Id); Self->EditDrone.bIsDefault = true; Self->Refresh(); }, false,
 			TAttribute<bool>(!bNew), ESmvIcon::Star)]
@@ -1346,10 +1358,38 @@ TSharedRef<SWidget> SSmvShell::Hangar()
 			});
 		})]
 	];
-	return Page(Tx(TEXT("menu.hangar")), Tx(TEXT("menu.hangar_sub")), ESmvIcon::Drone, SNew(SHorizontalBox)
+	// dron şeridi: mini 3B kartlar (menü sahnesinde çekilen anlık görüntüler; ★ varsayılan)
+	TSharedRef<SHorizontalBox> Strip = SNew(SHorizontalBox);
+	for (const FSmvDrone& X : D->Drones())
+	{
+		const FSmvDrone Copy = X;
+		const FLinearColor Ac = SmvHex(X.Color, Accent());
+		UTextureRenderTarget2D* Rt = (Scene() && FSmvUiPrefs::Get().bPreview3d) ? Scene()->DroneSnap(X.Type, X.ModelKey, X.Color) : nullptr;
+		TSharedRef<SWidget> Img = SNullWidget::NullWidget;
+		if (Rt)
+		{
+			TSharedPtr<FSlateBrush>& Br = AvatarBrushes.FindOrAdd(Rt->GetName());
+			if (!Br.IsValid()) { Br = MakeShared<FSlateBrush>(); Br->DrawAs = ESlateBrushDrawType::Image; Br->SetResourceObject(Rt); Br->ImageSize = FVector2D(144, 90); }
+			Img = SNew(SImage).Image(Br.Get());
+		}
+		else Img = SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)[Icon(IconForType(X.Type), 40.f, Ac)];
+		Strip->AddSlot().AutoWidth().Padding(0, 0, 10, 0)
+		[
+			SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Ac).MinWidth(160.f).Selected(X.Id == EditDrone.Id).OnClick([Self, Copy]() { Self->EditDrone = Copy; Self->Refresh(); })
+			.Extra()
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SNew(SBox).WidthOverride(144.f).HeightOverride(90.f)[Img]]
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 4, 0, 0)[SmvUi::Text(FText::FromString((X.bIsDefault ? FString(TEXT("★ ")) : FString()) + X.Name), 12, "Bold", Fg(), false)]
+			]
+		];
+	}
+	return Page(Tx(TEXT("menu.hangar")), Tx(TEXT("menu.hangar_sub")), ESmvIcon::Drone, SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 16)[SNew(SScrollBox).Orientation(Orient_Horizontal).ScrollBarVisibility(EVisibility::Collapsed) + SScrollBox::Slot()[Strip]]
+		+ SVerticalBox::Slot().AutoHeight()[SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 22, 0)[SNew(SBox).WidthOverride(320.f)[List]]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 22, 0)[Mid]
-		+ SHorizontalBox::Slot().FillWidth(1.f)[Glass(Ed, FMargin(20.f))]);
+		+ SHorizontalBox::Slot().FillWidth(1.f)[Glass(Ed, FMargin(20.f))]]);
 }
 
 // ---------------------------------------------------------------------------
@@ -2448,6 +2488,19 @@ TSharedRef<SWidget> SSmvShell::WizAdvanced()
 	L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("power.fuel_l")), Slider(&R.Power.FuelL, -1, 500, 0.5, Pw))];
 	L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("power.mah")), Slider(&R.Power.ElecMah, -1, 200000, 100, Pw))];
 	L->AddSlot().AutoHeight().Padding(0, 3)[SmvUi::Text(Tx(TEXT("power.wizard_hint")), 10, "Regular", Mute())];
+	{
+		double Kml = -1, Wt = -1;
+		if (FSmvUiPrefs::GetMeasured(R.Drone.Id, Kml, Wt))
+		{
+			const FString Txt = (Kml > 0 ? FString::Printf(TEXT("%.1f km/L"), Kml) : FString()) + (Kml > 0 && Wt > 0 ? TEXT(" · ") : TEXT("")) + (Wt > 0 ? FString::Printf(TEXT("%.0f W"), Wt) : FString());
+			L->AddSlot().AutoHeight().HAlign(HAlign_Left).Padding(0, 8, 0, 0)
+			[
+				SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12).Icon(ESmvIcon::Star).Accent(Hex(0xfbbf24))
+				.Text(FText::FromString(FSmvI18n::T(TEXT("power.recommended")).ToString() + TEXT(": ") + Txt))
+				.OnClick([Self, F, Kml, Wt]() { if (Kml > 0) F->Draft.Power.FuelKmPerL = FMath::RoundToDouble(Kml * 10.0) / 10.0; if (Wt > 0) F->Draft.Power.ElecW = FMath::RoundToDouble(Wt); Self->Toast(FSmvI18n::T(TEXT("power.recommended_applied")).ToString(), 6); Self->Refresh(); })
+			];
+		}
+	}
 
 	Rt->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("wizard.sim")), Accent2())];
 	Rt->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("wizard.camera")), Chips(&R.Camera, { TEXT("day"), TEXT("thermal"), TEXT("night"), TEXT("none") },

@@ -187,6 +187,7 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	if (Preview) Preview->Destroy();
 	if (PilotPrev) PilotPrev->Destroy();
 	if (SnapFig) SnapFig->Destroy();
+	if (DSnapActor) DSnapActor->Destroy();
 	if (Cam) Cam->Destroy();
 	if (Terrain) Terrain->Destroy();
 	if (WorldSetup) WorldSetup->Destroy();
@@ -375,7 +376,10 @@ void ASmvMenuScene::Tick(float Dt)
 	if (Preview)
 	{
 		if (FPlatformTime::Seconds() > ManualUntil) PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 24.f, 360.f);
-		Preview->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, PreviewYaw, 0.f));
+		// "hangara indi": yukarıdan yumuşak iniş (son anda hafif sekme)
+		const double Lk = FMath::Clamp((FPlatformTime::Seconds() - LandAt) / 1.6, 0.0, 1.0);
+		const double Drop = Lk < 1.0 ? FMath::Pow(1.0 - Lk, 3.0) * PreviewDistCm * 0.9 : 0.0;
+		Preview->SetActorLocationAndRotation(GSmvPreviewAt + FVector(0, 0, Drop), FRotator(0.f, PreviewYaw + (float)((1.0 - Lk) * 180.0), 0.f));
 		const FVector CamAt = GSmvPreviewAt + FVector(-PreviewDistCm, 0.0, PreviewDistCm * 0.32);
 		Capture->SetWorldLocationAndRotation(CamAt, (GSmvPreviewAt - CamAt).Rotation());
 		KeyLight->SetWorldLocation(GSmvPreviewAt + FVector(-PreviewDistCm * 0.6, PreviewDistCm * 0.7, PreviewDistCm * 0.8));
@@ -425,7 +429,11 @@ void ASmvMenuScene::TickSnaps()
 		SnapPhase = 0;
 		return;
 	}
-	if (SnapQueue.Num() == 0) return;
+	if (SnapQueue.Num() == 0)
+	{
+		TickDroneSnaps();
+		return;
+	}
 	const TPair<FString, FSmvAvatar> Job = SnapQueue[0];
 	SnapQueue.RemoveAt(0);
 	if (!SnapFig)
@@ -442,4 +450,85 @@ void ASmvMenuScene::TickSnaps()
 	for (UPrimitiveComponent* Pc : Prims) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
 	SnapPending = Job.Key;
 	SnapPhase = 1;
+}
+
+void ASmvMenuScene::PlayLanding() { LandAt = FPlatformTime::Seconds(); }
+
+UTextureRenderTarget2D* ASmvMenuScene::DroneSnap(const FString& Type, const FString& ModelKey, const FString& ColorHex)
+{
+	const FString Key = TEXT("d|") + Type + TEXT("|") + ModelKey + TEXT("|") + ColorHex;
+	if (TObjectPtr<UTextureRenderTarget2D>* Found = Snaps.Find(Key)) return Found->Get();
+	if (Snaps.Num() > 96) return nullptr;
+	UTextureRenderTarget2D* Rt = NewObject<UTextureRenderTarget2D>(this);
+	Rt->ClearColor = FLinearColor(0.f, 0.f, 0.f, 0.f);
+	Rt->InitAutoFormat(240, 150);
+	Rt->UpdateResourceImmediate(true);
+	Snaps.Add(Key, Rt);
+	DQueue.Add({ Key, Type, ModelKey, ColorHex });
+	return Rt;
+}
+
+void ASmvMenuScene::TickDroneSnaps()
+{
+	UWorld* W = GetWorld();
+	if (!W) return;
+	if (DSnapActor)
+	{
+		++DFrames;
+		// 20. karede (model gelmeden siluet) ve 150. karede (GLB yüklendiyse model) çekilir
+		if (DFrames == 20 || DFrames == 150)
+		{
+			if (TObjectPtr<UTextureRenderTarget2D>* Rt = Snaps.Find(DPending))
+			{
+				const FVector At = GSmvPreviewAt;
+				const float D = FMath::Clamp(DSnapActor->GetVisualRadiusM() * 100.f * 3.0f, 120.f, 2400.f);
+				const FVector CamAt = At + FVector(-D * 0.86, -D * 0.5, D * 0.36);
+				DSnapActor->SetActorHiddenInGame(false);
+				SnapCap->TextureTarget = Rt->Get();
+				SnapCap->SetWorldLocationAndRotation(CamAt, (At - CamAt).Rotation());
+				KeyLight->SetWorldLocation(At + FVector(-D * 0.6, D * 0.7, D * 0.8));
+				RimLight->SetWorldLocation(At + FVector(D * 0.8, -D * 0.5, D * 0.4));
+				SnapCap->ShowOnlyActors.Reset();
+				SnapCap->ShowOnlyActors.Add(DSnapActor);
+				SnapCap->CaptureScene();
+			}
+		}
+		if (DFrames >= 150) { DSnapActor->Destroy(); DSnapActor = nullptr; }
+		return;
+	}
+	if (DQueue.Num() == 0) return;
+	const FDroneJob Job = DQueue[0];
+	DQueue.RemoveAt(0);
+	FActorSpawnParameters P;
+	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	DSnapActor = W->SpawnActor<ASmvDroneActor>(ASmvDroneActor::StaticClass(), FTransform(FRotator(0.f, 25.f, 0.f), GSmvPreviewAt), P);
+	if (!DSnapActor) return;
+	FCaySimSession S;
+	S.Type = SmvMenuCaysimType(Job.Type);
+	S.Model.Orient.Forward = TEXT("+x");
+	S.Model.Orient.Up = TEXT("+y");
+	S.Model.Orient.Scale = 1.f;
+	DSnapActor->Setup(S, nullptr);
+	DSnapActor->ConfigureVisual(Job.Type, Job.Model, SmvHexColor(Job.Color));
+	DSnapActor->SetActorTickEnabled(false);
+	DSnapActor->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, 25.f, 0.f));
+	if (USmvMotorSynth* M = DSnapActor->GetMotor()) M->Stop();
+	TInlineComponentArray<UPrimitiveComponent*> Prims(DSnapActor.Get());
+	for (UPrimitiveComponent* Pc : Prims) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
+	DPending = Job.Key;
+	DFrames = 0;
+	if (USmvGameInstance* GI = USmvGameInstance::GetSmv(this))
+	{
+		TWeakObjectPtr<ASmvDroneActor> WP(DSnapActor);
+		if (GI->GetData() && !Job.Model.IsEmpty())
+			GI->GetData()->FetchModelGlb(Job.Model, [WP](bool bOk, const TArray<uint8>& Bytes)
+			{
+				if (bOk && WP.IsValid())
+				{
+					WP->LoadGlbBytes(Bytes);
+					TInlineComponentArray<UPrimitiveComponent*> Pr(WP.Get());
+					for (UPrimitiveComponent* Pc : Pr) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
+				}
+			});
+	}
 }

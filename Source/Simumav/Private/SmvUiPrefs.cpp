@@ -189,3 +189,21 @@ float FSmvUiPrefs::Shape(float V, int32 Axis, float FallbackExpo) const
 	const float R = FMath::Clamp(Rate[Ax], 0.f, 1.f);
 	return FMath::Sign(V) * ((1.f - E) * N + E * N * N * N) * R;
 }
+
+void FSmvUiPrefs::SetMeasured(const FString& DroneId, double KmPerL, double W)
+{
+	if (!GConfig || DroneId.IsEmpty()) return;
+	GConfig->SetString(TEXT("/Script/Simumav.SmvMeasured"), *DroneId, *FString::Printf(TEXT("%.3f,%.2f"), KmPerL, W), GGameUserSettingsIni);
+	GConfig->Flush(false, GGameUserSettingsIni);
+}
+
+bool FSmvUiPrefs::GetMeasured(const FString& DroneId, double& KmPerL, double& W)
+{
+	KmPerL = -1; W = -1;
+	FString V;
+	if (!GConfig || DroneId.IsEmpty() || !GConfig->GetString(TEXT("/Script/Simumav.SmvMeasured"), *DroneId, V, GGameUserSettingsIni)) return false;
+	FString A, B;
+	if (!V.Split(TEXT(","), &A, &B)) return false;
+	KmPerL = FCString::Atod(*A); W = FCString::Atod(*B);
+	return KmPerL > 0 || W > 0;
+}

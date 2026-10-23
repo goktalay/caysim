@@ -41,6 +41,10 @@ public:
 	UTextureRenderTarget2D* GetPreviewTarget() const { return PreviewRT; }
 	/** Avatar anlık görüntüsü (baş-omuz, 160×160; TOP10 / listeler): önbellekte yoksa sıraya alınır, kare başına bir tane çizilir */
 	UTextureRenderTarget2D* AvatarSnap(const FSmvAvatar& A);
+	/** Dron anlık görüntüsü (hangar şeridi mini kartları, 240×150): sıraya alınır; model yüklenince yeniden çekilir */
+	UTextureRenderTarget2D* DroneSnap(const FString& Type, const FString& ModelKey, const FString& ColorHex);
+	/** "Hangara indi": önizlemedeki araç yukarıdan süzülerek iner (1,6 sn) */
+	void PlayLanding();
 	bool IsLive() const { return bLive; }
 
 protected:
@@ -58,6 +62,7 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> SnapCap;
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> SnapFig;
 	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
+	UPROPERTY() TObjectPtr<ASmvDroneActor> DSnapActor;
 
 private:
 	bool bLive = false;
@@ -78,7 +83,13 @@ private:
 	TArray<TPair<FString, FSmvAvatar>> SnapQueue;
 	FString SnapPending;
 	int32 SnapPhase = 0;
+	struct FDroneJob { FString Key, Type, Model, Color; };
+	TArray<FDroneJob> DQueue;
+	FString DPending;
+	int32 DFrames = 0;
+	double LandAt = -100.0;
 	void TickSnaps();
+	void TickDroneSnaps();
 
 	void BuildWorld();
 	FVector EnuToWorld(double E, double N, double Agl) const;

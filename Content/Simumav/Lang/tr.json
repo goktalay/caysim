@@ -1131,6 +1131,8 @@
  "power.km_per_l": "Tüketim (km/L)",
  "power.mah": "Batarya (mAh)",
  "power.max_speed": "Azami hız (m/s; −1 = yok)",
+ "power.recommended": "★ Önerilen (son uçuşta ölçülen)",
+ "power.recommended_applied": "Önerilen tüketim uygulandı",
  "power.w": "Elektronik gücü (W)",
  "power.wizard_hint": "Bu uçuş için dron ayarının üstüne yazılır (−1 = dron ayarı).",
  "q.cinematic": "Sinematik",

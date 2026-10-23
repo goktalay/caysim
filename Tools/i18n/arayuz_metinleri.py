@@ -426,4 +426,6 @@ U = {
  'video.saved': ('Video kaydedildi: {p}', 'Video saved: {p}', 'Video gespeichert: {p}', 'Vidéo enregistrée : {p}', 'Vídeo guardado: {p}', 'Видео сохранено: {p}', 'حُفظ الفيديو: {p}'),
  'video.started': ('Video kaydı başladı', 'Video recording started', 'Videoaufnahme gestartet', 'Enregistrement vidéo démarré', 'Grabación de vídeo iniciada', 'Запись видео начата', 'بدأ تسجيل الفيديو'),
  'video.wizard': ('Video kaydı', 'Video recording', 'Videoaufnahme', 'Enregistrement vidéo', 'Grabación de vídeo', 'Запись видео', 'تسجيل الفيديو'),
+ 'power.recommended': ('★ Önerilen (son uçuşta ölçülen)', '★ Recommended (measured last flight)', '★ Empfohlen (im letzten Flug gemessen)', '★ Recommandé (mesuré au dernier vol)', '★ Recomendado (medido en el último vuelo)', '★ Рекомендуется (измерено в прошлом полёте)', '★ موصى به (مُقاس في آخر رحلة)'),
+ 'power.recommended_applied': ('Önerilen tüketim uygulandı', 'Recommended consumption applied', 'Empfohlener Verbrauch übernommen', 'Consommation recommandée appliquée', 'Consumo recomendado aplicado', 'Рекомендуемый расход применён', 'طُبّق الاستهلاك الموصى به'),
 }
