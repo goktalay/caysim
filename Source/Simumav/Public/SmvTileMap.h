@@ -52,6 +52,8 @@ private:
 	// sürükleme
 	int32 DragGate = -1;
 	bool bPan = false, bMoved = false;
+	/** Konum işaretini sürükleme (yol haritası "Gerçek Dünya › ikonu kaydır") */
+	bool bDragPin = false;
 	FVector2D DownAt = FVector2D::ZeroVector, LastAt = FVector2D::ZeroVector;
 
 	static FVector2D Project(double Lat, double Lon, int32 Z);

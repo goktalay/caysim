@@ -186,7 +186,9 @@ FReply SSmvTileMap::OnMouseButtonDown(const FGeometry& G, const FPointerEvent& E
 	if (E.GetEffectingButton() != EKeys::LeftMouseButton) return FReply::Unhandled();
 	DownAt = LastAt = P; bMoved = false;
 	DragGate = RingMode.Get() ? HitGate(G, P) : -1;
-	bPan = DragGate < 0;
+	// işaretin üstünden basılırsa işaret sürüklenir (harita kaymaz)
+	bDragPin = DragGate < 0 && !RingMode.Get() && Lat && Lon && FVector2D::Distance(ToLocal(G, *Lat, *Lon), P) < 18.0;
+	bPan = DragGate < 0 && !bDragPin;
 	return FReply::Handled().CaptureMouse(SharedThis(this));
 }
 
@@ -196,6 +198,7 @@ FReply SSmvTileMap::OnMouseMove(const FGeometry& G, const FPointerEvent& E)
 	const FVector2D P = FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition()));
 	if (FVector2D::Distance(P, DownAt) > 4.0) bMoved = true;
 	if (DragGate >= 0 && Gates && Gates->IsValidIndex(DragGate)) ToGeo(G, P, (*Gates)[DragGate].Lat, (*Gates)[DragGate].Lon);
+	else if (bDragPin && Lat && Lon) ToGeo(G, P, *Lat, *Lon);
 	else if (bPan) { Cx -= P.X - LastAt.X; Cy -= P.Y - LastAt.Y; }
 	LastAt = P;
 	return FReply::Handled();
@@ -205,7 +208,7 @@ FReply SSmvTileMap::OnMouseButtonUp(const FGeometry& G, const FPointerEvent& E)
 {
 	if (!HasMouseCapture()) return FReply::Unhandled();
 	const FVector2D P = FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition()));
-	if (DragGate >= 0) { if (OnChanged) OnChanged(); }
+	if (DragGate >= 0 || bDragPin) { if (OnChanged) OnChanged(); }
 	else if (!bMoved)
 	{
 		double La, Lo;
@@ -220,7 +223,7 @@ FReply SSmvTileMap::OnMouseButtonUp(const FGeometry& G, const FPointerEvent& E)
 		else if (Lat && Lon) { *Lat = La; *Lon = Lo; }
 		if (OnChanged) OnChanged();
 	}
-	DragGate = -1; bPan = false;
+	DragGate = -1; bPan = false; bDragPin = false;
 	return FReply::Handled().ReleaseMouseCapture();
 }
 
