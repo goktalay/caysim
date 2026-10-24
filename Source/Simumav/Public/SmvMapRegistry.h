@@ -37,6 +37,9 @@ struct SIMUMAV_API FSmvMapDef
 	bool bDecor;
 	/** Gereken Fab paketi (Content altı klasör; bilgi/rehber için) */
 	const TCHAR* Package;
+	/** Çevre zemini biyomu (Desert | Rocky | Grasslands | Snow): harita "havada ada" ise çevresine Hyper malzemeli arazi diski, kaya/çalı ve
+	 *  uzak dağlar kurulur (ASmvScenery::BuildSurround). nullptr → yok. */
+	const TCHAR* Surround = nullptr;
 };
 
 struct SIMUMAV_API FSmvMapRegistry

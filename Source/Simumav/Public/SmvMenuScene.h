@@ -69,6 +69,10 @@ protected:
 	/** Fab haritası (varsa menü arka planı) ve gök */
 	UPROPERTY() TObjectPtr<class ULevelStreamingDynamic> MenuLevel;
 	UPROPERTY() TArray<TObjectPtr<AActor>> SkyActors;
+	/** Fab haritası çevresi (havada ada görünmesin; kayıt tablosu Surround) ve gökte uzak trafik (yalnız görsel) */
+	UPROPERTY() TArray<TObjectPtr<AActor>> SceneryActors;
+	bool bSceneryDone = false;
+	void TickScenery();
 	UPROPERTY() TObjectPtr<ACameraActor> Cam;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Preview;
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> PilotPrev;

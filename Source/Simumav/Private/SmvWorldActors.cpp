@@ -22,6 +22,7 @@
 #include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h"
 #include "SmvPhysics.h"
+#include "SmvScenery.h"
 
 namespace
 {
@@ -693,6 +694,12 @@ double ASmvProcTerrain::Noise2(double X, double Y) const
 	return Sum / Norm;
 }
 
+void ASmvProcTerrain::Destroyed()
+{
+	if (Scenery) { Scenery->Destroy(); Scenery = nullptr; }
+	Super::Destroyed();
+}
+
 void ASmvProcTerrain::SetSurfaceWeather(float Wetness, float Snow)
 {
 	PendingWet = FMath::Clamp(Wetness, 0.f, 1.f);
@@ -767,13 +774,25 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 		Nrm[Tri[i]] += Fn; Nrm[Tri[i + 1]] += Fn; Nrm[Tri[i + 2]] += Fn;
 	}
 	for (FVector& X : Nrm) { X = X.GetSafeNormal(); if (X.Z < 0) X = -X; }
+	// teğetler: dünya hizalı doku (Hyper malzemesi XY izdüşümü) için +X yönü yüzeye izdüşürülür (normal haritaları doğru aydınlansın)
+	Tan.Reserve(V.Num());
+	for (const FVector& Nv : Nrm) Tan.Add(FProcMeshTangent((FVector::ForwardVector - Nv * FVector::DotProduct(Nv, FVector::ForwardVector)).GetSafeNormal(), false));
 	Ground->CreateMeshSection_LinearColor(0, V, Tri, Nrm, UV, Col, Tan, true);
-	UMaterialInterface* TerrainWx = LoadObject<UMaterialInterface>(nullptr, GSmvTerrainWxMat, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	// malzeme: Hyper Auto Landscape dokulu otomatik arazi (eğim → kaya, yükseklik → kar) → hava duyarlı köşe rengi → temel
+	UMaterialInterface* Hyper = FSmvScenery::TerrainMaterial();
+	UMaterialInterface* TerrainWx = Hyper ? Hyper : LoadObject<UMaterialInterface>(nullptr, GSmvTerrainWxMat, nullptr, LOAD_NoWarn | LOAD_Quiet);
 	UMaterialInterface* TerrainMat = TerrainWx ? nullptr : LoadObject<UMaterialInterface>(nullptr, GSmvTerrainMat);
 	if (TerrainWx)
 	{
 		TerrainMid = UMaterialInstanceDynamic::Create(TerrainWx, this);
 		Ground->SetMaterial(0, TerrainMid);
+		if (Hyper)
+		{
+			// kar çizgisi: yüksek dağlarda (≥ 200 m) tepelerin üst %35'i (dünya Z, cm); alçak arazide kapalı
+			const double SnowLine = W.MountainHeight >= 200.0 ? Origin.Z + W.MountainHeight * 0.65 * 100.0 : 1.0e8;
+			TerrainMid->SetScalarParameterValue(TEXT("SnowLine"), (float)SnowLine);
+			TerrainMid->SetScalarParameterValue(TEXT("SnowFade"), (float)FMath::Max(2000.0, W.MountainHeight * 15.0));
+		}
 		SetSurfaceWeather(PendingWet, PendingSnow);
 	}
 	else if (TerrainMat) Ground->SetMaterial(0, TerrainMat);
@@ -798,8 +817,51 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 
 	// ağaçlar ve binalar (ev çevresinin dışında)
 	TreeTrunks->ClearInstances(); TreeCrowns->ClearInstances(); Buildings->ClearInstances();
+	if (Scenery) { Scenery->Destroy(); Scenery = nullptr; }
 	const int32 Trees = FMath::Clamp((int32)(W.TreeDensity * 1500.0), 0, 4000);
-	for (int32 i = 0; i < Trees; ++i)
+	// Fab manzarası varsa (Brushify ağaçları, çalı, orman kayaları; ia_scatter kaya/ot; uzak dağ ağları) temel şekil ağaçları yerine
+	const bool bFabScenery = FSmvScenery::Meshes(ESmvSceneryKind::Tree).Num() > 0 && GetWorld();
+	if (bFabScenery)
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Sp.Owner = this;
+		Scenery = GetWorld()->SpawnActor<ASmvScenery>(ASmvScenery::StaticClass(), FTransform(Origin), Sp);
+	}
+	if (Scenery)
+	{
+		Scenery->AttachToActor(this, FAttachmentTransformRules::KeepWorldTransform);
+		FSmvScatterDensity D;
+		D.Trees = Trees;
+		D.Bushes = Trees / 3 + 60;
+		D.Rocks = 140 + FMath::Clamp(W.MountainCount, 0, 12) * 40;
+		D.Grass = FMath::Clamp((int32)FSmvScenery::GetFloat(TEXT("GrassCount"), 2600.f), 0, 20000);
+		D.TreeInnerM = FlatR * 1.2;
+		D.GrassOuterM = FlatR * 1.5;
+		const double Rh = FMath::DegreesToRadians(W.RunwayHeading);
+		const double RwFe = FMath::Sin(Rh), RwFn = FMath::Cos(Rh);
+		const bool bRw = W.bRunway;
+		const bool bWater = W.Water > 0.01;
+		const double WaterE = Half * 0.55, WaterN = -Half * 0.5, WaterHalf = Half * W.Water + 20.0;
+		Scenery->Scatter(30.0, Half * 0.98, D, Seed, [this, &ToUe, RwFe, RwFn, bRw, bWater, WaterE, WaterN, WaterHalf](double E, double N, FVector& P, FVector& Up)
+		{
+			// pist (ev noktasından pist yönünde −50..+550 m, 30 m genişlik) ve su düzlemi boş kalır
+			if (bRw)
+			{
+				const double Along = E * RwFe + N * RwFn, Across = E * RwFn - N * RwFe;
+				if (Along > -90.0 && Along < 590.0 && FMath::Abs(Across) < 32.0) return false;
+			}
+			if (bWater && FMath::Abs(E - WaterE) < WaterHalf && FMath::Abs(N - WaterN) < WaterHalf) return false;
+			const double H = HeightAt(E, N);
+			const double Hx = HeightAt(E + 2.0, N) - HeightAt(E - 2.0, N), Hy = HeightAt(E, N + 2.0) - HeightAt(E, N - 2.0);
+			P = ToUe(E, N, H);
+			Up = FVector(-Hx / 4.0, Hy / 4.0, 1.0).GetSafeNormal();
+			return true;
+		});
+		// arazinin dışı: alçakta (ova gürültüsünün altında) geniş arazi diski + ufuk dağları — kare arazinin kenarında boşluk görünmesin
+		Scenery->BuildGroundDisk(Origin - FVector(0.0, 0.0, 1800.0), Half * 0.9, FMath::Max(14000.0, Half * 6.0), Track.Weather == TEXT("snow") ? TEXT("Snow") : TEXT("Rocky"), Seed, false);
+	}
+	for (int32 i = 0; i < Trees && !Scenery; ++i)
 	{
 		const double E = Rng.Uniform(-Half, Half), N = Rng.Uniform(-Half, Half);
 		if (FMath::Sqrt(E * E + N * N) < FlatR * 1.2) continue;

@@ -52,6 +52,7 @@ namespace
 			M.StartE = D.StartE; M.StartN = D.StartN; M.StartYaw = D.StartYaw;
 			M.bDecor = D.bDecor;
 			M.Package = D.Package;
+			M.Surround = D.Surround ? D.Surround : TEXT("");
 			M.Preview = D.Preview;
 			// UFS (pak) içindeki dosya: göreli proje yolu korunur (pak bağlama noktası göreli; tam yola çevirmek bulamazdı)
 			const FString PreviewPath = FPaths::Combine(FPaths::ProjectContentDir(), M.Preview);

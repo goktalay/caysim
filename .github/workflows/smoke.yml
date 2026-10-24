@@ -20,15 +20,15 @@ on:
         type: string
         default: ""
       flights:
-        description: "Ucus sayisi (0-3; Fab haritalari + saat/hava)"
+        description: "Ucus sayisi (0-4; Fab haritalari + saat/hava, 4. prosedurel dunya)"
         type: string
-        default: "3"
+        default: "4"
 
 jobs:
   smoke:
     if: github.repository_owner == 'goktalay'
     runs-on: [self-hosted, windows, unreal]
-    timeout-minutes: 35
+    timeout-minutes: 40
     defaults:
       run:
         shell: powershell

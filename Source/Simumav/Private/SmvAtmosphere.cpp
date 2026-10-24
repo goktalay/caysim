@@ -2,6 +2,7 @@
 #include "SimumavModule.h"
 #include "SmvSolar.h"
 #include "SmvWorldActors.h"
+#include "SmvScenery.h"
 #include "SmvGlbBody.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/IAssetRegistry.h"
@@ -361,6 +362,7 @@ bool FSmvAtmosphere::Apply(UWorld* W, const FSmvAtmosphereCfg& Cfg, TArray<AActo
 	}
 	// ---- prosedürel zemin ıslaklığı / kar ----
 	for (TActorIterator<ASmvProcTerrain> It(W); It; ++It) It->SetSurfaceWeather((float)X.Wet, (float)X.SnowCover);
+	for (TActorIterator<ASmvScenery> It(W); It; ++It) It->SetSurfaceWeather((float)X.Wet, (float)X.SnowCover);
 
 	if (!SkyCls)
 	{

@@ -5,6 +5,8 @@
 #   /Game/Simumav/Materials/M_SmvPbr(2S)   GLB dron gövdeleri (çalışma anı ProceduralMesh): BaseColor × BaseColorTex, Metallic, Roughness, Emissive
 #   /Game/Simumav/Materials/M_SmvPropDisc  dönen pervane bulanık diski (yarı saydam, Opacity)
 #   /Game/Simumav/Materials/M_SmvTerrainWx arazi + hava (Wetness: koyulaşma, parlaklık, su birikintisi; Snow: düz yüzeylerde kar)
+#   /Game/Simumav/Materials/M_SmvTerrainHyper  Hyper Auto Landscape dokularıyla eğim/yükseklik otomatik arazi (Fab paketi varsa)
+#   /Game/Simumav/Materials/M_SmvStreet    şehir asfaltı / kaldırım taşı (dünya hizalı gürültü + karo derzi)
 #   /Game/Simumav/Models/<ad>/...          Content/Simumav/ModelsSrc/*.glb (Interchange glTF; idempotent, kaynak sha1 etiketi)
 # Ayrıca Ultra Dynamic Sky / Weather değişken dökümü (USmvAtmosphereLibrary; "UDSPROP" satırları) — atmosfer ad listesinin doğrulaması.
 # Çalıştırma (Windows, şirket bilgisayarı / CI):
@@ -188,6 +190,255 @@ def hava_arazi_malzemesi():
     mel.connect_material_property(r3, "", unreal.MaterialProperty.MP_ROUGHNESS)
     mel.recompile_material(m)
     eal.save_loaded_asset(m)
+
+
+class Graf:
+    """Malzeme grafiği kısaltmaları (düğüm konumları yalnız görünüm için sırayla verilir)."""
+
+    def __init__(self, m):
+        self.m = m
+        self.n = 0
+
+    def e(self, cls, **ozellik):
+        self.n += 1
+        x = mel.create_material_expression(self.m, cls, -2400 + (self.n % 12) * 180, -1200 + (self.n // 12) * 140)
+        for k, v in ozellik.items():
+            x.set_editor_property(k, v)
+        return x
+
+    def bag(self, a, b, pin="", acik=""):
+        mel.connect_material_expressions(a, acik, b, pin)
+        return b
+
+    def c(self, v):
+        return self.e(unreal.MaterialExpressionConstant, r=float(v))
+
+    def ikili(self, cls, a, b):
+        x = self.e(cls)
+        self.bag(a if not isinstance(a, (int, float)) else self.c(a), x, "A")
+        self.bag(b if not isinstance(b, (int, float)) else self.c(b), x, "B")
+        return x
+
+    def mul(self, a, b):
+        return self.ikili(unreal.MaterialExpressionMultiply, a, b)
+
+    def add(self, a, b):
+        return self.ikili(unreal.MaterialExpressionAdd, a, b)
+
+    def sub(self, a, b):
+        return self.ikili(unreal.MaterialExpressionSubtract, a, b)
+
+    def lerp(self, a, b, t):
+        x = self.e(unreal.MaterialExpressionLinearInterpolate)
+        self.bag(a if not isinstance(a, (int, float)) else self.c(a), x, "A")
+        self.bag(b if not isinstance(b, (int, float)) else self.c(b), x, "B")
+        self.bag(t, x, "Alpha")
+        return x
+
+    def sat(self, a):
+        return self.bag(a, self.e(unreal.MaterialExpressionSaturate))
+
+    def abs(self, a):
+        return self.bag(a, self.e(unreal.MaterialExpressionAbs))
+
+    def frac(self, a):
+        return self.bag(a, self.e(unreal.MaterialExpressionFrac))
+
+    def maske(self, a, r=False, g=False, b=False, al=False):
+        return self.bag(a, self.e(unreal.MaterialExpressionComponentMask, r=r, g=g, b=b, a=al))
+
+    def ekle(self, a, b):
+        x = self.e(unreal.MaterialExpressionAppendVector)
+        self.bag(a, x, "A")
+        self.bag(b, x, "B")
+        return x
+
+    def skaler(self, ad, v):
+        return self.e(unreal.MaterialExpressionScalarParameter, parameter_name=ad, default_value=float(v))
+
+    def vektor(self, ad, r, g, b):
+        return self.e(unreal.MaterialExpressionVectorParameter, parameter_name=ad, default_value=unreal.LinearColor(r, g, b, 1.0))
+
+
+def ornek_tipi(t, normal, sanal):
+    ST = unreal.MaterialSamplerType
+    TC = unreal.TextureCompressionSettings
+    try:
+        cs = t.get_editor_property("compression_settings")
+    except Exception:  # noqa: BLE001
+        cs = None
+    if normal or cs == TC.TC_NORMALMAP:
+        return ST.SAMPLERTYPE_VIRTUAL_NORMAL if sanal else ST.SAMPLERTYPE_NORMAL
+    if cs == TC.TC_MASKS:
+        return ST.SAMPLERTYPE_VIRTUAL_MASKS if sanal else ST.SAMPLERTYPE_MASKS
+    if cs in (TC.TC_GRAYSCALE, TC.TC_ALPHA):
+        srgb = bool(t.get_editor_property("srgb"))
+        if sanal:
+            return ST.SAMPLERTYPE_VIRTUAL_GRAYSCALE if srgb else ST.SAMPLERTYPE_VIRTUAL_LINEAR_GRAYSCALE
+        return ST.SAMPLERTYPE_GRAYSCALE if srgb else ST.SAMPLERTYPE_LINEAR_GRAYSCALE
+    srgb = bool(t.get_editor_property("srgb"))
+    if sanal:
+        return ST.SAMPLERTYPE_VIRTUAL_COLOR if srgb else ST.SAMPLERTYPE_VIRTUAL_LINEAR_COLOR
+    return ST.SAMPLERTYPE_COLOR if srgb else ST.SAMPLERTYPE_LINEAR_COLOR
+
+
+def malzeme_derlendi(m):
+    """Derleme başarısını yönerge sayısıyla denetle (hatalı grafikte piksel gölgelendirici yönergesi 0)."""
+    try:
+        st = mel.get_statistics(m)
+        return int(st.get_editor_property("num_pixel_shader_instructions")) > 0
+    except Exception as e:  # noqa: BLE001
+        log(f"malzeme istatistiği okunamadı ({e}) — başarılı sayıldı")
+        return True
+
+
+HYPER = "/Game/Hyper/ResourcePack"
+HYPER_DOKU = {
+    "cimD": HYPER + "/Environments/Foliage/Grass/GrassPatch_01/T_Grass_Blobby_Tiling_D",
+    "cimN": HYPER + "/Environments/Foliage/Grass/GrassPatch_01/T_Grass_Blobby_Tiling_N",
+    "ormanD": HYPER + "/Tileable_Materials/Landscape/forest_ground_04/textures/T_forest_ground_04_diff",
+    "ormanN": HYPER + "/Tileable_Materials/Landscape/forest_ground_04/textures/T_forest_ground_04_nor",
+    "kumD": HYPER + "/Tileable_Materials/sand_02/textures/T_sand_02_diff",
+    "kumN": HYPER + "/Tileable_Materials/sand_02/textures/T_sand_02_nor",
+    "kayaD": HYPER + "/Tileable_Materials/Landscape/RockWall/Textures/T_RockCliff_4K_Color",
+    "kayaN": HYPER + "/Tileable_Materials/Landscape/RockWall/Textures/T_RockCliff_4K_Normal",
+    "karD": HYPER + "/Tileable_Materials/Landscape/Snow/Textures/T_Snow_Color",
+    "karN": HYPER + "/Tileable_Materials/Landscape/Snow/Textures/T_Snow_Normal",
+    "makro": HYPER + "/Tileable_Materials/Landscape/Grass/Textures/T_MacroVariation",
+    "gurultu": HYPER + "/Environments/Textures/T_TilingNoise06",
+}
+
+
+def hyper_arazi_malzemesi(sanal_zorla=None):
+    """M_SmvTerrainHyper — Hyper Auto Landscape Material v4 dokularıyla EĞİM / YÜKSEKLİK tabanlı otomatik arazi malzemesi
+    (prosedürel arazi ProceduralMesh olduğu için Hyper'ın Landscape katman malzemesi doğrudan kullanılamaz; aynı fikir burada:
+    düz yüzey çimen/orman toprağı (makro desenle karışık), dik yamaç kaya (iki düzlemli izdüşüm), SnowLine üstü ve Snow
+    parametresiyle kar, Sand ile çöl kumu, Wetness ile ıslak zemin). Uzakta iri ölçekli örnek (desen tekrarı azalır)."""
+    eksik = [k for k, y in HYPER_DOKU.items() if not eal.does_asset_exist(y)]
+    if eksik:
+        log("Hyper dokuları yok (" + ", ".join(eksik) + ") — M_SmvTerrainHyper üretilmedi (M_SmvTerrainWx kalır)")
+        return
+    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "3")
+    if m is None and sanal_zorla is None:
+        return
+    if m is None:
+        m = eal.load_asset("/Game/Simumav/Materials/M_SmvTerrainHyper")
+    try:
+        vt_acik = bool(unreal.get_default_object(unreal.RendererSettings).get_editor_property("virtual_textures"))
+    except Exception:  # noqa: BLE001
+        vt_acik = False
+    dokular = {k: eal.load_asset(y) for k, y in HYPER_DOKU.items()}
+    for deneme in range(2):
+        if deneme == 1:
+            mel.delete_all_material_expressions(m)
+        g = Graf(m)
+        wp = g.e(unreal.MaterialExpressionWorldPosition)
+        xy = g.maske(wp, r=True, g=True)
+        z = g.maske(wp, b=True)
+        nrm = g.e(unreal.MaterialExpressionVertexNormalWS)
+        nx = g.abs(g.maske(nrm, r=True))
+        ny = g.abs(g.maske(nrm, g=True))
+        nz = g.maske(nrm, b=True)
+        cam = g.e(unreal.MaterialExpressionCameraPositionWS)
+        uz = g.e(unreal.MaterialExpressionDistance)
+        g.bag(wp, uz, "A"); g.bag(cam, uz, "B")
+        uzak = g.sat(g.mul(g.sub(uz, 2500.0), 1.0 / 15000.0))
+
+        def doku(ad, uv, normal=False):
+            t = dokular[ad]
+            sanal = bool(t.get_editor_property("virtual_texture_streaming")) and vt_acik
+            if deneme == 1:
+                sanal = not sanal
+            x = g.e(unreal.MaterialExpressionTextureSample, texture=t, sampler_type=ornek_tipi(t, normal, sanal),
+                    sampler_source=unreal.SamplerSourceMode.SSM_WRAP_WORLD_GROUP_SETTINGS)
+            g.bag(uv, x, "UVs")
+            return x
+
+        def uv(olcek_cm):
+            return g.mul(xy, 1.0 / olcek_cm)
+
+        makro = g.sat(g.mul(g.sub(g.maske(doku("makro", uv(30000.0)), r=True), 0.35), 2.5))
+        genis = g.lerp(0.82, 1.12, g.maske(doku("gurultu", uv(9000.0)), r=True))
+        yakin = g.lerp(doku("cimD", uv(300.0)), doku("ormanD", uv(420.0)), makro)
+        irak = g.lerp(doku("cimD", uv(1800.0)), doku("ormanD", uv(2600.0)), makro)
+        zemin = g.mul(g.lerp(yakin, irak, uzak), genis)
+        kum = g.lerp(doku("kumD", uv(380.0)), doku("kumD", uv(2300.0)), uzak)
+        kum_on = g.skaler("Sand", 0.0)
+        zemin = g.lerp(zemin, g.mul(kum, genis), kum_on)
+        zemin = g.mul(zemin, g.vektor("Tint", 1.0, 1.0, 1.0))
+        # kaya: iki düzlemli izdüşüm (YZ ve XZ), yüzey yönüne göre karışım
+        uvA = g.mul(g.ekle(g.maske(wp, g=True), z), 1.0 / 900.0)
+        uvB = g.mul(g.ekle(g.maske(wp, r=True), z), 1.0 / 900.0)
+        wB = g.sat(g.ikili(unreal.MaterialExpressionDivide, nx, g.add(g.add(nx, ny), 0.001)))
+        kaya = g.lerp(doku("kayaD", uvB), doku("kayaD", uvA), wB)
+        kayaN = g.lerp(doku("kayaN", uvB, True), doku("kayaN", uvA, True), wB)
+        egim = g.sub(1.0, nz)
+        kaya_m = g.sat(g.add(g.mul(g.sub(egim, g.skaler("RockSlope", 0.22)), g.skaler("RockSharp", 5.0)), g.mul(g.sub(makro, 0.5), 0.3)))
+        # kar: hava parametresi (düz yüzey) ve kar çizgisi (yükseklik; SnowLine cm, varsayılan kapalı)
+        duz = g.sat(g.sub(g.mul(nz, 2.0), 1.0))
+        kar_h = g.mul(g.skaler("Snow", 0.0), duz)
+        kar_y = g.mul(g.sat(g.ikili(unreal.MaterialExpressionDivide, g.sub(z, g.skaler("SnowLine", 1.0e8)), g.skaler("SnowFade", 4000.0))), g.sat(g.sub(g.mul(nz, 2.5), 1.2)))
+        kar_m = g.ikili(unreal.MaterialExpressionMax, kar_h, kar_y)
+        renk = g.lerp(zemin, kaya, kaya_m)
+        renk = g.lerp(renk, doku("karD", uv(500.0)), kar_m)
+        islak = g.skaler("Wetness", 0.0)
+        renk = g.mul(renk, g.lerp(1.0, 0.55, islak))
+        mel.connect_material_property(renk, "", unreal.MaterialProperty.MP_BASE_COLOR)
+        zn = g.lerp(doku("cimN", uv(300.0), True), doku("ormanN", uv(420.0), True), makro)
+        zn = g.lerp(zn, doku("kumN", uv(380.0), True), kum_on)
+        nn = g.lerp(zn, kayaN, kaya_m)
+        nn = g.lerp(nn, doku("karN", uv(500.0), True), kar_m)
+        mel.connect_material_property(nn, "", unreal.MaterialProperty.MP_NORMAL)
+        pr = g.lerp(0.93, 0.78, kaya_m)
+        pr = g.lerp(pr, 0.55, kar_m)
+        pr = g.lerp(pr, 0.3, islak)
+        mel.connect_material_property(pr, "", unreal.MaterialProperty.MP_ROUGHNESS)
+        mel.recompile_material(m)
+        if malzeme_derlendi(m):
+            break
+        log(f"M_SmvTerrainHyper derlenemedi (deneme {deneme + 1}) — örnekleyici türleri {'sanal' if deneme == 0 else 'normal'} ile yeniden")
+    eal.save_loaded_asset(m)
+    log("M_SmvTerrainHyper hazır (Hyper dokuları, eğim/yükseklik karışımı)")
+
+
+def sokak_malzemesi():
+    """M_SmvStreet — kodla kurulan şehrin asfalt / kaldırım / meydan yüzeyleri: dünya hizalı gürültü (Hyper T_TilingNoise06 ya da
+    motor gürültüsü), TileCm > 0 ise karo derzleri (kaldırım taşı), Color / Rough parametreleri."""
+    m = malzeme_v("/Game/Simumav/Materials", "M_SmvStreet", "2")
+    if m is None:
+        return
+    g = Graf(m)
+    wp = g.e(unreal.MaterialExpressionWorldPosition)
+    xy = g.maske(wp, r=True, g=True)
+    gt = eal.load_asset(HYPER_DOKU["gurultu"]) if eal.does_asset_exist(HYPER_DOKU["gurultu"]) else None
+
+    def gur(olcek):
+        if gt:
+            x = g.e(unreal.MaterialExpressionTextureSample, texture=gt, sampler_type=ornek_tipi(gt, False, False),
+                    sampler_source=unreal.SamplerSourceMode.SSM_WRAP_WORLD_GROUP_SETTINGS)
+            g.bag(g.mul(xy, 1.0 / olcek), x, "UVs")
+            return g.maske(x, r=True)
+        n = g.e(unreal.MaterialExpressionNoise, scale=100.0 / olcek)
+        g.bag(wp, n, "Position")
+        return n
+
+    renk = g.vektor("Color", 0.05, 0.05, 0.055)
+    ince = g.lerp(0.72, 1.12, gur(240.0))
+    iri = g.lerp(0.88, 1.06, gur(2600.0))
+    taban = g.mul(g.mul(renk, ince), iri)
+    karo = g.skaler("TileCm", 0.0)
+    kv = g.frac(g.ikili(unreal.MaterialExpressionDivide, xy, g.ikili(unreal.MaterialExpressionMax, karo, 1.0)))
+    kx = g.maske(kv, r=True)
+    ky = g.maske(kv, g=True)
+    kenar = g.ikili(unreal.MaterialExpressionMin, g.ikili(unreal.MaterialExpressionMin, kx, g.sub(1.0, kx)), g.ikili(unreal.MaterialExpressionMin, ky, g.sub(1.0, ky)))
+    derz = g.sub(1.0, g.sat(g.ikili(unreal.MaterialExpressionDivide, g.mul(kenar, karo), 2.5)))
+    karo_on = g.sat(karo)
+    son = g.mul(taban, g.lerp(1.0, 0.55, g.mul(derz, karo_on)))
+    mel.connect_material_property(son, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(g.lerp(g.skaler("Rough", 0.85), 0.95, g.mul(derz, karo_on)), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    log(f"M_SmvStreet hazır ({'Hyper gürültü dokusu' if gt else 'motor gürültüsü'})")
 
 
 def glb_dugum_adlari(yol):
@@ -394,7 +645,8 @@ def harita():
 def main():
     arazi_malzemesi()
     parlak_malzeme()
-    for adim in (lambda: pbr_malzemesi("M_SmvPbr", False), lambda: pbr_malzemesi("M_SmvPbr2S", True), pervane_diski, hava_arazi_malzemesi, niagara_sablonu):
+    for adim in (lambda: pbr_malzemesi("M_SmvPbr", False), lambda: pbr_malzemesi("M_SmvPbr2S", True), pervane_diski, hava_arazi_malzemesi, niagara_sablonu,
+                 hyper_arazi_malzemesi, sokak_malzemesi):
         try:
             adim()
         except Exception as e:  # noqa: BLE001 — eksik malzeme oyunu durdurmaz (yedek malzemeler)

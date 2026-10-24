@@ -4506,11 +4506,11 @@ void SSmvShell::TickSmoke()
 	static const bool bSmoke = FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke"));
 	if (!bSmoke || !Flow.IsValid()) return;
 	const double Now = FPlatformTime::Seconds();
-	// -SmvSmokeLang=tr: arayüz dili (Türkçe tur; görüntüler Screenshots/Smoke_tr) · -SmvSmokeFlights=N: uçuş sayısı (0–3)
+	// -SmvSmokeLang=tr: arayüz dili (Türkçe tur; görüntüler Screenshots/Smoke_tr) · -SmvSmokeFlights=N: uçuş sayısı (0–4)
 	static FString SmokeLang;
 	static const bool bLang = FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeLang="), SmokeLang) && !SmokeLang.IsEmpty();
 	static int32 NFlights = -1;
-	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 3); }
+	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 4); }
 	if (SmokeStep < 0)
 	{
 		SmokeStep = 0; SmokeAt = Now + 12.0; LogoAt = -100.0;
@@ -4562,6 +4562,8 @@ void SSmvShell::TickSmoke()
 		{ TEXT("orman"), TEXT("dusk"), TEXT("rain"), TEXT("f1"), true },
 		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f2"), false },
 		{ TEXT("sehir"), TEXT("day"), TEXT("cloudy"), TEXT("f3"), false },
+		// prosedürel dünya (Hyper arazi malzemesi, Brushify ağaçları, ia_scatter kaya/ot, ufuk dağları)
+		{ TEXT("proc"), TEXT("golden"), TEXT("clear"), TEXT("f4"), false },
 	};
 	if (SmokeFl >= NFlights)
 	{
@@ -4579,7 +4581,17 @@ void SSmvShell::TickSmoke()
 	case 0:
 	{
 		if (Flow->GetScreen() != ESmvScreen::Menu && Flow->GetScreen() != ESmvScreen::Wizard) { Flow->SetScreen(ESmvScreen::Menu); SmokeAt = Now + 3.0; return; }
-		if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Fx.Map)) Flow->Draft.Track = FSmvFabContent::MakeTrack(*M);
+		if (FCString::Strcmp(Fx.Map, TEXT("proc")) == 0)
+		{
+			Flow->Draft.Track = FSmvTrack();
+			Flow->Draft.Track.Id = TEXT("smoke-proc");
+			Flow->Draft.Track.Name = TEXT("Smoke");
+			Flow->Draft.Track.WorldMode = TEXT("procedural");
+			Flow->Draft.Track.World.MountainHeight = 420.0;
+			Flow->Draft.Track.World.MountainCount = 6;
+			Flow->Draft.Track.World.TreeDensity = 0.45;
+		}
+		else if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Fx.Map)) Flow->Draft.Track = FSmvFabContent::MakeTrack(*M);
 		else UE_LOG(LogTemp, Display, TEXT("SMOKE map %s yok — varsayılan parkur"), Fx.Map);
 		Flow->Draft.Track.TimeOfDay = Fx.Tod;
 		Flow->Draft.Track.Weather = Fx.Wx;

@@ -147,8 +147,11 @@ public:
 	double HeightAt(double E, double N) const;
 	/** Hava: ıslaklık (koyulaşma, parlaklık, su birikintisi) ve kar örtüsü 0..1 — M_SmvTerrainWx varsa (FSmvAtmosphere çağırır). */
 	void SetSurfaceWeather(float Wetness, float Snow);
+	virtual void Destroyed() override;
 
 protected:
+	/** Fab manzarası (Brushify ağaç/çalı/kaya/uzak dağ, ia_scatter ot/kaya; SmvScenery) — yoksa temel şekil ağaçları */
+	UPROPERTY() TObjectPtr<class ASmvScenery> Scenery;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UProceduralMeshComponent> Ground;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> TreeTrunks;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> TreeCrowns;

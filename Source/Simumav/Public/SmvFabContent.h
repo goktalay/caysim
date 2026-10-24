@@ -39,6 +39,8 @@ struct SIMUMAV_API FSmvFabMap
 	bool bDecor = false;
 	/** Gereken Fab paketi (bilgi) */
 	FString Package;
+	/** Çevre zemini biyomu (kayıt tablosu Surround; boş → yok) */
+	FString Surround;
 	/** Pakette var mı (yoksa menüde gösterilip seçilemez) */
 	bool bAvailable = false;
 };

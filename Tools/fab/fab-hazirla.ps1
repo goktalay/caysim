@@ -249,6 +249,16 @@ try {
 		$g = $y.Groups[1].Value
 		if (HaritaVar $g) { [void]$pisirilecek.Add($g); Bilgi "sehir bina seviyesi: $g" } else { Uyari "sehir bina seviyesi yok: $g" }
 	}
+	# manzara (yalniz gorsel): agac / kaya / ot / uzak dag / ucan arac / ic mekan malzemesi klasorleri
+	# (Source/Simumav/Private/SmvScenery.cpp MANZARA-KLASORLERI; oyun bunlari yumusak yolla yukler)
+	$scn = Join-Path $Proje 'Source\Simumav\Private\SmvScenery.cpp'
+	$scnMetin = if (Test-Path -LiteralPath $scn) { Get-Content -LiteralPath $scn -Raw -Encoding UTF8 } else { '' }
+	if ($scnMetin -match "(?s)// <MANZARA-KLASORLERI>(.*?)// </MANZARA-KLASORLERI>") {
+		foreach ($y in [regex]::Matches($Matches[1], '"(/Game/[^"]+)"')) {
+			$g = $y.Groups[1].Value
+			if (Test-Path -LiteralPath (DiskYolu $g)) { $satirlar += "+DirectoriesToAlwaysCook=(Path=`"$($g.Substring(6))`")"; Bilgi "manzara klasoru: $g" } else { Bilgi "manzara klasoru yok (paket inmemis): $g" }
+		}
+	}
 	foreach ($h in $pisirilecek) { $satirlar += "+MapsToCook=(FilePath=`"$h`")" }
 	# ---------------- e) fizik carpismasi (statik aglar) ----------------
 	$carpKlasor = @()

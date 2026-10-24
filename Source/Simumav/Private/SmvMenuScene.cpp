@@ -25,6 +25,8 @@
 #include "Engine/LevelStreamingDynamic.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
+#include "SmvScenery.h"
+#include "SmvMapRegistry.h"
 
 namespace
 {
@@ -290,6 +292,8 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	Extras.Reset();
 	for (TObjectPtr<AActor>& X : SkyActors) if (X) X->Destroy();
 	SkyActors.Reset();
+	for (TObjectPtr<AActor>& X : SceneryActors) if (X) X->Destroy();
+	SceneryActors.Reset();
 	if (MenuLevel) { MenuLevel->SetShouldBeLoaded(false); MenuLevel->SetShouldBeVisible(false); MenuLevel->SetIsRequestingUnloadAndRemoval(true); MenuLevel = nullptr; }
 	if (Preview) Preview->Destroy();
 	if (PilotPrev) PilotPrev->Destroy();
@@ -498,6 +502,7 @@ void ASmvMenuScene::Tick(float Dt)
 		}
 	}
 	TickSnaps();
+	TickScenery();
 	if (WorldPrev && WorldSetup && !Preview && !PilotPrev)
 	{
 		// dünya önizlemesi: merkez çevresinde yavaş yörünge (eğik kuş bakışı)
@@ -616,6 +621,37 @@ void ASmvMenuScene::TickSnaps()
 }
 
 void ASmvMenuScene::PlayLanding() { LandAt = FPlatformTime::Seconds(); }
+
+void ASmvMenuScene::TickScenery()
+{
+	if (bSceneryDone || !bLive || !WorldSetup) return;
+	UWorld* W = GetWorld();
+	if (!W) return;
+	if (bFabMap && (!MenuLevel || !MenuLevel->IsLevelVisible() || !MenuLevel->GetLoadedLevel())) return;
+	bSceneryDone = true;
+	FActorSpawnParameters Sp;
+	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	// Fab haritası "havada ada" ise çevresine arazi diski + uzak dağlar (uçuştakiyle aynı: ASmvScenery::BuildSurround)
+	const FSmvMapDef* Def = bFabMap ? FSmvMapRegistry::Find(MapKey) : nullptr;
+	if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
+	{
+		if (ASmvScenery* Sc = W->SpawnActor<ASmvScenery>(ASmvScenery::StaticClass(), FTransform::Identity, Sp))
+		{
+			TArray<AActor*> Ig;
+			if (Flyer) Ig.Add(Flyer);
+			for (const TObjectPtr<ASmvDroneActor>& X : Extras) if (X) Ig.Add(X);
+			if (Sc->BuildSurround({ MenuLevel->GetLoadedLevel() }, Def->Surround, 11, Ig)) SceneryActors.Add(Sc);
+			else Sc->Destroy();
+		}
+		GroundCache.Reset();
+	}
+	if (ASmvSkyTraffic* St = W->SpawnActor<ASmvSkyTraffic>(ASmvSkyTraffic::StaticClass(), FTransform::Identity, Sp))
+	{
+		const FVector C = WorldSetup->GeoToUnreal(Lon0, Lat0, WorldSetup->MslToWorldHeight(Lat0, Lon0, GroundMsl));
+		if (St->Build(C, 3, 160000.0, 22000.0, 52000.0, 7)) SceneryActors.Add(St);
+		else St->Destroy();
+	}
+}
 
 UTextureRenderTarget2D* ASmvMenuScene::DroneSnap(const FString& Type, const FString& ModelKey, const FString& ColorHex)
 {

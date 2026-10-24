@@ -35,6 +35,9 @@
 #include "SmvSitlConfig.h"
 #include "SmvFabContent.h"
 #include "SmvPhysics.h"
+#include "SmvScenery.h"
+#include "Materials/Material.h"
+#include "Misc/PackageName.h"
 #include "Engine/LevelStreamingDynamic.h"
 #include "Engine/Level.h"
 #include "Engine/DirectionalLight.h"
@@ -294,6 +297,17 @@ void ASmvGameMode::BuildScene()
 		TArray<AActor*> SkyActors;
 		if (FSmvFabContent::SpawnSky(W, Req.Track, SkyActors)) WorldSetup->DisableBuiltinSky();
 		for (AActor* A : SkyActors) FabSkyActors.Add(A);
+	}
+	// gökte uzak trafik (Flying AI ağı; yalnız görsel — davranış / hedef yok)
+	if (FSmvScenery::Enabled() && WorldSetup->GetSource() == ECaySimWorldSource::Flat)
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (ASmvSkyTraffic* St = W->SpawnActor<ASmvSkyTraffic>(ASmvSkyTraffic::StaticClass(), FTransform::Identity, Sp))
+		{
+			if (St->Build(Geo(Req.Track.Lat, Req.Track.Lon, GroundMsl), 3, 170000.0, 24000.0, 60000.0, Req.Track.World.Seed)) FabDecor.Add(St);
+			else St->Destroy();
+		}
 	}
 
 	// ---- dron ----
@@ -911,6 +925,7 @@ void ASmvGameMode::Tick(float Dt)
 	if (VideoRec.IsValid() && VideoRec->IsOn()) VideoRec->Tick(Dt);
 	TickPhysics(Dt);
 	TickDebris(Dt);
+	TickCityWindows();
 	UpdateRace(Dt);
 	UpdateTargets();
 	// ses
@@ -1737,6 +1752,21 @@ void ASmvGameMode::PlaceFabLevels()
 	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi (%s): %d seviye, kutu %s, kalkış (%.0f, %.0f, %.0f) — %s; %d gök/ışık aktörü kaldırıldı; fizik kalkış araması %d aday eledi (son: %s)"),
 		*FabMapKey, Levels.Num(), *Box.GetSize().ToString(), Start.X, Start.Y, Zg, *How, Drop.Num(), Rejected, LastWhy.IsEmpty() ? TEXT("-") : *LastWhy);
 	if (Def && Def->bDecor) SpawnFabDecor(FVector::ZeroVector, true);
+	// "havada ada" haritaları (kayıt tablosu Surround biyomu): çevreye Hyper malzemeli arazi diski + kaya/çalı + uzak dağlar
+	if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (ASmvScenery* Sc = W->SpawnActor<ASmvScenery>(ASmvScenery::StaticClass(), FTransform::Identity, Sp))
+		{
+			TArray<AActor*> Ig;
+			if (Drone) Ig.Add(Drone);
+			if (PilotFigure) Ig.Add(PilotFigure);
+			for (const TObjectPtr<AActor>& X : FabDecor) if (X) Ig.Add(X);
+			if (Sc->BuildSurround(Levels, Def->Surround, 11, Ig)) FabDecor.Add(Sc);
+			else Sc->Destroy();
+		}
+	}
 }
 
 // Sahne dekoru: Fab statik modelleri (ör. tank, hava savunma, anti-dron sistemi) kalkış noktasının doğusunda
@@ -1789,7 +1819,10 @@ void ASmvGameMode::SpawnFabCity()
 	const double Cell = 10000.0, Road = 3000.0;
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	UMaterialInterface* BaseMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
-	auto Slab = [&](const FVector& Ctr, const FVector& SizeCm, const FLinearColor& C, bool bCollide = false)
+	UMaterialInterface* Street = FSmvScenery::StreetMaterial();
+	UMaterialInterface* Hyper = FSmvScenery::TerrainMaterial();
+	// Mat: 0 düz renk, 1 sokak malzemesi (asfalt / kaldırım taşı; TileCm > 0 karo derzi), 2 Hyper arazi (park çimi)
+	auto Slab = [&](const FVector& Ctr, const FVector& SizeCm, const FLinearColor& C, bool bCollide = false, int32 Mat = 0, float TileCm = 0.f, float Rough = 0.85f)
 	{
 		if (!Cube) return;
 		AStaticMeshActor* A = W->SpawnActor<AStaticMeshActor>(Ctr, FRotator::ZeroRotator);
@@ -1799,24 +1832,32 @@ void ASmvGameMode::SpawnFabCity()
 		SC->SetStaticMesh(Cube);
 		if (!bCollide) SC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		A->SetActorScale3D(SizeCm / 100.0);   // BasicShapes küpü 100 cm
-		if (BaseMat)
+		UMaterialInterface* Src = Mat == 1 && Street ? Street : Mat == 2 && Hyper ? Hyper : SmvSolidMat(BaseMat);
+		if (Src)
 		{
-			UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(BaseMat, SC);
-			D->SetVectorParameterValue(TEXT("Color"), C);
+			UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Src, SC);
+			if (Src == Street) { D->SetVectorParameterValue(TEXT("Color"), C); D->SetScalarParameterValue(TEXT("TileCm"), TileCm); D->SetScalarParameterValue(TEXT("Rough"), Rough); }
+			else if (Src == Hyper) D->SetVectorParameterValue(TEXT("Tint"), C);
+			else SmvSetSolidColor(D, C);
 			SC->SetMaterial(0, D);
 		}
 		FabDecor.Add(A);
 	};
-	// zemin (3 km; üstü Z 0 = SITL düz zemini), caddeler (koyu asfalt) ve kalkış meydanı (açık beton)
+	// zemin (24 km; üstü Z 0 = SITL düz zemini; şehir dışı park çimi; ufuk dağları üstünde), caddeler (asfalt), adalarda kaldırım taşı (12 cm bordür),
+	// ortada kalkış meydanı (iri karo, üstü +2 cm)
 	const double Span = 5.0 * Cell + Road;
-	Slab(FVector(0, 0, -50), FVector(300000, 300000, 100), FLinearColor(0.16f, 0.2f, 0.12f), true);
+	Slab(FVector(0, 0, -50), FVector(2400000, 2400000, 100), Hyper ? FLinearColor(0.9f, 0.95f, 0.85f) : FLinearColor(0.16f, 0.2f, 0.12f), true, 2);
 	for (int32 k = -2; k <= 3; ++k)
 	{
 		const double C = (k - 0.5) * Cell;
-		Slab(FVector(C, 0, 2), FVector(Road, Span, 4), FLinearColor(0.035f, 0.035f, 0.04f));
-		Slab(FVector(0, C, 2), FVector(Span, Road, 4), FLinearColor(0.035f, 0.035f, 0.04f));
+		Slab(FVector(C, 0, 2), FVector(Road, Span, 4), FLinearColor(0.05f, 0.05f, 0.055f), false, 1, 0.f, 0.78f);
+		Slab(FVector(0, C, 2.2), FVector(Span, Road, 4), FLinearColor(0.05f, 0.05f, 0.055f), false, 1, 0.f, 0.78f);
 	}
-	Slab(FVector(0, 0, 3), FVector(Cell - Road, Cell - Road, 4), FLinearColor(0.42f, 0.42f, 0.4f));
+	Slab(FVector(0, 0, 0), FVector(Cell - Road, Cell - Road, 4), FLinearColor(0.5f, 0.49f, 0.46f), false, 1, 140.f, 0.7f);
+	for (int32 i = -2; i <= 2; ++i)
+		for (int32 j = -2; j <= 2; ++j)
+			if (i != 0 || j != 0) Slab(FVector(i * Cell, j * Cell, 6), FVector(Cell - Road, Cell - Road, 12), FLinearColor(0.38f, 0.37f, 0.35f), false, 1, 60.f, 0.8f);
+	SpawnCityStreetscape(Cell, Road);
 	int32 NMesh = 0, NTower = 0, Pick = 0;
 	auto PlaceMesh = [&](const FVector& Ctr, double MaxFoot, int32 Yaw90)
 	{
@@ -1863,6 +1904,197 @@ void ASmvGameMode::SpawnFabCity()
 	UE_LOG(LogSimumav, Log, TEXT("Şehir bloğu kuruldu: %d bina ağı, %d City Sample bina seviyesi"), NMesh, NTower);
 }
 
+// Şehir sokak dokusu (yalnız görsel): yol orta şeridi kesikli çizgileri, kavşak yaya geçitleri, ada köşelerinde sokak lambaları
+// (alacakaranlık/gece başları parlar), kalkış meydanı çevresinde ağaçlar (Brushify), şehir dışında park ağaçları/kayalar ve ufuk dağları.
+void ASmvGameMode::SpawnCityStreetscape(double Cell, double Road)
+{
+	UWorld* W = GetWorld();
+	if (!W) return;
+	FActorSpawnParameters Sp;
+	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	ASmvScenery* Sc = W->SpawnActor<ASmvScenery>(ASmvScenery::StaticClass(), FTransform::Identity, Sp);
+	if (!Sc) return;
+	FabDecor.Add(Sc);
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	UStaticMesh* Sph = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	UMaterialInterface* Solid = SmvSolidMat(LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")));
+	auto Mid = [&](const FLinearColor& C, const FLinearColor& Em = FLinearColor::Black) -> UMaterialInterface*
+	{
+		if (!Solid) return nullptr;
+		UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Solid, Sc);
+		SmvSetSolidColor(D, C);
+		if (!Em.Equals(FLinearColor::Black)) D->SetVectorParameterValue(TEXT("Emissive"), Em);
+		return D;
+	};
+	const double Half = 2.5 * Cell + Road * 0.5;   // şehir kenarı (cm, merkezden)
+	// yol çizgileri: her caddenin ortasında 3 m çizgi / 6 m boşluk, 15 cm genişlik; kavşak içleri boş
+	TArray<FTransform> Dash, Zebra;
+	for (int32 k = -2; k <= 3; ++k)
+	{
+		const double C = (k - 0.5) * Cell;
+		for (double t = -Half; t <= Half; t += 900.0)
+		{
+			const double Rel = FMath::Fmod(FMath::Abs(t) + Cell * 0.5, Cell);
+			if (Rel < Road * 0.5 + 300.0 || Rel > Cell - Road * 0.5 - 300.0) continue;   // kavşak
+			Dash.Add(FTransform(FRotator::ZeroRotator, FVector(C, t, 4.6), FVector(0.15, 3.0, 0.01)));
+			Dash.Add(FTransform(FRotator::ZeroRotator, FVector(t, C, 4.8), FVector(3.0, 0.15, 0.01)));
+		}
+		// yaya geçitleri: kavşaktan çıkışta cadde genişliğince 50 cm şeritler (50 cm aralık)
+		for (int32 m = -2; m <= 3; ++m)
+		{
+			const double D = (m - 0.5) * Cell;
+			const int32 NZ = FMath::Max(1, (int32)((Road - 400.0) / 100.0));
+			for (int32 z = 0; z < NZ; ++z)
+			{
+				const double Off = -Road * 0.5 + 200.0 + z * 100.0 + 25.0;
+				const double Ax = C + Off;
+				Zebra.Add(FTransform(FRotator::ZeroRotator, FVector(Ax, D + Road * 0.5 + 250.0, 4.7), FVector(0.5, 3.0, 0.01)));
+				Zebra.Add(FTransform(FRotator::ZeroRotator, FVector(D + Road * 0.5 + 250.0, Ax, 4.9), FVector(3.0, 0.5, 0.01)));
+			}
+		}
+	}
+	UMaterialInterface* White = Mid(FLinearColor(0.75f, 0.75f, 0.72f));
+	Sc->AddMeshInstances(Cube, Dash, false, 700.0, White, false);
+	Sc->AddMeshInstances(Cube, Zebra, false, 700.0, White, false);
+	// sokak lambaları: ada köşelerinde (bordür içinde 1 m), 8 m direk + kol + baş
+	const FString Tod = Req.Track.TimeOfDay;
+	const bool bLit = Tod == TEXT("night") || Tod == TEXT("dusk");
+	TArray<FTransform> Poles, Arms, Heads;
+	for (int32 i = -2; i <= 2; ++i)
+	{
+		for (int32 j = -2; j <= 2; ++j)
+		{
+			const double Hs = (Cell - Road) * 0.5 - 100.0;
+			for (int32 q = 0; q < 4; ++q)
+			{
+				const double Sx = (q & 1) ? 1.0 : -1.0, Sy = (q & 2) ? 1.0 : -1.0;
+				const FVector Base(i * Cell + Sx * Hs, j * Cell + Sy * Hs, 12.0);
+				Poles.Add(FTransform(FRotator::ZeroRotator, Base + FVector(0, 0, 400.0), FVector(0.14, 0.14, 8.0)));
+				const FVector Out = FVector(Sx, Sy, 0.0).GetSafeNormal();
+				Arms.Add(FTransform(Out.Rotation(), Base + FVector(0, 0, 790.0) + Out * 90.0, FVector(1.8, 0.08, 0.08)));
+				Heads.Add(FTransform(FRotator::ZeroRotator, Base + FVector(0, 0, 780.0) + Out * 180.0, FVector(0.5, 0.3, 0.16)));
+			}
+		}
+	}
+	Sc->AddMeshInstances(Cyl, Poles, true, 2500.0, Mid(FLinearColor(0.08f, 0.085f, 0.09f)));
+	Sc->AddMeshInstances(Cube, Arms, false, 1500.0, Mid(FLinearColor(0.08f, 0.085f, 0.09f)));
+	Sc->AddMeshInstances(Sph, Heads, false, 3000.0, Mid(FLinearColor(0.9f, 0.85f, 0.7f), bLit ? FLinearColor(6.f, 4.6f, 2.6f) : FLinearColor(0.02f, 0.02f, 0.02f)), false);
+	// kalkış meydanı çevresi ağaçları (Brushify; meydanın kenarından 3 m içeride, 12 m arayla — ortası açık)
+	const TArray<UStaticMesh*>& Trees = FSmvScenery::Meshes(ESmvSceneryKind::Tree);
+	if (Trees.Num() > 0)
+	{
+		TArray<UStaticMesh*> Pick;
+		for (UStaticMesh* M : Trees) if (M->GetName().Contains(TEXT("Medium")) || M->GetName().Contains(TEXT("Small"))) Pick.Add(M);
+		if (Pick.Num() == 0) Pick = Trees;
+		TMap<UStaticMesh*, TArray<FTransform>> ByMesh;
+		const double Hp = (Cell - Road) * 0.5 - 300.0;
+		int32 n = 0;
+		for (double t = -Hp; t <= Hp + 1.0; t += 1200.0)
+		{
+			for (int32 e = 0; e < 4; ++e)
+			{
+				const FVector P = e == 0 ? FVector(t, -Hp, 2.0) : e == 1 ? FVector(t, Hp, 2.0) : e == 2 ? FVector(-Hp, t, 2.0) : FVector(Hp, t, 2.0);
+				UStaticMesh* Tm = Pick[(n * 5 + 1) % Pick.Num()];
+				ByMesh.FindOrAdd(Tm).Add(FTransform(FRotator(0.0, n * 47.0, 0.0), P, FVector(0.75)));
+				++n;
+			}
+		}
+		for (TPair<UStaticMesh*, TArray<FTransform>>& It : ByMesh) Sc->AddMeshInstances(It.Key, It.Value, true, 3000.0);
+		// şehir dışı park: ağaç / çalı / kaya (şehir kenarından 1,2 km'ye)
+		FSmvScatterDensity D;
+		D.Trees = 900; D.Bushes = 300; D.Rocks = 80; D.Grass = 0;
+		const double Edge = Half / 100.0 + 40.0;
+		Sc->Scatter(Edge, 1450.0, D, 23, [](double E, double N, FVector& P, FVector& Up) { P = FVector(E * 100.0, -N * 100.0, 0.0); Up = FVector::UpVector; return true; });
+	}
+	Sc->AddMountains(FVector::ZeroVector, 600000.0, 1100000.0, -2000.0, 12, TEXT("Rocky"), 31, 50000.0, 150000.0);
+	UE_LOG(LogSimumav, Log, TEXT("Şehir sokak dokusu: %d çizgi, %d yaya geçidi şeridi, %d lamba (%s), %d manzara örneği"), Dash.Num(), Zebra.Num(), Heads.Num(), bLit ? TEXT("yanık") : TEXT("sönük"), Sc->GetInstanceCount());
+}
+
+void ASmvGameMode::TickCityWindows()
+{
+	if (bCityWindowsDone || CityLevels.Num() == 0) return;
+	bool bAll = true;
+	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : CityLevels) if (Lv && !Lv->IsLevelVisible()) bAll = false;
+	if (!bAll && FPlatformTime::Seconds() - SceneT0 < 45.0) return;
+	bCityWindowsDone = true;
+	bool bSwap = true;
+	if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvScenery"), TEXT("CityWindowSwap"), bSwap, GGameIni);
+	TArray<UMaterialInterface*> Ics;
+	static const TCHAR* Presets[] = { TEXT("MI_ICS_Offices_M_2k"), TEXT("MI_ICS_Offices_L_2k"), TEXT("MI_ICS_Rooms_L_2k"), TEXT("MI_ICS_Offices_S3_1k"), TEXT("MI_ICS_Rooms_S_2k"), TEXT("MI_ICS_Lobbies_M_4k") };
+	for (const TCHAR* Pr : Presets)
+	{
+		const FString Pk = FString(TEXT("/Game/InteriorCubemapSystem/Presets/")) + Pr;
+		if (!FPackageName::DoesPackageExist(Pk)) continue;
+		if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *(Pk + TEXT(".") + Pr), nullptr, LOAD_NoWarn | LOAD_Quiet)) Ics.Add(M);
+	}
+	auto LogParams = [](UMaterialInterface* M)
+	{
+		TArray<FMaterialParameterInfo> Infos;
+		TArray<FGuid> Ids;
+		M->GetAllScalarParameterInfo(Infos, Ids);
+		FString Out;
+		for (const FMaterialParameterInfo& I : Infos)
+		{
+			float V = 0.f;
+			M->GetScalarParameterValue(FHashedMaterialParameterInfo(I), V);
+			Out += FString::Printf(TEXT("%s=%.3g "), *I.Name.ToString(), V);
+		}
+		UE_LOG(LogSimumav, Log, TEXT("Pencere malzemesi %s (taban %s): %s"), *M->GetName(), M->GetMaterial() ? *M->GetMaterial()->GetName() : TEXT("-"), *Out);
+	};
+	for (UMaterialInterface* M : Ics) LogParams(M);
+	// gece/alacakaranlıkta özgün pencere ışıması kısılır (değiştirme kapalıysa)
+	const float Dim = FSmvScenery::GetFloat(TEXT("CityWindowEmissive"), 0.3f);
+	int32 Swapped = 0, Dimmed = 0;
+	TSet<FString> Seen;
+	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : CityLevels)
+	{
+		ULevel* L = Lv ? Lv->GetLoadedLevel() : nullptr;
+		if (!L) continue;
+		for (AActor* A : L->Actors)
+		{
+			if (!IsValid(A)) continue;
+			TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+			for (UStaticMeshComponent* C : Comps)
+			{
+				if (!C) continue;
+				for (int32 i = 0; i < C->GetNumMaterials(); ++i)
+				{
+					UMaterialInterface* M = C->GetMaterial(i);
+					if (!M) continue;
+					const UMaterial* Base = M->GetMaterial();
+					const FString Mn = M->GetName();
+					const bool bWin = (Base && Base->GetName().Contains(TEXT("Window"))) || Mn.Contains(TEXT("Window")) || Mn.Contains(TEXT("Glass"));
+					if (!bWin) continue;
+					if (!Seen.Contains(Mn)) { Seen.Add(Mn); LogParams(M); }
+					if (bSwap && Ics.Num() > 0)
+					{
+						C->SetMaterial(i, Ics[(C->GetUniqueID() / 7 + i) % Ics.Num()]);
+						++Swapped;
+					}
+					else
+					{
+						UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(M, C);
+						TArray<FMaterialParameterInfo> Infos;
+						TArray<FGuid> Ids;
+						M->GetAllScalarParameterInfo(Infos, Ids);
+						for (const FMaterialParameterInfo& I : Infos)
+						{
+							const FString N = I.Name.ToString();
+							if (!(N.Contains(TEXT("Emiss")) || N.Contains(TEXT("Bright")) || N.Contains(TEXT("Intens")) || N.Contains(TEXT("Light")))) continue;
+							float V = 0.f;
+							if (M->GetScalarParameterValue(FHashedMaterialParameterInfo(I), V)) D->SetScalarParameterValue(I.Name, V * Dim);
+						}
+						C->SetMaterial(i, D);
+						++Dimmed;
+					}
+				}
+			}
+		}
+	}
+	UE_LOG(LogSimumav, Log, TEXT("Şehir pencereleri: %d yuva Interior Cubemap ile değişti, %d kısıldı (%d ön ayar, %d farklı pencere malzemesi)"), Swapped, Dimmed, Ics.Num(), Seen.Num());
+}
+
 void ASmvGameMode::ClearFabWorld()
 {
 	for (TArray<TObjectPtr<ULevelStreamingDynamic>>* Arr : { &FabLevels, &CityLevels })
@@ -1881,6 +2113,7 @@ void ASmvGameMode::ClearFabWorld()
 	FabDecor.Reset();
 	bFabSubsRequested = false;
 	bFabPlaced = false;
+	bCityWindowsDone = false;
 	FabMapKey.Reset();
 }
 

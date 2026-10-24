@@ -84,6 +84,12 @@ protected:
 	void SpawnFabCity();
 	/** Fab/şehir aktörlerini ve seviyelerini kaldırır (uçuş sonu / yeni uçuş) */
 	void ClearFabWorld();
+	/** Şehir: City Sample bina seviyeleri görünür olunca pencere malzemeleri Interior Cubemap System iç mekân malzemesiyle
+	 *  değiştirilir (gece/alacakaranlıkta aşırı parlayan pencereler; ayar CityWindowSwap) — bir kez */
+	void TickCityWindows();
+	/** Şehir sokak dokusu: yol çizgileri, yaya geçitleri, sokak lambaları, meydan ağaçları, şehir dışı park ve ufuk dağları */
+	void SpawnCityStreetscape(double Cell, double Road);
+	bool bCityWindowsDone = false;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Drone;
 	UPROPERTY() TArray<TObjectPtr<ASmvGateActor>> Gates;
 	UPROPERTY() TArray<TObjectPtr<ASmvDroneActor>> Ghosts;       // botlar / rakipler
