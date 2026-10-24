@@ -655,6 +655,14 @@ ASmvProcTerrain::ASmvProcTerrain()
 	TreeCrowns->SetupAttachment(Ground);
 	Buildings = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("Buildings"));
 	Buildings->SetupAttachment(Ground);
+	CityCars = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("CityCars"));
+	CityCars->SetupAttachment(Ground);
+	CityCabins = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("CityCabins"));
+	CityCabins->SetupAttachment(Ground);
+	CityPeople = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("CityPeople"));
+	CityPeople->SetupAttachment(Ground);
+	CityHeads = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("CityHeads"));
+	CityHeads->SetupAttachment(Ground);
 	Runway = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Runway"));
 	Runway->SetupAttachment(Ground);
 	WaterPlane = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Water"));
@@ -666,6 +674,11 @@ ASmvProcTerrain::ASmvProcTerrain()
 	TreeTrunks->SetStaticMesh(Cyl.Object);
 	TreeCrowns->SetStaticMesh(Cone.Object);
 	Buildings->SetStaticMesh(Cube.Object);
+	CityCars->SetStaticMesh(Cube.Object);
+	CityCabins->SetStaticMesh(Cube.Object);
+	CityPeople->SetStaticMesh(Cyl.Object);
+	CityHeads->SetStaticMesh(Cyl.Object);
+	for (UInstancedStaticMeshComponent* Dc : { CityCars.Get(), CityCabins.Get(), CityPeople.Get(), CityHeads.Get() }) Dc->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Runway->SetStaticMesh(Cube.Object);
 	WaterPlane->SetStaticMesh(Cube.Object);
 	BaseMaterial = Mat.Object;
@@ -817,6 +830,10 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	Tinted(TreeTrunks, FLinearColor(0.25f, 0.15f, 0.07f));
 	Tinted(TreeCrowns, FLinearColor(0.05f, 0.22f, 0.06f));
 	Tinted(Buildings, FLinearColor(0.6f, 0.58f, 0.55f));
+	Tinted(CityCars, FLinearColor(0.62f, 0.64f, 0.68f));
+	Tinted(CityCabins, FLinearColor(0.03f, 0.04f, 0.06f));
+	Tinted(CityPeople, FLinearColor(0.12f, 0.2f, 0.38f));
+	Tinted(CityHeads, FLinearColor(0.72f, 0.52f, 0.4f));
 	Tinted(Runway, FLinearColor(0.08f, 0.08f, 0.09f));
 	Tinted(WaterPlane, FLinearColor(0.05f, 0.18f, 0.3f));
 	if (UMaterialInterface* St = FSmvScenery::StreetMaterial())
@@ -912,6 +929,32 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 		else Buildings->AddInstance(FTransform(FRotator(0, Yaw, 0), P + FVector(0, 0, S.Z * 5000.f), S * 100.f));
 	}
 	for (TPair<UStaticMesh*, TArray<FTransform>>& It : BldXf) Scenery->AddMeshInstances(It.Key, It.Value, true, 4000.0);
+	// şehir dekoru (yol haritası "Özel parkur › Şehir"): binaların arasında park etmiş / yoldaki araçlar ve küçük insan grupları (yalnız görsel)
+	CityCars->ClearInstances(); CityCabins->ClearInstances(); CityPeople->ClearInstances(); CityHeads->ClearInstances();
+	SmvCore::FPyRandom Rc((uint64_t)Seed + 7u);   // ayrı akış: dekorsuz eski parkurların yerleşimi değişmez
+	for (int32 i = 0; i < FMath::Clamp(W.Vehicles, 0, 400); ++i)
+	{
+		const double A = Rc.Uniform(0.0, 2.0 * UE_DOUBLE_PI), R = Rc.Uniform(FlatR * 1.1, Half * 0.62);
+		const double E = R * FMath::Sin(A), N = R * FMath::Cos(A);
+		const FVector P = ToUe(E, N, HeightAt(E, N)) - Origin;
+		const FRotator Rot(0.0, Rc.Uniform(0.0, 360.0), 0.0);
+		CityCars->AddInstance(FTransform(Rot, P + FVector(0, 0, 65.0), FVector(4.3, 1.8, 0.9)));
+		CityCabins->AddInstance(FTransform(Rot, P + Rot.RotateVector(FVector(-30.0, 0.0, 0.0)) + FVector(0, 0, 138.0), FVector(2.2, 1.6, 0.6)));
+	}
+	for (int32 i = 0; i < FMath::Clamp(W.People, 0, 400); )
+	{
+		const double A = Rc.Uniform(0.0, 2.0 * UE_DOUBLE_PI), R = Rc.Uniform(FlatR * 0.9, Half * 0.6);
+		const double E0 = R * FMath::Sin(A), N0 = R * FMath::Cos(A);
+		const int32 Group = 1 + (int32)Rc.Uniform(0.0, 5.0);
+		for (int32 k = 0; k < Group && i < FMath::Clamp(W.People, 0, 400); ++k, ++i)
+		{
+			const double E = E0 + Rc.Uniform(-3.0, 3.0), N = N0 + Rc.Uniform(-3.0, 3.0);
+			const FVector P = ToUe(E, N, HeightAt(E, N)) - Origin;
+			const double Hm = Rc.Uniform(1.55, 1.9);
+			CityPeople->AddInstance(FTransform(FRotator::ZeroRotator, P + FVector(0, 0, Hm * 42.0), FVector(0.42, 0.42, Hm * 0.84)));
+			CityHeads->AddInstance(FTransform(FRotator::ZeroRotator, P + FVector(0, 0, Hm * 92.0), FVector(0.23, 0.23, 0.25)));
+		}
+	}
 	// pist (ev noktasından pist yönünde, 600 × 30 m)
 	Runway->SetVisibility(W.bRunway);
 	if (W.bRunway)

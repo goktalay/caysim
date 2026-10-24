@@ -173,6 +173,11 @@ protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> TreeTrunks;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> TreeCrowns;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> Buildings;
+	/** Şehir dekoru (Özel parkur › Şehir): araç gövdesi / kabini, insan gövdesi / başı — yalnız görsel */
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> CityCars;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> CityCabins;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> CityPeople;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> CityHeads;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Runway;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> WaterPlane;
 	UPROPERTY() TObjectPtr<UMaterialInterface> BaseMaterial;
