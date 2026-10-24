@@ -44,6 +44,12 @@ def main():
         from ceviriler import C  # noqa: E402
     except ImportError:
         C = {}
+    try:
+        from yol_ceviriler import C as _YC  # noqa: E402  (yol haritası metinleri; ceviriler.py önceliklidir)
+        for _k, _v in _YC.items():
+            C.setdefault(_k, _v)
+    except ImportError:
+        pass
     out = {d: {} for d in DILLER}
     eslesmedi = []
     for key, (tr, en) in M.items():
