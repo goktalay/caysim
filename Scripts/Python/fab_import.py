@@ -70,7 +70,7 @@ def simgeler(j):
                             veri = uyeler.get(ad[: -len("pathname")] + "asset")
                             if not yol.lower().endswith(".png") or veri is None:
                                 continue
-                            hedef_dosya = os.path.join(gecici, *yol.split("/")[-3:])
+                            hedef_dosya = os.path.join(gecici, *yol.split("/")[-4:])
                             os.makedirs(os.path.dirname(hedef_dosya), exist_ok=True)
                             with open(hedef_dosya, "wb") as f:
                                 f.write(tf.extractfile(veri).read())
@@ -78,6 +78,14 @@ def simgeler(j):
                 except Exception as e:  # noqa: BLE001
                     uyar(f"unitypackage okunamadi ({tam}): {e}")
     log(f"simge paketi: {len(pngler)} PNG ({kaynak})")
+    for rel, _ in pngler[:80]:
+        log(f"simge örneği: {rel}")
+    # yalnız düz ("Filled") biçem içe aktarılır (arayüze uygun, sayı ~1/3; Realistic / Outline alınmaz); yoksa hepsi. En çok 1200.
+    duz = [x for x in pngler if "filled" in x[0].lower()]
+    if duz:
+        pngler = duz
+    pngler = pngler[:1200]
+    log(f"simge paketi: içe aktarılacak {len(pngler)} PNG")
     if not pngler:
         return {"hedef": hedef, "ok": False, "iskelet": False, "varliklar": [], "kemikler": []}
     if eal.does_directory_exist(hedef):
