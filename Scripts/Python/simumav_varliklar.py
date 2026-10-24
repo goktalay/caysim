@@ -324,7 +324,7 @@ def hyper_arazi_malzemesi():
     if eksik:
         log("Hyper dokuları yok (" + ", ".join(eksik) + ") — M_SmvTerrainHyper üretilmedi (M_SmvTerrainWx kalır)")
         return
-    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "6")
+    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "7")
     if m is None:
         return
     try:
@@ -401,7 +401,13 @@ def hyper_arazi_malzemesi():
         zn = g.lerp(zn, doku("kumN", uv(380.0), True), kum_on)
         nn = g.lerp(zn, kayaN, kaya_m)
         nn = g.lerp(nn, doku("karN", uv(500.0), True), kar_m)
+        # s7: normal haritaları düzleştirilir (NormalStrength; uzakta daha da) ve yansıma düşük — duman testinde gökyüzü yansıması
+        # ve iri ölçekli normal kabartısı zemini beyaz-mor lekeli gösteriyordu
+        guc = g.mul(g.skaler("NormalStrength", 0.45), g.lerp(1.0, 0.35, uzak))
+        duzN = g.e(unreal.MaterialExpressionConstant3Vector, constant=unreal.LinearColor(0.0, 0.0, 1.0, 1.0))
+        nn = g.lerp(duzN, nn, guc)
         mel.connect_material_property(nn, "", unreal.MaterialProperty.MP_NORMAL)
+        mel.connect_material_property(g.skaler("Specular", 0.2), "", unreal.MaterialProperty.MP_SPECULAR)
         pr = g.lerp(0.93, 0.78, kaya_m)
         pr = g.lerp(pr, 0.55, kar_m)
         pr = g.lerp(pr, 0.3, islak)
