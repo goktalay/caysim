@@ -51,7 +51,6 @@ jobs:
         # Windows PowerShell 5.1 (her Windows'ta var; runner servisi Store/kullanıcı kurulumu pwsh'ı göremeyebilir). Betikler UTF-8 BOM'lu.
         shell: powershell
     env:
-      UE_ROOT: ${{ vars.UE_ROOT != '' && vars.UE_ROOT || 'C:\Program Files\Epic Games\UE_5.8' }}
       STEAM_APP_ID: ${{ vars.STEAM_APP_ID != '' && vars.STEAM_APP_ID || '480' }}
       ARCHIVE_DIR: ${{ github.workspace }}\Paketler
       # Etkilesimli oturumda Unreal Editor acikken yerel Zen DDC sunucusu (port 8558) o kullanicinin profilinde calisir;
@@ -63,6 +62,27 @@ jobs:
         with:
           lfs: true
           clean: false
+
+      - name: Yollari coz (Unreal, Fab hazirlama projesi, VaultCache)
+        # Bilgisayara gore: vars.* yolu varsa o; yoksa bilinen adaylar (yeni bilgisayar C:\claude\..., eski D:\...). Sonraki adimlara GITHUB_ENV ile.
+        env:
+          UE_ROOT_VAR: ${{ vars.UE_ROOT }}
+          FAB_PROJE_VAR: ${{ vars.FAB_PROJE }}
+          FAB_VAULT_VAR: ${{ vars.FAB_VAULT }}
+        run: |
+          function Ilk($liste, $isaret) { foreach ($p in $liste) { if ($p -and (Test-Path (Join-Path $p $isaret))) { return $p } }; return $null }
+          $ue = Ilk @($env:UE_ROOT_VAR, 'C:\claude\epic\UE_5.8', 'C:\claude\epic', 'C:\claude\Epic Games\UE_5.8', 'C:\claude\UE_5.8', 'D:\Epic Games\UE_5.8', 'C:\Program Files\Epic Games\UE_5.8') 'Engine\Build\BatchFiles\RunUAT.bat'
+          if (-not $ue) {
+            $f = Get-ChildItem -Path 'C:\claude', 'D:\' -Filter RunUAT.bat -Recurse -Depth 6 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($f) { $ue = $f.Directory.Parent.Parent.Parent.FullName }
+          }
+          $fab = Ilk @($env:FAB_PROJE_VAR, 'C:\claude\SimumavFab', 'D:\SimumavFab') 'Content'
+          $vault = Ilk @($env:FAB_VAULT_VAR, 'C:\ProgramData\Epic\EpicGamesLauncher\VaultCache', 'C:\claude\VaultCache', 'C:\claude\epic\VaultCache', 'D:\VaultCache') 'FabLibrary'
+          Write-Host "UE_ROOT=$ue"; Write-Host "FAB_PROJE=$fab"; Write-Host "FAB_VAULT=$vault"
+          if (-not $ue) { throw 'Unreal Engine 5.8 bulunamadi (vars.UE_ROOT ya da C:\claude\epic\UE_5.8)' }
+          "UE_ROOT=$ue" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($fab) { "FAB_PROJE=$fab" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
+          if ($vault) { "FAB_VAULT=$vault" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
 
       - name: Ortam denetimi
         run: |
@@ -98,7 +118,6 @@ jobs:
         # D:\SimumavFab\Content paketleri ve VaultCache UE paketleri Content altina kopyalanir, FabLibrary FBX urunleri
         # /Game/Fab altina ice aktarilir, DefaultGame.ini'ye pisirme/harita satirlari eklenir. Hicbiri yoksa uyari verir, derleme surer.
         env:
-          FAB_PROJE: ${{ vars.FAB_PROJE }}
         run: powershell -NoProfile -ExecutionPolicy Bypass -File Tools/fab/fab-hazirla.ps1 -Proje "$PWD" -UeRoot "$env:UE_ROOT"
 
       - name: Varlıkları koddan üret (Editor Python, headless)
