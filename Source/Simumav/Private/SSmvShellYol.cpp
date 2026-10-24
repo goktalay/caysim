@@ -2357,7 +2357,16 @@ TSharedRef<SWidget> SSmvShell::CrewWizard()
 	{
 		TArray<FString> V; TArray<FText> L;
 		En(Field, Vals, V, L);
-		return Row(FSmvI18n::T(FString(TEXT("avatar.")) + Field), Chips(Target, V, L, {}, Re, PerRow));
+		// sihirbaz paneli dar (≈ 460 px): etiket üstte, seçenekler altta tam genişlikte, satırda en çok 4 (taşıyordu)
+		return SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().Padding(2, 0, 0, 4)[SmvUi::Text(FSmvI18n::T(FString(TEXT("avatar.")) + Field), 12, "Regular", Dim(), false)]
+			+ SVerticalBox::Slot().AutoHeight()[Chips(Target, V, L, {}, Re, FMath::Min(PerRow, 4))];
+	};
+	auto RowV = [](const FText& Label, TSharedRef<SWidget> W) -> TSharedRef<SWidget>
+	{
+		return SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().Padding(2, 0, 0, 4)[SmvUi::Text(Label, 12, "Regular", Dim(), false)]
+			+ SVerticalBox::Slot().AutoHeight()[W];
 	};
 	TSharedRef<SWidget> Body = SNullWidget::NullWidget;
 	if (CwStep == 0)
@@ -2394,31 +2403,31 @@ TSharedRef<SWidget> SSmvShell::CrewWizard()
 						.Extra()[SNew(SBox).WidthOverride(18.f).HeightOverride(18.f)[SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(YhHex(Skins[k]))]]
 					];
 				}
-				V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.skin")), Sk)];
+				V->AddSlot().AutoHeight().Padding(0, 3)[RowV(Tx(TEXT("avatar.skin")), Sk)];
 			}
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Face, TEXT("face"), { TEXT("oval"), TEXT("round"), TEXT("square"), TEXT("long"), TEXT("heart") }, 5)];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Eyes, TEXT("eyes"), { TEXT("almond"), TEXT("round"), TEXT("narrow"), TEXT("wide") }, 4)];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.eye_color")), ColorPick(&A.EyeColor, Re))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[RowV(Tx(TEXT("avatar.eye_color")), ColorPick(&A.EyeColor, Re))];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Brows, TEXT("brows"), { TEXT("straight"), TEXT("arched"), TEXT("angled"), TEXT("soft") }, 4)];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Nose, TEXT("nose"), { TEXT("small"), TEXT("straight"), TEXT("wide"), TEXT("pointed") }, 4)];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Mouth, TEXT("mouth"), { TEXT("neutral"), TEXT("smile"), TEXT("grin"), TEXT("serious") }, 4)];
 			if (A.Body != TEXT("f")) V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Beard, TEXT("beard"), { TEXT("none"), TEXT("stubble"), TEXT("mustache"), TEXT("goatee"), TEXT("full") }, 5)];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Hair, TEXT("hair"), { TEXT("short"), TEXT("buzz"), TEXT("spiky"), TEXT("sidepart"), TEXT("curly"), TEXT("mohawk"), TEXT("bald"), TEXT("long"), TEXT("ponytail"), TEXT("bun"), TEXT("bob") }, 4)];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.hair_color")), ColorPick(&A.HairColor, Re))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[RowV(Tx(TEXT("avatar.hair_color")), ColorPick(&A.HairColor, Re))];
 		}
 		else if (CwStep == 3)
 		{
 			V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("cw.s_acc")), Accent2())];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Headgear, TEXT("headgear"), { TEXT("helmet"), TEXT("none"), TEXT("cap"), TEXT("headset") }, 4)];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.gear_color")), ColorPick(&A.Helmet, Re))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[RowV(Tx(TEXT("avatar.gear_color")), ColorPick(&A.Helmet, Re))];
 			if (A.Headgear == TEXT("helmet") || A.Headgear.IsEmpty())
 			{
-				V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.visor")), ColorPick(&A.Visor, Re))];
+				V->AddSlot().AutoHeight().Padding(0, 3)[RowV(Tx(TEXT("avatar.visor")), ColorPick(&A.Visor, Re))];
 				V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.mirror")), Toggle(&A.bMirror, Re))];
 			}
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Glasses, TEXT("glasses"), { TEXT("none"), TEXT("aviator"), TEXT("sun") }, 3)];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Outfit, TEXT("outfit"), { TEXT("suit"), TEXT("jacket"), TEXT("casual") }, 3)];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.suit")), ColorPick(&A.Suit, Re))];
+			V->AddSlot().AutoHeight().Padding(0, 3)[RowV(Tx(TEXT("avatar.suit")), ColorPick(&A.Suit, Re))];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.accessory")), Cycle(&A.Accessory, { TEXT("none"), TEXT("mic"), TEXT("crest"), TEXT("antenna"), TEXT("stripe") },
 				{ Tx(TEXT("avatar.acc_none")), Tx(TEXT("avatar.acc_mic")), Tx(TEXT("avatar.acc_crest")), Tx(TEXT("avatar.acc_antenna")), Tx(TEXT("avatar.acc_stripe")) }, Re, 240.f))];
 			V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.patch")), Cycle(&A.Patch, { TEXT("none"), TEXT("star"), TEXT("wing"), TEXT("bolt"), TEXT("chevron"), TEXT("target"), TEXT("shield"), TEXT("cross") },

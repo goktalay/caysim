@@ -484,14 +484,27 @@ def vat_pisir(j):
             if not klipler:
                 uyar(f"VAT: {ad} için klip yok")
                 continue
-            sm = ed.convert_skeletal_mesh_to_static_mesh(sk, f"{hedef}/SM_{ad}_VAT", True, -1)
-            log(f"VAT statik ağ: {sm.get_path_name() if sm else '-'}")
+            # MeshToStatic çizim nesnesi ister (NullRHI'de reddediliyordu): önce VAT ana ağı (PURE_WPO), sonra LOD kopyası, en son dönüştürme
+            sm = None
+            for deneme in ("master", "lod", "convert"):
+                try:
+                    if deneme == "master":
+                        sm = ed.generate_vat_mesh_master(sk, f"{hedef}/SM_{ad}_VAT", 1, "None", True, unreal.OverVatDriveMode.PURE_WPO, -1)
+                    elif deneme == "lod":
+                        sm = ed.create_static_mesh_from_skeletal_lod(sk, 0, f"{hedef}/SM_{ad}_VAT")
+                    else:
+                        sm = ed.convert_skeletal_mesh_to_static_mesh(sk, f"{hedef}/SM_{ad}_VAT", True, -1)
+                except Exception as ex:  # noqa: BLE001
+                    uyar(f"VAT {deneme}: {ex}")
+                log(f"VAT statik ağ ({deneme}): {sm.get_path_name() if sm else '-'}")
+                if sm:
+                    break
             if not sm:
                 continue
             try:
-                r = lib.bake_pure_wpo_vat(sk, sm, klipler, hedef, f"VAT_{ad}")
-            except TypeError as ex:
-                uyar(f"VAT imza: {ex}")
+                r = lib.bake_pure_wpo_vat(sk, sm, klipler, hedef, f"VAT_{ad}", [])
+            except Exception as ex:  # noqa: BLE001
+                uyar(f"VAT pişirme: {ex}")
                 continue
             log(f"VAT sonuc {ad}: {r}")
             ok = bool(r.get_editor_property("success")) if r else False

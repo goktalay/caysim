@@ -182,6 +182,10 @@ protected:
 	UPROPERTY() TObjectPtr<class ASmvScenery> Scenery;
 	/** Şehir hayatı (City Traffic Pro park etmiş araçlar + yaya grupları; SmvCityLife) — yoksa temel şekil araç/insan dekoru */
 	UPROPERTY() TObjectPtr<class ASmvCityLife> CityLife;
+public:
+	/** Önizleme yakalaması için sade (köşe renkli) arazi malzemesi — Build'den önce */
+	bool bPlainMaterial = false;
+protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UProceduralMeshComponent> Ground;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> TreeTrunks;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> TreeCrowns;

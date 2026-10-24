@@ -891,7 +891,8 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	for (const FVector& Nv : Nrm) Tan.Add(FProcMeshTangent((FVector::ForwardVector - Nv * FVector::DotProduct(Nv, FVector::ForwardVector)).GetSafeNormal(), false));
 	Ground->CreateMeshSection_LinearColor(0, V, Tri, Nrm, UV, Col, Tan, true);
 	// malzeme: Hyper Auto Landscape dokulu otomatik arazi (eğim → kaya, yükseklik → kar) → hava duyarlı köşe rengi → temel
-	UMaterialInterface* Hyper = FSmvScenery::TerrainMaterial();
+	// sahne yakalamalı önizlemede (menü dünya önizlemesi) Hyper malzemesi siyah çiziliyordu → köşe renkli hava malzemesi
+	UMaterialInterface* Hyper = bPlainMaterial ? nullptr : FSmvScenery::TerrainMaterial();
 	UMaterialInterface* TerrainWx = Hyper ? Hyper : LoadObject<UMaterialInterface>(nullptr, GSmvTerrainWxMat, nullptr, LOAD_NoWarn | LOAD_Quiet);
 	UMaterialInterface* TerrainMat = TerrainWx ? nullptr : LoadObject<UMaterialInterface>(nullptr, GSmvTerrainMat);
 	if (TerrainWx)

@@ -862,6 +862,7 @@ void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
 	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	WorldPrev = W->SpawnActor<ASmvProcTerrain>(ASmvProcTerrain::StaticClass(), FTransform::Identity, P);
 	if (!WorldPrev) return;
+	WorldPrev->bPlainMaterial = true;
 	WorldPrev->Build(T, GroundMsl, WorldSetup);
 	Capture->ShowOnlyActors.Reset();
 	StudioWall->SetVisibility(false); StudioFloor->SetVisibility(false);

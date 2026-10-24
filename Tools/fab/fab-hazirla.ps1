@@ -247,7 +247,7 @@ try {
 		$imzalar['/OverCrowd'] = @($ocDamga, 'tamam')
 	}
 	# OverCrowd VAT pisirme denemesi (kalabalik): UE5 Manny/Quinn + yurume/bekleme -> /Game/Fab/Crowd (bir kez; sonuc gunlukte "VAT")
-	$vatDamga = Join-Path $content 'Fab\.vat-v1'
+	$vatDamga = Join-Path $content 'Fab\.vat-v2'
 	if (((Get-Content -LiteralPath $uproject -Raw) -match '"OverCrowd"') -and (Test-Path -LiteralPath (Join-Path $content 'AT_Drone')) -and -not (Test-Path -LiteralPath $vatDamga)) {
 		$isler += [pscustomobject]@{ tur = 'vat'; hedef = '/Game/Fab/Crowd'; agler = @('/Game/AT_Drone/Demo/Character/Mannequins/Meshes/SKM_Manny_Simple', '/Game/AT_Drone/Demo/Character/Mannequins/Meshes/SKM_Quinn_Simple') }
 		$imzalar['/Game/Fab/Crowd'] = @($vatDamga, 'tamam')
@@ -266,7 +266,9 @@ try {
 			$betik = Join-Path $Proje 'Scripts\Python\fab_import.py'
 			Bilgi "Editor Python ile ice aktariliyor ($($isler.Count) is)"
 			$ddc = @($env:UE_ZEN_ARGS -split ' ' | Where-Object { $_ })   # CI'nin kendi Zen DDC sunucusu (build-windows.yml)
-			& $editor $uproject "-ExecutePythonScript=$betik" -unattended -nop4 -nosplash -NullRHI -stdout -FullStdOutLogOutput @ddc 2>&1 | ForEach-Object {
+			# VAT pisirme cizim aygiti ister (iskeletli ag -> statik ag): bu durumda NullRHI yerine ekransiz cizim
+			$rhi = if (@($isler | Where-Object { $_.tur -eq 'vat' }).Count -gt 0) { '-RenderOffScreen' } else { '-NullRHI' }
+			& $editor $uproject "-ExecutePythonScript=$betik" -unattended -nop4 -nosplash $rhi -stdout -FullStdOutLogOutput @ddc 2>&1 | ForEach-Object {
 				$l = "$_"
 				if ($l -match 'fab_import|OverCrowd|LogInterchange.*(Error|Warning)|LogFbx.*(Error|Warning)') { Write-Host "    $l" }
 			}

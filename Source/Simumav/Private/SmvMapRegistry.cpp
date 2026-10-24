@@ -17,6 +17,8 @@ namespace
 		{ TEXT("sehir"),   TEXT("fabmap.city"),     TEXT("fabmap.city.desc"),     TEXT("Simumav/MapPreviews/sehir.png"),    TEXT(""), ESmvMapKind::ProcCity, 0, 0, 0, false, TEXT("EuropeanBuildings_Asset;CitySampleBuildings") },
 		{ TEXT("rafineri"), TEXT("fabmap.refinery"), TEXT("fabmap.refinery.desc"), TEXT("Simumav/MapPreviews/rafineri.png"), TEXT("/Game/Main"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("refineries") },
 		{ TEXT("askeri"),  TEXT("fabmap.military"), TEXT("fabmap.military.desc"), TEXT("Simumav/MapPreviews/askeri.png"),   TEXT("/Game/US_Military/Levels/Showreel_Scene;/Game/US_Military/Levels/Overview"), ESmvMapKind::Level, 0, 0, 0, true, TEXT("US_Military"), TEXT("Desert") },
+		{ TEXT("pist"),    TEXT("fabmap.racing"),   TEXT("fabmap.racing.desc"),   TEXT("Simumav/MapPreviews/pist.png"),     TEXT("/Game/CityRacing/Maps/CityRacingMainMap"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("CityRacing") },
+		{ TEXT("kosk"),    TEXT("fabmap.pavilion"), TEXT("fabmap.pavilion.desc"), TEXT("Simumav/MapPreviews/kosk.png"),     TEXT("/Game/SeyeonjeongPavilion/Level/Demo"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("SeyeonjeongPavilion") },
 		// </HARITA-TABLOSU>
 	};
 

@@ -742,14 +742,13 @@ TSharedRef<SWidget> SSmvShell::Cycle(FString* Target, const TArray<FString>& Val
 
 TSharedRef<SWidget> SSmvShell::Chips(FString* Target, const TArray<FString>& Values, const TArray<FText>& Labels, const TArray<ESmvIcon>& Icons, TFunction<void()> OnPick, int32 PerRow)
 {
-	// satır başına PerRow çip; dar panelde (ör. 500 px'lik sihirbaz paneli) taşmasın diye satırlar ayrıca ayrılan genişliğe göre kırılır
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
-	TSharedPtr<SWrapBox> Row;
+	TSharedPtr<SHorizontalBox> Row;
 	for (int32 i = 0; i < Values.Num(); ++i)
 	{
-		if (i % FMath::Max(1, PerRow) == 0) { Row = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(0.f, 6.f)); V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Row.ToSharedRef()]; }
+		if (i % FMath::Max(1, PerRow) == 0) { Row = SNew(SHorizontalBox); V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Row.ToSharedRef()]; }
 		const FString Val = Values[i];
-		Row->AddSlot().Padding(0, 0, 6, 0)
+		Row->AddSlot().AutoWidth().Padding(0, 0, 6, 0)
 		[
 			SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12)
 			.Text(Labels.IsValidIndex(i) ? Labels[i] : FText::FromString(Val))
@@ -763,11 +762,11 @@ TSharedRef<SWidget> SSmvShell::Chips(FString* Target, const TArray<FString>& Val
 
 TSharedRef<SWidget> SSmvShell::ColorPick(FString* HexStr, TFunction<void()> After)
 {
-	TSharedRef<SWrapBox> H = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(0.f, 4.f));
+	TSharedRef<SHorizontalBox> H = SNew(SHorizontalBox);
 	for (const FString& C : SmvPalette())
 	{
 		const FLinearColor Col = SmvHex(C);
-		H->AddSlot().Padding(0, 0, 4, 0)
+		H->AddSlot().AutoWidth().Padding(0, 0, 4, 0)
 		[
 			SNew(SSmvButton).Kind(ESmvBtn::Ghost).MinHeight(36.f)
 			.Selected_Lambda([HexStr, C]() { return HexStr->Equals(C, ESearchCase::IgnoreCase); })
@@ -778,7 +777,7 @@ TSharedRef<SWidget> SSmvShell::ColorPick(FString* HexStr, TFunction<void()> Afte
 			]
 		];
 	}
-	H->AddSlot().VAlign(VAlign_Center).Padding(6, 0, 0, 0)[TextEdit(HexStr, false, FText::FromString(TEXT("#rrggbb")), 110.f)];
+	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 0, 0)[TextEdit(HexStr, false, FText::FromString(TEXT("#rrggbb")), 110.f)];
 	return H;
 }
 
@@ -4747,6 +4746,9 @@ void SSmvShell::TickSmoke()
 			Flow->Draft.Track.Id = TEXT("smoke-proc");
 			Flow->Draft.Track.Name = TEXT("Smoke");
 			Flow->Draft.Track.WorldMode = TEXT("procedural");
+			// konum: harita ev konumu (boş parkur 0°/0° idi → dünya kürenin öbür yüzünde, ters ve yamuk çiziliyordu)
+			Flow->Draft.Track.Lat = 39.9334; Flow->Draft.Track.Lon = 32.8597; Flow->Draft.Track.GroundMsl = 0;
+			Flow->Draft.Track.RadiusM = 600;
 			Flow->Draft.Track.World.MountainHeight = 420.0;
 			Flow->Draft.Track.World.MountainCount = 6;
 			Flow->Draft.Track.World.TreeDensity = 0.45;
