@@ -52,11 +52,15 @@ const TArray<FSmvCatalogModel>& USmvDataService::Catalog()
 	Add(TEXT("glb:iris_fpv"), TEXT("Iris FPV"), TEXT("fpv"), TEXT("iris_fpv"), TEXT(""), TEXT(""), TEXT("3DR Iris + FPV kamera; akro/hız ağırlıklı oran döngüleri"), SmvQuad250());
 	Add(TEXT("proc:quad250"), TEXT("FPV Quad 250"), TEXT("fpv"), TEXT(""), TEXT(""), TEXT(""), TEXT("5\" FPV yarış quad (250 mm, 4S)"), SmvQuad250());
 	Add(TEXT("fab:fpv"), TEXT("FPV Interceptor (Fab gövdesi)"), TEXT("fpv"), TEXT(""), TEXT(""), TEXT(""), TEXT("Fab FPV Interceptor gövdesi; 6S 0,9 kg yarışçı fiziği"));
+	Add(TEXT("fab:atdrone"), TEXT("FPV Drone (Fab gövdesi)"), TEXT("fpv"), TEXT(""), TEXT(""), TEXT(""), TEXT("Fab FPV Drone: dört rotorlu RC quad (0,78 m), rotorlar döner"));
+	Add(TEXT("fab:mega_d"), TEXT("Mini Quad D (Fab gövdesi)"), TEXT("fpv"), TEXT(""), TEXT(""), TEXT(""), TEXT("Drone Mega Pack D: avuç içi küçük quad (0,32 m)"));
 	// ---- çok rotor ----
 	Add(TEXT("glb:iris"), TEXT("3DR Iris"), TEXT("multirotor"), TEXT("iris"), TEXT(""), TEXT(""), TEXT("3DR Iris quadrotor (0,5 m)"));
 	Add(TEXT("glb:x500"), TEXT("X500"), TEXT("multirotor"), TEXT("x500"), TEXT(""), TEXT(""), TEXT("Karbon çerçeve quad (0,6 m)"));
 	Add(TEXT("fab:quad"), TEXT("Quadcopter (Fab gövdesi)"), TEXT("multirotor"), TEXT(""), TEXT(""), TEXT(""), TEXT("Fab Quadcopter gövdesi (pervane kemikleri döner); 1,8 kg X quad fiziği"));
 	Add(TEXT("glb:typhoon_h480"), TEXT("Typhoon H480 (hexa)"), TEXT("multirotor"), TEXT("typhoon_h480"), TEXT(""), TEXT(""), TEXT("Altı rotor + gimbal kamera (0,7 m)"));
+	Add(TEXT("fab:hexa"), TEXT("Askerî Hexacopter (Fab gövdesi)"), TEXT("multirotor"), TEXT(""), TEXT(""), TEXT(""), TEXT("Military Hexacopter – Modular UAV: altı kollu taşıyıcı (2,4 m), pervaneler döner; yalnız araç gövdesi"));
+	Add(TEXT("fab:mega_a"), TEXT("Quad A (Fab gövdesi)"), TEXT("multirotor"), TEXT(""), TEXT(""), TEXT(""), TEXT("Drone Mega Pack A: küçük X quad (0,38 m)"));
 	Add(TEXT("smv:octa"), TEXT("Octa 8 (sinema/haritalama)"), TEXT("multirotor"), TEXT("smv_octa"), TEXT(""), TEXT(""), TEXT("Sekiz kollu düz octa (1,3 m, 5 kg): yedekli, sakin ve ağır uçuş; 3 kg faydalı yük"));
 	Add(TEXT("smv:y6"), TEXT("Y6 koaksiyel"), TEXT("multirotor"), TEXT("smv_y6"), TEXT(""), TEXT(""), TEXT("Üç kol, kol başına üst/alt karşıt dönen pervane (0,9 m, 2,5 kg)"));
 	Add(TEXT("smv:cargo_x8"), TEXT("Kargo X8 (ağır yük)"), TEXT("multirotor"), TEXT("smv_cargo_x8"), TEXT(""), TEXT(""), TEXT("Koaksiyel X8, 30\" pervaneler, 32,5 kg, 10 kg yük kutusu; ArduPilot Callisto modeli"));
@@ -66,6 +70,8 @@ const TArray<FSmvCatalogModel>& USmvDataService::Catalog()
 	Add(TEXT("smv:trainer"), TEXT("Eğitim uçağı"), TEXT("plane"), TEXT("smv_trainer"), TEXT("classic"), TEXT(""), TEXT("Yüksek kanatlı eğitim uçağı (1,6 m): yavaş (≈50 km/h), affedici, yumuşak yatış/yunuslama sınırları"));
 	Add(TEXT("glb:believer"), TEXT("Believer"), TEXT("plane"), TEXT("believer"), TEXT("classic"), TEXT(""), TEXT("Çift motorlu haritalama uçağı (1,9 m)"));
 	Add(TEXT("glb:talon_vtail"), TEXT("Talon V-kuyruk"), TEXT("plane"), TEXT("talon_vtail"), TEXT("vtail"), TEXT(""), TEXT("Tek itici pervane, V-kuyruk (1,72 m)"));
+	Add(TEXT("fab:mega_b"), TEXT("Sabit kanat İHA B (Fab gövdesi)"), TEXT("plane"), TEXT(""), TEXT("classic"), TEXT(""), TEXT("Drone Mega Pack B: arkadan itişli sabit kanat İHA gövdesi (≈ 2 m); yalnız araç gövdesi"));
+	Add(TEXT("fab:mega_c"), TEXT("Sabit kanat İHA C (Fab gövdesi)"), TEXT("plane"), TEXT(""), TEXT("classic"), TEXT(""), TEXT("Drone Mega Pack C: itici pervaneli küçük sabit kanat (1,2 m)"));
 	Add(TEXT("glb:jet"), TEXT("Jet (yüksek hız)"), TEXT("plane"), TEXT("jet"), TEXT("classic"), TEXT(""), TEXT("170 m/s (~610 km/h), sert manevra"), SmvJetParams());
 	Add(TEXT("glb:zephyr"), TEXT("Zephyr (delta kanat)"), TEXT("plane"), TEXT("zephyr"), TEXT("elevon"), TEXT(""), TEXT("Delta uçan kanat (1,5 m)"), SmvJetParams());
 	// ---- VTOL ----
@@ -76,6 +82,7 @@ const TArray<FSmvCatalogModel>& USmvDataService::Catalog()
 	Add(TEXT("glb:icept_x4"), TEXT("INTERCEPTOR X4"), TEXT("interceptor"), TEXT("icept_x4"), TEXT(""), TEXT(""), TEXT("Kuyruk üstünde dikey kalkış, yatayda ~400 km/h"));
 	Add(TEXT("glb:p1sun"), TEXT("P1-SUN"), TEXT("interceptor"), TEXT("p1sun"), TEXT(""), TEXT(""), TEXT("Önleyici (~0,44 m), 4 pervane"));
 	Add(TEXT("glb:sting"), TEXT("Sting"), TEXT("interceptor"), TEXT("sting"), TEXT(""), TEXT(""), TEXT("Önleyici (~0,45 m), 4 pervane"));
+	Add(TEXT("fab:bls_icept"), TEXT("Önleyici dron (Fab gövdesi)"), TEXT("interceptor"), TEXT(""), TEXT(""), TEXT(""), TEXT("Interceptor Drone FPV: dikey kalkışlı önleyici gövdesi (0,42 m); yalnız oyuncu kontrollü, otomatik nişan / güdüm yok"));
 	// ---- helikopter ----
 	Add(TEXT("glb:heli"), TEXT("Tek rotorlu heli"), TEXT("heli"), TEXT("heli"), TEXT(""), TEXT(""), TEXT("Ana rotor + kuyruk rotoru (1,75 m)"));
 	Add(TEXT("smv:heli_tandem"), TEXT("Tandem kargo heli"), TEXT("heli"), TEXT("smv_heli_tandem"), TEXT(""), TEXT(""), TEXT("Chinook düzeni iki ana rotor (2,6 m, 9 kg): kuyruk rotoru yok, yük taşıma"));
@@ -93,6 +100,14 @@ const TArray<FSmvCatalogModel>& USmvDataService::Catalog()
 		if (bSmv) M.GlbPath.Reset();   // sunucuda yok: yalnız gömülü dosya
 		if (M.Key == TEXT("fab:quad")) M.FabDir = TEXT("/Game/Fab/Drone");
 		if (M.Key == TEXT("fab:fpv")) M.FabDir = TEXT("/Game/Fab/DroneFpv");
+		// yeni Fab gövdeleri (docs/fab-icerik.md): bp: = Blueprint yapım betiği parçaları, "|ipucu" = pervane kemiği alt dizesi
+		if (M.Key == TEXT("fab:hexa")) M.FabDir = TEXT("bp:/Game/BendylabStudios/BLS_Hexacopter_v1");
+		if (M.Key == TEXT("fab:bls_icept")) M.FabDir = TEXT("bp:/Game/BendylabStudios/BLS_Interceptor_Drone_v1");
+		if (M.Key == TEXT("fab:mega_b")) M.FabDir = TEXT("bp:/Game/DroneMegaPack/Drone_B");
+		if (M.Key == TEXT("fab:mega_c")) M.FabDir = TEXT("bp:/Game/DroneMegaPack/Drone_C");
+		if (M.Key == TEXT("fab:mega_a")) M.FabDir = TEXT("/Game/DroneMegaPack/Drone_A/Models|sphere");
+		if (M.Key == TEXT("fab:mega_d")) M.FabDir = TEXT("/Game/DroneMegaPack/Drone_D/Models|sphere");
+		if (M.Key == TEXT("fab:atdrone")) M.FabDir = TEXT("/Game/AT_Drone/Mesh/Rigged");
 		if (M.GlbFile == TEXT("caymaz.glb")) M.GlbYawDeg = 90.f;   // caymaz-sim.glb burun +Z
 		M.bAddLiftRotors = M.Key == TEXT("smv:caymaz_vtol");
 		M.Sound = M.Type == TEXT("plane") ? (M.Key == TEXT("glb:jet") || M.Key == TEXT("proc:interceptor") ? TEXT("jet") : TEXT("prop"))

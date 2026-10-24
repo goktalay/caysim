@@ -253,6 +253,11 @@ const FSlateBrush* FSmvInputGlyphs::Brush(const FString& Key, float Height)
 	if (!HasPack()) return nullptr;
 	static TMap<FString, const FGlyphTex*> Memo;
 	const bool bPad = Key.StartsWith(TEXT("pad:"));
+	// klavye tuşları metin rozetiyle çizilir: Joystix "Filled" klavye simgeleri küçük boyda harfsiz beyaz kutu olarak görünüyordu
+	// (duman testi ekranlarında "Seç / Geri / Yardım" ipuçları ve Ayarlar › Tuşlar tablosu). Kumanda simgeleri kalır.
+	bool bKbIcons = false;
+	if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvUi"), TEXT("KeyboardGlyphIcons"), bKbIcons, GGameIni);
+	if (!bPad && !bKbIcons) return nullptr;
 	const ESmvGlyphStyle S = bPad ? GPadStyle : ESmvGlyphStyle::Keyboard;
 	const FString MemoKey = FString::FromInt((int32)S) + TEXT("|") + Key;
 	if (const FGlyphTex* const* M = Memo.Find(MemoKey)) return BrushFor(*M, Height);

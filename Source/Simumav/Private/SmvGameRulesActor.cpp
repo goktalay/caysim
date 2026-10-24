@@ -8,6 +8,8 @@
 #include "SmvUiPrefs.h"
 #include "SmvGameRules.h"
 #include "SmvTargets.h"
+#include "SmvFabContent.h"
+#include "Misc/ConfigCacheIni.h"
 #include "CaySimTypes.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -263,6 +265,16 @@ void ASmvGameRulesActor::BuildSpray()
 // savunma (kritik tesis / gemi)
 // ---------------------------------------------------------------------------
 
+namespace
+{
+	float SmvRulesCfg(const TCHAR* Key, float Def)
+	{
+		float V = Def;
+		if (GConfig) GConfig->GetFloat(TEXT("/Script/Simumav.SmvFabContent"), Key, V, GGameIni);
+		return V;
+	}
+}
+
 void ASmvGameRulesActor::BuildDefense(bool bShip)
 {
 	SmvCore::FDefCfg C;
@@ -297,6 +309,50 @@ void ASmvGameRulesActor::BuildDefense(bool bShip)
 		{
 			if (UStaticMeshComponent* P = AddPart(M, F + Off, S, R, Col, false)) FacilityParts.Add(P);
 		};
+		// Fab gemi modeli (JMSDF Mogami sınıfı fırkateyn; /Game/Fab/Ships — yalnız görsel, korunacak nesne; silah davranışı yok)
+		const TArray<UStaticMesh*>& ShipMeshes = FSmvFabContent::StaticMeshesIn(TEXT("/Game/Fab/Ships"));
+		if (ShipMeshes.Num() > 0)
+		{
+			// çapa: gemi merkezinde görünmez parça (FacilityParts[0]; gemi hareketi buna göre uygulanır)
+			if (UStaticMeshComponent* Anchor = AddPart(CubeMesh, F + FVector(0, 0, 150.0), FVector(0.01), FRotator::ZeroRotator, Gray, false))
+			{
+				Anchor->SetVisibility(false);
+				FacilityParts.Add(Anchor);
+			}
+			FBox B(ForceInit);
+			FVector GunAt = FVector::ZeroVector;
+			for (UStaticMesh* M : ShipMeshes)
+			{
+				B += M->GetBoundingBox();
+				if (M->GetName().Contains(TEXT("gun"))) GunAt = M->GetBoundingBox().GetCenter();
+			}
+			const FVector Sz = B.GetSize();
+			const bool bAlongY = Sz.Y > Sz.X;
+			const double LongCm = FMath::Max(1.0, FMath::Max(Sz.X, Sz.Y));
+			const double Sc = FMath::Max(10.0, (double)SmvRulesCfg(TEXT("ShipLengthM"), 133.f)) * 100.0 / LongCm;
+			// burun +X (gemi rotası doğu = +X): uzun eksen Y ise 90°; top (gun) merkezin arka yanındaysa 180° çevrilir
+			const FVector Ctr = B.GetCenter();
+			const double GunAlong = GunAt.IsNearlyZero() ? 1.0 : (bAlongY ? GunAt.Y - Ctr.Y : GunAt.X - Ctr.X);
+			const float Yaw = (bAlongY ? -90.f : 0.f) + (GunAlong < 0.0 ? 180.f : 0.f);
+			const FRotator R(0.f, Yaw, 0.f);
+			const double Draft = SmvRulesCfg(TEXT("ShipDraftM"), 5.f) * 100.0;
+			const FVector Loc = F - R.RotateVector(FVector(Ctr.X, Ctr.Y, 0.0) * Sc) + FVector(0, 0, -B.Min.Z * Sc - 30.0 - Draft);
+			for (UStaticMesh* M : ShipMeshes)
+			{
+				UStaticMeshComponent* P = NewObject<UStaticMeshComponent>(this);
+				P->SetStaticMesh(M);
+				P->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+				P->SetupAttachment(Root);
+				P->RegisterComponent();
+				P->SetWorldLocationAndRotation(Loc, R);
+				P->SetWorldScale3D(FVector(Sc));
+				Parts.Add(P);
+				FacilityParts.Add(P);
+			}
+			UE_LOG(LogSimumav, Log, TEXT("Gemi savunma: Fab gemi modeli %d parça, boy %.0f m (ölçek %.3f, yön %.0f°; yalnız görsel)"), ShipMeshes.Num(), LongCm * Sc / 100.0, Sc, Yaw);
+		}
+		else
+		{
 		Ship(CubeMesh, FVector(0, 0, 150.0), FVector(70.0, 12.0, 6.0), FRotator::ZeroRotator, Gray);
 		Ship(CubeMesh, FVector(0, 0, 455.0), FVector(70.0, 12.0, 0.1), FRotator::ZeroRotator, Deck);
 		Ship(ConeMesh, FVector(4300.0, 0, 150.0), FVector(12.0, 6.0, 16.0), FRotator(-90.0, 0, 0), Gray);
@@ -306,6 +362,7 @@ void ASmvGameRulesActor::BuildDefense(bool bShip)
 		Ship(SphereMesh, FVector(-900.0, 0, 3200.0), FVector(2.4, 2.4, 2.4), FRotator::ZeroRotator, FLinearColor(0.85f, 0.86f, 0.88f));
 		Ship(CubeMesh, FVector(2200.0, 0, 560.0), FVector(6.0, 5.0, 2.0), FRotator::ZeroRotator, Gray);
 		Ship(CylMesh, FVector(-2600.0, 0, 520.0), FVector(8.0, 8.0, 0.1), FRotator::ZeroRotator, FLinearColor(0.9f, 0.9f, 0.9f));
+		}
 	}
 	else
 	{

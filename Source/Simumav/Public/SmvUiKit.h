@@ -102,6 +102,8 @@ namespace SmvUi
 	SIMUMAV_API ESmvIcon IconForType(const FString& Type);
 
 	/** Başlık: büyük harf, harf aralıklı */
+	/** Dile duyarlı büyük harf (Türkçede i → İ, ı → I; ğ ş ö ü ç da çevrilir) — FString::ToUpper yalnız ASCII'yi çevirir */
+	SIMUMAV_API FString SmvUpper(const FString& In);
 	SIMUMAV_API TSharedRef<SWidget> Title(const FText& T, int32 Size = 28, const FLinearColor& Color = FLinearColor::White);
 	SIMUMAV_API TSharedRef<SWidget> Text(const TAttribute<FText>& T, int32 Size = 12, const ANSICHAR* Weight = "Regular", const FLinearColor& Color = FLinearColor(0.88f, 0.92f, 0.97f), bool bWrap = true);
 	/** Bölüm başlığı: vurgu çizgisi + küçük büyük harf metin */

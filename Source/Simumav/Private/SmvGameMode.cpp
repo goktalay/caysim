@@ -16,6 +16,7 @@
 #include "SSmvShell.h"
 #include "SSmvFlightUi.h"
 #include "SmvMenuScene.h"
+#include "SmvCityLife.h"
 #include "SmvFpvActor.h"
 #include "SmvPilotFigure.h"
 #include "SmvSpeech.h"
@@ -1087,6 +1088,17 @@ void ASmvGameMode::TickPhysics(float /*Dt*/)
 	if (bAir && Scan.UpM >= 0 && Scan.UpM < FMath::Min(PS.ProxWarnM, 3.f))
 	{
 		ProxLine += FString::Printf(TEXT("%sTAVAN %.1f m"), ProxLine.IsEmpty() ? TEXT("") : TEXT("   "), Scan.UpM);
+		// tanı (uçuş başına bir kez): tavanı oluşturan aktör / bileşen
+		static TWeakObjectPtr<AActor> LastCeilDrone;
+		if (LastCeilDrone.Get() != Drone)
+		{
+			LastCeilDrone = Drone;
+			FHitResult H;
+			const FVector Up = Enu.RotateVector(FVector::UpVector);
+			if (GetWorld()->LineTraceSingleByChannel(H, P, P + Up * 400.0, PS.Channel, Q))
+				UE_LOG(LogSimumav, Warning, TEXT("Tavan tanısı: %s / %s (%s) %.2f m, dron Z %.0f"), H.GetActor() ? *H.GetActor()->GetName() : TEXT("-"),
+					H.GetComponent() ? *H.GetComponent()->GetName() : TEXT("-"), H.GetComponent() ? *H.GetComponent()->GetClass()->GetName() : TEXT("-"), H.Distance / 100.0, P.Z);
+		}
 		ProxLevel = FMath::Max(ProxLevel, Scan.UpM < 1.5f ? 2 : 1);
 	}
 }
@@ -1939,10 +1951,11 @@ void ASmvGameMode::SpawnFabCity()
 		Slab(FVector(C, 0, 2), FVector(Road, Span, 4), FLinearColor(0.05f, 0.05f, 0.055f), false, 1, 0.f, 0.78f);
 		Slab(FVector(0, C, 2.2), FVector(Span, Road, 4), FLinearColor(0.05f, 0.05f, 0.055f), false, 1, 0.f, 0.78f);
 	}
-	Slab(FVector(0, 0, 0), FVector(Cell - Road, Cell - Road, 4), FLinearColor(0.5f, 0.49f, 0.46f), false, 1, 140.f, 0.7f);
+	// gerçekçi albedo (doğrusal): beton kaldırım ~0,17, meydan taşı ~0,21 — eski açık tonlar (0,38 / 0,5) bulutlu havada kar gibi bembeyaz görünüyordu
+	Slab(FVector(0, 0, 0), FVector(Cell - Road, Cell - Road, 4), FLinearColor(0.21f, 0.2f, 0.185f), false, 1, 140.f, 0.7f);
 	for (int32 i = -2; i <= 2; ++i)
 		for (int32 j = -2; j <= 2; ++j)
-			if (i != 0 || j != 0) Slab(FVector(i * Cell, j * Cell, 6), FVector(Cell - Road, Cell - Road, 12), FLinearColor(0.38f, 0.37f, 0.35f), false, 1, 60.f, 0.8f);
+			if (i != 0 || j != 0) Slab(FVector(i * Cell, j * Cell, 6), FVector(Cell - Road, Cell - Road, 12), FLinearColor(0.17f, 0.165f, 0.155f), false, 1, 60.f, 0.8f);
 	SpawnCityStreetscape(Cell, Road);
 	int32 NMesh = 0, NTower = 0, Pick = 0;
 	auto PlaceMesh = [&](const FVector& Ctr, double MaxFoot, int32 Yaw90)
@@ -1988,6 +2001,35 @@ void ASmvGameMode::SpawnFabCity()
 		}
 	}
 	UE_LOG(LogSimumav, Log, TEXT("Şehir bloğu kuruldu: %d bina ağı, %d City Sample bina seviyesi"), NMesh, NTower);
+	// şehir hayatı (yalnız görsel): City Traffic Pro araçlarıyla şerit trafiği + kaldırımlarda yürüyen, meydanda duran yayalar
+	FActorSpawnParameters Lp;
+	Lp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (ASmvCityLife* Life = W->SpawnActor<ASmvCityLife>(ASmvCityLife::StaticClass(), FTransform::Identity, Lp))
+	{
+		FabDecor.Add(Life);
+		TArray<double> Coords;
+		for (int32 k = -2; k <= 3; ++k) Coords.Add((k - 0.5) * Cell);
+		const int32 NCars = Req.Track.World.Vehicles > 0 ? Req.Track.World.Vehicles : (int32)FSmvCityLife::GetFloat(TEXT("CityCars"), 72.f);
+		const int32 NPeople = Req.Track.World.People > 0 ? Req.Track.World.People : (int32)FSmvCityLife::GetFloat(TEXT("CityPeople"), 120.f);
+		Life->BuildGridTraffic(Coords, Road, 2.5 * Cell + Road * 0.5, NCars, Req.Track.World.Seed ? Req.Track.World.Seed : 7);
+		// kaldırım halkaları (her adanın bordürünün 1,5 m içi; ada üstü Z 12 cm), meydanda grup noktaları (kalkış noktasından ≥ 15 m)
+		TArray<TArray<FVector>> Walk;
+		TArray<FVector> Spots;
+		const double Hs = (Cell - Road) * 0.5 - 150.0;
+		for (int32 i = -2; i <= 2; ++i)
+			for (int32 j = -2; j <= 2; ++j)
+			{
+				if (i == 0 && j == 0) continue;
+				const FVector C(i * Cell, j * Cell, 12.0);
+				Walk.Add({ C + FVector(-Hs, -Hs, 0), C + FVector(Hs, -Hs, 0), C + FVector(Hs, Hs, 0), C + FVector(-Hs, Hs, 0) });
+			}
+		for (int32 k = 0; k < 8; ++k)
+		{
+			const double A = 2.0 * UE_DOUBLE_PI * (k + 0.5) / 8.0;
+			Spots.Add(FVector(FMath::Cos(A), FMath::Sin(A), 0.0) * (1500.0 + 1000.0 * (k % 2)) + FVector(0, 0, 2.0));
+		}
+		Life->BuildCrowd(Walk, Spots, NPeople, 11);
+	}
 }
 
 // Şehir sokak dokusu (yalnız görsel): yol orta şeridi kesikli çizgileri, kavşak yaya geçitleri, ada köşelerinde sokak lambaları

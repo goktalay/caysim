@@ -274,7 +274,7 @@ public:
 		DrText(Out, L + 1, G, FString::Printf(TEXT("%02d"), Index), FVector2D(18.f + Ox, S.Y * 0.5f - (bPrimary ? 16.f : 13.f)), Fi, (bPrimary ? Ac : FLinearColor(1, 1, 1, 0.45f + 0.55f * H)).CopyWithNewOpacity(E * (0.55f + 0.45f * H)), -1);
 		// başlık
 		const FSlateFontInfo Ft = Font(bPrimary ? 44 : 34, bPrimary ? "Black" : "Bold", 140);
-		const FString T = Title.ToString().ToUpper();
+		const FString T = SmvUi::SmvUpper(Title.ToString());
 		const TSharedRef<FSlateFontMeasure> M = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 		const FVector2D Ts = M->Measure(T, Ft);
 		const float Tx = 64.f + Ox;
@@ -1095,7 +1095,7 @@ TSharedRef<SWidget> SSmvShell::HwModel()
 			Spec->AddSlot().AutoHeight().Padding(0, 2)
 			[
 				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth()[SNew(SBox).WidthOverride(130.f)[SmvUi::Text(K, 11, "Regular", Mute(), false)]]
+				+ SHorizontalBox::Slot().AutoWidth()[SNew(SBox).WidthOverride(130.f)[SmvUi::Text(K, 11, "Regular", Dim(), false)]]
 				+ SHorizontalBox::Slot().FillWidth(1.f)[SmvUi::Text(FText::FromString(Vv), 12, "Bold", Fg(), false)]
 			];
 		};
@@ -1746,7 +1746,7 @@ TSharedRef<SWidget> SSmvShell::ParkurList()
 					]
 				];
 			if (N == 0 || (!DefaultFocus.IsValid() && bAv)) DefaultFocus = B;
-			Wrap->AddSlot().Padding(0, 0, 14, 14)[B];
+			Wrap->AddSlot().Padding(0, 0, 14, 14)[SNew(SBox).WidthOverride(328.f)[B]];
 			++N;
 		}
 		if (N == 0) Wrap->AddSlot()[Glass(SmvUi::Text(Tx(TEXT("parkur.enc_empty")), 13, "Regular", Dim()), FMargin(20.f), 0.9f)];
@@ -1784,7 +1784,7 @@ TSharedRef<SWidget> SSmvShell::ParkurList()
 				]
 			];
 		if (N == 0) DefaultFocus = B;
-		Wrap->AddSlot().Padding(0, 0, 14, 14)[B];
+		Wrap->AddSlot().Padding(0, 0, 14, 14)[SNew(SBox).WidthOverride(328.f)[B]];
 		++N;
 	}
 	TSharedRef<SSmvButton> NewB = SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Plus).Text(Tx(TEXT("hangar2.new")))
@@ -1968,7 +1968,7 @@ TSharedRef<SWidget> SSmvShell::ParkurWizard()
 		});
 	if (!DefaultFocus.IsValid()) DefaultFocus = Next;
 	TSharedRef<SWidget> Footer = SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Icon(ESmvIcon::Prev).Text(Tx(TEXT("tut.prev"))).IsEnabled(PwStep > 0).OnClick([Self]() { Self->PwStep = FMath::Max(0, Self->PwStep - 1); Self->Refresh(); })]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom)[SNew(SSmvButton).Icon(ESmvIcon::Prev).Text(Tx(TEXT("tut.prev"))).IsEnabled(PwStep > 0).OnClick([Self]() { Self->PwStep = FMath::Max(0, Self->PwStep - 1); Self->Refresh(); })]
 		+ SHorizontalBox::Slot().FillWidth(1.f)
 		+ SHorizontalBox::Slot().AutoWidth()[Next];
 	return YhPage(T.Id.IsEmpty() ? Tx(TEXT("parkur.custom_new")) : FText::FromString(T.Name), Tx(TEXT("parkur.custom_wiz_sub")),
@@ -2077,7 +2077,7 @@ TSharedRef<SWidget> SSmvShell::RealWizard()
 		});
 	if (!DefaultFocus.IsValid()) DefaultFocus = Next;
 	TSharedRef<SWidget> Footer = SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Icon(ESmvIcon::Prev).Text(Tx(TEXT("tut.prev"))).IsEnabled(RwStep > 0).OnClick([Self]() { Self->RwStep = FMath::Max(0, Self->RwStep - 1); Self->Refresh(); })]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom)[SNew(SSmvButton).Icon(ESmvIcon::Prev).Text(Tx(TEXT("tut.prev"))).IsEnabled(RwStep > 0).OnClick([Self]() { Self->RwStep = FMath::Max(0, Self->RwStep - 1); Self->Refresh(); })]
 		+ SHorizontalBox::Slot().FillWidth(1.f)
 		+ SHorizontalBox::Slot().AutoWidth()[Next];
 	return YhPage(T.Id.IsEmpty() ? Tx(TEXT("parkur.real_new")) : FText::FromString(T.Name), Tx(TEXT("parkur.real_wiz_sub")),
@@ -2414,8 +2414,8 @@ TSharedRef<SWidget> SSmvShell::CrewWizard()
 		});
 	if (!DefaultFocus.IsValid()) DefaultFocus = Next;
 	TSharedRef<SWidget> Footer = SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Icon(ESmvIcon::Prev).Text(Tx(TEXT("tut.prev"))).IsEnabled(CwStep > 0).OnClick([Self]() { Self->CwStep = FMath::Max(0, Self->CwStep - 1); Self->Refresh(); })]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(10, 0, 0, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Star).Text(Tx(TEXT("avatar.random")))
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom)[SNew(SSmvButton).Icon(ESmvIcon::Prev).Text(Tx(TEXT("tut.prev"))).IsEnabled(CwStep > 0).OnClick([Self]() { Self->CwStep = FMath::Max(0, Self->CwStep - 1); Self->Refresh(); })]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(10, 0, 0, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Star).Text(Tx(TEXT("avatar.random")))
 			.OnClick([Self]()
 			{
 				FSmvAvatar& Av = Self->NewPilot.Avatar;
@@ -2608,7 +2608,7 @@ TSharedRef<SWidget> SSmvShell::FlyTracks()
 			.Text(Nm).SubText(Sub).OnClick(Fn)
 			.Extra()[SNew(SBox).WidthOverride(268.f).HeightOverride(150.f)[SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Hex(0x0b1222, 0.9f)).Padding(0.f)[Pic]]];
 		if (bSel || !DefaultFocus.IsValid()) DefaultFocus = B;
-		Hb->AddSlot().AutoWidth().Padding(0, 0, 12, 0)[B];
+		Hb->AddSlot().AutoWidth().Padding(0, 0, 12, 0)[SNew(SBox).WidthOverride(300.f)[B]];
 		++N;
 	};
 	if (Cat == TEXT("encounter"))
@@ -2701,7 +2701,7 @@ TSharedRef<SWidget> SSmvShell::FlyModes()
 				Self->Refresh();
 			});
 		if (bSel || (!DefaultFocus.IsValid() && bOk)) DefaultFocus = B;
-		Wrap->AddSlot().Padding(0, 0, 12, 12)[B];
+		Wrap->AddSlot().Padding(0, 0, 12, 12)[SNew(SBox).WidthOverride(340.f)[B]];
 	}
 	return SNew(SVerticalBox)
 		+ SVerticalBox::Slot().FillHeight(1.f)
@@ -2905,9 +2905,10 @@ TSharedRef<SWidget> SSmvShell::ProgressScreen()
 		DrBox(Out, L + 1, G, C - FVector2D(R, R), FVector2D(R * 2.f, R * 2.f), Hex(0x0b1222, 0.85f), Circle());
 		DrArc(Out, L + 2, G, C, R, 0.f, 360.f, FLinearColor(1, 1, 1, 0.12f), 10.f);
 		if (P > 0.001f) DrArc(Out, L + 3, G, C, R, -90.f, -90.f + 360.f * P, bUp ? Hex(0xfbbf24) : Accent(), 10.f);
-		DrText(Out, L + 4, G, FSmvI18n::T(TEXT("crew2.level")).ToString(), C - FVector2D(0, R * 0.42f), Font(12, "Bold", 200), Dim(), 0);
-		DrText(Out, L + 4, G, FString::FromInt(Lv), C - FVector2D(0, R * 0.12f), Font(64, "Black"), bUp ? Hex(0xfbbf24) : Fg(), 0);
-		DrText(Out, L + 4, G, FString::Printf(TEXT("%lld XP"), Cur), C + FVector2D(0, R * 0.5f), Font(12, "Bold"), Dim(), 0);
+		// etiket / rakam / XP üst üste binmesin (rakam 56 pt ≈ 68 px yüksek): etiket üstte, XP altta
+		DrText(Out, L + 4, G, SmvUi::SmvUpper(FSmvI18n::T(TEXT("crew2.level")).ToString()), C - FVector2D(0, R * 0.62f), Font(11, "Bold", 200), Dim(), 0);
+		DrText(Out, L + 4, G, FString::FromInt(Lv), C + FVector2D(0, R * 0.0f), Font(56, "Black"), bUp ? Hex(0xfbbf24) : Fg(), 0);
+		DrText(Out, L + 4, G, FString::Printf(TEXT("%lld XP"), Cur), C + FVector2D(0, R * 0.62f), Font(12, "Bold"), Dim(), 0);
 	};
 	const int32 Lv0 = X.LevelBefore, Lv1 = X.LevelAfter;
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
@@ -2984,13 +2985,14 @@ TSharedRef<SWidget> SSmvShell::ProgressScreen()
 	TSharedRef<SSmvButton> Sum = SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Book).MinWidth(200.f).Text(Tx(TEXT("xp.to_summary")))
 		.OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Summary); });
 	DefaultFocus = Sum;
+	// düğmeler panel genişliğinde satır kırar (üç düğme 426 px'e sığmıyordu: "Ana menü" panelden taşıyordu)
 	Rt->AddSlot().AutoHeight().Padding(0, 18, 0, 0)
 	[
-		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Sum]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[SNew(SSmvButton).Icon(ESmvIcon::Replay).Text(Tx(TEXT("xp.again")))
+		SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(8.f, 8.f))
+		+ SWrapBox::Slot()[Sum]
+		+ SWrapBox::Slot()[SNew(SSmvButton).Icon(ESmvIcon::Replay).Text(Tx(TEXT("xp.again")))
 			.OnClick([F]() { if (F.IsValid()) { F->FlyStep = 5; F->SetScreen(ESmvScreen::FlyFlow); } })]
-		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Home).Text(Tx(TEXT("xp.menu")))
+		+ SWrapBox::Slot()[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Home).Text(Tx(TEXT("xp.menu")))
 			.OnClick([F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Menu); })]
 	];
 	return SNew(SBox).Padding(FMargin(64.f, 40.f))

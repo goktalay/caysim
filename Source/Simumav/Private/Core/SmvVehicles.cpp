@@ -182,6 +182,27 @@ namespace SmvCore
 				S.Physics = "ArduCopter · quad X · 0,9 kg / 0,35 m JSON (Fab FPV Interceptor gövdesi)";
 				Add(S);
 			}
+			{
+				// Fab "FPV Drone" (RC askerî quad; dört rotor kemiği döner) — 0,78 m, 1,6 kg
+				FVehicleSpec S; S.Key = "fab:atdrone"; S.SmvType = "fpv"; S.Frame = "x";
+				S.Json = MultiJson({ 1.6, 0.78, 20, 40, 22.2, 14, 25.2, 4.0, 0.7, 500, 0.30, 0.05, 0.95, DiscArea(4, 9), 0.025, 4 });
+				S.Params = Join(CopterBase(0.30, 6, 4000, 0.7), { { "ATC_ACC_R_MAX", 900 }, { "ATC_ACC_P_MAX", 900 }, { "ATC_ANGLE_MAX", 60 }, { "ACRO_RP_RATE", 450 },
+					{ "LOIT_SPEED_MS", 22 }, { "WP_SPD", 22 } });
+				S.FrameParams = { { "FRAME_CLASS", 1 }, { "FRAME_TYPE", 1 } };
+				S.MassKg = 1.6; S.SpanM = 0.78; S.LengthM = 0.67; S.CruiseKmh = 60; S.MaxKmh = 110; S.EnduranceMin = 12; S.Motors = 4; S.Battery = "6S 4000 mAh";
+				S.Physics = "ArduCopter · quad X · 1,6 kg / 0,78 m JSON (Fab FPV Drone gövdesi)";
+				Add(S);
+			}
+			{
+				// Drone Mega Pack — D: avuç içi küçük quad (0,32 m)
+				FVehicleSpec S; S.Key = "fab:mega_d"; S.SmvType = "fpv"; S.Frame = "x";
+				S.Json = MultiJson({ 0.6, 0.30, 22, 45, 14.8, 8, 16.8, 1.3, 0.7, 700, 0.20, 0.03, 0.95, DiscArea(4, 5), 0.03, 4 });
+				S.Params = Join(CopterBase(0.20, 4, 1300, 0.7), { { "ATC_ACC_R_MAX", 1400 }, { "ATC_ACC_P_MAX", 1400 }, { "ATC_ANGLE_MAX", 65 }, { "ACRO_RP_RATE", 600 } });
+				S.FrameParams = { { "FRAME_CLASS", 1 }, { "FRAME_TYPE", 1 } };
+				S.MassKg = 0.6; S.SpanM = 0.32; S.LengthM = 0.3; S.CruiseKmh = 60; S.MaxKmh = 120; S.EnduranceMin = 6; S.Motors = 4; S.Battery = "4S 1300 mAh";
+				S.Physics = "ArduCopter · quad X · 0,6 kg / 0,30 m JSON (Fab Drone Mega Pack D)";
+				Add(S);
+			}
 
 			// ================= MULTIROTOR =================
 			{
@@ -219,6 +240,26 @@ namespace SmvCore
 				S.FrameParams = { { "FRAME_CLASS", 2 }, { "FRAME_TYPE", 1 } };
 				S.MassKg = 1.95; S.SpanM = 0.52; S.LengthM = 0.48; S.CruiseKmh = 36; S.MaxKmh = 70; S.EnduranceMin = 22; S.Motors = 6; S.Battery = "4S 5400 mAh";
 				S.Physics = "ArduCopter · hexa X · 1,95 kg / 0,48 m JSON";
+				Add(S);
+			}
+			{
+				// Fab "Military Hexacopter – Modular UAV": altı kollu X düzeni (2,4 m, 14 kg sınıfı taşıyıcı) → SITL hexax
+				FVehicleSpec S; S.Key = "fab:hexa"; S.SmvType = "multirotor"; S.Frame = "hexax";
+				S.Json = MultiJson({ 14.0, 2.2, 15, 30, 44.4, 60, 50.4, 22, 0.6, 110, 0.45, 0.15, 0.95, DiscArea(6, 24), 0.02, 6 });
+				S.Params = Join(CopterBase(0.45, 12, 22000, 0.6), { { "ATC_ACC_R_MAX", 400 }, { "ATC_ACC_P_MAX", 400 }, { "ATC_ACC_Y_MAX", 100 } });
+				S.FrameParams = { { "FRAME_CLASS", 2 }, { "FRAME_TYPE", 1 } };
+				S.MassKg = 14.0; S.SpanM = 2.4; S.LengthM = 1.8; S.CruiseKmh = 40; S.MaxKmh = 65; S.EnduranceMin = 35; S.Motors = 6; S.PayloadKg = 5; S.Battery = "12S 22000 mAh";
+				S.Physics = "ArduCopter · hexa X · 14 kg / 2,2 m JSON (Fab Military Hexacopter gövdesi)";
+				Add(S);
+			}
+			{
+				// Drone Mega Pack — A: küçük X quad (0,38 m)
+				FVehicleSpec S; S.Key = "fab:mega_a"; S.SmvType = "multirotor"; S.Frame = "x";
+				S.Json = MultiJson({ 0.9, 0.38, 15, 30, 14.8, 10, 16.8, 2.2, 0.65, 300, 0.40, 0.15, 0.95, DiscArea(4, 7), 0.03, 4 });
+				S.Params = CopterBase(0.40, 4, 2200, 0.65);
+				S.FrameParams = { { "FRAME_CLASS", 1 }, { "FRAME_TYPE", 1 } };
+				S.MassKg = 0.9; S.SpanM = 0.38; S.LengthM = 0.36; S.CruiseKmh = 36; S.MaxKmh = 60; S.EnduranceMin = 15; S.Motors = 4; S.Battery = "4S 2200 mAh";
+				S.Physics = "ArduCopter · quad X · 0,9 kg / 0,38 m JSON (Fab Drone Mega Pack A)";
 				Add(S);
 			}
 			{
@@ -306,6 +347,24 @@ namespace SmvCore
 				S.Json = PlaneJson({ { "s", 0.32 }, { "b", 1.5 }, { "c", 0.24 }, { "c_drag_p", 0.06 } });
 				S.MassKg = 2.0; S.SpanM = 1.5; S.LengthM = 0.6; S.CruiseKmh = 72; S.MaxKmh = 130; S.EnduranceMin = 40; S.Motors = 1; S.Battery = "4S 4000 mAh";
 				S.Physics = "ArduPlane · plane-elevon · 0,32 m² / 1,5 m uçan kanat katsayıları";
+				Add(S);
+			}
+			{
+				// Drone Mega Pack — B: arkadan itişli askerî İHA gövdesi (≈ 2 m açıklık) — yalnız araç gövdesi (silah / güdüm yok)
+				FVehicleSpec S; S.Key = "fab:mega_b"; S.Airframe = "classic"; S.SmvType = "plane"; S.Frame = "plane";
+				S.Json = PlaneJson({ { "s", 0.62 }, { "b", 2.0 }, { "c", 0.31 }, { "c_drag_p", 0.07 } });
+				S.Params = { { "AIRSPEED_CRUISE", 22 }, { "AIRSPEED_MIN", 15 }, { "AIRSPEED_MAX", 35 }, { "TRIM_THROTTLE", 55 }, { "TKOFF_ROTATE_SPD", 15 } };
+				S.MassKg = 8.0; S.SpanM = 2.0; S.LengthM = 2.16; S.CruiseKmh = 80; S.MaxKmh = 125; S.EnduranceMin = 120; S.Motors = 1; S.Battery = "6S 2×16000 mAh";
+				S.Physics = "ArduPlane · plane · 0,62 m² / 2,0 m katsayıları (Fab Drone Mega Pack B)";
+				Add(S);
+			}
+			{
+				// Drone Mega Pack — C: küçük itici pervaneli sabit kanat İHA (1,2 m)
+				FVehicleSpec S; S.Key = "fab:mega_c"; S.Airframe = "classic"; S.SmvType = "plane"; S.Frame = "plane";
+				S.Json = PlaneJson({ { "s", 0.3 }, { "b", 1.2 }, { "c", 0.25 }, { "c_drag_p", 0.07 } });
+				S.Params = { { "AIRSPEED_CRUISE", 20 }, { "AIRSPEED_MIN", 13 }, { "AIRSPEED_MAX", 32 }, { "TRIM_THROTTLE", 55 } };
+				S.MassKg = 2.5; S.SpanM = 1.2; S.LengthM = 1.25; S.CruiseKmh = 72; S.MaxKmh = 115; S.EnduranceMin = 50; S.Motors = 1; S.Battery = "4S 5000 mAh";
+				S.Physics = "ArduPlane · plane · 0,3 m² / 1,2 m katsayıları (Fab Drone Mega Pack C)";
 				Add(S);
 			}
 			{

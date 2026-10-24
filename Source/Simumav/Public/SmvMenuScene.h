@@ -109,6 +109,9 @@ protected:
 	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> DSnapActor;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> WorldPrev;
+	/** Dünya önizlemesinin kendi güneşi (1. ışık kanalı) ve gök kartı (yalnız yakalamada görünür) */
+	UPROPERTY() TObjectPtr<class UDirectionalLightComponent> PrevSun;
+	UPROPERTY() TObjectPtr<class UStaticMeshComponent> SkyCard;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Showcase;
 	UPROPERTY() TObjectPtr<USceneCaptureComponent2D> CardCap;
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> CardRT;
@@ -164,6 +167,9 @@ private:
 	FVector StationFocus = FVector::ZeroVector;
 	/** Vitrin noktası (ENU m; kalkış alanı yanı) */
 	double ShowE = -24.0, ShowN = 18.0;
+	double ClearGrassAt = 0.0;
+	void ClearShowcaseSpot();
+	void ClearShowcaseGrass();
 	FVector ShowGround();
 	void UpdateStationCamera(float Dt);
 	void SettleShowcase();

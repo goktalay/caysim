@@ -18,6 +18,11 @@
 #include "Misc/CommandLine.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
+#include "Engine/SimpleConstructionScript.h"
+#include "Engine/SCS_Node.h"
+#include "Engine/BlueprintGeneratedClass.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 namespace
 {
@@ -248,6 +253,96 @@ UObject* FSmvFabContent::LoadMeshIn(const FString& Dir)
 	}
 	Cache.Add(Dir, Out);
 	return Out;
+}
+
+const TArray<UStaticMesh*>& FSmvFabContent::StaticMeshesIn(const FString& Dir)
+{
+	static TMap<FString, TArray<UStaticMesh*>> Cache;
+	if (const TArray<UStaticMesh*>* F = Cache.Find(Dir)) return *F;
+	TArray<UStaticMesh*>& Out = Cache.Add(Dir);
+	TArray<FAssetData> Assets;
+	IAssetRegistry::GetChecked().GetAssetsByPath(FName(*Dir), Assets, true);
+	Assets.Sort([](const FAssetData& A, const FAssetData& B) { return A.PackageName.LexicalLess(B.PackageName); });
+	for (const FAssetData& A : Assets)
+	{
+		if (A.AssetClassPath != UStaticMesh::StaticClass()->GetClassPathName()) continue;
+		if (UStaticMesh* M = Cast<UStaticMesh>(A.GetAsset())) { M->AddToRoot(); Out.Add(M); }
+	}
+	UE_LOG(LogSimumav, Log, TEXT("Fab statik ağlar (%s): %d"), *Dir, Out.Num());
+	return Out;
+}
+
+namespace
+{
+	bool SmvIsPropName(const FString& N, const FString& Hint)
+	{
+		const FString L = N.ToLower();
+		return L.Contains(TEXT("prop")) || L.Contains(TEXT("rotor")) || L.Contains(TEXT("blade")) || L.Contains(TEXT("pervane")) || L.Contains(TEXT("fan"))
+			|| (!Hint.IsEmpty() && L.Contains(Hint.ToLower()));
+	}
+
+	/** SCS düğümü ağacını gezer: ağ bileşenlerinin kök bileşene göre dönüşümünü toplar */
+	void SmvWalkScs(USCS_Node* N, const FTransform& Parent, const FString& Hint, TArray<FSmvBodyPart>& Out)
+	{
+		if (!N) return;
+		FTransform Here = Parent;
+		if (USceneComponent* T = Cast<USceneComponent>(N->ComponentTemplate))
+		{
+			Here = FTransform(T->GetRelativeRotation(), T->GetRelativeLocation(), T->GetRelativeScale3D()) * Parent;
+			if (!T->IsVisible()) { for (USCS_Node* C : N->GetChildNodes()) SmvWalkScs(C, Here, Hint, Out); return; }
+			FSmvBodyPart P;
+			P.Xf = Here;
+			P.Name = N->GetVariableName().ToString();
+			if (UStaticMeshComponent* Sm = Cast<UStaticMeshComponent>(T))
+			{
+				P.Static = Sm->GetStaticMesh();
+				for (int32 i = 0; i < Sm->OverrideMaterials.Num(); ++i) P.Materials.Add(Sm->OverrideMaterials[i]);
+			}
+			else if (USkeletalMeshComponent* Sk = Cast<USkeletalMeshComponent>(T))
+			{
+				P.Skeletal = Sk->GetSkeletalMeshAsset();
+				for (int32 i = 0; i < Sk->OverrideMaterials.Num(); ++i) P.Materials.Add(Sk->OverrideMaterials[i]);
+			}
+			if (P.Static || P.Skeletal)
+			{
+				P.bProp = SmvIsPropName(P.Name, Hint) || (P.Static && SmvIsPropName(P.Static->GetName(), Hint));
+				Out.Add(P);
+			}
+		}
+		for (USCS_Node* C : N->GetChildNodes()) SmvWalkScs(C, Here, Hint, Out);
+	}
+}
+
+const TArray<FSmvBodyPart>& FSmvFabContent::BlueprintBody(const FString& Dir, const FString& PropHint)
+{
+	static TMap<FString, TArray<FSmvBodyPart>> Cache;
+	const FString Key = Dir + TEXT("|") + PropHint;
+	if (const TArray<FSmvBodyPart>* F = Cache.Find(Key)) return *F;
+	TArray<FSmvBodyPart>& Best = Cache.Add(Key);
+	TArray<FAssetData> Assets;
+	IAssetRegistry::GetChecked().GetAssetsByPath(FName(*Dir), Assets, true);
+	for (const FAssetData& A : Assets)
+	{
+		const FString Cls = A.AssetClassPath.GetAssetName().ToString();
+		if (!Cls.Contains(TEXT("Blueprint"))) continue;
+		// pişmiş pakette Blueprint varlığı yok: üretilen sınıf "<paket>.<ad>_C" yolundan yüklenir
+		const FString ClassPath = A.PackageName.ToString() + TEXT(".") + A.AssetName.ToString() + TEXT("_C");
+		UBlueprintGeneratedClass* Bp = Cast<UBlueprintGeneratedClass>(StaticLoadClass(UObject::StaticClass(), nullptr, *ClassPath, nullptr, LOAD_NoWarn | LOAD_Quiet));
+		if (!Bp) continue;
+		TArray<FSmvBodyPart> Parts;
+		for (UBlueprintGeneratedClass* C = Bp; C; C = Cast<UBlueprintGeneratedClass>(C->GetSuperClass()))
+			if (C->SimpleConstructionScript)
+				for (USCS_Node* R : C->SimpleConstructionScript->GetRootNodes()) SmvWalkScs(R, FTransform::Identity, PropHint, Parts);
+		UE_LOG(LogSimumav, Log, TEXT("Fab gövde Blueprint'i %s: %d ağ parçası (%d pervane)"), *ClassPath, Parts.Num(), Parts.FilterByPredicate([](const FSmvBodyPart& P) { return P.bProp; }).Num());
+		if (Parts.Num() > Best.Num()) Best = MoveTemp(Parts);
+	}
+	for (FSmvBodyPart& P : Best)
+	{
+		if (P.Static) P.Static->AddToRoot();
+		if (P.Skeletal) P.Skeletal->AddToRoot();
+		for (UMaterialInterface* M : P.Materials) if (M) M->AddToRoot();
+	}
+	return Best;
 }
 
 USkeletalMesh* FSmvFabContent::LoadDroneMesh()

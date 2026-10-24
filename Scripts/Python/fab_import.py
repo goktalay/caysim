@@ -369,6 +369,14 @@ def paket_incele(j):
     for a in v:
         c = str(a.asset_class_path.asset_name)
         say[c] = say.get(c, 0) + 1
+    if j.get("api"):
+        # eklenti C++ / Blueprint API'si (Python'a açılan sınıflar): ad ve yöntemleri
+        for ad in sorted(dir(unreal)):
+            if not any(k in ad for k in j["api"]):
+                continue
+            nesne = getattr(unreal, ad, None)
+            yontem = [m for m in dir(nesne) if not m.startswith("_")][:80] if nesne is not None else []
+            log(f"INCELE API {ad}: {', '.join(yontem)}"[:1800])
     log(f"INCELE {kok}: {len(v)} varlik; " + ", ".join(f"{k}={n}" for k, n in sorted(say.items(), key=lambda x: -x[1])[:25]))
     sinir = int(j.get("sinir", 400))
     n = 0

@@ -75,6 +75,8 @@ function PaketKopyala([string]$srcContent, [string]$etiket) {
 			# ayni yayincinin ortak klasoru (or. BendylabStudios: Hexacopter hazirlama projesinde, Interceptor VaultCache'te):
 			# ilk kaynakta olmayan alt klasorler eklenir (ilk kaynagin /MIR kopyasi onlari siler; her derlemede yeniden eklenir)
 			$ilk = $ilkKaynak[$ad]
+			# yalniz urun basina alt klasor kullanan yayinci klasorleri birlestirilir (Hyper gibi ayni adli farkli paketler birlestirilmez)
+			if ($ad -notin @('BendylabStudios')) { $ilk = $null }
 			$ekAlt = @(Get-ChildItem -LiteralPath $d.FullName -Directory -ErrorAction SilentlyContinue | Where-Object { $ilk -and -not (Test-Path -LiteralPath (Join-Path $ilk $_.Name)) })
 			if ($ekAlt.Count -eq 0) { Bilgi "zaten alindi (ilk kaynak gecerli): $ad"; continue }
 			foreach ($s in $ekAlt) {
@@ -180,7 +182,11 @@ try {
 			$temiz = ($urun -replace '[^A-Za-z0-9]', '')
 			$statik = $false
 			# sahne dekoru (yalniz gorsel statik ag): kara araclari / hava savunma / anti-dron sistemleri — once bunlar ("Anti-Drone" dron degil)
-			if ($urun -match '(?i)tank|patriot|mim-?104|sam_|_sam|anti-?drone|microwave|launcher|truck|vehicle') { $hedefAd = "Props\$temiz"; $ad = "SM_$temiz"; $statik = $true }
+			# gemi (korunacak nesne, yalniz gorsel): Interchange OBJ/glTF ice aktarimi parca basina ayri statik ag uretir; oyun klasordeki tum aglari birlikte kurar
+			if ($urun -match '(?i)mogami|frigate|ship|destroyer|corvette') { $hedefAd = "Ships\$temiz"; $ad = "SM_$temiz"; $statik = $true }
+			# us / tesis dekoru (kisla, radar, gozetleme kulesi, anten): statik
+			elseif ($urun -match '(?i)barrack|radar|watch_?tower|dish|antenna|command_?center|radio_?tower') { $hedefAd = "Base\$temiz"; $ad = "SM_$temiz"; $statik = $true }
+			elseif ($urun -match '(?i)tank|patriot|mim-?104|sam_|_sam|anti-?drone|microwave|launcher|truck|vehicle') { $hedefAd = "Props\$temiz"; $ad = "SM_$temiz"; $statik = $true }
 			elseif ($urun -match '(?i)fpv|interceptor|racer') { $hedefAd = 'DroneFpv'; $ad = 'SK_FabDroneFpv' }
 			elseif (-not $droneAlindi -and $urun -match '(?i)drone|quad|copter|uav') { $hedefAd = 'Drone'; $ad = 'SK_FabDrone'; $droneAlindi = $true }
 			else { $hedefAd = $temiz; $ad = "SK_$temiz" }
@@ -233,6 +239,12 @@ try {
 		if (Test-Path -LiteralPath $damga) { continue }
 		$isler += [pscustomobject]@{ tur = 'incele'; hedef = "/Game/$pk"; sinir = 500 }
 		$imzalar["/Game/$pk"] = @($damga, 'tamam')
+	}
+	# OverCrowd (motor eklentisi; Simumav.uproject'te etkin): icerik ve Python API envanteri bir kez
+	$ocDamga = Join-Path $content 'Fab\.incele-OverCrowd-v1'
+	if (((Get-Content -LiteralPath $uproject -Raw) -match '"OverCrowd"') -and -not (Test-Path -LiteralPath $ocDamga)) {
+		$isler += [pscustomobject]@{ tur = 'incele'; hedef = '/OverCrowd'; sinir = 600; api = @('OverCrowd', 'OverNiagara', 'OverVat', 'VertexAnim', 'Vat') }
+		$imzalar['/OverCrowd'] = @($ocDamga, 'tamam')
 	}
 	if ($isler.Count -gt 0) {
 		$editor = Join-Path $UeRoot 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
@@ -319,6 +331,15 @@ try {
 		foreach ($y in [regex]::Matches($Matches[1], '"(/Game/[^"]+)"')) {
 			$g = $y.Groups[1].Value
 			if (Test-Path -LiteralPath (DiskYolu $g)) { $satirlar += "+DirectoriesToAlwaysCook=(Path=`"$($g.Substring(6))`")"; Bilgi "manzara klasoru: $g" } else { Bilgi "manzara klasoru yok (paket inmemis): $g" }
+		}
+	}
+	# sehir hayati (trafik araclari, yayalar) ve yeni dron govdeleri (Source/Simumav/Private/SmvCityLife.cpp PISIR-KLASORLERI)
+	$clf = Join-Path $Proje 'Source\Simumav\Private\SmvCityLife.cpp'
+	$clMetin = if (Test-Path -LiteralPath $clf) { Get-Content -LiteralPath $clf -Raw -Encoding UTF8 } else { '' }
+	if ($clMetin -match "(?s)// <PISIR-KLASORLERI>(.*?)// </PISIR-KLASORLERI>") {
+		foreach ($y in [regex]::Matches($Matches[1], '"(/Game/[^"]+)"')) {
+			$g = $y.Groups[1].Value
+			if (Test-Path -LiteralPath (DiskYolu $g)) { $satirlar += "+DirectoriesToAlwaysCook=(Path=`"$($g.Substring(6))`")"; Bilgi "pisirilecek klasor: $g" } else { Bilgi "klasor yok (paket inmemis): $g" }
 		}
 	}
 	foreach ($h in $pisirilecek) { $satirlar += "+MapsToCook=(FilePath=`"$h`")" }

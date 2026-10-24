@@ -5,6 +5,7 @@
 #include "SmvRace.h"
 #include "SmvPyRandom.h"
 #include "SmvFabContent.h"
+#include "SmvCityLife.h"
 #include "SmvGlbBody.h"
 #include "SmvDataService.h"
 #include "Components/PoseableMeshComponent.h"
@@ -111,6 +112,12 @@ void ASmvDroneActor::ClearParts()
 	FabMesh = nullptr;
 	if (IsValid(FabStatic)) FabStatic->DestroyComponent();
 	FabStatic = nullptr;
+	for (TObjectPtr<UMeshComponent>& C : FabPartComps) if (IsValid(C)) C->DestroyComponent();
+	FabPartComps.Reset();
+	FabPropComps.Reset();
+	FabPropCompRef.Reset();
+	if (IsValid(FabRoot)) FabRoot->DestroyComponent();
+	FabRoot = nullptr;
 	FabPropBones.Reset();
 	FabPropRef.Reset();
 	FabPropDir.Reset();
@@ -191,7 +198,8 @@ bool ASmvDroneActor::BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, floa
 		const FString N = Ref.GetBoneName(i).ToString();
 		const FString L = N.ToLower();
 		Names += (i ? TEXT(", ") : TEXT("")) + N;
-		IsProp[i] = L.Contains(TEXT("prop")) || L.Contains(TEXT("rotor")) || L.Contains(TEXT("blade")) || L.Contains(TEXT("pervane")) || L.Contains(TEXT("fan"));
+		IsProp[i] = L.Contains(TEXT("prop")) || L.Contains(TEXT("rotor")) || L.Contains(TEXT("blade")) || L.Contains(TEXT("pervane")) || L.Contains(TEXT("fan"))
+			|| (!FabBoneHint.IsEmpty() && L.Contains(FabBoneHint));
 		// yalnız en üstteki pervane kemiği döner (kanat kemikleri onunla birlikte gelir)
 		if (IsProp[i] && !(P >= 0 && IsProp[P]))
 		{
@@ -222,6 +230,75 @@ bool ASmvDroneActor::BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, floa
 	return PlaceFabBody(C, B, Ctr, Fwd, *SpanKey, *YawKey, DefaultSpanM);
 }
 
+bool ASmvDroneActor::BuildFabFromSpec(const FString& Spec, const TCHAR* IniPrefix, float DefaultSpanM)
+{
+	if (Spec.StartsWith(TEXT("bp:")))
+	{
+		FString Dir = Spec.Mid(3), Hint;
+		Dir.Split(TEXT("|"), &Dir, &Hint);
+		return BuildFabParts(FSmvFabContent::BlueprintBody(Dir, Hint), IniPrefix, DefaultSpanM);
+	}
+	FString Dir = Spec, Hint;
+	if (Spec.Split(TEXT("|"), &Dir, &Hint)) FabBoneHint = Hint.ToLower();
+	const bool bOk = BuildFabBody(*Dir, IniPrefix, DefaultSpanM);
+	FabBoneHint.Reset();
+	return bOk;
+}
+
+bool ASmvDroneActor::BuildFabParts(const TArray<FSmvBodyPart>& P, const TCHAR* IniPrefix, float DefaultSpanM)
+{
+	if (P.Num() == 0) return false;
+	FabRoot = NewObject<USceneComponent>(this);
+	FabRoot->SetupAttachment(Body);
+	FabRoot->RegisterComponent();
+	FBox B(ForceInit);
+	FVector PropSum = FVector::ZeroVector, FrontHint = FVector::ZeroVector;
+	int32 NProp = 0;
+	for (const FSmvBodyPart& X : P)
+	{
+		UMeshComponent* C = nullptr;
+		FBoxSphereBounds Mb;
+		if (X.Static)
+		{
+			UStaticMeshComponent* Sc = NewObject<UStaticMeshComponent>(this);
+			Sc->SetStaticMesh(X.Static);
+			Mb = X.Static->GetBounds();
+			C = Sc;
+		}
+		else if (X.Skeletal)
+		{
+			UPoseableMeshComponent* Pc = NewObject<UPoseableMeshComponent>(this);
+			Pc->SetSkinnedAssetAndUpdate(X.Skeletal);
+			Mb = X.Skeletal->GetBounds();
+			C = Pc;
+		}
+		if (!C) continue;
+		for (int32 i = 0; i < X.Materials.Num(); ++i) if (X.Materials[i]) C->SetMaterial(i, X.Materials[i]);
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		C->SetCastShadow(true);
+		C->SetupAttachment(FabRoot);
+		C->RegisterComponent();
+		C->SetRelativeTransform(X.Xf);
+		FabPartComps.Add(C);
+		B += Mb.GetBox().TransformBy(X.Xf);
+		if (X.bProp)
+		{
+			FabPropComps.Add(C);
+			FabPropCompRef.Add(X.Xf.GetRotation());
+			PropSum += X.Xf.GetLocation();
+			++NProp;
+		}
+		const FString L = X.Name.ToLower();
+		if (L.Contains(TEXT("cam")) || L.Contains(TEXT("nose")) || L.Contains(TEXT("front"))) FrontHint = X.Xf.GetLocation();
+	}
+	if (FabPartComps.Num() == 0 || !B.IsValid) return false;
+	const FVector Ctr = NProp >= 3 ? PropSum / NProp : B.GetCenter();
+	const FVector Fwd = FrontHint.IsNearlyZero() ? FVector::ZeroVector : FrontHint - Ctr;
+	UE_LOG(LogSimumav, Log, TEXT("Fab parçalı gövde: %d parça, %d pervane, sınır %.0f×%.0f×%.0f cm"), FabPartComps.Num(), NProp, B.GetSize().X, B.GetSize().Y, B.GetSize().Z);
+	const FString SpanKey = FString(IniPrefix) + TEXT("SpanM"), YawKey = FString(IniPrefix) + TEXT("YawDeg");
+	return PlaceFabBody(FabRoot, FBoxSphereBounds(B), Ctr, Fwd, *SpanKey, *YawKey, DefaultSpanM);
+}
+
 bool ASmvDroneActor::PlaceFabBody(USceneComponent* C, const FBoxSphereBounds& B, const FVector& Ctr, const FVector& Fwd, const TCHAR* SpanKey, const TCHAR* YawKey, float DefaultSpanM)
 {
 	const FVector Ext = B.BoxExtent;
@@ -242,7 +319,8 @@ bool ASmvDroneActor::PlaceFabBody(USceneComponent* C, const FBoxSphereBounds& B,
 	Loc.Z = 0.0;
 	C->SetRelativeLocationAndRotation(Loc, Rot);
 	C->SetRelativeScale3D(FVector(S));
-	VisScale = 2.5f;
+	// görünürlük büyütmesi: küçük dronlarda ×2,5 (web MODEL_SCALE), büyük gövdelerde azalır (GLB gövdeleriyle aynı eğri: ≥ 1,6 m gerçek boyut)
+	VisScale = FMath::Clamp(1.6f / FMath::Max(0.1f, SpanCm * S / 100.f), 1.f, 2.5f);
 	GroundOffsetM = (float)(B.Origin.Z - Ext.Z) * S / 100.f * VisScale;
 	VisRadiusM = FMath::Max(0.3f, (float)FVector2D(Ext.X, Ext.Y).Size() * S / 100.f * VisScale);
 	VisNoseM = (float)FMath::Max(Ext.X, Ext.Y) * S / 100.f * VisScale;
@@ -264,6 +342,17 @@ void ASmvDroneActor::Tick(float DeltaSeconds)
 		In.ServoFn = &ServoFn;
 		GlbBody->Animate(DeltaSeconds, In);
 		return;
+	}
+	if (FabPropComps.Num() > 0)
+	{
+		const FCaySimTelemetry& Tp = GetLatestTelemetry();
+		const float Tg = Tp.bArmed ? FMath::Max(0.15f, Tp.Throttle / 100.f) : 0.f;
+		if (Tg > 0.f)
+		{
+			FabPropPhase = FMath::Fmod(FabPropPhase + DeltaSeconds * PropMaxRps * Tg * 360.f, 360.f);
+			for (int32 i = 0; i < FabPropComps.Num(); ++i)
+				if (FabPropComps[i]) FabPropComps[i]->SetRelativeRotation(FabPropCompRef[i] * FQuat(FVector::UpVector, FMath::DegreesToRadians(FabPropPhase * ((i % 2) ? 1.f : -1.f))));
+		}
 	}
 	if (!FabMesh || FabPropBones.Num() == 0) return;
 	const FCaySimTelemetry& T = GetLatestTelemetry();
@@ -438,7 +527,10 @@ void ASmvDroneActor::BuildPlaceholder()
 		if (!Cm->FabDir.IsEmpty())
 		{
 			const bool bFpvDir = Cm->FabDir.EndsWith(TEXT("Fpv"));
-			if (BuildFabBody(*Cm->FabDir, bFpvDir ? TEXT("Fpv") : TEXT("Drone"), bFpvDir ? 0.35f : 0.6f)) { Body->SetRelativeScale3D(FVector(VisScale)); return; }
+			// ayar öneki: Drone / Fpv (eski iki gövde) ya da katalog anahtarından (fab:hexa → Fab_hexa)
+			const FString Pre = Cm->Key == TEXT("fab:quad") ? FString(TEXT("Drone")) : Cm->Key == TEXT("fab:fpv") ? FString(TEXT("Fpv")) : FString(TEXT("Fab_")) + Cm->Key.Mid(4);
+			const float DefSpan = Cm->SpanM > 0.05f ? Cm->SpanM : (bFpvDir ? 0.35f : 0.6f);
+			if (BuildFabFromSpec(Cm->FabDir, *Pre, DefSpan)) { Body->SetRelativeScale3D(FVector(VisScale)); return; }
 		}
 		else if (BuildGlbModel(*Cm))
 		{
@@ -711,6 +803,7 @@ double ASmvProcTerrain::Noise2(double X, double Y) const
 void ASmvProcTerrain::Destroyed()
 {
 	if (Scenery) { Scenery->Destroy(); Scenery = nullptr; }
+	if (CityLife) { CityLife->Destroy(); CityLife = nullptr; }
 	Super::Destroyed();
 }
 
@@ -931,17 +1024,50 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	for (TPair<UStaticMesh*, TArray<FTransform>>& It : BldXf) Scenery->AddMeshInstances(It.Key, It.Value, true, 4000.0);
 	// şehir dekoru (yol haritası "Özel parkur › Şehir"): binaların arasında park etmiş / yoldaki araçlar ve küçük insan grupları (yalnız görsel)
 	CityCars->ClearInstances(); CityCabins->ClearInstances(); CityPeople->ClearInstances(); CityHeads->ClearInstances();
+	if (CityLife) { CityLife->Destroy(); CityLife = nullptr; }
 	SmvCore::FPyRandom Rc((uint64_t)Seed + 7u);   // ayrı akış: dekorsuz eski parkurların yerleşimi değişmez
+	// Fab City Traffic Pro araçları ve insan modelleri (SmvCityLife) varsa küp / silindir dekor yerine gerçek modeller
+	const bool bLife = GetWorld() && (W.Vehicles > 0 || W.People > 0) && (FSmvCityLife::CarModels().Num() > 0 || FSmvCityLife::HasCrowd());
+	if (bLife)
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		CityLife = GetWorld()->SpawnActor<ASmvCityLife>(ASmvCityLife::StaticClass(), FTransform(Origin), Sp);
+	}
 	for (int32 i = 0; i < FMath::Clamp(W.Vehicles, 0, 400); ++i)
 	{
 		const double A = Rc.Uniform(0.0, 2.0 * UE_DOUBLE_PI), R = Rc.Uniform(FlatR * 1.1, Half * 0.62);
 		const double E = R * FMath::Sin(A), N = R * FMath::Cos(A);
 		const FVector P = ToUe(E, N, HeightAt(E, N)) - Origin;
 		const FRotator Rot(0.0, Rc.Uniform(0.0, 360.0), 0.0);
+		if (CityLife && CityLife->AddParkedCar(P + Origin, (float)Rot.Yaw, i)) continue;
 		CityCars->AddInstance(FTransform(Rot, P + FVector(0, 0, 65.0), FVector(4.3, 1.8, 0.9)));
 		CityCabins->AddInstance(FTransform(Rot, P + Rot.RotateVector(FVector(-30.0, 0.0, 0.0)) + FVector(0, 0, 138.0), FVector(2.2, 1.6, 0.6)));
 	}
-	for (int32 i = 0; i < FMath::Clamp(W.People, 0, 400); )
+	if (CityLife && FSmvCityLife::HasCrowd() && W.People > 0)
+	{
+		// yaya grupları: binaların arasında duran gruplar + çevrelerinde 12–20 m'lik yürüyüş halkaları
+		TArray<FVector> Spots;
+		TArray<TArray<FVector>> Loops;
+		const int32 NGroups = FMath::Clamp(W.People / 5, 1, 60);
+		for (int32 g = 0; g < NGroups; ++g)
+		{
+			const double A = Rc.Uniform(0.0, 2.0 * UE_DOUBLE_PI), R = Rc.Uniform(FlatR * 0.9, Half * 0.6);
+			const double E0 = R * FMath::Sin(A), N0 = R * FMath::Cos(A);
+			Spots.Add(ToUe(E0, N0, HeightAt(E0, N0)));
+			TArray<FVector> Lp;
+			const double Rr = Rc.Uniform(12.0, 20.0);
+			for (int32 k = 0; k < 10; ++k)
+			{
+				const double Ak = 2.0 * UE_DOUBLE_PI * k / 10.0;
+				const double E = E0 + Rr * FMath::Cos(Ak), N = N0 + Rr * FMath::Sin(Ak);
+				Lp.Add(ToUe(E, N, HeightAt(E, N)));
+			}
+			Loops.Add(Lp);
+		}
+		CityLife->BuildCrowd(Loops, Spots, FMath::Clamp(W.People, 0, 300), Seed);
+	}
+	for (int32 i = 0; i < FMath::Clamp(W.People, 0, 400) && !(CityLife && CityLife->NumPeople() > 0); )
 	{
 		const double A = Rc.Uniform(0.0, 2.0 * UE_DOUBLE_PI), R = Rc.Uniform(FlatR * 0.9, Half * 0.6);
 		const double E0 = R * FMath::Sin(A), N0 = R * FMath::Cos(A);

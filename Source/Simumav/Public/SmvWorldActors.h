@@ -25,6 +25,8 @@ class FSmvContactSolver;
 class USmvGlbBody;
 struct FSmvCatalogModel;
 
+struct FSmvBodyPart;
+
 UCLASS()
 class SIMUMAV_API ASmvDroneActor : public ACaySimDroneActor
 {
@@ -72,6 +74,10 @@ protected:
 	UPROPERTY() TObjectPtr<UPoseableMeshComponent> FabMesh;
 	/** Fab gövdesi iskeletsizse (statik ağ) */
 	UPROPERTY() TObjectPtr<UStaticMeshComponent> FabStatic;
+	/** Parçalı Fab gövdesi (Blueprint yapım betiğinden): kök + parçalar; pervane parçaları yerel Z çevresinde döner */
+	UPROPERTY() TObjectPtr<USceneComponent> FabRoot;
+	UPROPERTY() TArray<TObjectPtr<UMeshComponent>> FabPartComps;
+	UPROPERTY() TArray<TObjectPtr<UMeshComponent>> FabPropComps;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USmvMotorSynth> Motor;
 	/** Katalog GLB gövdesi (pervane/yüzey/ışık hareketi bileşenin içinde) */
 	UPROPERTY() TObjectPtr<USmvGlbBody> GlbBody;
@@ -110,6 +116,11 @@ private:
 	void ClearParts();
 	/** Fab gövdesini kurar (Dir: /Game/Fab/Drone | /Game/Fab/DroneFpv; ayar öneki Drone|Fpv; yoksa false → BasicShapes gövdesi). */
 	bool BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, float DefaultSpanM);
+	/** Katalog FabDir biçimleri: "bp:<klasör>" (Blueprint yapım betiği parçaları), "<klasör>|<pervane ipucu>" (iskeletli ağ, kemik ipucu) ya da klasör */
+	bool BuildFabFromSpec(const FString& Spec, const TCHAR* IniPrefix, float DefaultSpanM);
+	bool BuildFabParts(const TArray<FSmvBodyPart>& P, const TCHAR* IniPrefix, float DefaultSpanM);
+	TArray<FQuat> FabPropCompRef;
+	FString FabBoneHint;
 	/** Ölçek/yön/yer ofseti (bileşen uzayı sınırları, dönüş merkezi, burun ipucu). */
 	bool PlaceFabBody(USceneComponent* C, const FBoxSphereBounds& B, const FVector& Ctr, const FVector& Fwd, const TCHAR* SpanKey, const TCHAR* YawKey, float DefaultSpanM);
 	TArray<FName> FabPropBones;
@@ -169,6 +180,8 @@ public:
 protected:
 	/** Fab manzarası (Brushify ağaç/çalı/kaya/uzak dağ, ia_scatter ot/kaya; SmvScenery) — yoksa temel şekil ağaçları */
 	UPROPERTY() TObjectPtr<class ASmvScenery> Scenery;
+	/** Şehir hayatı (City Traffic Pro park etmiş araçlar + yaya grupları; SmvCityLife) — yoksa temel şekil araç/insan dekoru */
+	UPROPERTY() TObjectPtr<class ASmvCityLife> CityLife;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UProceduralMeshComponent> Ground;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> TreeTrunks;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> TreeCrowns;

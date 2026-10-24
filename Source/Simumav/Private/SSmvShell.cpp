@@ -1,4 +1,5 @@
 #include "SSmvShell.h"
+#include "Widgets/Layout/SWrapBox.h"
 #include "SmvInputGlyphs.h"
 #include "SimumavModule.h"
 #include "SimumavClient.h"
@@ -282,10 +283,12 @@ void SSmvShell::Construct(const FArguments& InArgs)
 					const bool bLive = Scene() && Scene()->IsLive();
 					if (!bLive) return 1.f;
 					// yol haritası: gerçek 3B sahne arka planı — sahne ekranlarında yalnız okunurluk için hafif kenar degradesi
-					return IsSceneScreen(Built) ? 0.22f : 0.80f;
+					return IsSceneScreen(Built) ? 0.22f : 0.30f;
 				})
 				.Tint_Lambda([]() { return SmvUi::ReducedMotion() ? FLinearColor::Transparent : SeasonColor(SeasonId()); })
-				.Cinematic_Lambda([this]() { return Scene() && Scene()->IsLive() && IsSceneScreen(Built); })
+				// canlı 3B sahne varken tüm menü ekranları aynı sade görünümde: gerçek sahne + okunurluk degradesi
+				// (eski ekranlardaki holografik ızgara, tel küre, dron siluetleri ve koyu perde kaldırıldı)
+				.Cinematic_Lambda([this]() { return Scene() && Scene()->IsLive(); })
 				.Scene_Lambda([this]()
 				{
 					// bölüme özel arka plan (web bölüm arka planları): canlı 3B sahne varken menüde gizli kalır
@@ -739,13 +742,14 @@ TSharedRef<SWidget> SSmvShell::Cycle(FString* Target, const TArray<FString>& Val
 
 TSharedRef<SWidget> SSmvShell::Chips(FString* Target, const TArray<FString>& Values, const TArray<FText>& Labels, const TArray<ESmvIcon>& Icons, TFunction<void()> OnPick, int32 PerRow)
 {
+	// satır başına PerRow çip; dar panelde (ör. 500 px'lik sihirbaz paneli) taşmasın diye satırlar ayrıca ayrılan genişliğe göre kırılır
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
-	TSharedPtr<SHorizontalBox> Row;
+	TSharedPtr<SWrapBox> Row;
 	for (int32 i = 0; i < Values.Num(); ++i)
 	{
-		if (i % FMath::Max(1, PerRow) == 0) { Row = SNew(SHorizontalBox); V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Row.ToSharedRef()]; }
+		if (i % FMath::Max(1, PerRow) == 0) { Row = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(0.f, 6.f)); V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Row.ToSharedRef()]; }
 		const FString Val = Values[i];
-		Row->AddSlot().AutoWidth().Padding(0, 0, 6, 0)
+		Row->AddSlot().Padding(0, 0, 6, 0)
 		[
 			SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12)
 			.Text(Labels.IsValidIndex(i) ? Labels[i] : FText::FromString(Val))
@@ -759,11 +763,11 @@ TSharedRef<SWidget> SSmvShell::Chips(FString* Target, const TArray<FString>& Val
 
 TSharedRef<SWidget> SSmvShell::ColorPick(FString* HexStr, TFunction<void()> After)
 {
-	TSharedRef<SHorizontalBox> H = SNew(SHorizontalBox);
+	TSharedRef<SWrapBox> H = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(0.f, 4.f));
 	for (const FString& C : SmvPalette())
 	{
 		const FLinearColor Col = SmvHex(C);
-		H->AddSlot().AutoWidth().Padding(0, 0, 4, 0)
+		H->AddSlot().Padding(0, 0, 4, 0)
 		[
 			SNew(SSmvButton).Kind(ESmvBtn::Ghost).MinHeight(36.f)
 			.Selected_Lambda([HexStr, C]() { return HexStr->Equals(C, ESearchCase::IgnoreCase); })
@@ -774,7 +778,7 @@ TSharedRef<SWidget> SSmvShell::ColorPick(FString* HexStr, TFunction<void()> Afte
 			]
 		];
 	}
-	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 0, 0)[TextEdit(HexStr, false, FText::FromString(TEXT("#rrggbb")), 110.f)];
+	H->AddSlot().VAlign(VAlign_Center).Padding(6, 0, 0, 0)[TextEdit(HexStr, false, FText::FromString(TEXT("#rrggbb")), 110.f)];
 	return H;
 }
 
@@ -4215,6 +4219,13 @@ TSharedRef<SWidget> SSmvShell::RouteMap(const TArray<FSmvReplayFrame>* Frames, f
 		if (!Frames || Frames->Num() < 2) { DrText(Out, L + 2, G, FSmvI18n::T(TEXT("ops.no_data")).ToString(), Sz * 0.5, Font(11), Mute(), 0); return; }
 		TArray<FSmvReplayFrame> F;
 		for (const FSmvReplayFrame& Q : *Frames) if (FMath::Abs(Q.Lat) > 1e-4 || FMath::Abs(Q.Lon) > 1e-4) F.Add(Q);
+		// SITL'in ev konumu ayarlanmadan önceki kareleri (varsayılan konum, binlerce km öte) rota ölçeğini bozuyordu ("4414221 m"):
+		// son karenin 50 km'sinden uzak kareler atlanır
+		if (F.Num() > 2)
+		{
+			const double LaR = F.Last().Lat, LoR = F.Last().Lon, Kr = 111320.0 * FMath::Cos(FMath::DegreesToRadians(LaR));
+			F.RemoveAll([&](const FSmvReplayFrame& Q) { return FMath::Square((Q.Lat - LaR) * 110540.0) + FMath::Square((Q.Lon - LoR) * Kr) > FMath::Square(50000.0); });
+		}
 		if (F.Num() < 2) { DrText(Out, L + 2, G, FSmvI18n::T(TEXT("ops.no_data")).ToString(), Sz * 0.5, Font(11), Mute(), 0); return; }
 		const double La0 = F[0].Lat, Lo0 = F[0].Lon, Kx = 111320.0 * FMath::Cos(FMath::DegreesToRadians(La0)), Ky = 110540.0;
 		double X0 = 1e18, X1 = -1e18, Y0 = 1e18, Y1 = -1e18, MaxA = 1;
@@ -4250,11 +4261,10 @@ TSharedRef<SWidget> SSmvShell::ReplayScreen()
 		const FSmvReplayInfo& I = RepList[i];
 		FString When = I.Created.Left(16).Replace(TEXT("T"), TEXT(" "));
 		const FString Sub = FString::Printf(TEXT("%s · %02d:%02d · %.2f km"), *When, (int32)I.DurationS / 60, (int32)I.DurationS % 60, I.DistM / 1000.0);
-		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Normal).LeftAlign(true).MinWidth(380.f)
-			.Icon(I.DroneType == TEXT("plane") ? ESmvIcon::Plane : I.DroneType == TEXT("rover") ? ESmvIcon::Rover : I.DroneType == TEXT("heli") ? ESmvIcon::Heli : ESmvIcon::Drone)
-			.Text(FText::FromString(I.Drone + (I.Track.IsEmpty() ? FString() : TEXT(" — ") + I.Track))).SubText(FText::FromString(Sub))
-			.Selected(i == RepSel).OnClick([Self, i]() { Self->RepSelect(i); Self->Refresh(); });
-		if (i == RepSel) DefaultFocus = B;
+		// sola hizalı liste öğesi (simge + ad + tarih/süre/mesafe; eski düğme simgeyi ortada, adı sağda gösteriyor, alt yazıyı kesiyordu)
+		TSharedRef<SWidget> B = ListItem(FText::FromString(I.Drone + (I.Track.IsEmpty() ? FString() : TEXT(" — ") + I.Track)), FText::FromString(Sub),
+			I.DroneType == TEXT("plane") ? ESmvIcon::Plane : I.DroneType == TEXT("rover") ? ESmvIcon::Rover : I.DroneType == TEXT("heli") ? ESmvIcon::Heli : ESmvIcon::Drone,
+			i == RepSel, false, [Self, i]() { Self->RepSelect(i); Self->Refresh(); }, Accent());
 		Lf->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[B];
 	}
 	TSharedRef<SVerticalBox> Rt = SNew(SVerticalBox);
@@ -4563,7 +4573,7 @@ void SSmvShell::TickSmoke()
 	static FString SmokeLang;
 	static const bool bLang = FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeLang="), SmokeLang) && !SmokeLang.IsEmpty();
 	static int32 NFlights = -1;
-	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 4); }
+	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 5); }
 	if (SmokeStep < 0)
 	{
 		SmokeStep = 0; SmokeAt = Now + 12.0; LogoAt = -100.0;
@@ -4585,6 +4595,8 @@ void SSmvShell::TickSmoke()
 		{ ESmvScreen::HangarWizard, 4, -1, -1, TEXT("03_hw4_addons"), 3.f }, { ESmvScreen::HangarWizard, 5, -1, -1, TEXT("03_hw5_look"), 3.f },
 		{ ESmvScreen::Tracks, -1, -1, -1, TEXT("04_parkur"), 7.f },
 		{ ESmvScreen::ParkurList, -1, 0, -1, TEXT("05_enc_list"), 3.f }, { ESmvScreen::ParkurList, -1, 0, 1, TEXT("05_enc_tour"), 14.f },
+		{ ESmvScreen::ParkurList, -1, 0, 2, TEXT("05_enc_tour2"), 14.f }, { ESmvScreen::ParkurList, -1, 0, 3, TEXT("05_enc_tour3"), 14.f },
+		{ ESmvScreen::ParkurList, -1, 0, 4, TEXT("05_enc_tour4"), 14.f },
 		{ ESmvScreen::ParkurList, -1, 1, -1, TEXT("05_custom_list"), 4.f },
 		{ ESmvScreen::ParkurWizard, 0, -1, -1, TEXT("06_pw0_biome"), 3.f }, { ESmvScreen::ParkurWizard, 1, -1, -1, TEXT("06_pw1_world"), 6.f },
 		{ ESmvScreen::ParkurWizard, 2, -1, -1, TEXT("06_pw2_weather"), 2.5f }, { ESmvScreen::ParkurWizard, 3, -1, -1, TEXT("06_pw3_name"), 2.5f },
@@ -4639,8 +4651,13 @@ void SSmvShell::TickSmoke()
 			case ESmvScreen::ParkurList:
 				Flow->ParkurCat = S.Tab == 1 ? TEXT("custom") : S.Tab == 2 ? TEXT("real") : TEXT("encounter");
 				TourKey.Empty();
-				if (S.Log == 1)
-					for (const FSmvFabMap& M : FSmvFabContent::Maps()) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty()) { TourKey = M.Key; break; }
+				if (S.Log >= 1)
+				{
+					// harita turu: Log-1'inci harita (her Fab haritası için bir görüntü; harita önizleme görselleri bunlardan üretilir)
+					int32 K = S.Log - 1;
+					for (const FSmvFabMap& M : FSmvFabContent::Maps()) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty() && K-- == 0) { TourKey = M.Key; break; }
+					if (TourKey.IsEmpty()) { ++SmokeStep; ++SmokeStep; return; }
+				}
 				break;
 			case ESmvScreen::ParkurWizard:
 				if (S.Wiz == 0)
@@ -4691,7 +4708,7 @@ void SSmvShell::TickSmoke()
 	}
 	// uçuşlar (yerel SITL): Fab haritası + saat/hava; yer → kalkış (GPS/EKF hazır olunca kuyruktan) → ~10 m askı → (ilk uçuşta FPV/HUD, duraklatma, özet)
 	// Not: ekran görüntüsü sonraki karede çizilir — görüntü ile durum değiştiren eylem aynı adımda yapılmaz.
-	struct FFl { const TCHAR* Map; const TCHAR* Tod; const TCHAR* Wx; const TCHAR* Code; bool bFull; const TCHAR* Vehicle = nullptr; };
+	struct FFl { const TCHAR* Map; const TCHAR* Tod; const TCHAR* Wx; const TCHAR* Code; bool bFull; const TCHAR* Vehicle = nullptr; const TCHAR* Model = nullptr; const TCHAR* Mode = nullptr; };
 	static const FFl Fls[] = {
 		{ TEXT("orman"), TEXT("dusk"), TEXT("rain"), TEXT("f1"), true },
 		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f2"), false },
@@ -4699,6 +4716,8 @@ void SSmvShell::TickSmoke()
 		// prosedürel dünya (Hyper arazi malzemesi, Brushify ağaçları, ia_scatter kaya/ot, ufuk dağları)
 		// VTOL: pilot omuz görünümü (MetaHuman pilot RC ile) ve FPV'de jet HUD karesi
 		{ TEXT("proc"), TEXT("golden"), TEXT("clear"), TEXT("f4"), false, TEXT("vtol") },
+		// gemi savunma (Fab Mogami fırkateyni korunacak nesne; yalnız görsel) + Fab Askerî Hexacopter gövdesi
+		{ TEXT("proc"), TEXT("day"), TEXT("clear"), TEXT("f5"), false, nullptr, TEXT("fab:hexa"), TEXT("ship_defense") },
 	};
 	if (SmokeFl >= NFlights)
 	{
@@ -4739,6 +4758,9 @@ void SSmvShell::TickSmoke()
 			Flow->Draft.Drone.Type = Fx.Vehicle;
 			Flow->Draft.Drone.ModelKey = USmvDataService::DefaultModelFor(Fx.Vehicle);
 		}
+		if (Fx.Model)
+			if (const FSmvCatalogModel* Cm = USmvDataService::FindModel(Fx.Model)) { Flow->Draft.Drone.Type = Cm->Type; Flow->Draft.Drone.ModelKey = Cm->Key; }
+		if (Fx.Mode) Flow->Draft.GameMode = Fx.Mode;
 		Flow->Draft.Track.TimeOfDay = Fx.Tod;
 		Flow->Draft.Track.Weather = Fx.Wx;
 		Flow->Draft.bHasMission = false;

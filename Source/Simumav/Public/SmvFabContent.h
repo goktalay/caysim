@@ -45,8 +45,26 @@ struct SIMUMAV_API FSmvFabMap
 	bool bAvailable = false;
 };
 
+/** Blueprint (ya da klasör) gövdesinin bir parçası: ağ + gövdeye göre dönüşüm (+ isteğe bağlı malzeme geçersiz kılmaları). */
+struct SIMUMAV_API FSmvBodyPart
+{
+	UStaticMesh* Static = nullptr;
+	USkeletalMesh* Skeletal = nullptr;
+	FTransform Xf;
+	TArray<class UMaterialInterface*> Materials;
+	FString Name;
+	/** pervane / rotor parçası (adından): yerel Z ekseni çevresinde döner */
+	bool bProp = false;
+};
+
 struct SIMUMAV_API FSmvFabContent
 {
+	/** Klasördeki (alt klasörler dahil) tüm statik ağlar (ad sırasıyla; önbellekli). Parçalı içe aktarılan modeller (Mogami gemisi) için. */
+	static const TArray<UStaticMesh*>& StaticMeshesIn(const FString& Dir);
+	/** Klasördeki Blueprint'lerin yapım betiğinden (SCS) gövde parçaları: en çok ağ bileşeni olan Blueprint seçilir
+	 *  (Fab dron paketleri: Bendylab Hexacopter / Interceptor, Drone Mega Pack). Blueprint mantığı çalıştırılmaz — yalnız ağlar ve
+	 *  göreli dönüşümleri okunur. PropHint: ad içinde geçince pervane sayılan ek alt dize (ör. "Sphere"). Yoksa boş. */
+	static const TArray<FSmvBodyPart>& BlueprintBody(const FString& Dir, const FString& PropHint = FString());
 	/** Pakette gerçekten bulunan uçuş haritaları (kayıt tablosu + DefaultGame.ini +Maps; ilk çağrıda çözülür). */
 	static const TArray<FSmvFabMap>& Maps();
 	/** Kayıt tablosunun tamamı (pakette olmayanlar bAvailable = false) + ini ek haritaları — menü bunu gösterebilir. */

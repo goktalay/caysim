@@ -16,6 +16,9 @@
 #include "Camera/CameraComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/PointLightComponent.h"
+#include "Components/DirectionalLightComponent.h"
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "UObject/UObjectIterator.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -510,6 +513,7 @@ void ASmvMenuScene::Tick(float Dt)
 	}
 	TickSnaps();
 	TickScenery();
+	if (bSceneryDone) ClearShowcaseGrass();
 	SettleShowcase();
 	if (bCardOn && CardCap && bLive)
 	{
@@ -528,7 +532,17 @@ void ASmvMenuScene::Tick(float Dt)
 		const FVector At = Ctr + FVector(FMath::Cos(A) * R, FMath::Sin(A) * R, WpSize * 100.0 * 0.32);
 		Capture->FOVAngle = 55.f;
 		Capture->SetWorldLocationAndRotation(At, (Ctr - At).Rotation());
+		if (SkyCard)
+		{
+			// gök kartı: arazinin arkasında, kameraya dönük
+			const FVector Away = (Ctr - At).GetSafeNormal2D();
+			SkyCard->SetWorldLocationAndRotation(Ctr + Away * R * 2.2 + FVector(0, 0, R * 0.6), FRotator(0.0, Away.Rotation().Yaw, 0.0));
+			SkyCard->SetWorldScale3D(FVector(1.0, R * 7.0 / 100.0, R * 3.0 / 100.0));
+		}
 	}
+	const bool bWorldPrevOn = WorldPrev && !Preview && !PilotPrev;
+	if (PrevSun && PrevSun->IsVisible() != bWorldPrevOn) PrevSun->SetVisibility(bWorldPrevOn);
+	if (SkyCard && SkyCard->IsVisible() != bWorldPrevOn) SkyCard->SetVisibility(bWorldPrevOn);
 	if (PilotPrev)
 	{
 		// sürekli dönme yerine öne bakarak hafif salınım (±30°): yüz, vizör ve tulum önü görünsün
@@ -647,6 +661,7 @@ void ASmvMenuScene::TickScenery()
 	if (!W) return;
 	if (bFabMap && (!MenuLevel || !MenuLevel->IsLevelVisible() || !MenuLevel->GetLoadedLevel())) return;
 	bSceneryDone = true;
+	ClearShowcaseSpot();
 	FActorSpawnParameters Sp;
 	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	// Fab haritası "havada ada" ise çevresine arazi diski + uzak dağlar (uçuştakiyle aynı: ASmvScenery::BuildSurround)
@@ -855,6 +870,48 @@ void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
 	TArray<AActor*> Att;
 	WorldPrev->GetAttachedActors(Att, true);
 	for (AActor* A : Att) Capture->ShowOnlyActors.Add(A);
+	// ışık: menü dünyasının güneşi ~67 km ötedeki önizleme yakalamasında araziyi siyah bırakıyordu (yalnız beyaz kenarlar) →
+	// önizleme arazisi 1. ışık kanalında kendi alçak güneşiyle aydınlanır; arkasında gök rengi kart (yalnız yakalamada görünür)
+	TArray<AActor*> All = Att;
+	All.Add(WorldPrev);
+	for (AActor* A : All)
+	{
+		TInlineComponentArray<UPrimitiveComponent*> Pr(A);
+		for (UPrimitiveComponent* Pc : Pr) if (Pc) Pc->SetLightingChannels(true, true, false);
+	}
+	if (!PrevSun)
+	{
+		PrevSun = NewObject<UDirectionalLightComponent>(this, TEXT("PrevSun"));
+		PrevSun->SetupAttachment(Root);
+		PrevSun->RegisterComponent();
+		PrevSun->SetLightingChannels(false, true, false);
+		PrevSun->SetCastShadows(true);
+		PrevSun->SetAtmosphereSunLight(false);
+	}
+	PrevSun->SetIntensity(SmvCfg(TEXT("PreviewSunLux"), 7.f));
+	PrevSun->SetLightColor(Track.TimeOfDay == TEXT("golden") || Track.TimeOfDay == TEXT("dusk") ? FLinearColor(1.f, 0.82f, 0.62f) : FLinearColor(1.f, 0.97f, 0.92f));
+	PrevSun->SetWorldRotation(FRotator(Track.TimeOfDay == TEXT("day") ? -48.f : -24.f, 140.f, 0.f));
+	PrevSun->SetVisibility(true);
+	if (!SkyCard)
+	{
+		SkyCard = NewObject<UStaticMeshComponent>(this, TEXT("SkyCard"));
+		SkyCard->SetupAttachment(Root);
+		SkyCard->RegisterComponent();
+		SkyCard->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+		SkyCard->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		SkyCard->SetCastShadow(false);
+		SkyCard->SetLightingChannels(false, true, false);
+		SkyCard->SetVisibleInSceneCaptureOnly(true);
+		if (UMaterialInterface* Sm = SmvSolidMat(LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"))))
+		{
+			UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(Sm, this);
+			SmvSetSolidColor(M, FLinearColor(0.f, 0.f, 0.f));
+			M->SetVectorParameterValue(TEXT("Emissive"), Track.TimeOfDay == TEXT("night") ? FLinearColor(0.02f, 0.03f, 0.07f) : FLinearColor(0.42f, 0.58f, 0.82f));
+			SkyCard->SetMaterial(0, M);
+		}
+	}
+	SkyCard->SetVisibility(true);
+	Capture->ShowOnlyComponents.AddUnique(SkyCard.Get());
 	Capture->bCaptureEveryFrame = bPreviewOn;
 }
 
@@ -975,6 +1032,77 @@ void ASmvMenuScene::SetStation(EStation S)
 	StationAt = FPlatformTime::Seconds();
 	if (Showcase) Showcase->SetActorHiddenInGame(!(S == EStation::Hangar || S == EStation::Fly));
 	if (ShowPilot) ShowPilot->SetActorHiddenInGame(S != EStation::Crew);
+}
+
+void ASmvMenuScene::ClearShowcaseSpot()
+{
+	// vitrin açıklığı: hangar / mürettebat / uçuş istasyonlarında araç ve pilot orman haritasının ağaç, çalı ve uzun otlarının içinde
+	// kalıyordu (kamera yaprakların arasından bakıyordu). Vitrin noktası çevresindeki bitki örneklerini kaldırır (yalnız menü kopyası;
+	// uçuş haritasına dokunmaz). Yarıçap: alçak bitki MenuClearM (varsayılan 16 m), ağaç taçları MenuClearTreeM (26 m).
+	UWorld* W = GetWorld();
+	if (!W || !bFabMap || !MenuLevel || !MenuLevel->GetLoadedLevel()) return;
+	const FVector C = ShowGround();
+	const double Rlow = SmvCfg(TEXT("MenuClearM"), 16.f) * 100.0, Rtree = SmvCfg(TEXT("MenuClearTreeM"), 26.f) * 100.0;
+	int32 Removed = 0, Hidden = 0;
+	for (AActor* A : MenuLevel->GetLoadedLevel()->Actors)
+	{
+		if (!A || A->GetClass()->GetName().Contains(TEXT("Landscape"))) continue;
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* Mc : Comps)
+		{
+			if (!Mc || !Mc->GetStaticMesh()) continue;
+			if (UInstancedStaticMeshComponent* Ism = Cast<UInstancedStaticMeshComponent>(Mc))
+			{
+				const FBoxSphereBounds Mb = Ism->GetStaticMesh()->GetBounds();
+				TArray<int32> Kill;
+				for (int32 i = 0; i < Ism->GetInstanceCount(); ++i)
+				{
+					FTransform Xf;
+					if (!Ism->GetInstanceTransform(i, Xf, true)) continue;
+					const double Hcm = Mb.BoxExtent.Z * 2.0 * Xf.GetScale3D().Z;
+					const double Rad = Hcm > 400.0 ? Rtree : Rlow;
+					if (FVector::Dist2D(Xf.GetLocation(), C) < Rad && FMath::Abs(Xf.GetLocation().Z - C.Z) < 3000.0) Kill.Add(i);
+				}
+				if (Kill.Num()) { Ism->RemoveInstances(Kill); Removed += Kill.Num(); }
+			}
+			else
+			{
+				const FBoxSphereBounds B = Mc->Bounds;
+				// zemin parçaları (geniş / alçak ağlar) kalır: araç havada kalmasın
+				if (B.BoxExtent.Z < 2500.0 && FMath::Max(B.BoxExtent.X, B.BoxExtent.Y) < 2500.0 && B.Origin.Z + B.BoxExtent.Z > C.Z + 80.0
+					&& FVector::Dist2D(B.Origin, C) < Rtree && FMath::Abs(B.Origin.Z - C.Z) < 3000.0 && Mc->IsVisible())
+				{
+					Mc->SetVisibility(false);
+					Mc->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					++Hidden;
+				}
+			}
+		}
+	}
+	UE_LOG(LogSimumav, Log, TEXT("Menü vitrin açıklığı: %d bitki örneği kaldırıldı, %d ağ gizlendi (yarıçap %.0f / %.0f m)"), Removed, Hidden, Rlow / 100.0, Rtree / 100.0);
+	ClearGrassAt = FPlatformTime::Seconds();
+}
+
+void ASmvMenuScene::ClearShowcaseGrass()
+{
+	// arazi otları (Landscape grass) kamera yakınında yeniden üretilir: vitrin çevresindekiler periyodik kaldırılır
+	if (!bFabMap || FPlatformTime::Seconds() - ClearGrassAt < 1.5) return;
+	ClearGrassAt = FPlatformTime::Seconds();
+	const FVector C = ShowGround();
+	const double R = SmvCfg(TEXT("MenuClearM"), 16.f) * 100.0;
+	for (TObjectIterator<UHierarchicalInstancedStaticMeshComponent> It; It; ++It)
+	{
+		UHierarchicalInstancedStaticMeshComponent* H = *It;
+		if (!H || H->GetWorld() != GetWorld() || !H->GetClass()->GetName().Contains(TEXT("Grass"))) continue;
+		if (!H->Bounds.GetBox().ExpandBy(R).IsInsideXY(C)) continue;
+		TArray<int32> Kill;
+		for (int32 i = 0; i < H->GetInstanceCount(); ++i)
+		{
+			FTransform Xf;
+			if (H->GetInstanceTransform(i, Xf, true) && FVector::Dist2D(Xf.GetLocation(), C) < R) Kill.Add(i);
+		}
+		if (Kill.Num()) H->RemoveInstances(Kill);
+	}
 }
 
 FVector ASmvMenuScene::ShowGround()

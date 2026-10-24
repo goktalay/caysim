@@ -375,7 +375,7 @@ namespace SmvUi
 	// ---- bileşen yardımcıları ----
 
 	/** Büyük harf (ICU; Türkçede i → İ, ı → I) — FString::ToUpper yalnız ASCII'yi çevirir (ğ, ş, ö kalıyordu) */
-	static FString SmvUpper(const FString& In)
+	FString SmvUpper(const FString& In)
 	{
 		FString S = In;
 		if (FSmvI18n::Language() == TEXT("tr")) { S.ReplaceInline(TEXT("i"), TEXT("İ"), ESearchCase::CaseSensitive); S.ReplaceInline(TEXT("ı"), TEXT("I"), ESearchCase::CaseSensitive); }
