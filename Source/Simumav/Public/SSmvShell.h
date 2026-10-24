@@ -285,6 +285,25 @@ private:
 	bool bPilotMenu = false;
 	TSharedPtr<class SSmvTileMap> RealMap;
 	TArray<TSharedPtr<FSlateBrush>> YhBrushes;
+	/** Parkur merkezi: Özel kartın canlı prosedürel dünya önizlemesi kuruldu mu (ekrana her girişte bir kez) */
+	bool bHubWorld = false;
+	/** Parkur listesinde eski gelişmiş parkur düzenleyicisi (halka/kapı düzeni) açık */
+	bool bTrackEditor = false;
+	/** Yeni pilot sihirbazı: ad / soyad */
+	FString CwFirst, CwLast;
+	/** Uçuş akışı: bir önceki adım (parkur kategorisi atlanırken yön) */
+	int32 FlyPrevStep = 0;
+	/** Gerçek dünya sihirbazı: adres arama metni */
+	FString RealQuery;
+	/** Uçuş akışı / ilerleme ekranı yardımcıları (SSmvShellYol.cpp) */
+	TSharedRef<SWidget> FlyDrones();
+	TSharedRef<SWidget> FlyCats();
+	TSharedRef<SWidget> FlyTracks();
+	TSharedRef<SWidget> FlyModes();
+	TSharedRef<SWidget> FlyPlayers();
+	TSharedRef<SWidget> FlySummary();
+	TSharedRef<SWidget> EnvEditor(FSmvTrack& T);
+	void OpenTrackChoice(const FSmvTrack& T);
 public:
 	/** Bu ekranın arkasında canlı 3B sahne tam görünür mü (sinematik arka plan; düz degrade yok) */
 	static bool IsSceneScreen(ESmvScreen S);

@@ -528,6 +528,21 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 			if (Built == ESmvScreen::Friends) { Flow->FetchFriends(); Flow->FetchInvites(); }
 			if (Built == ESmvScreen::Progress) ProgressAt = FPlatformTime::Seconds();
 			if (Built == ESmvScreen::Logbook && Data()->DefaultPilot()) Flow->FetchPilotFlights(Data()->DefaultPilot()->Id);
+			if (Built == ESmvScreen::Tracks) bHubWorld = false;
+			if (Built == ESmvScreen::ParkurList) bTrackEditor = false;
+			if (Built == ESmvScreen::ParkurWizard) WorldPrevHash = 0;
+			if (Built == ESmvScreen::Crew && Data()->DefaultPilot()) Flow->FetchPilotLevel(Data()->DefaultPilot()->Id);
+			// uçuş akışı baştan: yeni taslak (varsayılan dron / pilot), davetler ve yapay zekâ sıfırlanır
+			if (Built == ESmvScreen::FlyFlow && Flow->FlyStep == 0)
+			{
+				Flow->NewDraft();
+				Flow->Draft.GameMode = TEXT("free");
+				Flow->bMulti = false;
+				Flow->InviteEmails.Reset();
+				Flow->InviteFriends.Reset();
+				Flow->AiCount = 0;
+				FlyPrevStep = 0;
+			}
 			FSmvUiSound::Play(ESmvSnd::Open);
 		}
 		DefaultFocus.Reset();
@@ -547,13 +562,14 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 	TickSmoke();
 	UpdateStation();
 	// dünya oluşturucu canlı önizlemesi: parametre değişince 0,6 sn sonra yeniden kur
-	if (Built == ESmvScreen::Tracks && MapMode == TEXT("3d"))
+	if (((Built == ESmvScreen::Tracks || (Built == ESmvScreen::ParkurList && bTrackEditor)) && MapMode == TEXT("3d")) || Built == ESmvScreen::ParkurWizard)
 	{
-		const FSmvTrackWorld& Wo = EditTrack.World;
+		const FSmvTrack& Tw = Built == ESmvScreen::ParkurWizard ? NewTrack : EditTrack;
+		const FSmvTrackWorld& Wo = Tw.World;
 		const uint32 H = HashCombine(HashCombine(GetTypeHash(Wo.Seed), GetTypeHash(Wo.MountainCount)), HashCombine(GetTypeHash((int32)(Wo.TreeDensity * 100)), HashCombine(GetTypeHash(Wo.BuildingCount),
 			HashCombine(GetTypeHash((int32)(Wo.Water * 100)), HashCombine(GetTypeHash((int32)Wo.MountainHeight), HashCombine(GetTypeHash((int32)Wo.SizeM), GetTypeHash(Wo.bRunway)))))));
 		if (H != WorldPrevHash) { WorldPrevHash = H; WorldPrevAt = FPlatformTime::Seconds(); bWorldPrevDirty = true; }
-		if (bWorldPrevDirty && FPlatformTime::Seconds() - WorldPrevAt > 0.6) { bWorldPrevDirty = false; if (ASmvMenuScene* S = Scene()) S->SetWorldPreview(EditTrack); }
+		if (bWorldPrevDirty && FPlatformTime::Seconds() - WorldPrevAt > 0.6) { bWorldPrevDirty = false; if (ASmvMenuScene* S = Scene()) S->SetWorldPreview(Tw); }
 	}
 	if (ASmvMenuScene* S = Scene()) S->SetPreviewActive(bPreviewVisible);
 	// RC eksen algılama: tabandan en çok sapan eksen (> 0,45) seçilir; eksi yönde ise ters çevrilir (kol yukarı / sağa itilir)
@@ -633,9 +649,10 @@ FReply SSmvShell::OnKeyDown(const FGeometry& G, const FKeyEvent& E)
 		{
 			int32* St = Built == ESmvScreen::HangarWizard ? &HwStep : Built == ESmvScreen::ParkurWizard ? &PwStep : Built == ESmvScreen::RealWizard ? &RwStep
 				: Built == ESmvScreen::CrewWizard ? &CwStep : Built == ESmvScreen::FlyFlow ? &Flow->FlyStep : nullptr;
-			const int32 Min = (Built == ESmvScreen::HangarWizard && bHwEdit) ? 2 : 0;
+			const int32 Min = (Built == ESmvScreen::HangarWizard && bHwEdit) ? 1 : 0;
 			if (St && *St > Min) { (*St)--; Refresh(); FSmvUiSound::Play(ESmvSnd::Back); return FReply::Handled(); }
 			if (Built == ESmvScreen::ParkurList && !TourKey.IsEmpty()) { TourKey.Empty(); Refresh(); FSmvUiSound::Play(ESmvSnd::Back); return FReply::Handled(); }
+			if (Built == ESmvScreen::ParkurList && bTrackEditor) { bTrackEditor = false; Refresh(); FSmvUiSound::Play(ESmvSnd::Back); return FReply::Handled(); }
 		}
 		FSmvUiSound::Play(ESmvSnd::Back);
 		Flow->Back();
@@ -3390,7 +3407,13 @@ TSharedRef<SWidget> SSmvShell::Logbook()
 	TSharedRef<SVerticalBox> B = SNew(SVerticalBox);
 	if (Data())
 	{
-		for (const FSmvFlightSummary& S : Data()->Flights())
+		// yol haritası "Önceki uçuşlarım": etkin pilotun uçuşları (hesapta sunucudan); "Tüm kayıtlar" sekmesi bu bilgisayardaki tüm uçuşlar
+		const bool bAll = LogTab == 2 || !Flow.IsValid();
+		const TArray<FSmvFlightSummary>& Src = bAll ? Data()->Flights() : Flow->PilotFlights;
+		if (!bAll && Data()->DefaultPilot())
+			B->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[SmvUi::Text(FSmvI18n::Format(TEXT("logbook.of_pilot"), { { TEXT("name"), Data()->DefaultPilot()->Name } }), 12, "Bold", Dim(), false)];
+		if (!bAll && Flow->bPilotFlightsBusy) B->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("friends.loading")), 12, "Regular", Mute())];
+		for (const FSmvFlightSummary& S : Src)
 		{
 			const FLinearColor C = S.Result == TEXT("ok") ? Accent3() : S.Result == TEXT("crash") ? Danger() : Warn();
 			B->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
@@ -3416,10 +3439,12 @@ TSharedRef<SWidget> SSmvShell::Logbook()
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%.2f km"), S.DistM / 1000.0)), 13, "Bold", Fg(), false)]
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0)[SmvUi::Text(FText::FromString(S.AlertScore >= 0 ? FString::Printf(TEXT("%s %d"), *S.AlertGrade, S.AlertScore) : FString(TEXT("—"))), 13, "Bold", Accent(), false)]
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0, 0, 0)[SmvUi::Text(FText::FromString(S.GatesPassed ? FString::Printf(TEXT("◎ %d"), S.GatesPassed) : FString()), 13, "Bold", Hex(0xf472b6), false)]
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0, 0, 0)[SmvUi::Text(FText::FromString(S.GameMode.IsEmpty() ? FString() : FSmvI18n::T(FString(TEXT("gmode.")) + S.GameMode).ToString()), 11, "Regular", Dim(), false)]
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0, 0, 0)[SmvUi::Text(FText::FromString(S.Xp > 0 ? FString::Printf(TEXT("+%d XP"), S.Xp) : FString()), 13, "Bold", Accent3(), false)]
 				]
 			];
 		}
-		if (Data()->Flights().Num() == 0) B->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("logbook.empty")), 13, "Regular", Mute())];
+		if (Src.Num() == 0) B->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("logbook.empty")), 13, "Regular", Mute())];
 	}
 	B->AddSlot().AutoHeight().Padding(0, 12, 0, 0)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s: %s"), *FSmvI18n::T(TEXT("logbook.bin")).ToString(),
 		*FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Simumav"), TEXT("Logs"))))), 10, "Regular", Mute())];
@@ -3427,7 +3452,7 @@ TSharedRef<SWidget> SSmvShell::Logbook()
 	Top->AddSlot().AutoHeight().Padding(0, 0, 0, 14)
 	[
 		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().FillWidth(1.f)[Tabs({ Tx(TEXT("ach.tab_flights")), Tx(TEXT("ach.tab")) }, { ESmvIcon::Book, ESmvIcon::Trophy }, &LogTab)]
+		+ SHorizontalBox::Slot().FillWidth(1.f)[Tabs({ Tx(TEXT("pilotmenu.flights")), Tx(TEXT("ach.tab")), Tx(TEXT("logbook.all")) }, { ESmvIcon::Book, ESmvIcon::Trophy, ESmvIcon::Replay }, &LogTab)]
 		+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Replay).Text(Tx(TEXT("replay.open")))
 			.OnClick([F = Flow]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Replay); })]
 	];
@@ -4548,18 +4573,37 @@ void SSmvShell::TickSmoke()
 		return;
 	}
 	if (Now < SmokeAt) return;
+	// yol haritası turu: sade menü + Pilot menüsü, Hangar (+ Yeni sihirbazının 6 adımı), Parkur (merkez, Karşılaşma listesi + harita içi tur, Özel / Gerçek
+	// Dünya listeleri ve sihirbazları), Mürettebat (+ yeni pilot sihirbazı), Uçuş akışı, Arkadaşlarım, Önceki uçuşlarım; ardından Pilot menüsünden erişilen
+	// eski ekranlar. Wiz: ekranın alt adımı; ParkurList'te Tab = kategori (0 karşılaşma, 1 özel, 2 gerçek), Log = 1 harita turu.
 	struct FStep { ESmvScreen Screen; int32 Wiz, Tab, Log; const TCHAR* Name; float Wait; };
 	static const FStep Steps[] = {
-		{ ESmvScreen::Menu, -1, -1, -1, TEXT("01_menu"), 3.5f }, { ESmvScreen::FlyMode, -1, -1, -1, TEXT("02_flymode"), 2.5f }, { ESmvScreen::Hangar, -1, -1, -1, TEXT("03_hangar"), 7.f },
-		{ ESmvScreen::Crew, -1, -1, -1, TEXT("04_crew"), 6.f }, { ESmvScreen::Crew, -1, -1, -1, TEXT("04_crew_face"), 3.f }, { ESmvScreen::Tracks, -1, -1, -1, TEXT("05_tracks"), 3.f }, { ESmvScreen::Missions, -1, -1, -1, TEXT("06_missions"), 2.5f },
-		{ ESmvScreen::Wizard, 0, -1, -1, TEXT("07_wiz0"), 3.f }, { ESmvScreen::Wizard, 1, -1, -1, TEXT("07_wiz1"), 2.5f }, { ESmvScreen::Wizard, 2, -1, -1, TEXT("07_wiz2"), 2.5f },
-		{ ESmvScreen::Wizard, 3, -1, -1, TEXT("07_wiz3"), 2.5f }, { ESmvScreen::Wizard, 4, -1, -1, TEXT("07_wiz4"), 2.5f }, { ESmvScreen::Wizard, 5, -1, -1, TEXT("07_wiz5"), 2.5f },
-		{ ESmvScreen::Wizard, 6, -1, -1, TEXT("07_wiz6"), 2.5f }, { ESmvScreen::Wizard, 7, -1, -1, TEXT("07_wiz7"), 2.5f },
-		{ ESmvScreen::Settings, -1, 0, -1, TEXT("08_set0"), 2.5f }, { ESmvScreen::Settings, -1, 1, -1, TEXT("08_set1"), 2.5f }, { ESmvScreen::Settings, -1, 2, -1, TEXT("08_set2"), 2.5f },
-		{ ESmvScreen::Settings, -1, 3, -1, TEXT("08_set3"), 2.5f }, { ESmvScreen::Settings, -1, 4, -1, TEXT("08_set4"), 2.5f }, { ESmvScreen::Settings, -1, 5, -1, TEXT("08_set5"), 2.5f },
-		{ ESmvScreen::Settings, -1, 6, -1, TEXT("08_set6"), 2.5f }, { ESmvScreen::Logbook, -1, -1, 0, TEXT("09_logbook"), 2.5f }, { ESmvScreen::Logbook, -1, -1, 1, TEXT("09_achievements"), 2.5f },
-		{ ESmvScreen::Replay, -1, -1, -1, TEXT("10_replay"), 2.5f }, { ESmvScreen::Leaderboard, -1, -1, -1, TEXT("11_top10"), 2.5f }, { ESmvScreen::Account, -1, -1, -1, TEXT("12_account"), 2.5f },
-		{ ESmvScreen::Support, -1, -1, -1, TEXT("13_support"), 2.5f }, { ESmvScreen::FpvGallery, -1, -1, -1, TEXT("14_fpv"), 2.5f }, { ESmvScreen::Lobby, -1, -1, -1, TEXT("15_lobby"), 2.5f },
+		{ ESmvScreen::Menu, -1, -1, -1, TEXT("01_menu"), 5.f }, { ESmvScreen::Menu, -1, -1, -1, TEXT("01_pilotmenu"), 2.f },
+		{ ESmvScreen::Hangar, -1, -1, -1, TEXT("02_hangar"), 7.f },
+		{ ESmvScreen::HangarWizard, 0, -1, -1, TEXT("03_hw0_type"), 4.f }, { ESmvScreen::HangarWizard, 1, -1, -1, TEXT("03_hw1_model"), 4.f },
+		{ ESmvScreen::HangarWizard, 2, -1, -1, TEXT("03_hw2_params"), 3.f }, { ESmvScreen::HangarWizard, 3, -1, -1, TEXT("03_hw3_camera"), 3.f },
+		{ ESmvScreen::HangarWizard, 4, -1, -1, TEXT("03_hw4_addons"), 3.f }, { ESmvScreen::HangarWizard, 5, -1, -1, TEXT("03_hw5_look"), 3.f },
+		{ ESmvScreen::Tracks, -1, -1, -1, TEXT("04_parkur"), 7.f },
+		{ ESmvScreen::ParkurList, -1, 0, -1, TEXT("05_enc_list"), 3.f }, { ESmvScreen::ParkurList, -1, 0, 1, TEXT("05_enc_tour"), 14.f },
+		{ ESmvScreen::ParkurList, -1, 1, -1, TEXT("05_custom_list"), 4.f },
+		{ ESmvScreen::ParkurWizard, 0, -1, -1, TEXT("06_pw0_biome"), 3.f }, { ESmvScreen::ParkurWizard, 1, -1, -1, TEXT("06_pw1_world"), 6.f },
+		{ ESmvScreen::ParkurWizard, 2, -1, -1, TEXT("06_pw2_weather"), 2.5f }, { ESmvScreen::ParkurWizard, 3, -1, -1, TEXT("06_pw3_name"), 2.5f },
+		{ ESmvScreen::ParkurList, -1, 2, -1, TEXT("05_real_list"), 3.f },
+		{ ESmvScreen::RealWizard, 0, -1, -1, TEXT("07_rw0_map"), 6.f }, { ESmvScreen::RealWizard, 1, -1, -1, TEXT("07_rw1_weather"), 4.f }, { ESmvScreen::RealWizard, 2, -1, -1, TEXT("07_rw2_name"), 3.f },
+		{ ESmvScreen::Crew, -1, -1, -1, TEXT("08_crew"), 7.f },
+		{ ESmvScreen::CrewWizard, 0, -1, -1, TEXT("09_cw0_gender"), 4.f }, { ESmvScreen::CrewWizard, 1, -1, -1, TEXT("09_cw1_body"), 3.f },
+		{ ESmvScreen::CrewWizard, 2, -1, -1, TEXT("09_cw2_face"), 4.f }, { ESmvScreen::CrewWizard, 3, -1, -1, TEXT("09_cw3_acc"), 3.f }, { ESmvScreen::CrewWizard, 4, -1, -1, TEXT("09_cw4_name"), 3.f },
+		{ ESmvScreen::Customize, -1, -1, -1, TEXT("10_customize"), 5.f },
+		{ ESmvScreen::FlyFlow, 0, -1, -1, TEXT("11_fly0_drone"), 6.f }, { ESmvScreen::FlyFlow, 2, -1, -1, TEXT("11_fly2_track"), 3.f },
+		{ ESmvScreen::FlyFlow, 3, -1, -1, TEXT("11_fly3_mode"), 3.f }, { ESmvScreen::FlyFlow, 4, -1, -1, TEXT("11_fly4_players"), 3.f }, { ESmvScreen::FlyFlow, 5, -1, -1, TEXT("11_fly5_go"), 4.f },
+		{ ESmvScreen::Friends, -1, -1, -1, TEXT("12_friends"), 3.f },
+		{ ESmvScreen::Logbook, -1, -1, 0, TEXT("13_flights"), 2.5f }, { ESmvScreen::Logbook, -1, -1, 1, TEXT("13_achievements"), 2.5f },
+		{ ESmvScreen::Settings, -1, 0, -1, TEXT("14_set0"), 2.5f }, { ESmvScreen::Settings, -1, 1, -1, TEXT("14_set1"), 2.5f }, { ESmvScreen::Settings, -1, 2, -1, TEXT("14_set2"), 2.5f },
+		{ ESmvScreen::Settings, -1, 3, -1, TEXT("14_set3"), 2.5f }, { ESmvScreen::Settings, -1, 4, -1, TEXT("14_set4"), 2.5f }, { ESmvScreen::Settings, -1, 5, -1, TEXT("14_set5"), 2.5f },
+		{ ESmvScreen::Settings, -1, 6, -1, TEXT("14_set6"), 2.5f },
+		{ ESmvScreen::Replay, -1, -1, -1, TEXT("15_replay"), 2.5f }, { ESmvScreen::Leaderboard, -1, -1, -1, TEXT("16_top10"), 2.5f }, { ESmvScreen::Account, -1, -1, -1, TEXT("17_account"), 2.5f },
+		{ ESmvScreen::Support, -1, -1, -1, TEXT("18_support"), 2.5f }, { ESmvScreen::FpvGallery, -1, -1, -1, TEXT("19_fpv"), 2.5f }, { ESmvScreen::Lobby, -1, -1, -1, TEXT("19_lobby"), 2.5f },
+		{ ESmvScreen::Missions, -1, -1, -1, TEXT("19_missions"), 2.5f }, { ESmvScreen::Wizard, 0, -1, -1, TEXT("19_wizard"), 3.f },
 	};
 	const int32 NS = UE_ARRAY_COUNT(Steps);
 	const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke"))));
@@ -4571,13 +4615,74 @@ void SSmvShell::TickSmoke()
 		const FStep& S = Steps[I];
 		if (SmokeStep % 2 == 0)
 		{
-			if (S.Wiz >= 0) WizStep = S.Wiz;
-			if (S.Tab >= 0) SetTab = S.Tab;
+			if (bOverlay) CloseOverlay();
+			if (S.Screen == ESmvScreen::Wizard && S.Wiz >= 0) WizStep = S.Wiz;
+			if (S.Screen == ESmvScreen::Settings && S.Tab >= 0) SetTab = S.Tab;
 			if (S.Log >= 0) LogTab = S.Log;
-			if (S.Screen == ESmvScreen::Crew) bFaceZoom = FCString::Strstr(S.Name, TEXT("face")) != nullptr;
+			if (S.Screen == ESmvScreen::Customize) bFaceZoom = false;
+			switch (S.Screen)
+			{
+			case ESmvScreen::HangarWizard:
+				if (S.Wiz == 0)
+				{
+					FSmvDrone Nd;
+					Nd.Name = FSmvI18n::T(TEXT("hangar.new_name")).ToString();
+					Nd.Type = TEXT("multirotor");
+					Nd.ModelKey = USmvDataService::DefaultModelFor(Nd.Type);
+					if (const FSmvCatalogModel* Cm = USmvDataService::FindModel(Nd.ModelKey)) Nd.Params = Cm->Defaults;
+					EditDrone = Nd; bHwEdit = false; HwKind = TEXT("multi"); HwMaxSpeed = -1;
+				}
+				if (S.Wiz == 3) EditDrone.Equipment.Camera = TEXT("night");
+				if (S.Wiz == 4) EditDrone.Equipment.bSprayer = true;
+				HwStep = S.Wiz;
+				break;
+			case ESmvScreen::ParkurList:
+				Flow->ParkurCat = S.Tab == 1 ? TEXT("custom") : S.Tab == 2 ? TEXT("real") : TEXT("encounter");
+				TourKey.Empty();
+				if (S.Log == 1)
+					for (const FSmvFabMap& M : FSmvFabContent::Maps()) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty()) { TourKey = M.Key; break; }
+				break;
+			case ESmvScreen::ParkurWizard:
+				if (S.Wiz == 0)
+				{
+					NewTrack = FSmvTrack();
+					NewTrack.Name = TEXT("Kartal Vadisi");
+					NewTrack.WorldMode = TEXT("procedural"); NewTrack.ParkurKind = TEXT("custom"); NewTrack.GroundMsl = 850;
+					NewTrack.TimeOfDay = TEXT("golden");
+					FSmvTrackWorld& Wo = NewTrack.World;
+					Wo.Biome = TEXT("mountain"); Wo.Seed = 4242; Wo.SizeM = 3000; Wo.MountainCount = 7; Wo.MountainHeight = 650; Wo.TreeDensity = 0.45; Wo.Water = 0.12; Wo.BuildingCount = 6;
+				}
+				PwStep = S.Wiz;
+				break;
+			case ESmvScreen::RealWizard:
+				if (S.Wiz == 0)
+				{
+					NewTrack = FSmvTrack();
+					NewTrack.Name = TEXT("İstanbul — Tarihi Yarımada");
+					NewTrack.ParkurKind = TEXT("real"); NewTrack.WorldMode = TEXT("real");
+					NewTrack.Lat = 41.0082; NewTrack.Lon = 28.9784; NewTrack.RadiusM = 1000;
+				}
+				RwStep = S.Wiz;
+				break;
+			case ESmvScreen::CrewWizard:
+				if (S.Wiz == 0) { NewPilot = FSmvPilot(); CwFirst = TEXT("Deniz"); CwLast = TEXT("Yılmaz"); }
+				CwStep = S.Wiz;
+				break;
+			case ESmvScreen::FlyFlow:
+				Flow->FlyStep = S.Wiz;
+				if (S.Wiz >= 2)
+				{
+					if (Flow->Draft.Drone.Id.IsEmpty()) Flow->NewDraft();
+					Flow->ParkurCat = TEXT("encounter");
+					for (const FSmvFabMap& M : FSmvFabContent::Maps()) if (M.Kind == ESmvMapKind::Level) { Flow->Draft.Track = FSmvFabContent::MakeTrack(M); break; }
+				}
+				if (S.Wiz >= 4) { Flow->Draft.GameMode = TEXT("rings"); Flow->AiCount = 3; }
+				break;
+			default: break;
+			}
 			if (Flow->GetScreen() != S.Screen) Flow->SetScreen(S.Screen);
 			else Refresh();
-			if (S.Wiz >= 0 || S.Tab >= 0) Refresh();
+			if (FCString::Strcmp(S.Name, TEXT("01_pilotmenu")) == 0) OpenPilotMenu();
 			SmokeAt = Now + S.Wait;
 		}
 		else { Shot(S.Name); SmokeAt = Now + 1.0; }
@@ -4610,7 +4715,13 @@ void SSmvShell::TickSmoke()
 	{
 	case 0:
 	{
+		if (bOverlay) CloseOverlay();
 		if (Flow->GetScreen() != ESmvScreen::Menu && Flow->GetScreen() != ESmvScreen::Wizard) { Flow->SetScreen(ESmvScreen::Menu); SmokeAt = Now + 3.0; return; }
+		// tur sırasında uçuş akışı taslağa oyun türü / yarış yazdı: duman uçuşları serbest uçuştur
+		Flow->Draft.GameMode = TEXT("free");
+		Flow->Race = FSmvLocalRace();
+		Flow->Race.Kind = TEXT("none");
+		Flow->bMulti = false;
 		if (FCString::Strcmp(Fx.Map, TEXT("proc")) == 0)
 		{
 			Flow->Draft.Track = FSmvTrack();
@@ -4673,7 +4784,10 @@ void SSmvShell::TickSmoke()
 	case 11:
 		UE_LOG(LogTemp, Display, TEXT("SMOKE end %s alt=%.1f"), Fx.Code, Alt);
 		Flow->EndFlight(TEXT("user")); SmokeAt = Now + 8.0; ++SmokeSub; return;
-	case 12: if (Fx.bFull) Shot(TEXT("24_summary")); SmokeAt = Now + 1.5; SmokeSub = 99; return;
+	// uçuş sonu: önce deneyim ekranı (XP, manevralar, seviye), sonra özet
+	case 12: if (Fx.bFull) Shot(TEXT("24_progress")); SmokeAt = Now + 1.0; SmokeSub = Fx.bFull ? 30 : 99; return;
+	case 30: Flow->SetScreen(ESmvScreen::Summary); SmokeAt = Now + 3.0; ++SmokeSub; return;
+	case 31: Shot(TEXT("24_summary")); SmokeAt = Now + 1.5; SmokeSub = 99; return;
 	// pilot omuz görünümü + FPV (jet HUD), ardından takip kamerasına dönüp bitir
 	case 13: if (GameMode.IsValid()) GameMode->SmokeCam(7); SmokeAt = Now + 3.0; ++SmokeSub; return;
 	case 14: Shot(Base + TEXT("_pilot")); SmokeAt = Now + 0.8; ++SmokeSub; return;

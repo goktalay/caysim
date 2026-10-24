@@ -9,6 +9,17 @@ import sys
 KOK = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, KOK)
 from metinler import M  # noqa: E402
+try:
+    from yol_metinleri import Y  # noqa: E402  (yol haritası ekranları; metinler.py önceliklidir)
+    try:
+        from arayuz_metinleri import U as _U  # noqa: E402
+    except ImportError:
+        _U = {}
+    for _k, _v in Y.items():
+        if _k not in _U:
+            M.setdefault(_k, _v)
+except ImportError:
+    pass
 
 DILLER = ['tr', 'en', 'de', 'fr', 'es', 'ru', 'ar']
 
