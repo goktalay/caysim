@@ -53,7 +53,9 @@ public class Simumav : ModuleRules
 			// Fab dron gövdesi /Game/Fab/Drone altında adı bilinmeden aranır (SmvFabContent)
 			"AssetRegistry",
 			// ana menü sahnesi: motor Niagara şablonundan kopyalanan ışık zerreleri (/Game/Simumav/FX/NS_SmvMotes; yoksa atlanır)
-			"Niagara"
+			"Niagara",
+			// MetaHuman pilot tüyleri (saç / kaş / sakal / kirpik groom bileşenleri; HairStrands eklentisi)
+			"HairStrandsCore"
 		});
 
 		// Steam başlatma OnlineSubsystemSteam eklentisiyle yapılır (DefaultEngine.ini); modül yalnız OSS arayüzlerini kullanır.

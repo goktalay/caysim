@@ -256,6 +256,13 @@ void ASmvMenuScene::BuildWorld()
 		Pp.bOverride_ColorGainShadows = true; Pp.ColorGainShadows = FVector4(0.92f, 0.98f, 1.08f, 1.f);
 		Pp.bOverride_ColorGainHighlights = true; Pp.ColorGainHighlights = FVector4(1.06f, 1.0f, 0.92f, 1.f);
 		Pp.bOverride_SceneFringeIntensity = true; Pp.SceneFringeIntensity = 0.6f;
+		// hafif hız çizgileri (Fab Speed Effects son işlem malzemesi; MenuSpeedLines ağırlığı, 0 kapalı)
+		const float SpeedW = SmvCfg(TEXT("MenuSpeedLines"), 0.3f);
+		if (SpeedW > 0.f && FPackageName::DoesPackageExist(TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines")))
+		{
+			if (UMaterialInterface* Sl = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines.M_SpeedEffects_SpeedLines"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+				Pp.WeightedBlendables.Array.Add(FWeightedBlendable(SpeedW, Sl));
+		}
 		Cc->PostProcessBlendWeight = 1.f;
 	}
 	// Niagara ışık zerreleri: derlemede motor şablonundan kopyalanan sistem (Scripts/Python/simumav_varliklar.py niagara_sablonu)
@@ -401,7 +408,10 @@ void ASmvMenuScene::SetPilotPreview(const FSmvAvatar& A, bool bFace)
 	}
 	if (!PilotPrev) return;
 	PilotKey = Key;
-	PilotPrev->Build(A, false);
+	// mürettebat önizlemesi: pilot RC kumandayı tutarken (MetaHuman ya da temel şekil; ayar CrewRcPose)
+	bool bRc = true;
+	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("CrewRcPose"), bRc, GGameIni);
+	PilotPrev->Build(A, bRc);
 	Capture->ShowOnlyActors.Reset();
 	Capture->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
 	PlaceStudio(0.f);
@@ -615,6 +625,7 @@ void ASmvMenuScene::TickSnaps()
 		SnapFig = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(GSmvPreviewAt), P);
 	}
 	if (!SnapFig) return;
+	SnapFig->bLowDetail = true;   // küçük resimler: temel şekil (MetaHuman yüz ağları büyük)
 	SnapFig->Build(Job.Value, false);
 	SnapFig->SetActorHiddenInGame(false);
 	SnapFig->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, 200.f, 0.f));
@@ -629,6 +640,7 @@ void ASmvMenuScene::PlayLanding() { LandAt = FPlatformTime::Seconds(); }
 void ASmvMenuScene::TickScenery()
 {
 	if (bSceneryDone || !bLive || !WorldSetup) return;
+	FSmvFabContent::DumpFabApis();
 	UWorld* W = GetWorld();
 	if (!W) return;
 	if (bFabMap && (!MenuLevel || !MenuLevel->IsLevelVisible() || !MenuLevel->GetLoadedLevel())) return;
@@ -649,10 +661,28 @@ void ASmvMenuScene::TickScenery()
 		}
 		GroundCache.Reset();
 	}
+	// alçak sis kümeleri (Fab Niagara Examples BP_FogBankCard): ufukta, uzak planda sinematik pus katmanı (MenuFogBanks)
+	bool bFog = true;
+	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("MenuFogBanks"), bFog, GGameIni);
+	if (bFog && FPackageName::DoesPackageExist(TEXT("/Game/NiagaraExamples/FX_Fog/BP_FogBankCard")))
+	{
+		if (UClass* FogC = LoadClass<AActor>(nullptr, TEXT("/Game/NiagaraExamples/FX_Fog/BP_FogBankCard.BP_FogBankCard_C"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			FSmvFabContent::DumpClassApi(FogC, TEXT("FogBankCard"));
+			const float Sc = SmvCfg(TEXT("MenuFogScale"), 6.f);
+			static const double Spots[][2] = { { 900.0, 700.0 }, { -1100.0, 600.0 }, { 400.0, -1300.0 }, { -700.0, -900.0 }, { 1500.0, -200.0 } };
+			int32 k = 0;
+			for (const auto& Sp2 : Spots)
+			{
+				const FVector At = EnuToWorld(Sp2[0], Sp2[1], 6.0);
+				if (AActor* Fg = W->SpawnActor<AActor>(FogC, FTransform(FRotator(0.0, 70.0 * k++, 0.0), At, FVector(Sc)), Sp)) SceneryActors.Add(Fg);
+			}
+		}
+	}
 	if (ASmvSkyTraffic* St = W->SpawnActor<ASmvSkyTraffic>(ASmvSkyTraffic::StaticClass(), FTransform::Identity, Sp))
 	{
 		const FVector C = WorldSetup->GeoToUnreal(Lon0, Lat0, WorldSetup->MslToWorldHeight(Lat0, Lon0, GroundMsl));
-		if (St->Build(C, 3, 160000.0, 22000.0, 52000.0, 7)) SceneryActors.Add(St);
+		if (St->Build(C, 4, 160000.0, 22000.0, 52000.0, 7)) SceneryActors.Add(St);
 		else St->Destroy();
 	}
 }

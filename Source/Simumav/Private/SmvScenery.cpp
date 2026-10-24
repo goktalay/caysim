@@ -33,6 +33,13 @@ namespace
 		TEXT("/Game/FlyingAI/Meshes"),
 		TEXT("/Game/FlyingAI/Materials"),
 		TEXT("/Game/InteriorCubemapSystem"),
+		TEXT("/Game/Planes_in_the_Sky/Meshes"),
+		TEXT("/Game/Planes_in_the_Sky/Materials"),
+		TEXT("/Game/Planes_in_the_Sky/Textures"),
+		TEXT("/Game/SpeedEffects/Assets/Materials"),
+		TEXT("/Game/NiagaraExamples/FX_Fog"),
+		TEXT("/Game/Aircraft_HUD"),
+		TEXT("/Game/SpeedEffects/Assets/Blueprints"),
 		// </MANZARA-KLASORLERI>
 	};
 
@@ -96,8 +103,11 @@ namespace
 		TEXT("/Game/Brushify/Meshes/Cliffs/Meshes/Cliff_Large_01/S_Cliff_Large_01"),
 		TEXT("/Game/Brushify/Meshes/Cliffs/Meshes/Cliff_Large_02/S_Cliff_Large_02"),
 	};
+	// gök trafiği: Planes in the Sky yolcu uçakları (yüksekte, iz bulutuyla) + Flying AI (alçakta)
 	const TCHAR* const GFlyers[] =
 	{
+		TEXT("/Game/Planes_in_the_Sky/Meshes/SM_Airliner"),
+		TEXT("/Game/Planes_in_the_Sky/Meshes/SM_Regional_Jet"),
 		TEXT("/Game/FlyingAI/Meshes/FlyingAI_SM"),
 	};
 
@@ -503,22 +513,29 @@ bool ASmvSkyTraffic::Build(const FVector& Center, int32 Count, double RadiusCm, 
 	C0 = Center;
 	SetActorLocation(Center);
 	FRandomStream R(Seed * 101 + 7);
-	UStaticMesh* M = Ms[0];
-	const FBoxSphereBounds B = M->GetBounds();
-	// gövde ekseni: yatayda uzun olan eksen (+X kabul; Y daha uzunsa 90° düzeltme)
-	MeshFix = B.BoxExtent.Y > B.BoxExtent.X * 1.2 ? FRotator(0.f, -90.f, 0.f) : FRotator::ZeroRotator;
-	const double Len = 2.0 * FMath::Max3(B.BoxExtent.X, B.BoxExtent.Y, 1.0);
-	const double S = FSmvScenery::GetFloat(TEXT("SkyTrafficLengthM"), 22.f) * 100.0 / Len;
+	int32 NJet = 0;
 	for (int32 i = 0; i < Count; ++i)
 	{
+		UStaticMesh* M = Ms[i % Ms.Num()];
+		const FString Mn = M->GetName();
+		const bool bJet = Mn.Contains(TEXT("Airliner")) || Mn.Contains(TEXT("Regional"));
+		const FBoxSphereBounds B = M->GetBounds();
+		// gövde ekseni: yatayda uzun olan eksen (+X kabul; Y daha uzunsa 90° düzeltme)
+		const FRotator Fix = B.BoxExtent.Y > B.BoxExtent.X * 1.2 ? FRotator(0.f, -90.f, 0.f) : FRotator::ZeroRotator;
+		const double Len = 2.0 * FMath::Max3(B.BoxExtent.X, B.BoxExtent.Y, 1.0);
+		// gerçek boyutlu ağ (10–80 m) olduğu gibi; değilse ayardaki uzunluğa
+		const double S = bJet && Len > 1000.0 && Len < 8000.0 ? 1.0 : FSmvScenery::GetFloat(TEXT("SkyTrafficLengthM"), 22.f) * 100.0 / Len;
 		FLeg L;
-		L.Rx = RadiusCm * R.FRandRange(0.65f, 1.35f);
-		L.Ry = RadiusCm * R.FRandRange(0.45f, 1.1f);
-		L.Alt = FMath::Lerp(AltMinCm, AltMaxCm, (double)R.FRand());
-		L.Speed = R.FRandRange(4500.f, 7500.f) * (R.FRand() < 0.5f ? -1.0 : 1.0);   // cm/sn (45–75 m/sn)
+		const double Rk = bJet ? 3.2 : 1.0;
+		L.Rx = RadiusCm * Rk * R.FRandRange(0.65f, 1.35f);
+		L.Ry = RadiusCm * Rk * R.FRandRange(0.45f, 1.1f);
+		// yolcu uçakları 2,5–5 km irtifada ve hızlı (iz bulutu görünür), Flying AI alçakta
+		L.Alt = bJet ? R.FRandRange(250000.f, 500000.f) : FMath::Lerp(AltMinCm, AltMaxCm, (double)R.FRand());
+		L.Speed = (bJet ? R.FRandRange(18000.f, 24000.f) : R.FRandRange(4500.f, 7500.f)) * (R.FRand() < 0.5f ? -1.0 : 1.0);
 		L.Phase = R.FRand() * UE_DOUBLE_TWO_PI;
 		L.Yaw0 = R.FRand() * 180.0;
 		Legs.Add(L);
+		Fixes.Add(Fix);
 		UStaticMeshComponent* Cm = NewObject<UStaticMeshComponent>(this);
 		Cm->SetupAttachment(Root);
 		Cm->SetStaticMesh(M);
@@ -527,8 +544,23 @@ bool ASmvSkyTraffic::Build(const FVector& Center, int32 Count, double RadiusCm, 
 		Cm->SetWorldScale3D(FVector(S));
 		Cm->RegisterComponent();
 		Craft.Add(Cm);
+		// iz bulutu (Planes in the Sky: aynı adlı SM_Contrail_*; uçağın yerel uzayında yazılmış)
+		if (bJet)
+		{
+			++NJet;
+			const FString Cp = Mn.Contains(TEXT("Airliner")) ? TEXT("/Game/Planes_in_the_Sky/Meshes/SM_Contrail_Airliner") : TEXT("/Game/Planes_in_the_Sky/Meshes/SM_Contrail_RegionalJet");
+			if (UStaticMesh* Cn = SmvLoadPkg<UStaticMesh>(Cp))
+			{
+				UStaticMeshComponent* Cc = NewObject<UStaticMeshComponent>(this);
+				Cc->SetupAttachment(Cm);
+				Cc->SetStaticMesh(Cn);
+				Cc->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				Cc->SetCastShadow(false);
+				Cc->RegisterComponent();
+			}
+		}
 	}
-	UE_LOG(LogSimumav, Log, TEXT("Gökte uzak trafik: %d araç (Flying AI ağı, yalnız görsel)"), Count);
+	UE_LOG(LogSimumav, Log, TEXT("Gökte uzak trafik: %d araç (%d yolcu uçağı, iz bulutlu; yalnız görsel)"), Count, NJet);
 	return true;
 }
 
@@ -547,6 +579,6 @@ void ASmvSkyTraffic::Tick(float Dt)
 		const FVector Dir = Ell.RotateVector(FVector(-L.Rx * FMath::Sin(A) * Sg, L.Ry * FMath::Cos(A) * Sg, 0.0)).GetSafeNormal();
 		FRotator Rot = Dir.Rotation();
 		Rot.Roll = -12.0 * Sg;
-		Craft[i]->SetWorldLocationAndRotation(P, (Rot.Quaternion() * MeshFix.Quaternion()).Rotator());
+		Craft[i]->SetWorldLocationAndRotation(P, (Rot.Quaternion() * (Fixes.IsValidIndex(i) ? Fixes[i] : FRotator::ZeroRotator).Quaternion()).Rotator());
 	}
 }

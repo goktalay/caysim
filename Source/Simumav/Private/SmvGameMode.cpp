@@ -305,7 +305,7 @@ void ASmvGameMode::BuildScene()
 		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		if (ASmvSkyTraffic* St = W->SpawnActor<ASmvSkyTraffic>(ASmvSkyTraffic::StaticClass(), FTransform::Identity, Sp))
 		{
-			if (St->Build(Geo(Req.Track.Lat, Req.Track.Lon, GroundMsl), 3, 170000.0, 24000.0, 60000.0, Req.Track.World.Seed)) FabDecor.Add(St);
+			if (St->Build(Geo(Req.Track.Lat, Req.Track.Lon, GroundMsl), 4, 170000.0, 24000.0, 60000.0, Req.Track.World.Seed)) FabDecor.Add(St);
 			else St->Destroy();
 		}
 	}

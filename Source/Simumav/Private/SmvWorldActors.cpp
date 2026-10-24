@@ -23,6 +23,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "SmvPhysics.h"
 #include "SmvScenery.h"
+#include "SmvUiKit.h"
 
 namespace
 {
@@ -802,11 +803,13 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 		M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.2f, 0.33f, 0.14f));
 		Ground->SetMaterial(0, M);
 	}
+	// BasicShapeMaterial'da Color parametresi yok (beyaz kalıyordu) → M_SmvPbr (SmvSolidMat); pist asfalt malzemesiyle (M_SmvStreet)
 	auto Tinted = [this](UMeshComponent* C, const FLinearColor& Color)
 	{
-		if (!BaseMaterial) return;
-		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(BaseMaterial, this);
-		M->SetVectorParameterValue(TEXT("Color"), Color);
+		UMaterialInterface* Src = SmvSolidMat(BaseMaterial);
+		if (!Src) return;
+		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(Src, this);
+		SmvSetSolidColor(M, Color);
 		C->SetMaterial(0, M);
 	};
 	Tinted(TreeTrunks, FLinearColor(0.25f, 0.15f, 0.07f));
@@ -814,6 +817,18 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	Tinted(Buildings, FLinearColor(0.6f, 0.58f, 0.55f));
 	Tinted(Runway, FLinearColor(0.08f, 0.08f, 0.09f));
 	Tinted(WaterPlane, FLinearColor(0.05f, 0.18f, 0.3f));
+	if (UMaterialInterface* St = FSmvScenery::StreetMaterial())
+	{
+		UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(St, this);
+		M->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.055f, 0.055f, 0.06f));
+		M->SetScalarParameterValue(TEXT("Rough"), 0.8f);
+		Runway->SetMaterial(0, M);
+	}
+	if (UMaterialInstanceDynamic* Wm = Cast<UMaterialInstanceDynamic>(WaterPlane->GetMaterial(0)))
+	{
+		Wm->SetScalarParameterValue(TEXT("Roughness"), 0.06f);
+		Wm->SetScalarParameterValue(TEXT("Metallic"), 0.1f);
+	}
 
 	// ağaçlar ve binalar (ev çevresinin dışında)
 	TreeTrunks->ClearInstances(); TreeCrowns->ClearInstances(); Buildings->ClearInstances();
@@ -871,14 +886,30 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 		TreeTrunks->AddInstance(FTransform(FRotator::ZeroRotator, P + FVector(0, 0, Tall * 20.f), FVector(0.3f, 0.3f, Tall * 0.4f)));
 		TreeCrowns->AddInstance(FTransform(FRotator::ZeroRotator, P + FVector(0, 0, Tall * 75.f), FVector(Tall * 0.35f, Tall * 0.35f, Tall * 0.7f)));
 	}
+	// binalar: Fab European Buildings ağları (varsa; köy/kasaba kümesi), yoksa temel küpler
+	const TArray<UStaticMesh*>& CityM = FSmvFabContent::CityMeshes();
+	TMap<UStaticMesh*, TArray<FTransform>> BldXf;
 	for (int32 i = 0; i < FMath::Clamp(W.BuildingCount, 0, 400); ++i)
 	{
 		const double A = Rng.Uniform(0.0, 2.0 * UE_DOUBLE_PI), R = Rng.Uniform(FlatR * 1.3, Half * 0.6);
 		const double E = R * FMath::Sin(A), N = R * FMath::Cos(A);
 		const FVector P = ToUe(E, N, HeightAt(E, N)) - Origin;
 		const FVector S((float)Rng.Uniform(0.08, 0.3), (float)Rng.Uniform(0.08, 0.3), (float)Rng.Uniform(0.06, 0.4));
-		Buildings->AddInstance(FTransform(FRotator(0, (float)Rng.Uniform(0, 90), 0), P + FVector(0, 0, S.Z * 5000.f), S * 100.f));
+		const float Yaw = (float)Rng.Uniform(0, 90);
+		if (Scenery && CityM.Num() > 0)
+		{
+			UStaticMesh* M = CityM[i % CityM.Num()];
+			const FBoxSphereBounds B = M->GetBounds();
+			const double Foot = 2.0 * FMath::Max(B.BoxExtent.X, B.BoxExtent.Y);
+			const double Sc = (Foot < 300.0 || Foot > 20000.0) ? 2000.0 / FMath::Max(Foot, 1.0) : 1.0;
+			const FRotator Rot(0.0, Yaw, 0.0);
+			FVector Loc = ToUe(E, N, HeightAt(E, N)) - Rot.RotateVector(FVector(B.Origin.X, B.Origin.Y, 0.0) * Sc);
+			Loc.Z += -(B.Origin.Z - B.BoxExtent.Z) * Sc - 30.0;
+			BldXf.FindOrAdd(M).Add(FTransform(Rot, Loc, FVector(Sc)));
+		}
+		else Buildings->AddInstance(FTransform(FRotator(0, Yaw, 0), P + FVector(0, 0, S.Z * 5000.f), S * 100.f));
 	}
+	for (TPair<UStaticMesh*, TArray<FTransform>>& It : BldXf) Scenery->AddMeshInstances(It.Key, It.Value, true, 4000.0);
 	// pist (ev noktasından pist yönünde, 600 × 30 m)
 	Runway->SetVisibility(W.bRunway);
 	if (W.bRunway)

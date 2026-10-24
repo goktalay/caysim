@@ -1,4 +1,7 @@
 #include "SmvPilotPawn.h"
+#include "Misc/PackageName.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "SimumavModule.h"
 #include "DroneActor.h"
 #include "SmvWorldActors.h"
@@ -380,7 +383,41 @@ void ASmvPilotPawn::Tick(float Dt)
 	// imleç görünür (alt bant düğmeleri): bakış yalnız fare tuşu basılıyken (sürükle) — imleci gezdirmek kamerayı döndürmesin
 	if (!KeyDown(EKeys::LeftMouseButton) && !KeyDown(EKeys::RightMouseButton)) Look = FVector2D::ZeroVector;
 	UpdateCamera(Dt);
+	UpdateSpeedFx(Dt);
 	Look = FVector2D::ZeroVector;
+}
+
+// Hız çizgileri: Fab "Speed effects" son işlem malzemesi kamera karışımına hızla artan ağırlıkla eklenir (18 m/sn'den başlar;
+// [/Script/Simumav.SmvScenery] SpeedLines=False kapatır, SpeedLinesMax en çok ağırlık). Paket yoksa hiçbir şey yapmaz.
+void ASmvPilotPawn::UpdateSpeedFx(float Dt)
+{
+	ACaySimDroneActor* D = Target.Get();
+	if (!D || Dt <= 0.f || !Camera) return;
+	if (!bSpeedTried)
+	{
+		bSpeedTried = true;
+		bool bOn = true;
+		if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvScenery"), TEXT("SpeedLines"), bOn, GGameIni);
+		if (bOn && FPackageName::DoesPackageExist(TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines")))
+		{
+			if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines.M_SpeedEffects_SpeedLines"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+				SpeedMid = UMaterialInstanceDynamic::Create(M, this);
+		}
+	}
+	if (!SpeedMid) return;
+	const FVector P = D->GetActorLocation();
+	const float V = bSpdInit ? (float)((P - SpdLast).Size() / Dt / 100.0) : 0.f;
+	SpdLast = P;
+	bSpdInit = true;
+	SpdSmooth = FMath::FInterpTo(SpdSmooth, FMath::Min(V, 120.f), Dt, 2.f);
+	float MaxW = 0.8f;
+	if (GConfig) GConfig->GetFloat(TEXT("/Script/Simumav.SmvScenery"), TEXT("SpeedLinesMax"), MaxW, GGameIni);
+	const float W = FMath::Clamp((SpdSmooth - 18.f) / 40.f, 0.f, 1.f) * MaxW;
+	TArray<FWeightedBlendable>& Arr = Camera->PostProcessSettings.WeightedBlendables.Array;
+	FWeightedBlendable* Found = nullptr;
+	for (FWeightedBlendable& B : Arr) if (B.Object == SpeedMid) Found = &B;
+	if (!Found && W > 0.001f) { Arr.Add(FWeightedBlendable(W, SpeedMid)); return; }
+	if (Found) Found->Weight = W;
 }
 
 // ---------------------------------------------------------------------------

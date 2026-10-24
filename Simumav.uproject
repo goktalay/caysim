@@ -26,7 +26,8 @@
 				"CaySim",
 				"OnlineSubsystem",
 				"AudioMixer",
-				"ProceduralMeshComponent"
+				"ProceduralMeshComponent",
+				"HairStrandsCore"
 			]
 		}
 	],
@@ -68,29 +69,48 @@
 		{
 			"Name": "RawInput",
 			"Enabled": true,
-			"PlatformAllowList": [ "Win64" ]
+			"PlatformAllowList": [
+				"Win64"
+			]
 		},
 		{
 			"Name": "PythonScriptPlugin",
 			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
+			"TargetAllowList": [
+				"Editor"
+			]
 		},
 		{
 			"Name": "EditorScriptingUtilities",
 			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
+			"TargetAllowList": [
+				"Editor"
+			]
 		},
 		{
 			"Name": "ModelingToolsEditorMode",
 			"Enabled": true,
-			"TargetAllowList": [ "Editor" ]
+			"TargetAllowList": [
+				"Editor"
+			]
 		},
 		{
 			"Name": "glTFRuntime",
 			"Enabled": false,
 			"Optional": true,
 			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/glTFRuntime"
+		},
+		{
+			"Name": "HairStrands",
+			"Enabled": true
+		},
+		{
+			"Name": "RigLogic",
+			"Enabled": true,
+			"Optional": true
 		}
 	],
-	"TargetPlatforms": [ "Windows" ]
+	"TargetPlatforms": [
+		"Windows"
+	]
 }

@@ -119,6 +119,6 @@ private:
 	struct FLeg { double Rx, Ry, Alt, Speed, Phase, Yaw0; };
 	TArray<FLeg> Legs;
 	FVector C0 = FVector::ZeroVector;
-	FRotator MeshFix = FRotator::ZeroRotator;
+	TArray<FRotator> Fixes;
 	double T = 0.0;
 };

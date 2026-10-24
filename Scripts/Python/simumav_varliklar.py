@@ -434,6 +434,95 @@ def sokak_malzemesi():
     log(f"M_SmvStreet hazır ({'Hyper gürültü dokusu' if gt else 'motor gürültüsü'})")
 
 
+MCC = "/Game/MetaCharacterCreator/Data/MetaHumans"
+# gerçekçi MetaHuman yüzleri (ad, kadın mı, yaklaşık ten kademesi 1 açık … 8 koyu). Anime / kara elf / goblin yüzleri alınmaz.
+MCC_YUZLER = (
+    ("Jelena", True, 1), ("Tuya", True, 2), ("Ada", True, 3), ("Etta", True, 5), ("Asha", True, 6), ("Zuri", True, 8),
+    ("Mikel", False, 1), ("Bruce", False, 2), ("Lorenzo", False, 3), ("Jorge", False, 4), ("Isaiah", False, 7), ("Kelvin", False, 8),
+)
+MCC_GROOMLAR = (
+    ("Hair", ("Hair_S_Casual", "Hair_S_BuzzCut", "Hair_S_Messy", "Hair_S_SideSweptFringe", "Hair_S_CurlyFade", "Hair_M_BobCurly", "Hair_M_Mohawk",
+              "Hair_L_Straight", "Hair_S_LowPonytail", "Hair_S_UpdoBuns", "Hair_M_BobStraight", "Hair_S_PulledBack")),
+    ("Eyebrows", ("Eyebrows_M_Thin", "Eyebrows_M_Natural", "Eyebrows_M_Thick")),
+    ("Beards", ("Beard_S_Stubble", "Beard_S_Full", "Goatee_M_Pointed")),
+    ("Mustaches", ("Mustache_S_Full",)),
+    ("Eyelashes", ("Eyelashes_L_SlightCurl", "Eyelashes_S_Thin")),
+)
+
+
+def pilot_kiti():
+    """/Game/Simumav/Pilot/DA_SmvPilotKit — MCC'den seçilen gövde / yüz / groom / bağlama varlıklarına yumuşak başvurular
+    (yalnız bunlar pakete pişirilir). Oyun avatar alanlarını bu kite eşler (SmvMetaPilot)."""
+    hedef = "/Game/Simumav/Pilot/DA_SmvPilotKit"
+    if not eal.does_directory_exist(MCC):
+        log("MCC (Meta Character Creator) yok — pilot kiti üretilmedi (temel şekil pilot)")
+        return
+    sinif = getattr(unreal, "SmvPilotKit", None)
+    if sinif is None:
+        unreal.log_warning("[simumav_varliklar] SmvPilotKit sınıfı yok (modül yüklenmedi) — pilot kiti atlandı")
+        return
+    girdiler = []
+
+    def ekle(tur, ad, yol, ek="", kadin=False, ton=3):
+        tam = yol + "." + yol.rsplit("/", 1)[-1]
+        if not eal.does_asset_exist(yol):
+            return False
+        nesne = eal.load_asset(yol)
+        if not nesne:
+            return False
+        e = unreal.SmvPilotKitEntry()
+        e.set_editor_property("kind", tur)
+        e.set_editor_property("name", ad)
+        e.set_editor_property("extra", ek)
+        e.set_editor_property("b_female", kadin)
+        e.set_editor_property("tone", ton)
+        e.set_editor_property("asset", nesne)
+        girdiler.append((tur, ad, ek, tam))
+        kit_girdileri.append(e)
+        return True
+
+    kit_girdileri = []
+    ekle("body_m", "Male", MCC + "/Common/Body/SKM_Human_Male")
+    ekle("body_f", "Female", MCC + "/Common/Body/SKM_Human_Female", kadin=True)
+    yuzler = []
+    for ad, kadin, ton in MCC_YUZLER:
+        yol = MCC + "/Common/Face/" + ("SKM_FH_" if kadin else "SKM_MH_") + ad
+        if ekle("face", ad, yol, kadin=kadin, ton=ton):
+            yuzler.append(ad)
+        else:
+            log(f"MCC yüzü yok: {yol}")
+    eksik_b = 0
+    for kat, adlar in MCC_GROOMLAR:
+        for g in adlar:
+            if not ekle("groom", g, f"{MCC}/Grooms/GroomAssets/{kat}/{g}/{g}"):
+                log(f"MCC groom yok: {kat}/{g}")
+                continue
+            kisa = g[5:] if g.startswith("Hair_") else g
+            for y in yuzler:
+                if not ekle("binding", g, f"{MCC}/Grooms/Bindings/{y}/GB_{kisa}_{y}", ek=y):
+                    eksik_b += 1
+    imza = hashlib.sha1(json.dumps(girdiler).encode()).hexdigest()
+    if eal.does_asset_exist(hedef):
+        mevcut = eal.load_asset(hedef)
+        if mevcut and eal.get_metadata_tag(mevcut, "smv_kit") == imza and not YENIDEN:
+            log(f"var: {hedef} ({len(girdiler)} girdi)")
+            return
+        eal.delete_asset(hedef)
+    fab = unreal.DataAssetFactory()
+    fab.set_editor_property("data_asset_class", sinif)
+    kit = at.create_asset("DA_SmvPilotKit", "/Game/Simumav/Pilot", sinif, fab)
+    if not kit:
+        unreal.log_warning("[simumav_varliklar] pilot kiti oluşturulamadı")
+        return
+    kit.set_editor_property("entries", kit_girdileri)
+    eal.set_metadata_tag(kit, "smv_kit", imza)
+    eal.save_loaded_asset(kit)
+    say = {}
+    for t, _, _, _ in girdiler:
+        say[t] = say.get(t, 0) + 1
+    log(f"pilot kiti üretildi: {hedef} — " + ", ".join(f"{v} {k}" for k, v in sorted(say.items())) + f"; eksik bağlama {eksik_b}; yüzler: {', '.join(yuzler)}")
+
+
 def glb_dugum_adlari(yol):
     """GLB JSON parçasından hareketli düğüm adları (pervane / yüzey / teker / ışık) — günlük doğrulaması."""
     try:
@@ -680,7 +769,7 @@ def main():
     arazi_malzemesi()
     parlak_malzeme()
     for adim in (lambda: pbr_malzemesi("M_SmvPbr", False), lambda: pbr_malzemesi("M_SmvPbr2S", True), pervane_diski, hava_arazi_malzemesi, niagara_sablonu,
-                 hyper_arazi_malzemesi, sokak_malzemesi):
+                 hyper_arazi_malzemesi, sokak_malzemesi, pilot_kiti):
         try:
             adim()
         except Exception as e:  # noqa: BLE001 — eksik malzeme oyunu durdurmaz (yedek malzemeler)

@@ -28,6 +28,10 @@ public:
 	void SetPose(const FVector2D& StickL, const FVector2D& StickR, const FVector& LookAt, bool bHasLook);
 	/** Göz yüksekliği (cm, aktör tabanından) — kamera çerçeveleme */
 	float HeadHeightCm() const { return HeadZ; }
+	/** Düşük ayrıntı (küçük resimler): MetaHuman yerine temel şekil figürü */
+	bool bLowDetail = false;
+	/** Figür MetaHuman (MCC) ile mi kuruldu */
+	bool IsMetaHuman() const { return bMh; }
 
 protected:
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
@@ -42,6 +46,10 @@ protected:
 	UPROPERTY() TObjectPtr<UStaticMesh> SphMesh;
 	UPROPERTY() TObjectPtr<UStaticMesh> ConeMesh;
 	UPROPERTY() TObjectPtr<UMaterialInterface> BaseMat;
+	/** MetaHuman (MCC): gövde (poz verilebilir; kollar RC tutar, baş drona bakar), lider pozlu yüz, tüyler (groom) */
+	UPROPERTY() TObjectPtr<class UPoseableMeshComponent> MhBody;
+	UPROPERTY() TObjectPtr<class USkeletalMeshComponent> MhFace;
+	UPROPERTY() TArray<TObjectPtr<class USceneComponent>> MhGrooms;
 
 private:
 	float HeadZ = 165.f;
@@ -55,4 +63,15 @@ private:
 	/** Parça malzemesi: pürüzlülük / metaliklik / ışıma (kask, vizör, kayış, toka). Rot verilirse parça döndürülür. */
 	static UStaticMeshComponent* Mat(UStaticMeshComponent* C, float Rough, float Metal, const FLinearColor& Emissive = FLinearColor::Black, const FRotator& Rot = FRotator::ZeroRotator);
 	void Clear();
+	/** Kask / vizör / şapka / kulaklık / gözlük / mikrofon (ve bPrimHair ise temel şekil saç) — Head düğümüne */
+	void HeadGear(const FSmvAvatar& A, const FVector& Hs, float Fx, bool bPrimHair);
+	bool BuildMetaHuman(const FSmvAvatar& A, bool bWithRc);
+	/** MetaHuman kol pozu (bileşen uzayında kemik yönlendirme): RC tutma ya da serbest duruş */
+	void PoseMhArms(bool bWithRc);
+	bool bMh = false;
+	FQuat MhHeadRef = FQuat::Identity;
+	FQuat MhNeckRef = FQuat::Identity;
+	FVector MhHeadLoc = FVector::ZeroVector;
+	FVector MhHeadOff = FVector(2.f, 0.f, 9.f);
+	FRotator HeadRel = FRotator::ZeroRotator;
 };

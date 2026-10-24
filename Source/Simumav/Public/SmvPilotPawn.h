@@ -110,6 +110,13 @@ protected:
 
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UCameraComponent> Camera;
+	/** Hız çizgileri (Fab Speed Effects son işlem malzemesi; hıza göre ağırlık) */
+	UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> SpeedMid;
+	bool bSpeedTried = false;
+	bool bSpdInit = false;
+	FVector SpdLast = FVector::ZeroVector;
+	float SpdSmooth = 0.f;
+	void UpdateSpeedFx(float Dt);
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> PipCapture;
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> PipTarget;
 	/** Termal palet renk tabloları (256×16 LUT; 0 beyaz-sıcak, 1 siyah-sıcak, 2 ironbow) */

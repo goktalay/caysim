@@ -4523,7 +4523,7 @@ void SSmvShell::TickSmoke()
 	struct FStep { ESmvScreen Screen; int32 Wiz, Tab, Log; const TCHAR* Name; float Wait; };
 	static const FStep Steps[] = {
 		{ ESmvScreen::Menu, -1, -1, -1, TEXT("01_menu"), 3.5f }, { ESmvScreen::FlyMode, -1, -1, -1, TEXT("02_flymode"), 2.5f }, { ESmvScreen::Hangar, -1, -1, -1, TEXT("03_hangar"), 7.f },
-		{ ESmvScreen::Crew, -1, -1, -1, TEXT("04_crew"), 4.f }, { ESmvScreen::Tracks, -1, -1, -1, TEXT("05_tracks"), 3.f }, { ESmvScreen::Missions, -1, -1, -1, TEXT("06_missions"), 2.5f },
+		{ ESmvScreen::Crew, -1, -1, -1, TEXT("04_crew"), 6.f }, { ESmvScreen::Crew, -1, -1, -1, TEXT("04_crew_face"), 3.f }, { ESmvScreen::Tracks, -1, -1, -1, TEXT("05_tracks"), 3.f }, { ESmvScreen::Missions, -1, -1, -1, TEXT("06_missions"), 2.5f },
 		{ ESmvScreen::Wizard, 0, -1, -1, TEXT("07_wiz0"), 3.f }, { ESmvScreen::Wizard, 1, -1, -1, TEXT("07_wiz1"), 2.5f }, { ESmvScreen::Wizard, 2, -1, -1, TEXT("07_wiz2"), 2.5f },
 		{ ESmvScreen::Wizard, 3, -1, -1, TEXT("07_wiz3"), 2.5f }, { ESmvScreen::Wizard, 4, -1, -1, TEXT("07_wiz4"), 2.5f }, { ESmvScreen::Wizard, 5, -1, -1, TEXT("07_wiz5"), 2.5f },
 		{ ESmvScreen::Wizard, 6, -1, -1, TEXT("07_wiz6"), 2.5f }, { ESmvScreen::Wizard, 7, -1, -1, TEXT("07_wiz7"), 2.5f },
@@ -4546,6 +4546,7 @@ void SSmvShell::TickSmoke()
 			if (S.Wiz >= 0) WizStep = S.Wiz;
 			if (S.Tab >= 0) SetTab = S.Tab;
 			if (S.Log >= 0) LogTab = S.Log;
+			if (S.Screen == ESmvScreen::Crew) bFaceZoom = FCString::Strstr(S.Name, TEXT("face")) != nullptr;
 			if (Flow->GetScreen() != S.Screen) Flow->SetScreen(S.Screen);
 			else Refresh();
 			if (S.Wiz >= 0 || S.Tab >= 0) Refresh();

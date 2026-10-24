@@ -75,4 +75,8 @@ struct SIMUMAV_API FSmvFabContent
 	/** Fab Blueprint sınıflarının API'sini (işlevler + parametreleri, değişkenler + türleri) günlüğe yazar — editörsüz entegrasyon için
 	 *  (duman testi günlüğünde "FABAPI <etiket>" satırları). MaxLines ile sınırlı; aynı sınıf bir kez yazılır. */
 	static void DumpClassApi(const UClass* Class, const FString& Tag, int32 MaxLines = 400);
+	/** Malzemenin skaler / vektör / doku parametre adlarını günlüğe yazar ("FABAPI <etiket> mat ...") */
+	static void DumpMaterialParams(class UMaterialInterface* M, const FString& Tag);
+	/** Duman testinde (-SmvSmoke) Fab arayüz/efekt varlıklarının API dökümü (Aircraft HUD, Speed Effects …) — bir kez */
+	static void DumpFabApis();
 };

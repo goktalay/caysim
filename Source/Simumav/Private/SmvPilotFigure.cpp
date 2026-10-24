@@ -5,6 +5,15 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
+#include "SmvMetaPilot.h"
+#include "Misc/ConfigCacheIni.h"
+#include "SimumavModule.h"
+#include "Components/PoseableMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
+#include "GroomComponent.h"
+#include "GroomAsset.h"
+#include "GroomBindingAsset.h"
 
 namespace
 {
@@ -12,6 +21,19 @@ namespace
 	{
 		return H.Len() == 7 ? FLinearColor::FromSRGBColor(FColor::FromHex(H)) : Def;
 	}
+	FLinearColor PfSkin(const FString& S);
+}
+
+/** MetaHuman baş merkezi: head kemiğine göre ileri / yukarı kaydırma (cm; [/Script/Simumav.SmvPilot] HeadFwdCm / HeadUpCm) */
+struct FSmvPilotHeadCfg
+{
+	static float Get(const TCHAR* K, float D) { float V = D; if (GConfig) GConfig->GetFloat(TEXT("/Script/Simumav.SmvPilot"), K, V, GGameIni); return V; }
+	static float Fwd() { return Get(TEXT("HeadFwdCm"), 2.f); }
+	static float Up() { return Get(TEXT("HeadUpCm"), 9.f); }
+};
+
+namespace
+{
 	FLinearColor PfSkin(const FString& S)
 	{
 		static const TCHAR* Sk[] = { TEXT("#ffdbac"), TEXT("#f7e0c3"), TEXT("#f1c9a5"), TEXT("#e8b58a"), TEXT("#e0ac69"), TEXT("#c68642"), TEXT("#8d5524"), TEXT("#6b4226") };
@@ -76,11 +98,21 @@ void ASmvPilotFigure::Clear()
 	for (TObjectPtr<UStaticMeshComponent>& P : Parts) if (P) P->DestroyComponent();
 	Parts.Reset();
 	ThumbL = ThumbR = nullptr;
+	for (TObjectPtr<USceneComponent>& G : MhGrooms) if (G) G->DestroyComponent();
+	MhGrooms.Reset();
+	if (MhFace) { MhFace->DestroyComponent(); MhFace = nullptr; }
+	if (MhBody) { MhBody->DestroyComponent(); MhBody = nullptr; }
+	bMh = false;
+	HeadRel = FRotator::ZeroRotator;
+	if (Head) Head->SetRelativeRotation(FRotator::ZeroRotator);
+	if (Torso) { Torso->SetRelativeScale3D(FVector::OneVector); Torso->SetRelativeRotation(FRotator::ZeroRotator); }
 }
 
 void ASmvPilotFigure::Build(const FSmvAvatar& A, bool bWithRc)
 {
 	Clear();
+	// MetaHuman (MCC) pilot: kit pakette varsa gerçek yüz + gövde + tüyler; yoksa / küçük resimde temel şekil figürü
+	if (!bLowDetail && BuildMetaHuman(A, bWithRc)) return;
 	const bool bF = A.Body == TEXT("f");
 	const float Wb = (A.Build == TEXT("slim") ? 34.f : A.Build == TEXT("broad") ? 46.f : 40.f) * (bF ? 0.88f : 1.f);
 	const FLinearColor Skin = PfSkin(A.Skin);
@@ -210,6 +242,16 @@ void ASmvPilotFigure::Build(const FSmvAvatar& A, bool bWithRc)
 	}
 	if (A.bFreckles) for (int32 k = 0; k < 6; ++k) Part(Head, 2, FVector(Fx - 0.2f, (k % 2 ? 1.f : -1.f) * (5.5f + (k / 2) * 1.1f), -1.f - (k / 2) * 0.8f), FVector(0.7f, 0.7f, 0.7f), Skin * 0.7f);
 	if (A.bMole) Part(Head, 2, FVector(Fx - 0.3f, 3.5f, -3.5f), FVector(0.9f, 0.9f, 0.9f), FLinearColor(0.2f, 0.12f, 0.08f));
+	HeadGear(A, Hs, Fx, true);
+}
+
+void ASmvPilotFigure::HeadGear(const FSmvAvatar& A, const FVector& Hs, float Fx, bool bPrimHair)
+{
+	const FLinearColor Helmet = PfHex(A.Helmet, FLinearColor(0.12f, 0.2f, 0.3f));
+	const FLinearColor Visor = PfHex(A.Visor, FLinearColor(0.9f, 0.75f, 0.2f));
+	const FLinearColor Hair = PfHex(A.HairColor, FLinearColor(0.2f, 0.14f, 0.1f));
+	const FLinearColor PatchC = PfHex(A.PatchColor, FLinearColor(0.95f, 0.75f, 0.25f));
+	const FLinearColor Strap(0.09f, 0.1f, 0.11f), Metal(0.55f, 0.57f, 0.6f);
 	if (A.Glasses != TEXT("none") && !A.Glasses.IsEmpty())
 	{
 		const FLinearColor Lens = A.Glasses == TEXT("sun") ? FLinearColor(0.03f, 0.03f, 0.04f) : FLinearColor(0.25f, 0.2f, 0.1f);
@@ -218,7 +260,7 @@ void ASmvPilotFigure::Build(const FSmvAvatar& A, bool bWithRc)
 	}
 	// saç (kasklıyken kask örter)
 	const bool bHelmet = A.Headgear == TEXT("helmet") || A.Headgear.IsEmpty();
-	if (!bHelmet && A.Hair != TEXT("bald"))
+	if (bPrimHair && !bHelmet && A.Hair != TEXT("bald"))
 	{
 		const FString& H = A.Hair;
 		if (H == TEXT("bob")) Part(Head, 2, FVector(-1.5f, 0, 2.f), FVector(Hs.X + 3, Hs.Y + 3, Hs.Z - 2), Hair);
@@ -264,6 +306,153 @@ void ASmvPilotFigure::Build(const FSmvAvatar& A, bool bWithRc)
 		Part(Head, 1, FVector(Fx - 2.f, Hs.Y * 0.5f - 1.f, -4.f), FVector(1, 1, 12), FLinearColor(0.12f, 0.12f, 0.14f), FRotator(0, 0, 60.f));
 }
 
+bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
+{
+	FSmvMetaPilotParts P;
+	if (!FSmvMetaPilot::Available() || !FSmvMetaPilot::Resolve(A, P) || !P.Body || !P.Face) return false;
+	MhBody = NewObject<UPoseableMeshComponent>(this);
+	MhBody->SetupAttachment(Root);
+	MhBody->SetSkinnedAssetAndUpdate(P.Body);
+	MhBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MhBody->RegisterComponent();
+	// bileşen uzayında ileri yön: ayak bileğinden parmak köküne (MetaHuman gövdesi +Y'ye bakar); aktörün +X'ine çevrilir
+	const FName FootL(TEXT("foot_l")), BallL(TEXT("ball_l"));
+	FVector F = FVector(0.0, 1.0, 0.0);
+	if (MhBody->GetBoneIndex(FootL) != INDEX_NONE && MhBody->GetBoneIndex(BallL) != INDEX_NONE)
+	{
+		FVector D = MhBody->GetBoneLocationByName(BallL, EBoneSpaces::ComponentSpace) - MhBody->GetBoneLocationByName(FootL, EBoneSpaces::ComponentSpace);
+		D.Z = 0.0;
+		if (D.Size() > 1.0) F = D.GetSafeNormal();
+	}
+	MhBody->SetRelativeRotation(FRotator(0.0, -FMath::RadiansToDegrees(FMath::Atan2(F.Y, F.X)), 0.0));
+	// tulum: gövde ağının tüm yuvaları kıyafet rengi (eller eldiven gibi koyu değil — tek parça uçuş tulumu)
+	const FLinearColor Suit = PfHex(A.Suit, FLinearColor(0.12f, 0.2f, 0.3f));
+	if (UMaterialInterface* Sm = SmvSolidMat(BaseMat))
+	{
+		for (int32 i = 0; i < MhBody->GetNumMaterials(); ++i)
+		{
+			UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(Sm, this);
+			SmvSetSolidColor(M, A.Outfit == TEXT("casual") ? FMath::Lerp(Suit, FLinearColor::White, 0.3f) : Suit);
+			M->SetScalarParameterValue(TEXT("Roughness"), 0.72f);
+			MhBody->SetMaterial(i, M);
+		}
+	}
+	// yüz: gövdeyi lider poz olarak izler (baş/boyun kemikleri ortak)
+	MhFace = NewObject<USkeletalMeshComponent>(this);
+	MhFace->SetupAttachment(MhBody);
+	MhFace->SetSkinnedAssetAndUpdate(P.Face);
+	MhFace->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MhFace->RegisterComponent();
+	MhFace->SetLeaderPoseComponent(MhBody);
+	// tüyler: saç / kaş / sakal / kirpik (yüze bağlı groom; saç rengi melanin/kızıllık parametreleriyle)
+	const FLinearColor Hc = PfHex(A.HairColor, FLinearColor(0.2f, 0.14f, 0.1f));
+	const float Lum = 0.3f * Hc.R + 0.59f * Hc.G + 0.11f * Hc.B;
+	for (const TPair<UObject*, UObject*>& G : P.Grooms)
+	{
+		UGroomAsset* Ga = Cast<UGroomAsset>(G.Key);
+		if (!Ga) continue;
+		UGroomComponent* Gc = NewObject<UGroomComponent>(this);
+		Gc->SetupAttachment(MhFace);
+		Gc->SetGroomAsset(Ga, Cast<UGroomBindingAsset>(G.Value));
+		Gc->RegisterComponent();
+		for (int32 i = 0; i < Gc->GetNumMaterials(); ++i)
+		{
+			if (UMaterialInterface* Gm = Gc->GetMaterial(i))
+			{
+				UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Gm, this);
+				D->SetScalarParameterValue(TEXT("hairMelanin"), FMath::Clamp(1.f - Lum * 1.8f, 0.f, 1.f));
+				D->SetScalarParameterValue(TEXT("hairRedness"), FMath::Clamp((Hc.R - Hc.G) * 2.5f, 0.f, 1.f));
+				Gc->SetMaterial(i, D);
+			}
+		}
+		MhGrooms.Add(Gc);
+	}
+	PoseMhArms(bWithRc);
+	// baş: kemik konumu (aktör uzayı) → kask/vizör düğümü; göz yüksekliği
+	const FName HeadB(TEXT("head")), NeckB(TEXT("neck_01"));
+	MhHeadRef = MhBody->GetBoneTransformByName(HeadB, EBoneSpaces::ComponentSpace).GetRotation();
+	MhNeckRef = MhBody->GetBoneIndex(NeckB) != INDEX_NONE ? MhBody->GetBoneTransformByName(NeckB, EBoneSpaces::ComponentSpace).GetRotation() : FQuat::Identity;
+	MhHeadLoc = MhBody->GetRelativeTransform().TransformPosition(MhBody->GetBoneLocationByName(HeadB, EBoneSpaces::ComponentSpace));
+	MhHeadOff = FVector(FSmvPilotHeadCfg::Fwd(), 0.f, FSmvPilotHeadCfg::Up());
+	HeadZ = (float)(MhHeadLoc.Z + MhHeadOff.Z + 1.f);
+	Head->SetRelativeLocation(MhHeadLoc + MhHeadOff);
+	const FVector Hs(21.f, 17.5f, 24.f);
+	HeadGear(A, Hs, Hs.X * 0.5f - 0.8f, false);
+	// RC kumanda: iki elin ortasında, biraz önde
+	if (bWithRc)
+	{
+		const FName HandL(TEXT("hand_l")), HandR(TEXT("hand_r"));
+		FVector Mid(28.0, 0.0, 108.0);
+		if (MhBody->GetBoneIndex(HandL) != INDEX_NONE && MhBody->GetBoneIndex(HandR) != INDEX_NONE)
+		{
+			const FTransform Rel = MhBody->GetRelativeTransform();
+			Mid = 0.5 * (Rel.TransformPosition(MhBody->GetBoneLocationByName(HandL, EBoneSpaces::ComponentSpace)) + Rel.TransformPosition(MhBody->GetBoneLocationByName(HandR, EBoneSpaces::ComponentSpace))) + FVector(5.0, 0.0, 3.0);
+		}
+		const FLinearColor Glove(0.07f, 0.07f, 0.08f);
+		Rc->SetRelativeLocation(Mid);
+		Rc->SetRelativeRotation(FRotator(35.f, 0, 0));
+		Part(Rc, 0, FVector::ZeroVector, FVector(10, 24, 14), FLinearColor(0.12f, 0.12f, 0.14f));
+		Part(Rc, 1, FVector(-2, 0, 9), FVector(1, 1, 12), FLinearColor(0.7f, 0.7f, 0.72f));
+		for (int32 s = -1; s <= 1; s += 2) Part(Rc, 1, FVector(0, s * 6.f, 7.5f), FVector(4, 4, 1), FLinearColor(0.3f, 0.3f, 0.32f));
+		ThumbL0 = FVector(0, -6.f, 9.f); ThumbR0 = FVector(0, 6.f, 9.f);
+		ThumbL = Part(Rc, 1, ThumbL0, FVector(3, 3, 4), Glove);
+		ThumbR = Part(Rc, 1, ThumbR0, FVector(3, 3, 4), Glove);
+	}
+	bMh = true;
+	UE_LOG(LogSimumav, Log, TEXT("MetaHuman pilot: yüz %s, %d tüy, %s"), *P.FaceName, MhGrooms.Num(), bWithRc ? TEXT("RC duruşu") : TEXT("serbest duruş"));
+	return true;
+}
+
+void ASmvPilotFigure::PoseMhArms(bool bWithRc)
+{
+	if (!MhBody) return;
+	auto Has = [this](const TCHAR* B) { return MhBody->GetBoneIndex(FName(B)) != INDEX_NONE; };
+	auto Loc = [this](const TCHAR* B) { return MhBody->GetBoneLocationByName(FName(B), EBoneSpaces::ComponentSpace); };
+	if (!Has(TEXT("upperarm_l")) || !Has(TEXT("upperarm_r")) || !Has(TEXT("lowerarm_l")) || !Has(TEXT("hand_l"))) return;
+	// bileşen uzayı eksenleri: ileri (ayaklar), yukarı +Z, sol (sol omuz yönü)
+	FVector F = Has(TEXT("ball_l")) && Has(TEXT("foot_l")) ? Loc(TEXT("ball_l")) - Loc(TEXT("foot_l")) : FVector(0, 1, 0);
+	F.Z = 0.0;
+	F = F.GetSafeNormal();
+	if (F.IsNearlyZero()) F = FVector(0, 1, 0);
+	const FVector U(0, 0, 1);
+	FVector Lf = Loc(TEXT("upperarm_l")) - Loc(TEXT("upperarm_r"));
+	Lf -= F * FVector::DotProduct(Lf, F);
+	Lf.Z = 0.0;
+	Lf = Lf.GetSafeNormal();
+	auto Aim = [this, &Has, &Loc](const TCHAR* Bone, const TCHAR* Child, const FVector& Dir)
+	{
+		if (!Has(Bone) || !Has(Child)) return;
+		const FTransform Tb = MhBody->GetBoneTransformByName(FName(Bone), EBoneSpaces::ComponentSpace);
+		const FVector Cur = (Loc(Child) - Tb.GetLocation()).GetSafeNormal();
+		const FQuat Q = FQuat::FindBetweenNormals(Cur, Dir.GetSafeNormal());
+		MhBody->SetBoneRotationByName(FName(Bone), (Q * Tb.GetRotation()).Rotator(), EBoneSpaces::ComponentSpace);
+	};
+	for (int32 k = 0; k < 2; ++k)
+	{
+		const bool bL = k == 0;
+		const FVector S = bL ? Lf : -Lf;   // o kolun dış yanı
+		const TCHAR* Up = bL ? TEXT("upperarm_l") : TEXT("upperarm_r");
+		const TCHAR* Lo = bL ? TEXT("lowerarm_l") : TEXT("lowerarm_r");
+		const TCHAR* Ha = bL ? TEXT("hand_l") : TEXT("hand_r");
+		const TCHAR* Fi = bL ? TEXT("middle_metacarpal_l") : TEXT("middle_metacarpal_r");
+		const TCHAR* Fi2 = bL ? TEXT("middle_01_l") : TEXT("middle_01_r");
+		if (bWithRc)
+		{
+			// RC tutma: dirsekler gövdeye yakın, önkollar öne-içe ve hafif yukarı, eller kumandanın iki yanında
+			Aim(Up, Lo, F * 0.32 + S * 0.10 - U * 0.94);
+			Aim(Lo, Ha, F * 0.82 - S * 0.42 + U * 0.28);
+			Aim(Ha, Has(Fi) ? Fi : Fi2, F * 0.78 - S * 0.22 + U * 0.5);
+		}
+		else
+		{
+			// serbest duruş: kollar gövde yanında, hafif dirsek bükümü
+			Aim(Up, Lo, F * 0.06 + S * 0.2 - U * 0.98);
+			Aim(Lo, Ha, F * 0.2 + S * 0.1 - U * 0.97);
+			Aim(Ha, Has(Fi) ? Fi : Fi2, F * 0.12 + S * 0.04 - U * 0.99);
+		}
+	}
+}
+
 void ASmvPilotFigure::SetPose(const FVector2D& L, const FVector2D& R, const FVector& LookAt, bool bHasLook)
 {
 	Sl = L; Sr = R; Look = LookAt; bLook = bHasLook;
@@ -273,9 +462,12 @@ void ASmvPilotFigure::Tick(float Dt)
 {
 	Super::Tick(Dt);
 	T += Dt;
-	// nefes + ağırlık aktarma
-	Torso->SetRelativeScale3D(FVector(1.f, 1.f, 1.f + 0.008f * FMath::Sin(T * 1.6f)));
-	Torso->SetRelativeRotation(FRotator(0.f, 0.f, 1.2f * FMath::Sin(T * 0.35f)));
+	// nefes + ağırlık aktarma (temel şekil figürü; MetaHuman'da gövde kemikleri pozludur)
+	if (!bMh)
+	{
+		Torso->SetRelativeScale3D(FVector(1.f, 1.f, 1.f + 0.008f * FMath::Sin(T * 1.6f)));
+		Torso->SetRelativeRotation(FRotator(0.f, 0.f, 1.2f * FMath::Sin(T * 0.35f)));
+	}
 	if (ThumbL) ThumbL->SetRelativeLocation(ThumbL0 + FVector(-Sl.Y * 1.6f, Sl.X * 1.6f, 0));
 	if (ThumbR) ThumbR->SetRelativeLocation(ThumbR0 + FVector(-Sr.Y * 1.6f, Sr.X * 1.6f, 0));
 	if (bLook)
@@ -284,6 +476,19 @@ void ASmvPilotFigure::Tick(float Dt)
 		const FRotator Want = (Look - From).Rotation();
 		const FRotator Body = GetActorRotation();
 		FRotator Rel(FMath::Clamp(FRotator::NormalizeAxis(Want.Pitch), -35.f, 45.f), FMath::Clamp(FRotator::NormalizeAxis(Want.Yaw - Body.Yaw), -70.f, 70.f), 0.f);
-		Head->SetRelativeRotation(FMath::RInterpTo(Head->GetRelativeRotation(), Rel, Dt, 4.f));
+		HeadRel = FMath::RInterpTo(HeadRel, Rel, Dt, 4.f);
+		if (!bMh) Head->SetRelativeRotation(HeadRel);
+	}
+	if (bMh && MhBody)
+	{
+		// baş kemiği aktör uzayındaki bakış dönüşüyle (boyun %40); kask düğümü aynı dönüşle baş merkezinde
+		const FQuat Qa = HeadRel.Quaternion();
+		const FQuat Cr = MhBody->GetRelativeRotation().Quaternion();
+		const FQuat Qc = Cr.Inverse() * Qa * Cr;
+		if (MhBody->GetBoneIndex(FName(TEXT("neck_01"))) != INDEX_NONE)
+			MhBody->SetBoneRotationByName(FName(TEXT("neck_01")), (FQuat::Slerp(FQuat::Identity, Qc, 0.4f) * MhNeckRef).Rotator(), EBoneSpaces::ComponentSpace);
+		MhBody->SetBoneRotationByName(FName(TEXT("head")), (Qc * MhHeadRef).Rotator(), EBoneSpaces::ComponentSpace);
+		const FVector Hb = MhBody->GetRelativeTransform().TransformPosition(MhBody->GetBoneLocationByName(FName(TEXT("head")), EBoneSpaces::ComponentSpace));
+		Head->SetRelativeLocationAndRotation(Hb + Qa.RotateVector(MhHeadOff), HeadRel);
 	}
 }

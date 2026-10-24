@@ -14,6 +14,10 @@
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Sound/SoundBase.h"
+#include "Misc/Parse.h"
+#include "Misc/CommandLine.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInterface.h"
 
 namespace
 {
@@ -42,6 +46,47 @@ void FSmvFabContent::DumpClassApi(const UClass* Class, const FString& Tag, int32
 	{
 		UE_LOG(LogSimumav, Log, TEXT("FABAPI %s var %s %s"), *Tag, *It->GetCPPType(), *It->GetName());
 	}
+}
+
+void FSmvFabContent::DumpMaterialParams(UMaterialInterface* M, const FString& Tag)
+{
+	if (!M) { UE_LOG(LogSimumav, Log, TEXT("FABAPI %s mat yok"), *Tag); return; }
+	TArray<FMaterialParameterInfo> Infos;
+	TArray<FGuid> Ids;
+	FString Out;
+	M->GetAllScalarParameterInfo(Infos, Ids);
+	for (const FMaterialParameterInfo& I : Infos) Out += TEXT("s:") + I.Name.ToString() + TEXT(" ");
+	M->GetAllVectorParameterInfo(Infos, Ids);
+	for (const FMaterialParameterInfo& I : Infos) Out += TEXT("v:") + I.Name.ToString() + TEXT(" ");
+	M->GetAllTextureParameterInfo(Infos, Ids);
+	for (const FMaterialParameterInfo& I : Infos) Out += TEXT("t:") + I.Name.ToString() + TEXT(" ");
+	const UMaterial* Base = M->GetMaterial();
+	UE_LOG(LogSimumav, Log, TEXT("FABAPI %s mat %s (alan %d, taban %s): %s"), *Tag, *M->GetName(), Base ? (int32)Base->MaterialDomain.GetValue() : -1, Base ? *Base->GetName() : TEXT("-"), *Out);
+}
+
+void FSmvFabContent::DumpFabApis()
+{
+	static bool bDone = false;
+	if (bDone || !FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke"))) return;
+	bDone = true;
+	auto Cls = [](const TCHAR* Pkg, const TCHAR* Obj) -> UClass*
+	{
+		return FPackageName::DoesPackageExist(Pkg) ? LoadClass<UObject>(nullptr, Obj, nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+	};
+	auto Mat = [](const TCHAR* Pkg, const TCHAR* Obj) -> UMaterialInterface*
+	{
+		return FPackageName::DoesPackageExist(Pkg) ? LoadObject<UMaterialInterface>(nullptr, Obj, nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+	};
+	DumpClassApi(Cls(TEXT("/Game/Aircraft_HUD/UI/HUD/WBP_Jet_HUD"), TEXT("/Game/Aircraft_HUD/UI/HUD/WBP_Jet_HUD.WBP_Jet_HUD_C")), TEXT("JetHUD"));
+	DumpClassApi(Cls(TEXT("/Game/Aircraft_HUD/UI/HUD/WBP_C"), TEXT("/Game/Aircraft_HUD/UI/HUD/WBP_C.WBP_C_C")), TEXT("JetHUD_C"));
+	DumpClassApi(Cls(TEXT("/Game/SpeedEffects/Assets/Blueprints/AC_SpeedEffects"), TEXT("/Game/SpeedEffects/Assets/Blueprints/AC_SpeedEffects.AC_SpeedEffects_C")), TEXT("SpeedFx"));
+	for (const TCHAR* N : { TEXT("M_Pitch"), TEXT("M_Yaw"), TEXT("M_NUM_Altitude"), TEXT("M_NUM_Speed") })
+	{
+		const FString P = FString(TEXT("/Game/Aircraft_HUD/Materials/UI_Materials/")) + N;
+		DumpMaterialParams(Mat(*P, *(P + TEXT(".") + N)), TEXT("JetHUD"));
+	}
+	DumpMaterialParams(Mat(TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines"), TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines.M_SpeedEffects_SpeedLines")), TEXT("SpeedFx"));
+	DumpMaterialParams(Mat(TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_RadialBlur"), TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_RadialBlur.M_SpeedEffects_RadialBlur")), TEXT("SpeedFx"));
 }
 
 float FSmvFabContent::GetFloat(const TCHAR* Key, float Default)
