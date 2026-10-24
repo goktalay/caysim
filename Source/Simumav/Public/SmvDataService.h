@@ -138,4 +138,11 @@ private:
 	template <typename T> static void RemoveById(TArray<T>& Arr, const FString& Id);
 	void SaveSettingsLocalOnly() const;
 	void LoadSettingsLocal();
+	/** Hesapta hangar donanımı (yol haritası §30.7): Lua betiği (/scripts, ad simumav.lua) ve yerel çıkartma PNG'leri (/decals) sunucuya
+	 *  yüklenir; yüklenen çıkartmaların kimlikleri görünüme (livery.decals[].id) bağlanıp dron yeniden yazılır. */
+	void SyncDroneExtras(const FString& Did, const FSmvDrone& Local);
+	/** Hesapta açılışta: dronun betiği ve çıkartma görselleri sunucudan (görseller Saved/Simumav/Decals/srv_<id>.png) */
+	void FetchDroneExtras(const FString& Did);
+	/** Sunucu yanıtındaki dronu yerel ek alanlarla birleştirir (betik, yüzey, çıkartma dosya yolları, henüz yüklenmemiş çıkartmalar) */
+	static void MergeLocalExtras(FSmvDrone& Server, const FSmvDrone& Local);
 };

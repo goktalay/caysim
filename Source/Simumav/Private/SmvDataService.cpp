@@ -4,6 +4,7 @@
 #include "SimumavSecrets.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/Base64.h"
 #include "HAL/FileManager.h"
 #include "SmvVehicles.h"
 #include "SmvSitlConfig.h"
@@ -491,7 +492,12 @@ void USmvDataService::RefreshOnline(FSmvDone Done)
 	auto List = [](const TSharedPtr<FJsonObject>& O, const TCHAR* K) { const TArray<TSharedPtr<FJsonValue>>* A = nullptr; static TArray<TSharedPtr<FJsonValue>> Empty; return (O.IsValid() && O->TryGetArrayField(K, A) && A) ? *A : Empty; };
 	Client->Get(TEXT("/api/hangar"), FSmvRestDone::CreateLambda([Weak, Part, List](int32 S, const TSharedPtr<FJsonObject>& O, const FString&, const FString& M)
 	{
-		if (USmvDataService* Self = Weak.Get()) if (S == 200) { Self->DronesCache.Reset(); for (const auto& V : List(O, TEXT("drones"))) Self->DronesCache.Add(FSmvDrone::FromJson(V->AsObject())); }
+		if (USmvDataService* Self = Weak.Get()) if (S == 200)
+		{
+			Self->DronesCache.Reset();
+			for (const auto& V : List(O, TEXT("drones"))) Self->DronesCache.Add(FSmvDrone::FromJson(V->AsObject()));
+			for (const FSmvDrone& D : Self->DronesCache) Self->FetchDroneExtras(D.Id);
+		}
 		Part(S == 200, M);
 	}));
 	Client->Get(TEXT("/api/crew"), FSmvRestDone::CreateLambda([Weak, Part, List](int32 S, const TSharedPtr<FJsonObject>& O, const FString&, const FString& M)
@@ -535,8 +541,22 @@ void USmvDataService::SaveDrone(const FSmvDrone& DIn, FSmvDone Done)
 		const FString CapId = DIn.Id;
 		const FString Path = bNew ? FString(TEXT("/api/hangar")) : FString::Printf(TEXT("/api/hangar/%s"), *DIn.Id);
 		const TSharedRef<FJsonObject> Body = DIn.ToJson(bNew);
-		if (bNew) SMV_ONLINE_WRITE("POST", Path, Body, Upsert(Self->DronesCache, FSmvDrone::FromJson(O)))
-		else SMV_ONLINE_WRITE("PUT", Path, Body, Upsert(Self->DronesCache, FSmvDrone::FromJson(O)))
+		const FSmvDrone Local = DIn;
+		TWeakObjectPtr<USmvDataService> Weak(this);
+		Client->Request(bNew ? TEXT("POST") : TEXT("PUT"), Path, Body, FSmvRestDone::CreateLambda([Weak, Done, Local](int32 S, const TSharedPtr<FJsonObject>& O, const FString& C, const FString& M)
+		{
+			USmvDataService* Self = Weak.Get();
+			const bool bOk = S >= 200 && S < 300;
+			if (Self && bOk)
+			{
+				FSmvDrone Sv = FSmvDrone::FromJson(O);
+				MergeLocalExtras(Sv, Local);
+				Upsert(Self->DronesCache, Sv);
+				Self->OnChanged.Broadcast();
+				Self->SyncDroneExtras(Sv.Id, Local);
+			}
+			Done.ExecuteIfBound(bOk, bOk ? FString() : (M.IsEmpty() ? C : M));
+		}));
 		return;
 	}
 	FSmvDrone D = DIn;
@@ -756,4 +776,165 @@ void USmvDataService::FetchModelGlb(const FString& ModelKey, TFunction<void(bool
 		}
 		Done(bOk && B.Num() > 12, B);
 	});
+}
+
+// ---------------------------------------------------------------------------
+// hangar donanımı: Lua betiği + çıkartmalar (hesap kipi; yol haritası §30.7)
+// ---------------------------------------------------------------------------
+
+void USmvDataService::MergeLocalExtras(FSmvDrone& Server, const FSmvDrone& Local)
+{
+	Server.Script = Local.Script;
+	Server.Equipment.Finish = Local.Equipment.Finish;
+	for (FSmvDecal& Dc : Server.Equipment.Decals)
+		for (const FSmvDecal& Lc : Local.Equipment.Decals)
+			if (Lc.Id > 0 && Lc.Id == Dc.Id) { if (Dc.File.IsEmpty()) Dc.File = Lc.File; Dc.Kind = Lc.Kind; }
+	// henüz yüklenmemiş (yalnız yerel) çıkartmalar görünümde kalır; yüklenince kimlik alır
+	for (const FSmvDecal& Lc : Local.Equipment.Decals)
+		if (Lc.Id <= 0 && !Lc.File.IsEmpty() && Server.Equipment.Decals.Num() < 6) Server.Equipment.Decals.Add(Lc);
+}
+
+void USmvDataService::SyncDroneExtras(const FString& Did, const FSmvDrone& Local)
+{
+	if (!IsOnline() || !SmvJson::IsServerId(Did)) return;
+	TWeakObjectPtr<USmvDataService> Weak(this);
+	// ---- Lua betiği: simumav.lua (yoksa oluştur, varsa güncelle) ----
+	if (!Local.Script.IsEmpty())
+	{
+		const FString Content = Local.Script.Left(64000);
+		TSharedRef<FJsonObject> B = MakeShared<FJsonObject>();
+		B->SetStringField(TEXT("name"), TEXT("simumav.lua"));
+		B->SetStringField(TEXT("content"), Content);
+		B->SetBoolField(TEXT("enabled"), true);
+		Client->Post(FString::Printf(TEXT("/api/hangar/%s/scripts"), *Did), B, FSmvRestDone::CreateLambda([Weak, Did, Content](int32 S, const TSharedPtr<FJsonObject>&, const FString& C, const FString&)
+		{
+			USmvDataService* Self = Weak.Get();
+			if (!Self || S != 409 || C != TEXT("exists")) return;
+			Self->Client->Get(FString::Printf(TEXT("/api/hangar/%s/scripts"), *Did), FSmvRestDone::CreateLambda([Weak, Did, Content](int32 S2, const TSharedPtr<FJsonObject>& O2, const FString&, const FString&)
+			{
+				USmvDataService* Self2 = Weak.Get();
+				const TArray<TSharedPtr<FJsonValue>>* A = nullptr;
+				if (!Self2 || S2 != 200 || !O2.IsValid() || !O2->TryGetArrayField(TEXT("scripts"), A) || !A) return;
+				for (const TSharedPtr<FJsonValue>& V : *A)
+				{
+					const TSharedPtr<FJsonObject> J = V.IsValid() ? V->AsObject() : nullptr;
+					if (!J.IsValid() || SmvJson::Str(J, TEXT("name")) != TEXT("simumav.lua")) continue;
+					TSharedRef<FJsonObject> P = MakeShared<FJsonObject>();
+					P->SetStringField(TEXT("content"), Content);
+					P->SetBoolField(TEXT("enabled"), true);
+					Self2->Client->Put(FString::Printf(TEXT("/api/hangar/%s/scripts/%lld"), *Did, (long long)SmvJson::Num(J, TEXT("id"))), P, FSmvRestDone());
+					break;
+				}
+			}));
+		}));
+	}
+	// ---- çıkartmalar: yalnız yerel PNG'ler sırayla yüklenir, sonra görünüm kimliklerle yeniden yazılır ----
+	struct FUp { FString File, Kind; };
+	TSharedRef<TArray<FUp>> Queue = MakeShared<TArray<FUp>>();
+	for (const FSmvDecal& Dc : Local.Equipment.Decals) if (Dc.Id <= 0 && !Dc.File.IsEmpty()) Queue->Add({ Dc.File, Dc.Kind });
+	if (Queue->Num() == 0) return;
+	TSharedRef<TFunction<void(int32)>> Next = MakeShared<TFunction<void(int32)>>();
+	TWeakPtr<TFunction<void(int32)>> NextW = Next;
+	*Next = [Weak, Did, Queue, NextW](int32 I)
+	{
+		USmvDataService* Self = Weak.Get();
+		if (!Self) return;
+		if (I >= Queue->Num())
+		{
+			// görünüm: yüklenen kimliklerle dron yeniden yazılır (equipment.livery.decals[].id)
+			for (const FSmvDrone& D : Self->DronesCache)
+			{
+				if (D.Id != Did) continue;
+				TSharedRef<FJsonObject> B = MakeShared<FJsonObject>();
+				B->SetObjectField(TEXT("equipment"), D.Equipment.ToJson(true));
+				Self->Client->Put(FString::Printf(TEXT("/api/hangar/%s"), *Did), B, FSmvRestDone());
+				break;
+			}
+			return;
+		}
+		const FUp U = (*Queue)[I];
+		TArray<uint8> Bytes;
+		if (!FFileHelper::LoadFileToArray(Bytes, *U.File) || Bytes.Num() > 1000 * 1024)
+		{
+			UE_LOG(LogSimumav, Warning, TEXT("Çıkartma yüklenmedi (okunamadı ya da > 1 MB): %s"), *U.File);
+			if (TSharedPtr<TFunction<void(int32)>> N = NextW.Pin()) (*N)(I + 1);
+			return;
+		}
+		TSharedRef<FJsonObject> B = MakeShared<FJsonObject>();
+		B->SetStringField(TEXT("image"), FString(TEXT("data:image/png;base64,")) + FBase64::Encode(Bytes));
+		B->SetStringField(TEXT("kind"), U.Kind == TEXT("logo") ? FString(TEXT("logo")) : FString(TEXT("sticker")));
+		TSharedPtr<TFunction<void(int32)>> Keep = NextW.Pin();
+		Self->Client->Post(FString::Printf(TEXT("/api/hangar/%s/decals"), *Did), B, FSmvRestDone::CreateLambda([Weak, Did, U, I, Keep](int32 S, const TSharedPtr<FJsonObject>& O, const FString& C, const FString& M)
+		{
+			USmvDataService* Self2 = Weak.Get();
+			if (!Self2) return;
+			if (S >= 200 && S < 300 && O.IsValid())
+			{
+				const int64 Iid = (int64)SmvJson::Num(O, TEXT("id"));
+				for (FSmvDrone& D : Self2->DronesCache)
+					if (D.Id == Did)
+						for (FSmvDecal& Dc : D.Equipment.Decals)
+							if (Dc.Id <= 0 && Dc.File == U.File) { Dc.Id = Iid; break; }
+			}
+			else UE_LOG(LogSimumav, Warning, TEXT("Çıkartma yüklenemedi (%d %s): %s"), S, *C, *M);
+			if (Keep.IsValid()) (*Keep)(I + 1);
+		}));
+	};
+	(*Next)(0);
+}
+
+void USmvDataService::FetchDroneExtras(const FString& Did)
+{
+	if (!IsOnline() || !SmvJson::IsServerId(Did)) return;
+	TWeakObjectPtr<USmvDataService> Weak(this);
+	Client->Get(FString::Printf(TEXT("/api/hangar/%s/scripts"), *Did), FSmvRestDone::CreateLambda([Weak, Did](int32 S, const TSharedPtr<FJsonObject>& O, const FString&, const FString&)
+	{
+		USmvDataService* Self = Weak.Get();
+		const TArray<TSharedPtr<FJsonValue>>* A = nullptr;
+		if (!Self || S != 200 || !O.IsValid() || !O->TryGetArrayField(TEXT("scripts"), A) || !A || A->Num() == 0) return;
+		TSharedPtr<FJsonObject> Pick;
+		for (const TSharedPtr<FJsonValue>& V : *A)
+		{
+			const TSharedPtr<FJsonObject> J = V.IsValid() ? V->AsObject() : nullptr;
+			if (J.IsValid() && (!Pick.IsValid() || SmvJson::Str(J, TEXT("name")) == TEXT("simumav.lua"))) Pick = J;
+		}
+		if (!Pick.IsValid()) return;
+		Self->Client->Get(FString::Printf(TEXT("/api/hangar/%s/scripts/%lld"), *Did, (long long)SmvJson::Num(Pick, TEXT("id"))), FSmvRestDone::CreateLambda([Weak, Did](int32 S2, const TSharedPtr<FJsonObject>& O2, const FString&, const FString&)
+		{
+			USmvDataService* Self2 = Weak.Get();
+			if (!Self2 || S2 != 200 || !O2.IsValid()) return;
+			const FString Content = SmvJson::Str(O2, TEXT("content"));
+			for (FSmvDrone& D : Self2->DronesCache) if (D.Id == Did) D.Script = Content;
+			Self2->OnChanged.Broadcast();
+		}));
+	}));
+	Client->Get(FString::Printf(TEXT("/api/hangar/%s/decals"), *Did), FSmvRestDone::CreateLambda([Weak, Did](int32 S, const TSharedPtr<FJsonObject>& O, const FString&, const FString&)
+	{
+		USmvDataService* Self = Weak.Get();
+		const TArray<TSharedPtr<FJsonValue>>* A = nullptr;
+		if (!Self || S != 200 || !O.IsValid() || !O->TryGetArrayField(TEXT("decals"), A) || !A) return;
+		const FString Dir = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Simumav"), TEXT("Decals"));
+		IFileManager::Get().MakeDirectory(*Dir, true);
+		for (const TSharedPtr<FJsonValue>& V : *A)
+		{
+			const TSharedPtr<FJsonObject> J = V.IsValid() ? V->AsObject() : nullptr;
+			if (!J.IsValid()) continue;
+			const int64 Iid = (int64)SmvJson::Num(J, TEXT("id"));
+			const FString Url = SmvJson::Str(J, TEXT("url"));
+			const FString Dst = FPaths::ConvertRelativePathToFull(FPaths::Combine(Dir, FString::Printf(TEXT("srv_%lld.png"), (long long)Iid)));
+			auto Bind = [Weak, Did, Iid, Dst]()
+			{
+				USmvDataService* Self2 = Weak.Get();
+				if (!Self2) return;
+				for (FSmvDrone& D : Self2->DronesCache) if (D.Id == Did) for (FSmvDecal& Dc : D.Equipment.Decals) if (Dc.Id == Iid) Dc.File = Dst;
+				Self2->OnChanged.Broadcast();
+			};
+			if (IFileManager::Get().FileExists(*Dst)) { Bind(); continue; }
+			if (Url.IsEmpty()) continue;
+			Self->Client->GetBytes(Url, [Bind, Dst](bool bOk, const TArray<uint8>& Bytes)
+			{
+				if (bOk && Bytes.Num() > 8 && FFileHelper::SaveArrayToFile(Bytes, *Dst)) Bind();
+			});
+		}
+	}));
 }
