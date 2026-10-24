@@ -87,6 +87,8 @@ protected:
 	/** Şehir: City Sample bina seviyeleri görünür olunca pencere malzemeleri Interior Cubemap System iç mekân malzemesiyle
 	 *  değiştirilir (gece/alacakaranlıkta aşırı parlayan pencereler; ayar CityWindowSwap) — bir kez */
 	void TickCityWindows();
+	/** Fare: imleç görünür, yalnız sağ tuşla yakalama, kilit yok; arayüz tıklamasından sonra klavye odağı oyuna (her karede) */
+	void EnsureMouse();
 	/** Uçak/VTOL FPV'de Fab "Aircraft HUD" (WBP_Jet_HUD; yeşil jet göstergesi: yunuslama/yatış merdiveni, pusula, irtifa, hız).
 	 *  Hedef kilidi öğeleri her zaman gizli (silah benzeri davranış yok). Ayar [/Script/Simumav.SmvScenery] JetHud */
 	void UpdateJetHud(const struct FCaySimTelemetry& T, class ASmvPilotPawn* Pw);
@@ -180,6 +182,9 @@ public:
 		bool SmokeTele(float& OutAltRel, bool& bOutArmed, int32& OutPosReady) const;
 		/** Duman testi: kamera kipi (0 takip, 1 FPV, 7 pilot omuz görünümü) */
 		void SmokeCam(int32 Mode);
+		/** Duman testi: görünümün (Fx, Fy) oranındaki noktaya sentetik sol tık (Slate); günlükte "SMOKE mouse" */
+		bool SmokeClick(float Fx, float Fy, const TCHAR* What);
+		bool SmokePanelOpen() const;
 	private:
 		FString HudLang;
 	void TickDebris(float Dt);

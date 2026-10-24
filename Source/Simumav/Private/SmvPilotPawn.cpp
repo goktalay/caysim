@@ -380,8 +380,8 @@ void ASmvPilotPawn::Tick(float Dt)
 		LastRcSent = Now;
 		OnRc.Broadcast(Rc);
 	}
-	// imleç görünür (alt bant düğmeleri): bakış yalnız fare tuşu basılıyken (sürükle) — imleci gezdirmek kamerayı döndürmesin
-	if (!KeyDown(EKeys::LeftMouseButton) && !KeyDown(EKeys::RightMouseButton)) Look = FVector2D::ZeroVector;
+	// imleç görünür: sol tık arayüzün (alt bant, panel, tekerlek, pencereler); kamera yalnız SAĞ ya da ORTA tuşla sürüklenince döner
+	if (!KeyDown(EKeys::RightMouseButton) && !KeyDown(EKeys::MiddleMouseButton)) Look = FVector2D::ZeroVector;
 	UpdateCamera(Dt);
 	UpdateSpeedFx(Dt);
 	Look = FVector2D::ZeroVector;

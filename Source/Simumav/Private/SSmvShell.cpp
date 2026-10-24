@@ -302,7 +302,9 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		]
 		+ SOverlay::Slot()
 		[
-			SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("NoBorder")).Padding(0.f)
+			// tam ekran sarmalayıcı kendisi tıklama almaz (SelfHitTestInvisible): uçuşta altta kalan uçuş arayüzü (alt bant, panel, tekerlek,
+			// pencereler, sanal çubuklar) fareyi alsın — varsayılan Visible ile tüm tıklamaları yutuyordu ("uçuşta fare çalışmıyor")
+			SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("NoBorder")).Padding(0.f).Visibility(EVisibility::SelfHitTestInvisible)
 			.ColorAndOpacity_Lambda([this]()
 			{
 				if (ReducedMotion()) return FLinearColor::White;
@@ -316,7 +318,7 @@ void SSmvShell::Construct(const FArguments& InArgs)
 				return TOptional<FSlateRenderTransform>(FSlateRenderTransform(FVector2f((1.f - E) * 46.f * TransDir, (1.f - E) * 10.f)));
 			})
 			[
-				SAssignNew(Content, SBox)
+				SAssignNew(Content, SBox).Visibility(EVisibility::SelfHitTestInvisible)
 			]
 		]
 		// ışık süpürmesi (geçişte soldan sağa çapraz parlak şerit)
@@ -4623,7 +4625,22 @@ void SSmvShell::TickSmoke()
 		if (Alt < 8.5f && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
 		UE_LOG(LogTemp, Display, TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);
 		SmokeAt = Now + 4.0; ++SmokeSub; return;
-	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.bFull ? 6 : Fx.Vehicle ? 13 : 11; return;
+	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.bFull ? 20 : Fx.Vehicle ? 13 : 11; return;
+	// fare doğrulaması: alt banttaki "Panel" düğmesine sentetik sol tık → panel açık/kapalı değişmeli (günlük: SMOKE mouse ... panel)
+	case 20:
+	{
+		const bool b0 = GameMode.IsValid() && GameMode->SmokePanelOpen();
+		if (GameMode.IsValid()) GameMode->SmokeClick(0.104f, 0.978f, TEXT("panel"));
+		UE_LOG(LogTemp, Display, TEXT("SMOKE mouse panel once=%d"), b0 ? 1 : 0);
+		SmokeAt = Now + 1.0; ++SmokeSub; return;
+	}
+	case 21:
+	{
+		const bool b1 = GameMode.IsValid() && GameMode->SmokePanelOpen();
+		UE_LOG(LogTemp, Display, TEXT("SMOKE mouse panel sonra=%d"), b1 ? 1 : 0);
+		if (GameMode.IsValid()) GameMode->SmokeClick(0.104f, 0.978f, TEXT("panel-geri"));
+		SmokeAt = Now + 1.0; SmokeSub = 6; return;
+	}
 	case 6: if (GameMode.IsValid()) GameMode->UiAction(TEXT("CamCycle"), FString()); SmokeAt = Now + 3.0; ++SmokeSub; return;
 	case 7: Shot(Base + TEXT("_fpv")); SmokeAt = Now + 0.8; ++SmokeSub; return;
 	case 8: if (GameMode.IsValid()) GameMode->TogglePause(); SmokeAt = Now + 2.0; ++SmokeSub; return;

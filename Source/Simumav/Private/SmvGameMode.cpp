@@ -36,6 +36,9 @@
 #include "SmvFabContent.h"
 #include "SmvPhysics.h"
 #include "SmvScenery.h"
+#include "Widgets/SWindow.h"
+#include "Framework/Application/SlateApplication.h"
+#include "SmvInputGlyphs.h"
 #include "Materials/Material.h"
 #include "Misc/PackageName.h"
 #include "Engine/LevelStreamingDynamic.h"
@@ -169,6 +172,7 @@ void ASmvGameMode::HandleScreen(ESmvScreen Screen)
 		M.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 		PC->SetInputMode(M);
 	}
+	EnsureMouse();
 	if (ASmvPilotPawn* P = GetPilot()) P->SetFlying(Screen == ESmvScreen::Flight);
 	if (Shell.IsValid()) Shell->Refresh();
 }
@@ -919,9 +923,57 @@ void ASmvGameMode::HandleAction(FName A)
 // her kare
 // ---------------------------------------------------------------------------
 
+// Fare her ekranda (uçuş dahil) serbest ve görünür: sol tık Slate arayüzüne, görünüm yalnız sağ tuş basılıyken yakalar,
+// fare pencereye kilitlenmez. Bir şey (piyon sahiplenme, giriş kipi değişimi, odak) bunu bozarsa her karede geri kurulur.
+void ASmvGameMode::EnsureMouse()
+{
+	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0)) if (!PC->bShowMouseCursor) PC->bShowMouseCursor = true;
+	if (UGameViewportClient* Vc = GEngine ? GEngine->GameViewport : nullptr)
+	{
+		if (Vc->GetMouseCaptureMode() != EMouseCaptureMode::CaptureDuringRightMouseDown) Vc->SetMouseCaptureMode(EMouseCaptureMode::CaptureDuringRightMouseDown);
+		if (Vc->GetMouseLockMode() != EMouseLockMode::DoNotLock) Vc->SetMouseLockMode(EMouseLockMode::DoNotLock);
+		Vc->SetHideCursorDuringCapture(false);
+	}
+	// arayüze tıklandıktan sonra klavye odağı oyuna döner (WASD / kısayollar); yazı alanı odaktaysa dokunulmaz
+	if (bScene && !bPauseMenu && FSmvInputGlyphs::ConsumeMouseUp() && FSlateApplication::IsInitialized())
+	{
+		FSlateApplication& Sa = FSlateApplication::Get();
+		const TSharedPtr<SWidget> Fw = Sa.GetKeyboardFocusedWidget();
+		const bool bTyping = Fw.IsValid() && (Fw->GetType() == FName(TEXT("SEditableText")) || Fw->GetType() == FName(TEXT("SMultiLineEditableText")));
+		if (!bTyping) Sa.SetAllUserFocusToGameViewport();
+	}
+}
+
+bool ASmvGameMode::SmokeClick(float Fx, float Fy, const TCHAR* What)
+{
+	if (!FSlateApplication::IsInitialized() || !GEngine || !GEngine->GameViewport) return false;
+	TSharedPtr<SWindow> Win = GEngine->GameViewport->GetWindow();
+	if (!Win.IsValid()) return false;
+	FVector2D Vs;
+	GEngine->GameViewport->GetViewportSize(Vs);
+	const FVector2D Scr = Win->GetPositionInScreen() + FVector2D(Vs.X * Fx, Vs.Y * Fy) / FMath::Max(0.01f, Win->GetDPIScaleFactor()) * Win->GetDPIScaleFactor();
+	FSlateApplication& Sa = FSlateApplication::Get();
+	TSet<FKey> Pressed;
+	Sa.ProcessMouseMoveEvent(FPointerEvent(0, Scr, Scr, Pressed, FKey(), 0.f, FModifierKeysState()));
+	Pressed.Add(EKeys::LeftMouseButton);
+	const bool bDown = Sa.ProcessMouseButtonDownEvent(nullptr, FPointerEvent(0, Scr, Scr, Pressed, EKeys::LeftMouseButton, 0.f, FModifierKeysState()));
+	Pressed.Remove(EKeys::LeftMouseButton);
+	const bool bUp = Sa.ProcessMouseButtonUpEvent(FPointerEvent(0, Scr, Scr, Pressed, EKeys::LeftMouseButton, 0.f, FModifierKeysState()));
+	const UGameViewportClient* Vc = GEngine->GameViewport;
+	UE_LOG(LogTemp, Display, TEXT("SMOKE mouse %s (%.0f, %.0f): down=%d up=%d imlec=%d yakalama=%d"), What, Scr.X, Scr.Y, bDown ? 1 : 0, bUp ? 1 : 0,
+		UGameplayStatics::GetPlayerController(this, 0) && UGameplayStatics::GetPlayerController(this, 0)->bShowMouseCursor ? 1 : 0, (int32)Vc->GetMouseCaptureMode());
+	return bDown || bUp;
+}
+
+bool ASmvGameMode::SmokePanelOpen() const
+{
+	return FlightUi.IsValid() && FlightUi->IsPanelOpen();
+}
+
 void ASmvGameMode::Tick(float Dt)
 {
 	Super::Tick(Dt);
+	EnsureMouse();
 	if (!bScene) return;
 	if (EndAt > 0 && FPlatformTime::Seconds() >= EndAt) { EndAt = 0; if (Flow.IsValid()) Flow->EndFlight(EndReasonPending); }
 	if (VideoRec.IsValid() && VideoRec->IsOn()) VideoRec->Tick(Dt);

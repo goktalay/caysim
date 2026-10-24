@@ -34,6 +34,8 @@ struct SIMUMAV_API FSmvInputGlyphs
 	static const FSlateBrush* Brush(const FString& Key, float Height = 26.f);
 	/** Gamepad ailesinin kumanda görseli (Mode 1–4 çubuk şeması için; yoksa nullptr) ve çubukların görsel üzerindeki konumu (0..1) */
 	static const FSlateBrush* ControllerBrush(FVector2D& OutLeftStick, FVector2D& OutRightStick);
+	/** Son karede fare tuşu bırakıldı mı (bir kez true döner; uçuşta klavye odağını oyuna geri vermek için) */
+	static bool ConsumeMouseUp();
 	/** Ad (günlük / ayarlar ekranı için) */
 	static const TCHAR* StyleName(ESmvGlyphStyle S);
 };

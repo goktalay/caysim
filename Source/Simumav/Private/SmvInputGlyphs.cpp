@@ -14,6 +14,7 @@
 namespace
 {
 	ESmvGlyphStyle GPadStyle = ESmvGlyphStyle::Xbox;
+	bool GMouseUp = false;
 
 	ESmvGlyphStyle SmvStyleOfDevice(FInputDeviceId Id)
 	{
@@ -59,6 +60,7 @@ namespace
 			return false;
 		}
 		virtual bool HandleMouseButtonDownEvent(FSlateApplication&, const FPointerEvent&) override { SmvUi::PadActive() = false; return false; }
+		virtual bool HandleMouseButtonUpEvent(FSlateApplication&, const FPointerEvent&) override { GMouseUp = true; return false; }
 		virtual const TCHAR* GetDebugName() const override { return TEXT("SmvGlyphInput"); }
 	};
 }
@@ -87,6 +89,13 @@ void FSmvInputGlyphs::Init()
 		else if (State == EInputDeviceConnectionState::Disconnected) SmvUi::PadActive() = false;
 		UE_LOG(LogSimumav, Log, TEXT("Kumanda %s"), State == EInputDeviceConnectionState::Connected ? TEXT("bağlandı") : TEXT("ayrıldı"));
 	});
+}
+
+bool FSmvInputGlyphs::ConsumeMouseUp()
+{
+	const bool b = GMouseUp;
+	GMouseUp = false;
+	return b;
 }
 
 ESmvGlyphStyle FSmvInputGlyphs::Style()
