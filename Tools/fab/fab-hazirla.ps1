@@ -35,6 +35,7 @@ $korunan = @('Drones', 'Input', 'Launch', 'Maps', 'Simumav', 'UI', 'Fab', 'Colle
 $kopyalanan = New-Object System.Collections.ArrayList   # Content altı göreli yollar (ör. RuinedConstruction, __ExternalActors__\RuinedConstruction)
 $paketler = New-Object System.Collections.ArrayList     # üst düzey paket klasörleri (harita aramak için)
 $ilkKaynak = @{}                                         # paket klasörü → ilk kaynak yolu (ortak yayıncı klasörlerinin birleştirilmesi)
+$modelKlasorleri = New-Object System.Collections.ArrayList   # model dosyasi iceren (UE paketi olmayan) klasorler -> b) adimi
 
 function Kopyala([string]$kaynak, [string]$hedef) {
 	# /XO: hedefte daha yeni olan dosya (fab_carpisma.py'nin duzelttigi ag) kaynaktan ezilmez; kaynak guncellenirse kopyalanir
@@ -69,7 +70,11 @@ function PaketKopyala([string]$srcContent, [string]$etiket) {
 			}
 			continue
 		}
-		if ($ad -match '[\s\.]') { Uyari "atlandi (UE paket adi degil - bosluk/nokta; or. .blend klasoru): $etiket\$ad"; continue }
+		if ($ad -match '[\s\.]') {
+			# UE paketi degil (bosluk/nokta): icinde FBX/OBJ/GLB/.blend modeli varsa b) adiminda FabLibrary urunu gibi ice aktarilir
+			[void]$modelKlasorleri.Add($d.FullName)
+			Uyari "UE paketi degil (bosluk/nokta), model klasoru olarak denenecek: $etiket\$ad"; continue
+		}
 		if ($korunan -contains $ad) { Uyari "atlandi (proje klasoruyle cakisiyor): $etiket\$ad"; continue }
 		if ($kopyalanan -contains $ad) {
 			# ayni yayincinin ortak klasoru (or. BendylabStudios: Hexacopter hazirlama projesinde, Interceptor VaultCache'te):
@@ -173,10 +178,90 @@ try {
 	$imzalar = @{}
 	$lib = Join-Path $Vault 'FabLibrary'
 	$droneAlindi = $false
-	if (Test-Path -LiteralPath $lib) {
-		foreach ($u in (Get-ChildItem -LiteralPath $lib -Directory -ErrorAction SilentlyContinue)) {
-			$dosya = Get-ChildItem -LiteralPath (Join-Path $u.FullName 'fbx') -Filter *.fbx -File -Recurse -ErrorAction SilentlyContinue | Sort-Object Length -Descending | Select-Object -First 1
-			if (-not $dosya) { $dosya = Get-ChildItem -LiteralPath (Join-Path $u.FullName 'obj') -Filter *.obj -File -Recurse -ErrorAction SilentlyContinue | Sort-Object Length -Descending | Select-Object -First 1 }
+	# Blender (yalniz .blend olarak inen urunler icin: arka planda GLB'ye donusturulur)
+	$blender = $null
+	foreach ($bk in @('C:\Program Files\Blender Foundation', 'C:\Program Files (x86)\Blender Foundation', 'C:\claude', 'C:\Program Files\Steam\steamapps\common', 'C:\Program Files (x86)\Steam\steamapps\common')) {
+		$bf = Get-ChildItem -Path $bk -Filter blender.exe -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+		if ($bf) { $blender = $bf.FullName; break }
+	}
+	if (-not $blender) { $bc = Get-Command blender.exe -ErrorAction SilentlyContinue; if ($bc) { $blender = $bc.Source } }
+	Bilgi "Blender: $(if ($blender) { $blender } else { 'yok (.blend urunleri atlanir)' })"
+	$donusum = Join-Path $Proje 'Intermediate\FabModel'
+	function EnBuyuk([string]$kok, [string[]]$uzantilar) {
+		return Get-ChildItem -LiteralPath $kok -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $uzantilar -contains $_.Extension.ToLower() } | Sort-Object Length -Descending | Select-Object -First 1
+	}
+	function ModelBul([string]$kok, [string]$temizAd, [int]$derinlik = 0) {
+		# oncelik: FBX > OBJ > GLB/glTF > .blend (Blender ile GLB'ye) > .zip (acilip yeniden aranir)
+		$f = EnBuyuk $kok @('.fbx'); if ($f) { return $f }
+		$f = EnBuyuk $kok @('.obj'); if ($f) { return $f }
+		$f = EnBuyuk $kok @('.glb', '.gltf'); if ($f) { return $f }
+		$b = EnBuyuk $kok @('.blend')
+		if ($b) {
+			if (-not $blender) { Uyari "yalniz .blend var, Blender yok: $($b.FullName)"; return $null }
+			$cikti = Join-Path $donusum "$temizAd.glb"
+			$imzaB = "$($b.FullName)|$($b.Length)|$($b.LastWriteTimeUtc.Ticks)"
+			$imzaBDosya = "$cikti.kaynak"
+			if ((Test-Path -LiteralPath $cikti) -and (Test-Path -LiteralPath $imzaBDosya) -and ((Get-Content -LiteralPath $imzaBDosya -Raw).Trim() -eq $imzaB)) { return (Get-Item -LiteralPath $cikti) }
+			New-Item -ItemType Directory -Force -Path $donusum | Out-Null
+			$py = Join-Path $donusum 'blend2glb.py'
+			$pyMetin = @(
+				'import bpy, sys',
+				'out = sys.argv[sys.argv.index("--") + 1]',
+				'try:',
+				'    bpy.ops.file.find_missing_files(directory=bpy.path.abspath("//"))',
+				'except Exception as e:',
+				'    print("blend2glb: find_missing_files", e)',
+				'n = len([o for o in bpy.data.objects if o.type == "MESH"])',
+				'print("blend2glb: mesh nesnesi", n)',
+				'try:',
+				'    bpy.ops.object.mode_set(mode="OBJECT")',
+				'except Exception:',
+				'    pass',
+				'try:',
+				'    ms = [o for o in bpy.context.view_layer.objects if o.type in ("MESH", "CURVE", "SURFACE", "META", "FONT") and o.visible_get()]',
+				'    bpy.ops.object.select_all(action="DESELECT")',
+				'    for o in ms: o.select_set(True)',
+				'    if ms:',
+				'        bpy.context.view_layer.objects.active = ms[0]',
+				'        bpy.ops.object.convert(target="MESH")',
+				'        bpy.ops.object.join()',
+				'        print("blend2glb: tek aga birlestirildi", len(ms))',
+				'except Exception as e:',
+				'    print("blend2glb: birlestirme yapilamadi", e)',
+				'bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_visible=True, export_apply=True, export_yup=True, export_animations=False)',
+				'print("blend2glb: tamam", out)'
+			)
+			Set-Content -LiteralPath $py -Value $pyMetin -Encoding ASCII
+			Bilgi "Blender donusumu: $($b.FullName) -> $cikti"
+			Remove-Item -LiteralPath $cikti -ErrorAction SilentlyContinue
+			& $blender --factory-startup -b $b.FullName --python $py -- $cikti 2>&1 | ForEach-Object { $l = "$_"; if ($l -match 'blend2glb|Error|Traceback') { Write-Host "    $l" } }
+			if (Test-Path -LiteralPath $cikti) {
+				Set-Content -LiteralPath $imzaBDosya -Value $imzaB -Encoding UTF8
+				Bilgi "  GLB: $([math]::Round((Get-Item -LiteralPath $cikti).Length / 1KB)) KB"
+				return (Get-Item -LiteralPath $cikti)
+			}
+			Uyari "Blender donusumu basarisiz: $($b.FullName)"; return $null
+		}
+		if ($derinlik -eq 0) {
+			$z = EnBuyuk $kok @('.zip')
+			if ($z) {
+				$acik = Join-Path $donusum "zip_$temizAd"
+				if (-not (Test-Path -LiteralPath $acik)) {
+					Bilgi "zip aciliyor: $($z.FullName)"
+					try { Expand-Archive -LiteralPath $z.FullName -DestinationPath $acik -Force } catch { Uyari "zip acilamadi: $($z.FullName) - $($_.Exception.Message)"; return $null }
+				}
+				return (ModelBul $acik $temizAd 1)
+			}
+		}
+		return $null
+	}
+	$urunKlasorleri = @()
+	if (Test-Path -LiteralPath $lib) { $urunKlasorleri += @(Get-ChildItem -LiteralPath $lib -Directory -ErrorAction SilentlyContinue) }
+	foreach ($mk in $modelKlasorleri) { $urunKlasorleri += @(Get-Item -LiteralPath $mk) }
+	if ($urunKlasorleri.Count -gt 0) {
+		foreach ($u in $urunKlasorleri) {
+			$temizOn = (($u.Name -replace '-[0-9a-f]{6,}$', '') -replace '[^A-Za-z0-9]', '')
+			$dosya = ModelBul $u.FullName $temizOn
 			if (-not $dosya) { continue }
 			$urun = ($u.Name -replace '-[0-9a-f]{6,}$', '')
 			$temiz = ($urun -replace '[^A-Za-z0-9]', '')
@@ -185,7 +270,8 @@ try {
 			# gemi (korunacak nesne, yalniz gorsel): Interchange OBJ/glTF ice aktarimi parca basina ayri statik ag uretir; oyun klasordeki tum aglari birlikte kurar
 			if ($urun -match '(?i)mogami|frigate|ship|destroyer|corvette') { $hedefAd = "Ships\$temiz"; $ad = "SM_$temiz"; $statik = $true }
 			# us / tesis dekoru (kisla, radar, gozetleme kulesi, anten): statik
-			elseif ($urun -match '(?i)barrack|radar|watch_?tower|dish|antenna|command_?center|radio_?tower') { $hedefAd = "Base\$temiz"; $ad = "SM_$temiz"; $statik = $true }
+			elseif ($urun -match '(?i)barrack|radar|watch[\s_-]?tower|dish|antenna|command[\s_-]?center|radio[\s_-]?tower') { $hedefAd = "Base\$temiz"; $ad = "SM_$temiz"; $statik = $true }
+			elseif ($urun -match '(?i)agras|drone[\s_-]?196|armou?red') { $hedefAd = "Props\$temiz"; $ad = "SM_$temiz"; $statik = $true }
 			elseif ($urun -match '(?i)tank|patriot|mim-?104|sam_|_sam|anti-?drone|microwave|launcher|truck|vehicle') { $hedefAd = "Props\$temiz"; $ad = "SM_$temiz"; $statik = $true }
 			elseif ($urun -match '(?i)fpv|interceptor|racer') { $hedefAd = 'DroneFpv'; $ad = 'SK_FabDroneFpv' }
 			elseif (-not $droneAlindi -and $urun -match '(?i)drone|quad|copter|uav') { $hedefAd = 'Drone'; $ad = 'SK_FabDrone'; $droneAlindi = $true }

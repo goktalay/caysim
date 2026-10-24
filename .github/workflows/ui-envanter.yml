@@ -33,14 +33,15 @@ jobs:
           $ErrorActionPreference = 'Continue'
           $out = Join-Path $env:RUNNER_TEMP 'ui-envanter.txt'
           function W($s) { Add-Content -Path $out -Value $s -Encoding UTF8; Write-Host $s }
-          $ue = if ($env:UE_ROOT) { $env:UE_ROOT } else { 'D:\Epic Games\UE_5.8' }
+          $ue = @($env:UE_ROOT, 'C:\claude\epic\UE_5.8', 'C:\claude\epic', 'D:\Epic Games\UE_5.8') | Where-Object { $_ -and (Test-Path (Join-Path $_ 'Engine')) } | Select-Object -First 1
+          $fabp = @('C:\claude\SimumavFab', 'D:\SimumavFab') | Where-Object { Test-Path $_ } | Select-Object -First 1
           $roots = @()
-          foreach ($m in @("$ue\Engine\Plugins\Marketplace", "D:\Epic Games\UE_5.8\Engine\Plugins\Marketplace", "$ue\Engine\Plugins\Fab")) {
+          foreach ($m in @("$ue\Engine\Plugins\Marketplace", "$ue\Engine\Plugins\Fab")) {
             if (Test-Path $m) {
               Get-ChildItem $m -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'MainMenu*' -or $_.Name -like 'EffectFo*' -or $_.Name -like '*Menu*' -or $_.Name -like '*Radial*' -or $_.Name -like '*Instrument*' } | ForEach-Object { $roots += $_.FullName }
             }
           }
-          $roots += @('D:\SimumavFab\Content\Procedural_Radial_Wheel_Menu', 'D:\SimumavFab\Content\AirplaneInstruments')
+          $roots += @("$fabp\Content\Procedural_Radial_Wheel_Menu", "$fabp\Content\AirplaneInstruments")
           if ($env:EKSTRA) { $roots += $env:EKSTRA.Split(';') | Where-Object { $_ } }
           $roots = $roots | Select-Object -Unique
           foreach ($r in $roots) {

@@ -198,6 +198,9 @@ def bir_is(j):
         # Interchange FBX çevirmeni FbxImportUI seçeneklerini yok sayarsa eski FBX içe aktarıcıyla bir daha dene
         denemeler.append((True, "Interchange.FeatureFlags.Import.FBX 0"))
         denemeler.append((False, None))
+    elif not j.get("statik"):
+        # OBJ / glTF (Interchange): iskelet yoksa statik ağ da kabul
+        denemeler.append((False, None))
     sonuc = {"hedef": hedef, "ok": False, "iskelet": False, "varliklar": [], "kemikler": []}
     for iskelet, cvar in denemeler:
         if cvar:
