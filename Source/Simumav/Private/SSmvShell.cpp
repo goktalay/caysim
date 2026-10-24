@@ -807,6 +807,7 @@ TSharedRef<SWidget> SSmvShell::PreviewCard(const FString& Type, const FString& M
 		S->SetPreview(Type, Model, ColorHex);
 		PreviewBrush.SetResourceObject(S->GetPreviewTarget());
 		PreviewBrush.ImageSize = FVector2D(960, 600);
+		PreviewBrush.SetUVRegion(FBox2f(FVector2f(0.f, 0.f), FVector2f(1.f, 1.f)));
 		bPreviewVisible = true;
 	}
 	const FLinearColor Col = SmvHex(ColorHex, Accent());
@@ -1585,6 +1586,8 @@ TSharedRef<SWidget> SSmvShell::Crew()
 		Sc->SetPilotPreview(A, bFaceZoom);
 		PreviewBrush.SetResourceObject(Sc->GetPreviewTarget());
 		PreviewBrush.ImageSize = FVector2D(960, 600);
+		// pilot kutusu ~1,26 en/boy; 1,6'lık yakalama yatayda kırpılır (figür sıkışıp incelmesin)
+		PreviewBrush.SetUVRegion(FBox2f(FVector2f(0.105f, 0.f), FVector2f(0.895f, 1.f)));
 		bPreviewVisible = true;
 		TSharedRef<SSmvCanvas> Drag = SNew(SSmvCanvas).Size(FVector2D(400, 460));
 		TSharedPtr<FVector2D> LastP = MakeShared<FVector2D>(FVector2D::ZeroVector);
@@ -1796,7 +1799,7 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.ground")), Spin(&EditTrack.GroundMsl, -10000, 8000, 1))];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.radius")), Slider(&EditTrack.RadiusM, 200, 5000, 50, Mfmt))];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.world")), Chips(&EditTrack.WorldMode, { TEXT("procedural"), TEXT("real"), TEXT("google3d") },
-		{ Tx(TEXT("world.procedural")), Tx(TEXT("world.real")), Tx(TEXT("world.google3d")) }, { ESmvIcon::Map, ESmvIcon::Globe, ESmvIcon::Globe }, Re, 2))];   // dar sütun: 2 + 1 (taşıyordu)
+		{ Tx(TEXT("world.procedural")), Tx(TEXT("world.real")), Tx(TEXT("world.google3d")) }, { ESmvIcon::Map, ESmvIcon::Globe, ESmvIcon::Globe }, Re, 1))];   // dar sütun: alt alta (uzun dillerde taşıyordu)
 	Ed->AddSlot().AutoHeight().Padding(0, 14, 0, 6)[Section(Tx(TEXT("tracks.env")), Warn())];
 	Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.time")), Chips(&EditTrack.TimeOfDay, { TEXT("day"), TEXT("dusk"), TEXT("night") },
 		{ Tx(TEXT("time.day")), Tx(TEXT("time.dusk")), Tx(TEXT("time.night")) }, { ESmvIcon::Sun, ESmvIcon::Sunset, ESmvIcon::Moon }))];
@@ -1885,6 +1888,7 @@ TSharedRef<SWidget> SSmvShell::Tracks()
 	{
 		PreviewBrush.SetResourceObject(Scene()->GetPreviewTarget());
 		PreviewBrush.ImageSize = FVector2D(960, 600);
+		PreviewBrush.SetUVRegion(FBox2f(FVector2f(0.f, 0.f), FVector2f(1.f, 1.f)));
 		bPreviewVisible = true;
 		Mid->AddSlot().AutoHeight()
 		[

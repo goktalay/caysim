@@ -16,7 +16,14 @@ void USmvGameInstance::Init()
 	Super::Init();
 	// motorun ekran üstü hata ayıklama iletileri (ör. "Runtime Virtual Texture ... needs to be rebuilt") oyuncuya gösterilmez
 	// (Development paketinde de; günlükte kalır). -SmvScreenMessages ile açılabilir.
-	if (GEngine && !FParse::Param(FCommandLine::Get(), TEXT("SmvScreenMessages"))) GEngine->bEnableOnScreenDebugMessages = false;
+	if (!FParse::Param(FCommandLine::Get(), TEXT("SmvScreenMessages")))
+	{
+		if (GEngine)
+		{
+			GEngine->bEnableOnScreenDebugMessages = false;
+			GEngine->Exec(nullptr, TEXT("DisableAllScreenMessages"));   // RVT / gölge uyarı satırları da gizlenir
+		}
+	}
 	Client = NewObject<USimumavClient>(this, TEXT("SimumavClient"));
 	Data = NewObject<USmvDataService>(this, TEXT("SmvData"));
 	Flow = NewObject<USmvFlow>(this, TEXT("SmvFlow"));

@@ -49,7 +49,7 @@ public:
 	void SetWorldPreview(const FSmvTrack& Track);
 	bool IsLive() const { return bLive; }
 	/** Canlı sahnenin haritası (Fab harita adı; yoksa boş → prosedürel arazi) */
-	const FText& GetMapName() const { return MapName; }
+	FText GetMapName() const;
 
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
@@ -101,7 +101,7 @@ private:
 	double ManualUntil = 0;
 	FString PilotKey;
 	bool bFabMap = false;
-	FText MapName;
+	FString MapKey;
 	double FabStartE = 0, FabStartN = 0;
 	TMap<int64, float> GroundCache;
 	float GroundAt(double E, double N);

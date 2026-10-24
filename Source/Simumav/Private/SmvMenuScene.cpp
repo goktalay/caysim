@@ -210,7 +210,7 @@ void ASmvMenuScene::BuildWorld()
 			bool bOk = false;
 			MenuLevel = ULevelStreamingDynamic::LoadLevelInstance(W, Pick->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
 			bFabMap = bOk && MenuLevel;
-			if (bFabMap) MapName = Pick->Name;
+			if (bFabMap) MapKey = Pick->Key;
 			FabStartE = Pick->StartE; FabStartN = Pick->StartN;
 			UE_LOG(LogTemp, Log, TEXT("Menü sahnesi Fab haritası: %s (%s)"), *Pick->Level, bFabMap ? TEXT("yükleniyor") : TEXT("yüklenemedi"));
 		}
@@ -510,7 +510,12 @@ void ASmvMenuScene::Tick(float Dt)
 	}
 	if (PilotPrev)
 	{
-		if (FPlatformTime::Seconds() > ManualUntil) PreviewYaw = FMath::Fmod(PreviewYaw + Dt * 14.f, 360.f);
+		// sürekli dönme yerine öne bakarak hafif salınım (±30°): yüz, vizör ve tulum önü görünsün
+		if (FPlatformTime::Seconds() > ManualUntil)
+		{
+			const float Want = 30.f * FMath::Sin((float)(FPlatformTime::Seconds() - T0) * 0.45f);
+			PreviewYaw = FRotator::NormalizeAxis(PreviewYaw + FMath::Clamp(FRotator::NormalizeAxis(Want - PreviewYaw), -Dt * 40.f, Dt * 40.f));
+		}
 		FaceK = FMath::FInterpTo(FaceK, bFaceZoom ? 1.f : 0.f, Dt, 4.f);
 		PilotPrev->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, 180.f + PreviewYaw, 0.f));
 		// tam boy: tüm figür (yatay FOV 28° → dikey ~18°) için ~6,4 m; yüz: 0,95 m
@@ -777,6 +782,13 @@ void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
 	WorldPrev->GetAttachedActors(Att, true);
 	for (AActor* A : Att) Capture->ShowOnlyActors.Add(A);
 	Capture->bCaptureEveryFrame = bPreviewOn;
+}
+
+FText ASmvMenuScene::GetMapName() const
+{
+	// geçerli dilde (dil sonradan değişebilir)
+	if (!MapKey.IsEmpty()) for (const FSmvFabMap& M : FSmvFabContent::AllMaps()) if (M.Key == MapKey) return M.Name;
+	return FText::GetEmpty();
 }
 
 void ASmvMenuScene::PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt, float Scale)

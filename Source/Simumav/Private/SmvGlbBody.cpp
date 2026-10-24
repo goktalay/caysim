@@ -468,7 +468,7 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 				UPointLightComponent* Lc = NewObject<UPointLightComponent>(GetOwner(), NAME_None);
 				Lc->SetupAttachment(P.Pivot);
 				Lc->SetIntensityUnits(ELightUnits::Candelas);
-				Lc->SetIntensity(P.bBeacon ? 0.f : 3.f);
+				Lc->SetIntensity(P.bBeacon ? 0.f : 0.6f);   // gövdeye birkaç cm: 3 cd gövdeyi renkli parlatıyordu (orman alacakaranlık duman testi)
 				Lc->SetLightColor(P.LightColor);
 				Lc->SetAttenuationRadius(250.f);
 				Lc->SetCastShadows(false);
@@ -535,7 +535,7 @@ void USmvGlbBody::AddNavLight(const FString& Name, const FVector& PosCm, const F
 	UPointLightComponent* Lc = NewObject<UPointLightComponent>(GetOwner(), NAME_None);
 	Lc->SetupAttachment(Pv);
 	Lc->SetIntensityUnits(ELightUnits::Candelas);
-	Lc->SetIntensity(bBeacon ? 0.f : 3.f);
+	Lc->SetIntensity(bBeacon ? 0.f : 0.6f);
 	Lc->SetLightColor(Color);
 	Lc->SetAttenuationRadius(250.f);
 	Lc->SetCastShadows(false);
@@ -749,7 +749,7 @@ void USmvGlbBody::Animate(float Dt, const FSmvGlbInputs& In)
 			P.Pivot->SetRelativeRotation(FQuat(P.Axis, FMath::DegreesToRadians(Steer * 28.f)));
 			break;
 		case EKind::Light:
-			if (P.Light && P.bBeacon) P.Light->SetIntensity(In.bArmed && bNightBlink ? 20.f : 0.f);
+			if (P.Light && P.bBeacon) P.Light->SetIntensity(In.bArmed && bNightBlink ? 6.f : 0.f);
 			break;
 		default:
 			break;
