@@ -437,7 +437,7 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 		{
 			UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Glow, this);
 			D->SetVectorParameterValue(TEXT("Color"), Parts[Pi].LightColor);
-			D->SetScalarParameterValue(TEXT("Glow"), 6.f);
+			D->SetScalarParameterValue(TEXT("Glow"), bNightLighting ? 1.6f : 3.f);   // alacakaranlıkta 6 bloom ile gövdeyi renkli boyuyordu
 			Mids.Add(D);
 			Mat = D;
 		}
@@ -525,7 +525,7 @@ void USmvGlbBody::AddNavLight(const FString& Name, const FVector& PosCm, const F
 		{
 			UMaterialInstanceDynamic* Dm = UMaterialInstanceDynamic::Create(G, this);
 			Dm->SetVectorParameterValue(TEXT("Color"), Color);
-			Dm->SetScalarParameterValue(TEXT("Glow"), 6.f);
+			Dm->SetScalarParameterValue(TEXT("Glow"), bNightLighting ? 1.6f : 3.f);
 			S->SetMaterial(0, Dm);
 			Mids.Add(Dm);
 		}

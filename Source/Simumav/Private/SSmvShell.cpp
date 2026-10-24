@@ -2162,7 +2162,9 @@ TSharedRef<SWidget> SSmvShell::MissionMap(float Wd, float Ht)
 				DrSeg(Out, L + 3, G, O + D * Sz.Y * 0.42, O + D * Sz.Y * 0.1, Hex(0xff5a46), 2.f);
 			}
 		}
-		DrText(Out, L + 5, G, FSmvI18n::T(FString(TEXT("missions.hint_")) + P.Kind).ToString(), FVector2D(12.f, Sz.Y - 14.f), Font(10), Dim(), -1);
+		// ipucu satırı: uydu görüntüsünün üstünde okunaklı kalsın (koyu şerit)
+		DrBox(Out, L + 4, G, FVector2D(0.f, Sz.Y - 22.f), FVector2D(Sz.X, 22.f), Hex(0x0b1424, 0.8f));
+		DrText(Out, L + 5, G, FSmvI18n::T(FString(TEXT("missions.hint_")) + P.Kind).ToString(), FVector2D(12.f, Sz.Y - 16.f), Font(10), Fg(), -1);
 		Out.PopClip();
 	};
 	C->OnHover = [Self, ToScr](const FVector2D& P)
