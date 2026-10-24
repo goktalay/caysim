@@ -6,6 +6,10 @@ name: dosya-envanter
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: "Runner etiketi (bos = vars.RUNNER_LABEL ya da unreal; yeni bilgisayar: unreal5080)"
+        type: string
+        default: ""
       kokler:
         description: "Taranacak klasorler (; ile ayrilmis)"
         type: string
@@ -26,7 +30,7 @@ on:
 jobs:
   envanter:
     if: github.repository_owner == 'goktalay'
-    runs-on: [self-hosted, windows, unreal]
+    runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
     timeout-minutes: 20
     defaults:
       run:

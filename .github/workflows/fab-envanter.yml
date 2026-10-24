@@ -5,6 +5,10 @@ name: fab-envanter
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: "Runner etiketi (bos = vars.RUNNER_LABEL ya da unreal; yeni bilgisayar: unreal5080)"
+        type: string
+        default: ""
       ekstra:
         description: "Ek taranacak klasorler (; ile ayrilmis)"
         type: string
@@ -13,7 +17,7 @@ on:
 jobs:
   envanter:
     if: github.repository_owner == 'goktalay'
-    runs-on: [self-hosted, windows, unreal]
+    runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
     timeout-minutes: 30
     defaults:
       run:

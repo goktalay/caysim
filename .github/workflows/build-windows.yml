@@ -14,6 +14,10 @@ on:
     paths-ignore: [ 'docs/**', '**.md' ]
   workflow_dispatch:
     inputs:
+      runner:
+        description: "Runner etiketi (bos = vars.RUNNER_LABEL ya da unreal; yeni bilgisayar: unreal5080)"
+        type: string
+        default: ""
       steam_upload:
         description: "Steam'e yükle (beta dalı)"
         type: boolean
@@ -39,7 +43,7 @@ jobs:
   build:
     # fork PR'larından asla; yalnız bu depodaki push/manuel tetik
     if: github.event_name != 'pull_request' && github.repository_owner == 'goktalay'
-    runs-on: [self-hosted, windows, unreal]
+    runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
     # ilk Fab pisirmesi (golgelendirici derlemesi) uzun surer; sonraki derlemeler Zen DDC'den gelir
     timeout-minutes: 720
     defaults:
