@@ -10,10 +10,36 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 #include "Misc/CommandLine.h"
+#include "UObject/UnrealType.h"
+#include "UObject/UObjectArray.h"
+
+namespace
+{
+	/** OverCrowd eklentisinin ayar CDO'su (GC dışı havuzda) Blueprint sınıflarına (BP_NiagaraCrowd …) sert başvuru tutuyor; paketlenmiş
+	 *  oyunda ilk çöp toplamada "Disregard for GC assumptions" ölümcül hatası (Development) / sallanan işaretçi (Shipping) olur.
+	 *  Başvurulan nesneler kök kümesine alınır (eklenti yoksa hiçbir şey yapılmaz). */
+	void SmvPinPluginSettingRefs()
+	{
+		for (const TCHAR* Path : { TEXT("/Script/OverCrowd.OverCrowdDeveloperSettings") })
+		{
+			UClass* C = FindObject<UClass>(nullptr, Path);
+			UObject* Cdo = C ? C->GetDefaultObject() : nullptr;
+			if (!Cdo) continue;
+			int32 N = 0;
+			for (TPropertyValueIterator<FObjectPropertyBase> It(C, Cdo); It; ++It)
+			{
+				UObject* O = It.Key()->GetObjectPropertyValue(It.Value());
+				if (O && !O->IsRooted() && !GUObjectArray.IsDisregardForGC(O)) { O->AddToRoot(); ++N; }
+			}
+			UE_LOG(LogSimumav, Log, TEXT("Eklenti ayar başvuruları kök kümesine alındı: %s (%d nesne)"), Path, N);
+		}
+	}
+}
 
 void USmvGameInstance::Init()
 {
 	Super::Init();
+	SmvPinPluginSettingRefs();
 	// motorun ekran üstü hata ayıklama iletileri (ör. "Runtime Virtual Texture ... needs to be rebuilt") oyuncuya gösterilmez
 	// (Development paketinde de; günlükte kalır). -SmvScreenMessages ile açılabilir.
 	if (!FParse::Param(FCommandLine::Get(), TEXT("SmvScreenMessages")))

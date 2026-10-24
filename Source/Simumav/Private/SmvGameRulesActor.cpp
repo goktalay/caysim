@@ -380,6 +380,32 @@ void ASmvGameRulesActor::BuildDefense(bool bShip)
 		Fac(CubeMesh, FVector(0.0, 0.0, 600.0), FVector(52.0, 1.6, 0.8), FRotator::ZeroRotator, Steel);
 		Fac(CubeMesh, FVector(0.0, 0.0, 300.0), FVector(52.0, 0.4, 6.0), FRotator::ZeroRotator, Steel);
 		Fac(CubeMesh, FVector(200.0, -3200.0, 350.0), FVector(20.0, 12.0, 7.0), FRotator::ZeroRotator, Conc);
+		// Fab tesis dekoru (kışla, radar çanağı, gözetleme kulesi …; /Game/Fab/Base — yalnız görsel): tesisin çevresinde
+		TMap<FName, TArray<UStaticMesh*>> ByProduct;
+		for (UStaticMesh* M : FSmvFabContent::StaticMeshesIn(TEXT("/Game/Fab/Base"))) ByProduct.FindOrAdd(FName(*FPackageName::GetLongPackagePath(M->GetOutermost()->GetName()))).Add(M);
+		int32 k = 0;
+		for (TPair<FName, TArray<UStaticMesh*>>& It : ByProduct)
+		{
+			FBox B(ForceInit);
+			for (UStaticMesh* M : It.Value) B += M->GetBoundingBox();
+			const double L = FMath::Max3(B.GetSize().X, B.GetSize().Y, B.GetSize().Z);
+			const double Sc = (L < 200.0 || L > 6000.0) ? 1200.0 / FMath::Max(L, 1.0) : 1.0;
+			const double A = FMath::DegreesToRadians(200.0 + 55.0 * k++);
+			const FVector At = Ground(C.FacE + 48.0 * FMath::Cos(A), C.FacN + 48.0 * FMath::Sin(A), 0.0);
+			for (UStaticMesh* M : It.Value)
+			{
+				UStaticMeshComponent* P = NewObject<UStaticMeshComponent>(this);
+				P->SetStaticMesh(M);
+				P->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+				P->SetupAttachment(Root);
+				P->RegisterComponent();
+				const FRotator R(0.0, FMath::RadiansToDegrees(A) + 180.0, 0.0);
+				P->SetWorldLocationAndRotation(At - R.RotateVector(FVector(B.GetCenter().X, B.GetCenter().Y, 0.0) * Sc) + FVector(0, 0, -B.Min.Z * Sc), R);
+				P->SetWorldScale3D(FVector(Sc));
+				Parts.Add(P);
+			}
+		}
+		if (ByProduct.Num()) UE_LOG(LogSimumav, Log, TEXT("Kritik tesis: %d Fab tesis dekoru (yalnız görsel)"), ByProduct.Num());
 	}
 	// korunan alan halkası (isabet yarıçapı)
 	if (UStaticMeshComponent* Ring = AddPart(CylMesh, F + FVector(0, 0, 8.0), FVector(C.HitR * 2.0, C.HitR * 2.0, 0.002), FRotator::ZeroRotator,

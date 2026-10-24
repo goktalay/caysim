@@ -92,6 +92,23 @@ alt %10 yüzeyinden, `SurroundPercentile`, `SurroundSinkCm`). Yeni bir "havada a
 Ayarlar `Config/DefaultGame.ini` → `[/Script/Simumav.SmvScenery]`: `Enabled`, `HyperTerrain`, `TreeCullM` (ağaç kesme mesafesi, m),
 `GrassCount`, `SkyTraffic`, `SkyTrafficLengthM`, `CityWindowSwap`, `CityWindowEmissive`, `SurroundRadiusM`, `SurroundPercentile`.
 
+## Şehir hayatı, yeni gövdeler, gemi (2026-10)
+
+Kod: `Source/Simumav/Private/SmvCityLife.cpp` (trafik + kalabalık), `SmvFabContent::BlueprintBody` (Blueprint gövdeleri),
+`SmvGameRulesActor::BuildDefense` (gemi). Pişirilen klasörler `SmvCityLife.cpp` → `PISIR-KLASORLERI` bloğu (CI okur).
+
+| Paket | Nerede | Not |
+|---|---|---|
+| City Traffic Pro | Şehir parkuru: 6×6 cadde ızgarasında şerit trafiği (yön başına 2 şerit, öndeki araçla aralık, iki evreli kavşak ışığı, tekerlek kemikleri döner); Özel parkur › Şehir: park etmiş araçlar | yalnız `Cars/Meshes/Skeletal_Meshes` (12 araç) pişirilir; paketin ChaosVehicles trafik Blueprint'leri kullanılmaz. Ayarlar `[/Script/Simumav.SmvCityLife]`: `CityCars` (72), `CarSpeedKmh` (38), `CarCullM` (900) |
+| OverCrowd (motor eklentisi, 5.8) | `Simumav.uproject`'te etkin (isteğe bağlı) | OverCrowd bir **VAT araç takımı**dır: karakter içermez; iskeletli ağ + animasyondan VAT ağı/dokusu editörde üretilir. Üretilen VAT ağları `/Game/Fab/Crowd` altına konunca kalabalık onlarla kurulur; yoksa geçici olarak paketteki UE5 Manny/Quinn (FPV Drone paketi) yürüme/bekleme animasyonlu iskeletli ağlar kullanılır. Ayarlar: `CityPeople` (120), `PeopleCullM` (450) |
+| Military Hexacopter (Bendylab) | katalog `fab:hexa` — hexa X (SITL `hexax`), 2,4 m | Blueprint yapım betiğinden parçalar; pervane bileşenleri döner |
+| Interceptor Drone FPV (Bendylab) | katalog `fab:bls_icept` (önleyici tipi) | yalnız oyuncu kontrollü araç gövdesi |
+| Drone Mega Pack | `fab:mega_a` (quad), `fab:mega_d` (FPV quad), `fab:mega_b` / `fab:mega_c` (sabit kanat İHA) | A/D iskeletli (kemik ipucu `sphere`), B/C Blueprint parçaları |
+| FPV Drone (AT_Drone) | `fab:atdrone` (FPV quad, rotor kemikleri döner) | paketin Manny/Quinn ağları ve animasyonları kalabalıkta da kullanılır |
+| JMSDF Mogami fırkateyni | Gemi savunmada korunacak gemi (`/Game/Fab/Ships`; OBJ, parça parça içe aktarılır) | yalnız görsel; boy `ShipLengthM` (133), su çekimi `ShipDraftM` (5) — `[/Script/Simumav.SmvFabContent]` |
+| Drone 196 UAV, DJI Agras T50, Armored Vehicle, Satellite Dish | **kullanılamadı** | yalnız `.blend` biçiminde indirilmiş; runner'da Blender yok. Fab'den FBX/GLB biçimi indirilirse otomatik içe aktarılır |
+| GERAN-2 + pickup rampası | `/Game/Fab/Props` (statik dekor) | yalnız `launcher.fbx` (rampalı pikap) içe aktarılır; savunma hedefi olarak kullanılmaz |
+
 ## Fab paketleri — kullanım durumu
 
 | Paket | Durum | Not |

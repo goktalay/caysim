@@ -386,6 +386,13 @@ USoundBase* FSmvFabContent::LoadEngineSound(const TCHAR* Kind)
 		Path = FString::Printf(TEXT("/Game/Fab/Sounds/SC_Engine_%s.SC_Engine_%s"), *K, *K);
 	}
 	if (!Path.Contains(TEXT("."))) Path += TEXT(".") + FPackageName::GetShortName(Path);   // paket yolu verildiyse nesne yolu
+	// dron motor döngüleri (Fab "Drone Sounds"): çok rotor / hexa / küçük FPV (CI kopyası yoksa paketteki cue doğrudan)
+	if (!FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(Path)))
+	{
+		const TCHAR* Cue = K == TEXT("Multi") ? TEXT("04_Multi-Rotor_Drone_Flying_Object_Loop_Cue") : K == TEXT("Hexa") ? TEXT("10_Hexacopter_Drone_Flying_Object_Loop_Cue")
+			: K == TEXT("Fpv") ? TEXT("03_Small_Drone_Flying_Object_Loop_Cue") : nullptr;
+		if (Cue) Path = FString::Printf(TEXT("/Game/Drone-Sounds/Cue/44_1kHz-24bit/%s.%s"), Cue, Cue);
+	}
 	USoundBase* S = nullptr;
 	if (FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(Path))) S = LoadObject<USoundBase>(nullptr, *Path);
 	if (S)

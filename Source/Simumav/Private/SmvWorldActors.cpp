@@ -398,10 +398,15 @@ void ASmvDroneActor::ConfigureVisual(const FString& InType, const FString& Model
 		if (Cm->Sound == TEXT("jet")) SoundKind = TEXT("Jet");
 		else if (Cm->Sound == TEXT("prop")) SoundKind = TEXT("Prop");
 		else if (Cm->Sound == TEXT("pusher")) SoundKind = TEXT("Pusher");
+		// çok rotor / FPV: Fab "Drone Sounds" döngüleri (hexa/octa için hexacopter, FPV için küçük dron sesi)
+		else if (Cm->Sound == TEXT("multi")) SoundKind = InType == TEXT("fpv") ? TEXT("Fpv") : Cm->Motors >= 6 ? TEXT("Hexa") : TEXT("Multi");
 	}
+	else if (InType == TEXT("multirotor")) SoundKind = TEXT("Multi");
+	else if (InType == TEXT("fpv")) SoundKind = TEXT("Fpv");
 	USoundBase* EngineSnd = SoundKind ? FSmvFabContent::LoadEngineSound(SoundKind) : nullptr;
 	bFabEngineSound = EngineSnd != nullptr;
-	SynthShare = !bFabEngineSound ? 1.f : (InType == TEXT("vtol") ? 0.6f : 0.f);
+	// prosedürel sentezin payı: uçak 0 (motor sesi tek başına), VTOL 0,6 (dikey rotorlar), dronlar 0,25 (pervane vızıltısı katmanı)
+	SynthShare = !bFabEngineSound ? 1.f : (InType == TEXT("vtol") ? 0.6f : (InType == TEXT("plane") || InType == TEXT("interceptor")) ? 0.f : 0.25f);
 	EngineThr = 0.f;
 	if (bFabEngineSound)
 	{
