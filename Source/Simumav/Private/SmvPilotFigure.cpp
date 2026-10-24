@@ -373,30 +373,32 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 	{
 		const FTransform Rel = MhBody->GetRelativeTransform();
 		auto B = [this, &Rel](const TCHAR* N, FVector& Out) { if (MhBody->GetBoneIndex(FName(N)) == INDEX_NONE) return false; Out = Rel.TransformPosition(MhBody->GetBoneLocationByName(FName(N), EBoneSpaces::ComponentSpace)); return true; };
-		const FLinearColor Dark = Suit * 0.55f, Strap(0.09f, 0.1f, 0.11f), Boot(0.06f, 0.06f, 0.07f);
-		FVector Sp2, Sp5, Pel, ClL, ClR, ThL, ThR, FtL, FtR, CaL, CaR;
-		if (B(TEXT("spine_02"), Sp2) && B(TEXT("spine_05"), Sp5) && B(TEXT("clavicle_l"), ClL) && B(TEXT("clavicle_r"), ClR))
+		const FLinearColor Vest(0.035f, 0.04f, 0.035f), Strap(0.02f, 0.02f, 0.022f), Boot(0.03f, 0.03f, 0.035f), Collar = Suit * 0.8f;
+		FVector Sp3, Sp5, Pel, ClL, ClR, ThL, ThR, FtL, FtR, CaL, CaR, Nk;
+		if (B(TEXT("spine_03"), Sp3) && B(TEXT("spine_05"), Sp5) && B(TEXT("clavicle_l"), ClL) && B(TEXT("clavicle_r"), ClR))
 		{
-			const float Wd = (float)FVector::Dist(ClL, ClR) * 1.15f + 12.f;
-			const FVector C = 0.5 * (Sp2 + Sp5) + FVector(2.0, 0.0, -2.0);
-			const float H = (float)(Sp5.Z - Sp2.Z) + 8.f;
-			Mat(Part(Torso, 0, C, FVector(27.f, Wd, H), Dark), 0.7f, 0.f);
-			for (int32 s2 = -1; s2 <= 1; s2 += 2) Mat(Part(Torso, 0, C + FVector(14.0, s2 * Wd * 0.22, 0.0), FVector(1.4f, 4.f, H + 2.f), Strap), 0.45f, 0.f);
-			Mat(Part(Torso, 0, C + FVector(14.2, 0.0, -H * 0.2), FVector(1.2f, Wd * 0.6f, 3.5f), Strap), 0.45f, 0.f);
+			// göğüs takımı yeleği (koyu, gövdeden taşar) + omuz kayışları + göğüs kayışı + arma
+			const float Wd = (float)FVector::Dist(ClL, ClR) * 1.05f + 10.f;
+			const float H = (float)(Sp5.Z - Sp3.Z) + 16.f;
+			const FVector C = FVector(0.5 * (Sp3.X + Sp5.X) + 3.0, 0.5 * (Sp3.Y + Sp5.Y), 0.5 * (Sp3.Z + Sp5.Z) - 2.0);
+			Mat(Part(Torso, 0, C, FVector(30.f, Wd, H), Vest), 0.8f, 0.f);
+			for (int32 s2 = -1; s2 <= 1; s2 += 2) Mat(Part(Torso, 0, C + FVector(15.2, s2 * Wd * 0.24, H * 0.1), FVector(1.2f, 4.f, H * 0.9f), Strap), 0.5f, 0.f);
+			Mat(Part(Torso, 0, C + FVector(15.4, 0.0, -H * 0.15), FVector(1.f, Wd * 0.7f, 3.2f), Strap), 0.5f, 0.f);
 			const FLinearColor PatchC = PfHex(A.PatchColor, FLinearColor(0.95f, 0.75f, 0.25f));
-			if (A.Patch != TEXT("none") && !A.Patch.IsEmpty()) Mat(Part(Torso, 0, C + FVector(14.4, Wd * 0.25, H * 0.25), FVector(1.f, 7.f, 6.f), PatchC), 0.5f, 0.f, PatchC * 0.15f);
+			if (A.Patch != TEXT("none") && !A.Patch.IsEmpty()) Mat(Part(Torso, 0, C + FVector(15.6, Wd * 0.26, H * 0.28), FVector(1.f, 7.f, 6.f), PatchC), 0.5f, 0.f, PatchC * 0.15f);
 		}
+		if (B(TEXT("neck_01"), Nk)) Mat(Part(Torso, 1, Nk + FVector(0.0, 0.0, -3.0), FVector(17.f, 17.f, 7.f), Collar), 0.7f, 0.f);   // yaka (yüz ağının boyun derisini örter)
 		if (B(TEXT("pelvis"), Pel) && B(TEXT("thigh_l"), ThL) && B(TEXT("thigh_r"), ThR))
 		{
-			const float Hw = (float)FVector::Dist(ThL, ThR) + 24.f;
-			Mat(Part(Torso, 1, Pel + FVector(0.0, 0.0, 9.0), FVector(26.f, Hw, 7.f), Strap), 0.4f, 0.f);                // kemer
-			Mat(Part(Torso, 0, Pel + FVector(13.5, 0.0, 9.0), FVector(1.5f, 6.5f, 4.2f), FLinearColor(0.55f, 0.57f, 0.6f)), 0.25f, 0.9f);
-			Mat(Part(Torso, 1, Pel + FVector(0.0, 0.0, -6.0), FVector(25.f, Hw - 2.f, 26.f), Dark), 0.75f, 0.f);       // kalça / uyluk örtüsü
+			const float Hw = (float)FVector::Dist(ThL, ThR) + 22.f;
+			Mat(Part(Torso, 1, Pel + FVector(0.0, 0.0, 8.0), FVector(25.f, Hw, 6.f), Strap), 0.4f, 0.f);                // kemer
+			Mat(Part(Torso, 0, Pel + FVector(13.0, 0.0, 8.0), FVector(1.5f, 6.5f, 4.2f), FLinearColor(0.55f, 0.57f, 0.6f)), 0.25f, 0.9f);
+			Mat(Part(Torso, 1, Pel + FVector(0.0, 0.0, -3.0), FVector(23.f, Hw - 4.f, 15.f), Suit * 0.7f), 0.75f, 0.f);  // kalça örtüsü
 		}
 		if (B(TEXT("foot_l"), FtL) && B(TEXT("foot_r"), FtR) && B(TEXT("calf_l"), CaL) && B(TEXT("calf_r"), CaR))
 		{
-			for (const FVector& Ft : { FtL, FtR }) Mat(Part(Torso, 0, FVector(Ft.X + 5.0, Ft.Y, 6.0), FVector(26.f, 11.f, 12.f), Boot), 0.45f, 0.f);
-			for (const FVector& Ca : { CaL, CaR }) Mat(Part(Torso, 1, FVector(Ca.X, Ca.Y, 16.0), FVector(12.f, 12.f, 20.f), Boot), 0.45f, 0.f);
+			for (const FVector& Ft : { FtL, FtR }) Mat(Part(Torso, 0, FVector(Ft.X + 8.0, Ft.Y, 5.5), FVector(31.f, 12.f, 11.f), Boot), 0.45f, 0.f);
+			for (const FVector& Ca : { CaL, CaR }) Mat(Part(Torso, 1, FVector(Ca.X, Ca.Y, 15.0), FVector(13.f, 13.f, 20.f), Boot), 0.45f, 0.f);
 		}
 	}
 	// baş: kemik konumu (aktör uzayı) → kask/vizör düğümü; göz yüksekliği

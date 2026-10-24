@@ -793,7 +793,6 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 			const double SnowLine = W.MountainHeight >= 200.0 ? Origin.Z + W.MountainHeight * 0.65 * 100.0 : 1.0e8;
 			TerrainMid->SetScalarParameterValue(TEXT("SnowLine"), (float)SnowLine);
 			TerrainMid->SetScalarParameterValue(TEXT("SnowFade"), (float)FMath::Max(2000.0, W.MountainHeight * 15.0));
-			TerrainMid->SetVectorParameterValue(TEXT("Tint"), FLinearColor(0.85f, 1.f, 0.75f));
 			TerrainMid->SetScalarParameterValue(TEXT("Sand"), 0.f);
 			UE_LOG(LogSimumav, Log, TEXT("Hyper arazi: kar çizgisi %.0f cm (köken Z %.0f), ıslaklık %.2f, kar %.2f"), SnowLine, Origin.Z, PendingWet, PendingSnow);
 		}

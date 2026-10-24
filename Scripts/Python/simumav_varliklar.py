@@ -324,7 +324,7 @@ def hyper_arazi_malzemesi():
     if eksik:
         log("Hyper dokuları yok (" + ", ".join(eksik) + ") — M_SmvTerrainHyper üretilmedi (M_SmvTerrainWx kalır)")
         return
-    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "5")
+    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "6")
     if m is None:
         return
     try:
@@ -359,12 +359,24 @@ def hyper_arazi_malzemesi():
         def uv(olcek_cm):
             return g.mul(xy, 1.0 / olcek_cm)
 
+        # s6: dokular yalnız AYRINTI (parlaklık) için; katman rengi parametreden — duman testinde Hyper dokularının kendi tonu
+        # uzakta beyazımsı / kırmızımsı görünüyordu. ayrinti = clamp(parlaklık × kazanç, 0,55, 1,45)
+        lumv = g.e(unreal.MaterialExpressionConstant3Vector, constant=unreal.LinearColor(0.3, 0.59, 0.11, 1.0))
+
+        def ayr(tex, kazanc):
+            d = g.e(unreal.MaterialExpressionDotProduct)
+            g.bag(g.maske(tex, r=True, g=True, b=True), d, "A")
+            g.bag(lumv, d, "B")
+            k = g.e(unreal.MaterialExpressionClamp, min_default=0.55, max_default=1.45)
+            g.bag(g.mul(d, kazanc), k, "")
+            return k
+
         makro = g.sat(g.mul(g.sub(g.maske(doku("makro", uv(30000.0)), r=True), 0.35), 2.5))
-        genis = g.lerp(0.82, 1.12, g.maske(doku("gurultu", uv(9000.0)), r=True))
-        yakin = g.lerp(doku("cimD", uv(300.0)), doku("ormanD", uv(420.0)), makro)
-        irak = g.lerp(doku("cimD", uv(1800.0)), doku("ormanD", uv(2600.0)), makro)
-        zemin = g.mul(g.lerp(yakin, irak, uzak), genis)
-        kum = g.lerp(doku("kumD", uv(380.0)), doku("kumD", uv(2300.0)), uzak)
+        genis = g.lerp(0.85, 1.1, g.maske(doku("gurultu", uv(9000.0)), r=True))
+        cim = g.mul(g.vektor("GrassColor", 0.13, 0.2, 0.065), g.lerp(ayr(doku("cimD", uv(300.0)), 2.2), ayr(doku("cimD", uv(1800.0)), 2.2), uzak))
+        orman = g.mul(g.vektor("ForestColor", 0.17, 0.14, 0.08), g.lerp(ayr(doku("ormanD", uv(420.0)), 2.5), ayr(doku("ormanD", uv(2600.0)), 2.5), uzak))
+        zemin = g.mul(g.lerp(cim, orman, makro), genis)
+        kum = g.mul(g.vektor("SandColor", 0.56, 0.45, 0.31), g.lerp(ayr(doku("kumD", uv(380.0)), 1.8), ayr(doku("kumD", uv(2300.0)), 1.8), uzak))
         kum_on = g.skaler("Sand", 0.0)
         zemin = g.lerp(zemin, g.mul(kum, genis), kum_on)
         zemin = g.mul(zemin, g.vektor("Tint", 1.0, 1.0, 1.0))
@@ -372,17 +384,16 @@ def hyper_arazi_malzemesi():
         uvA = g.mul(g.ekle(g.maske(wp, g=True), z), 1.0 / 900.0)
         uvB = g.mul(g.ekle(g.maske(wp, r=True), z), 1.0 / 900.0)
         wB = g.sat(g.ikili(unreal.MaterialExpressionDivide, nx, g.add(g.add(nx, ny), 0.001)))
-        kaya = g.lerp(doku("kayaD", uvB), doku("kayaD", uvA), wB)
+        kaya = g.mul(g.vektor("RockColor", 0.3, 0.28, 0.25), g.lerp(ayr(doku("kayaD", uvB), 2.2), ayr(doku("kayaD", uvA), 2.2), wB))
         kayaN = g.lerp(doku("kayaN", uvB, True), doku("kayaN", uvA, True), wB)
         egim = g.sub(1.0, nz)
         kaya_m = g.sat(g.add(g.mul(g.sub(egim, g.skaler("RockSlope", 0.22)), g.skaler("RockSharp", 5.0)), g.mul(g.sub(makro, 0.5), 0.3)))
-        # kar: hava parametresi (düz yüzey) ve kar çizgisi (yükseklik; SnowLine cm, varsayılan kapalı)
         duz = g.sat(g.sub(g.mul(nz, 2.0), 1.0))
         kar_h = g.mul(g.skaler("Snow", 0.0), duz)
         kar_y = g.mul(g.sat(g.ikili(unreal.MaterialExpressionDivide, g.sub(z, g.skaler("SnowLine", 1.0e8)), g.skaler("SnowFade", 4000.0))), g.sat(g.sub(g.mul(nz, 2.5), 1.2)))
         kar_m = g.ikili(unreal.MaterialExpressionMax, kar_h, kar_y)
         renk = g.lerp(zemin, kaya, kaya_m)
-        renk = g.lerp(renk, doku("karD", uv(500.0)), kar_m)
+        renk = g.lerp(renk, g.mul(g.vektor("SnowColor", 0.82, 0.85, 0.9), ayr(doku("karD", uv(500.0)), 1.1)), kar_m)
         islak = g.skaler("Wetness", 0.0)
         renk = g.mul(renk, g.lerp(1.0, 0.55, islak))
         mel.connect_material_property(renk, "", unreal.MaterialProperty.MP_BASE_COLOR)

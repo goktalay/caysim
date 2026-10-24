@@ -464,8 +464,8 @@ void ASmvScenery::BuildGroundDisk(const FVector& C, double FlatM, double OuterM,
 		GroundMid = UMaterialInstanceDynamic::Create(Tm, this);
 		const bool bDesert = Biome == TEXT("Desert");
 		GroundMid->SetScalarParameterValue(TEXT("Sand"), bDesert ? 1.f : 0.f);
-		// Hyper kum dokusu kırmızımsıydı (adanın açık kumuyla uyumsuz) → kırmızıyı bastıran ton; çayır biraz yeşile
-		GroundMid->SetVectorParameterValue(TEXT("Tint"), bDesert ? FLinearColor(0.8f, 0.98f, 1.12f) : FLinearColor(0.85f, 1.f, 0.75f));
+		// katman renkleri malzemede (s6); çöl kumu adanın açık kumuna yakın
+		if (bDesert) GroundMid->SetVectorParameterValue(TEXT("SandColor"), FLinearColor(0.62f, 0.5f, 0.34f));
 		GroundMid->SetScalarParameterValue(TEXT("Snow"), Biome == TEXT("Snow") ? 0.6f : 0.f);
 		GroundMid->SetScalarParameterValue(TEXT("Wetness"), 0.f);
 		GroundMid->SetScalarParameterValue(TEXT("RockSlope"), bDesert ? 0.35f : 0.22f);
