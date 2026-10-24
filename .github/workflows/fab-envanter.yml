@@ -79,6 +79,18 @@ jobs:
             } else { W "  (Content yok)" }
             try { $acl = (Get-Acl $fp).Access | Where-Object { $_.IdentityReference -match 'NETWORK SERVICE|Users|Everyone|Authenticated' } | ForEach-Object { $_.IdentityReference.ToString() + ':' + $_.FileSystemRights } ; W ("  izinler: " + ($acl -join '; ')) } catch { W "  izinler okunamadi" }
           } else { W ("  (yok) " + $fp) }
+          W "=== Alt projeler (hazirlama projesi altindaki *.uproject) ==="
+          if (Test-Path $fp) {
+            Get-ChildItem $fp -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+              $u = Get-ChildItem $_.FullName -Filter *.uproject -File -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($u) {
+                $flags = @('Content', 'Config', 'Plugins', 'Source') | ForEach-Object { $_ + '=' + (Test-Path (Join-Path $u.DirectoryName $_)) }
+                W ("  " + $u.FullName + "  [" + (Size $u.DirectoryName) + "]  " + ($flags -join ' '))
+                Get-ChildItem (Join-Path $u.DirectoryName 'Content') -Directory -ErrorAction SilentlyContinue | ForEach-Object { W ("    Content\" + $_.Name + "  [" + (Size $_.FullName) + "]") }
+                try { $pj = Get-Content $u.FullName -Raw | ConvertFrom-Json; W ("    eklentiler: " + ((@($pj.Plugins) | Where-Object { $_.Enabled } | ForEach-Object { $_.Name }) -join ', ')) } catch { W "    uproject okunamadi" }
+              }
+            }
+          }
           W "=== Haritalar (.umap; hazirlama projesi + VaultCache data\Content) ==="
           $hk = @("$fp\Content") + @(Get-ChildItem $vc -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' } | ForEach-Object { Join-Path $_.FullName 'data\Content' })
           foreach ($k in $hk) {

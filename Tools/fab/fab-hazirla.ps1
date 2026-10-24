@@ -89,6 +89,31 @@ try {
 		Uyari "hazirlama projesi yok: $fabContent (docs/fab-icerik.md - bos UE 5.8 projesi olusturup Fab paketlerini 'Projeye Ekle' ile ekleyin)"
 	}
 
+	# ---------------- a2) hazirlama projesi altindaki ALT PROJELER ----------------
+	# Bazi Fab urunleri "Projeye Ekle" yerine kendi projesini olusturur (D:\SimumavFab\<Urun>\<Urun>.uproject). Content klasorleri
+	# /Game yollari korunarak alinir (VaultCache'ten ONCE: ayni paket iki yerde varsa alt proje - kullanici degisikligi olabilir - gecerli).
+	# Config / Plugins / Source yalniz raporlanir: gereken eklenti ve ayarlar Simumav.uproject / Config'e elle (kodla) eklenir.
+	if (Test-Path -LiteralPath $FabProje) {
+		$anaEklenti = @()
+		try { $anaEklenti = @((Get-Content -LiteralPath $uproject -Raw | ConvertFrom-Json).Plugins | ForEach-Object { $_.Name }) } catch { }
+		foreach ($alt in (Get-ChildItem -LiteralPath $FabProje -Directory -ErrorAction SilentlyContinue)) {
+			$up = Get-ChildItem -LiteralPath $alt.FullName -Filter *.uproject -File -ErrorAction SilentlyContinue | Select-Object -First 1
+			if (-not $up) { continue }
+			Bilgi "alt proje: $($alt.Name) ($($up.Name))"
+			$ac = Join-Path $alt.FullName 'Content'
+			if (Test-Path -LiteralPath $ac) { PaketKopyala $ac "alt:$($alt.Name)" }
+			try {
+				$j = Get-Content -LiteralPath $up.FullName -Raw | ConvertFrom-Json
+				foreach ($pl in @($j.Plugins)) { if ($pl.Enabled -and -not ($anaEklenti -contains $pl.Name)) { Uyari "alt proje $($alt.Name) eklentisi projede yok: $($pl.Name)" } }
+			} catch { Uyari "alt proje uproject okunamadi: $($up.FullName)" }
+			$cfg = Join-Path $alt.FullName 'Config\DefaultEngine.ini'
+			if (Test-Path -LiteralPath $cfg) {
+				Select-String -LiteralPath $cfg -Pattern '^(r\.GPUSkin|SkeletalMesh\.|r\.SkinCache|r\.VirtualTextures|r\.RayTracing|r\.DynamicGlobalIllumination|r\.Lumen|\+?Profiles=|DefaultGraphicsRHI)' | ForEach-Object { Bilgi "  ayar ($($alt.Name)): $($_.Line.Trim())" }
+			}
+			foreach ($k in @('Plugins', 'Source')) { if (Test-Path -LiteralPath (Join-Path $alt.FullName $k)) { Uyari "alt proje $($alt.Name): $k klasoru var - otomatik eklenmez (kod / eklenti incelemesi gerekir)" } }
+		}
+	}
+
 	# ---------------- c) VaultCache UE paketleri ----------------
 	if (Test-Path -LiteralPath $Vault) {
 		foreach ($v in (Get-ChildItem -LiteralPath $Vault -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' })) {
