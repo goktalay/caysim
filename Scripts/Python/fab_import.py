@@ -61,30 +61,37 @@ def simgeler(j):
             elif d.lower().endswith(".unitypackage"):
                 gecici = tempfile.mkdtemp(prefix="smv_joystix_")
                 try:
-                    with tarfile.open(tam, "r:gz") as tf:
-                        uyeler = {m.name: m for m in tf.getmembers()}
-                        for ad, m in uyeler.items():
-                            if not ad.endswith("/pathname"):
+                    # .unitypackage = tar.gz; üyeler SIRAYLA tek geçişte okunur (extractfile ile rastgele erişim gz'yi her seferinde
+                    # baştan açıyordu — ilk denemede 70 dk'da bitmedi). <guid>/pathname + <guid>/asset eşlenir.
+                    yollar, veriler = {}, {}
+                    with tarfile.open(tam, "r|gz") as tf:
+                        for m in tf:
+                            if not m.isfile():
                                 continue
-                            yol = tf.extractfile(m).read().decode("utf-8", "replace").splitlines()[0].strip()
-                            veri = uyeler.get(ad[: -len("pathname")] + "asset")
-                            if not yol.lower().endswith(".png") or veri is None:
-                                continue
-                            hedef_dosya = os.path.join(gecici, *yol.split("/")[-4:])
-                            os.makedirs(os.path.dirname(hedef_dosya), exist_ok=True)
-                            with open(hedef_dosya, "wb") as f:
-                                f.write(tf.extractfile(veri).read())
-                            pngler.append((os.path.relpath(hedef_dosya, gecici), hedef_dosya))
+                            klasor, _, ad = m.name.rpartition("/")
+                            if ad == "pathname":
+                                yollar[klasor] = tf.extractfile(m).read().decode("utf-8", "replace").splitlines()[0].strip()
+                            elif ad == "asset":
+                                veriler[klasor] = tf.extractfile(m).read()
+                    for klasor, yol in yollar.items():
+                        if not yol.lower().endswith(".png") or klasor not in veriler:
+                            continue
+                        hedef_dosya = os.path.join(gecici, *yol.split("/")[-4:])
+                        os.makedirs(os.path.dirname(hedef_dosya), exist_ok=True)
+                        with open(hedef_dosya, "wb") as f:
+                            f.write(veriler[klasor])
+                        pngler.append((os.path.relpath(hedef_dosya, gecici), hedef_dosya))
+                    log(f"unitypackage: {len(yollar)} yol, {len(veriler)} varlık")
                 except Exception as e:  # noqa: BLE001
                     uyar(f"unitypackage okunamadi ({tam}): {e}")
     log(f"simge paketi: {len(pngler)} PNG ({kaynak})")
     for rel, _ in pngler[:80]:
         log(f"simge örneği: {rel}")
-    # yalnız düz ("Filled") biçem içe aktarılır (arayüze uygun, sayı ~1/3; Realistic / Outline alınmaz); yoksa hepsi. En çok 1200.
+    # yalnız düz ("Filled") biçem içe aktarılır (arayüze uygun, sayı ~1/3; Realistic / Outline alınmaz); yoksa hepsi. En çok 800.
     duz = [x for x in pngler if "filled" in x[0].lower()]
     if duz:
         pngler = duz
-    pngler = pngler[:1200]
+    pngler = pngler[:800]
     log(f"simge paketi: içe aktarılacak {len(pngler)} PNG")
     if not pngler:
         return {"hedef": hedef, "ok": False, "iskelet": False, "varliklar": [], "kemikler": []}
