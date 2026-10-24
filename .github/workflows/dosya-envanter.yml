@@ -54,7 +54,7 @@ jobs:
               W ("  " + $_.FullName.Substring($r.Length) + "  [" + $fs.Count + " dosya, " + ('{0:N1}' -f $mb) + " MB]")
             }
             W "=== Metin dosyalari (ilk 6000 karakter)"
-            Get-ChildItem -LiteralPath $r -Recurse -File -Include *.uproject,*.uplugin,*.ini,*.json,*.txt,*.md -ErrorAction SilentlyContinue | Where-Object { $_.Length -lt 200000 } | Select-Object -First 40 | ForEach-Object {
+            Get-ChildItem -LiteralPath $r -Recurse -File -Include *.uproject,*.uplugin,*.ini,*.json,*.txt,*.md,metadata -ErrorAction SilentlyContinue | Where-Object { $_.Length -lt 200000 } | Select-Object -First 40 | ForEach-Object {
               W ("--- " + $_.FullName.Substring($r.Length) + "  " + $_.Length)
               $t = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
               if ($t) { W ($t.Substring(0, [Math]::Min(6000, $t.Length))) }
