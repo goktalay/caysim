@@ -68,6 +68,30 @@ pakete girmesi için `+DirectoriesToAlwaysCook` gerekir) ya da `Scripts/Python/f
 FPV ve önleyici gövdesi (`/Game/Fab/DroneFpv`). Askeri modeller (Tank, MIM-104 Patriot, yüksek güçlü mikrodalga anti-dron
 sistemi) yalnız **statik sahne dekorudur**: atış, güdüm, hedefleme ya da başka davranış yoktur.
 
+## Manzara (ağaç, kaya, ot, uzak dağ, gök trafiği, şehir sokakları)
+
+Kod: `Source/Simumav/Private/SmvScenery.cpp` (`FSmvScenery`, `ASmvScenery`, `ASmvSkyTraffic`). Hepsi **yalnız görsel**dir; paket yoksa
+eski temel şekil dünyası kalır. Pakete pişirilen klasörler dosyadaki `MANZARA-KLASORLERI` bloğundadır (CI okur).
+
+| Paket | Nerede kullanılır |
+|---|---|
+| Brushify Forest Pack | prosedürel dünyada ağaçlar (huş / sedir / akçaağaç), çalılar, orman kayaları; ufuk dağları (`DistanceMeshes`, biyom malzemesi `MI_<ağ>_<Desert/Rocky/Snow>`); şehir meydanı ve şehir dışı park ağaçları |
+| ia_scatter | kaya (`rock1`, `rock2`) ve ot / eğrelti / yabani ot ağları. Eklentinin dağıtım Blueprint'i (`BP_ia_scatter`, kontrol paneli) editör aracıdır; çalışma anında dağıtımı `ASmvScenery::Scatter` yapar (tohumlu, pist/su alanı boş, kesme mesafeli HISM) |
+| Hyper Auto Landscape Material v4 | dokuları `M_SmvTerrainHyper` malzemesinde (Editor Python üretir): eğime göre kaya, kar çizgisi + hava karı, çöl kumu (`Sand`), ıslaklık. Hyper'ın kendi malzemesi Landscape katman düğümleri kullandığından ProceduralMesh arazisine doğrudan uygulanmaz |
+| Interior Cubemap System | şehirde City Sample pencere malzemesi (`M_Window`) bu paketin ön ayarlarıyla değiştirilir (`CityWindowSwap`); gece aşırı parlayan pencereler yerine iç mekân görünümü |
+| Flying AI | gökte uzak trafik: 3 araç büyük elips yörüngelerde (`SkyTraffic`, `SkyTrafficLengthM`) |
+| Niagara (Fab paketlerinden) | Editor Python tüm Fab Niagara sistemleri içinden toz / zerre / kor türünü `NS_SmvDust` olarak kopyalar; ana menü kamerasının önünde süzülür (`MenuDust`) |
+
+**Askeri Üs** haritası boşlukta bir ada olduğu için kayıt tablosunda çevre biyomu `Desert` tanımlıdır: uçuşta ve ana menüde adanın altından
+12 km'lik kum arazisi (Hyper malzemesi, kum tepeleri), kaya/çalı ve çöl dağları kurulur (`ASmvScenery::BuildSurround`; zemin yüksekliği adanın
+alt %10 yüzeyinden, `SurroundPercentile`, `SurroundSinkCm`). Yeni bir "havada ada" haritası için tablo satırının sonuna biyom adı eklenir.
+
+**Şehir:** asfalt ve kaldırım taşı (`M_SmvStreet`), 12 cm bordürlü adalar, orta şerit ve yaya geçidi çizgileri, ada köşelerinde sokak lambaları
+(alacakaranlık/gece yanar), kalkış meydanı ağaçları, şehir dışında park ve ufuk dağları.
+
+Ayarlar `Config/DefaultGame.ini` → `[/Script/Simumav.SmvScenery]`: `Enabled`, `HyperTerrain`, `TreeCullM` (ağaç kesme mesafesi, m),
+`GrassCount`, `SkyTraffic`, `SkyTrafficLengthM`, `CityWindowSwap`, `CityWindowEmissive`, `SurroundRadiusM`, `SurroundPercentile`.
+
 ## Adım adım (şirket bilgisayarı)
 
 1. **Hazırlama projesini bir kez oluşturun**

@@ -1,0 +1,79 @@
+# Simumav - esnek dosya envanteri (sirket bilgisayari). Yalniz okur: hicbir dosyayi degistirmez, kopyalamaz.
+# Verilen koklerde klasor agaci (klasor basina dosya sayisi/boyut), desene uyan dosyalar (en cok N) ve kucuk metin dosyalarinin
+# (uproject, uplugin, ini, json, txt, md) icerigi. Fab paketlerinin yapisini editorsuz ogrenmek icin. Sonuc dosya-envanter.txt artefakti.
+name: dosya-envanter
+
+on:
+  workflow_dispatch:
+    inputs:
+      kokler:
+        description: "Taranacak klasorler (; ile ayrilmis)"
+        type: string
+        required: true
+      desen:
+        description: "Listelenecek dosya deseni (ornek *.uasset)"
+        type: string
+        default: "*.uasset"
+      azami:
+        description: "Kok basina en cok dosya satiri"
+        type: string
+        default: "3000"
+      filtre:
+        description: "Dosya yolu suzgeci (regex, bos = hepsi)"
+        type: string
+        default: ""
+
+jobs:
+  envanter:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, unreal]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Envanter
+        env:
+          KOKLER: ${{ inputs.kokler }}
+          DESEN: ${{ inputs.desen }}
+          AZAMI: ${{ inputs.azami }}
+          FILTRE: ${{ inputs.filtre }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = Join-Path $env:RUNNER_TEMP 'dosya-envanter.txt'
+          function W($s) { Add-Content -Path $out -Value $s -Encoding UTF8 }
+          $max = [int]$env:AZAMI
+          foreach ($r in ($env:KOKLER.Split(';') | Where-Object { $_ })) {
+            W ""
+            W ("################ " + $r)
+            if (-not (Test-Path -LiteralPath $r)) { W "  (yok)"; continue }
+            W "=== Klasor agaci (dosya sayisi, MB)"
+            Get-ChildItem -LiteralPath $r -Directory -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1500 | ForEach-Object {
+              $fs = @(Get-ChildItem -LiteralPath $_.FullName -File -ErrorAction SilentlyContinue)
+              $mb = ($fs | Measure-Object Length -Sum).Sum / 1MB
+              W ("  " + $_.FullName.Substring($r.Length) + "  [" + $fs.Count + " dosya, " + ('{0:N1}' -f $mb) + " MB]")
+            }
+            W "=== Metin dosyalari (ilk 6000 karakter)"
+            Get-ChildItem -LiteralPath $r -Recurse -File -Include *.uproject,*.uplugin,*.ini,*.json,*.txt,*.md -ErrorAction SilentlyContinue | Where-Object { $_.Length -lt 200000 } | Select-Object -First 40 | ForEach-Object {
+              W ("--- " + $_.FullName.Substring($r.Length) + "  " + $_.Length)
+              $t = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
+              if ($t) { W ($t.Substring(0, [Math]::Min(6000, $t.Length))) }
+            }
+            W ("=== Dosyalar (" + $env:DESEN + ")")
+            $n = 0
+            Get-ChildItem -LiteralPath $r -Recurse -File -Filter $env:DESEN -ErrorAction SilentlyContinue | ForEach-Object {
+              $rel = $_.FullName.Substring($r.Length)
+              if ($env:FILTRE -and ($rel -notmatch $env:FILTRE)) { return }
+              if ($n -lt $max) { W ("  " + $rel + "  " + [math]::Round($_.Length / 1KB) + " KB") }
+              $n++
+            }
+            W ("  toplam: " + $n)
+          }
+      - name: Artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dosya-envanter
+          path: ${{ runner.temp }}/dosya-envanter.txt
+          if-no-files-found: ignore
+          retention-days: 7

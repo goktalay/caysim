@@ -21,6 +21,29 @@ namespace
 	const TCHAR* GSmvFabDroneDir = TEXT("/Game/Fab/Drone");
 }
 
+void FSmvFabContent::DumpClassApi(const UClass* Class, const FString& Tag, int32 MaxLines)
+{
+	static TSet<const UClass*> Done;
+	if (!Class || Done.Contains(Class)) return;
+	Done.Add(Class);
+	int32 N = 0;
+	UE_LOG(LogSimumav, Log, TEXT("FABAPI %s sınıf %s (üst %s)"), *Tag, *Class->GetPathName(), Class->GetSuperClass() ? *Class->GetSuperClass()->GetName() : TEXT("-"));
+	for (TFieldIterator<UFunction> It(Class, EFieldIteratorFlags::ExcludeSuper); It && N < MaxLines; ++It, ++N)
+	{
+		FString Sig;
+		for (TFieldIterator<FProperty> P(*It); P; ++P)
+		{
+			if (!Sig.IsEmpty()) Sig += TEXT(", ");
+			Sig += FString::Printf(TEXT("%s%s %s"), P->HasAnyPropertyFlags(CPF_ReturnParm) ? TEXT("ret ") : P->HasAnyPropertyFlags(CPF_OutParm) ? TEXT("out ") : TEXT(""), *P->GetCPPType(), *P->GetName());
+		}
+		UE_LOG(LogSimumav, Log, TEXT("FABAPI %s fn %s(%s)"), *Tag, *It->GetName(), *Sig);
+	}
+	for (TFieldIterator<FProperty> It(Class, EFieldIteratorFlags::ExcludeSuper); It && N < MaxLines; ++It, ++N)
+	{
+		UE_LOG(LogSimumav, Log, TEXT("FABAPI %s var %s %s"), *Tag, *It->GetCPPType(), *It->GetName());
+	}
+}
+
 float FSmvFabContent::GetFloat(const TCHAR* Key, float Default)
 {
 	float V = Default;

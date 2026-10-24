@@ -26,6 +26,7 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "SmvScenery.h"
+#include "Misc/PackageName.h"
 #include "SmvMapRegistry.h"
 
 namespace
@@ -260,11 +261,14 @@ void ASmvMenuScene::BuildWorld()
 	// Niagara ışık zerreleri: derlemede motor şablonundan kopyalanan sistem (Scripts/Python/simumav_varliklar.py niagara_sablonu)
 	// Motorla gelen tek uygun şablon "FountainLightweight" (fıskiye): kamera önünde iri beyaz küreler olarak göründü (duman testi) →
 	// varsayılan kapalı; [/Script/Simumav.SmvMenuScene] MenuNiagara=True ile açılır. Uygun varlık için Epic "Niagara Examples Pack" önerilir.
-	bool bNiagara = false;
+	// Fab paketlerinden (Niagara Examples Pack / Ultra Dynamic Sky / Ruined Construction ...) seçilen toz-zerre sistemi NS_SmvDust varsa varsayılan açık
+	bool bNiagara = false, bDust = true;
 	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("MenuNiagara"), bNiagara, GGameIni);
-	if (Cam && bNiagara)
+	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("MenuDust"), bDust, GGameIni);
+	UNiagaraSystem* DustFx = bDust && FPackageName::DoesPackageExist(TEXT("/Game/Simumav/FX/NS_SmvDust")) ? LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Simumav/FX/NS_SmvDust.NS_SmvDust"), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+	if (Cam && (bNiagara || DustFx))
 	{
-		if (UNiagaraSystem* Fx = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Simumav/FX/NS_SmvMotes.NS_SmvMotes"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+		if (UNiagaraSystem* Fx = DustFx ? DustFx : LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Simumav/FX/NS_SmvMotes.NS_SmvMotes"), nullptr, LOAD_NoWarn | LOAD_Quiet))
 		{
 			Motes = NewObject<UNiagaraComponent>(Cam);
 			Motes->SetAsset(Fx);

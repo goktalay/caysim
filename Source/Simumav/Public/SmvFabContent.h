@@ -72,4 +72,7 @@ struct SIMUMAV_API FSmvFabContent
 	static TArray<FString> CityTowerLevels();
 	/** Ayar (DefaultGame.ini [/Script/Simumav.SmvFabContent]); yoksa Default. */
 	static float GetFloat(const TCHAR* Key, float Default);
+	/** Fab Blueprint sınıflarının API'sini (işlevler + parametreleri, değişkenler + türleri) günlüğe yazar — editörsüz entegrasyon için
+	 *  (duman testi günlüğünde "FABAPI <etiket>" satırları). MaxLines ile sınırlı; aynı sınıf bir kez yazılır. */
+	static void DumpClassApi(const UClass* Class, const FString& Tag, int32 MaxLines = 400);
 };

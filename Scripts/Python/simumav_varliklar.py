@@ -309,7 +309,7 @@ HYPER_DOKU = {
 }
 
 
-def hyper_arazi_malzemesi(sanal_zorla=None):
+def hyper_arazi_malzemesi():
     """M_SmvTerrainHyper — Hyper Auto Landscape Material v4 dokularıyla EĞİM / YÜKSEKLİK tabanlı otomatik arazi malzemesi
     (prosedürel arazi ProceduralMesh olduğu için Hyper'ın Landscape katman malzemesi doğrudan kullanılamaz; aynı fikir burada:
     düz yüzey çimen/orman toprağı (makro desenle karışık), dik yamaç kaya (iki düzlemli izdüşüm), SnowLine üstü ve Snow
@@ -318,19 +318,17 @@ def hyper_arazi_malzemesi(sanal_zorla=None):
     if eksik:
         log("Hyper dokuları yok (" + ", ".join(eksik) + ") — M_SmvTerrainHyper üretilmedi (M_SmvTerrainWx kalır)")
         return
-    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "3")
-    if m is None and sanal_zorla is None:
-        return
+    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "4")
     if m is None:
-        m = eal.load_asset("/Game/Simumav/Materials/M_SmvTerrainHyper")
+        return
     try:
         vt_acik = bool(unreal.get_default_object(unreal.RendererSettings).get_editor_property("virtual_textures"))
     except Exception:  # noqa: BLE001
         vt_acik = False
     dokular = {k: eal.load_asset(y) for k, y in HYPER_DOKU.items()}
-    for deneme in range(2):
-        if deneme == 1:
-            mel.delete_all_material_expressions(m)
+    # örnekleyici türü dokunun gerçek durumundan: sanal doku akışı yalnız proje VT desteği açıksa (-NullRHI'de derleme istatistiği
+    # güvenilir olmadığından deneme-yanılma yapılmaz; ilk sürümde "Virtual Normal, should be Normal" hatasıyla varsayılan malzemeye düşmüştü)
+    for deneme in range(1):
         g = Graf(m)
         wp = g.e(unreal.MaterialExpressionWorldPosition)
         xy = g.maske(wp, r=True, g=True)
@@ -347,8 +345,6 @@ def hyper_arazi_malzemesi(sanal_zorla=None):
         def doku(ad, uv, normal=False):
             t = dokular[ad]
             sanal = bool(t.get_editor_property("virtual_texture_streaming")) and vt_acik
-            if deneme == 1:
-                sanal = not sanal
             x = g.e(unreal.MaterialExpressionTextureSample, texture=t, sampler_type=ornek_tipi(t, normal, sanal),
                     sampler_source=unreal.SamplerSourceMode.SSM_WRAP_WORLD_GROUP_SETTINGS)
             g.bag(uv, x, "UVs")
@@ -394,9 +390,6 @@ def hyper_arazi_malzemesi(sanal_zorla=None):
         pr = g.lerp(pr, 0.3, islak)
         mel.connect_material_property(pr, "", unreal.MaterialProperty.MP_ROUGHNESS)
         mel.recompile_material(m)
-        if malzeme_derlendi(m):
-            break
-        log(f"M_SmvTerrainHyper derlenemedi (deneme {deneme + 1}) — örnekleyici türleri {'sanal' if deneme == 0 else 'normal'} ile yeniden")
     eal.save_loaded_asset(m)
     log("M_SmvTerrainHyper hazır (Hyper dokuları, eğim/yükseklik karışımı)")
 
@@ -527,29 +520,76 @@ def uds_dokum():
 
 
 NIAGARA_HEDEF = "/Game/Simumav/FX/NS_SmvMotes"
+NIAGARA_TOZ = "/Game/Simumav/FX/NS_SmvDust"
 # ana menü sahnesi için havada süzülen ışık zerreleri: motorun Niagara eklentisindeki hazır sistem şablonlarından biri kopyalanır
 # (lisanslı içerik değil; Engine/Plugins/FX/Niagara). Tercih sırası ad parçasına göre; hiçbiri yoksa C++ Slate zerrelerinde kalır.
 NIAGARA_TERCIH = ("hangingparticulates", "hanging", "particulates", "ambient", "dust", "mote", "floating", "fountain")
+# Fab paketlerindeki (Niagara Examples Pack, Speed effects, Ultra Dynamic Sky, Ruined Construction ...) toz / zerre / kor sistemleri:
+# varsa NS_SmvDust olarak kopyalanır ve menüde varsayılan açık kullanılır (motor şablonu NS_SmvMotes yalnız MenuNiagara=True ile)
+TOZ_TERCIH = ("ambientdust", "dustmote", "mote", "particulate", "floatingdust", "ambient", "dust", "ember", "firefl", "spark", "pollen")
+TOZ_HARIC = ("rain", "snow", "splash", "lightning", "puddle", "impact", "explos", "muzzle", "blood", "trail", "wind", "fire_big", "smoke")
+
+
+def _niagara_sistemleri(kok):
+    ar = unreal.AssetRegistryHelpers.get_asset_registry()
+    try:
+        ar.scan_paths_synchronous([kok], True)
+    except Exception as e:  # noqa: BLE001
+        log(f"Niagara tarama {kok}: {e}")
+    out = []
+    try:
+        for a in ar.get_assets_by_path(kok, recursive=True):
+            sinif = str(a.asset_class_path.asset_name) if hasattr(a, "asset_class_path") else str(a.asset_class)
+            if sinif == "NiagaraSystem":
+                out.append(str(a.package_name))
+    except Exception as e:  # noqa: BLE001
+        log(f"Niagara arama {kok}: {e}")
+    return out
+
+
+def _kopyala(kaynak, hedef):
+    if eal.does_asset_exist(hedef):
+        eal.delete_asset(hedef)
+    if not eal.does_directory_exist("/Game/Simumav/FX"):
+        eal.make_directory("/Game/Simumav/FX")
+    if eal.duplicate_asset(kaynak, hedef):
+        eal.save_asset(hedef)
+        return True
+    return False
 
 
 def niagara_sablonu():
+    # 1) Fab paketlerinden toz/zerre sistemi (kaynak etiketiyle; kaynak değişmedikçe yeniden kopyalanmaz)
+    fab = [y for y in _niagara_sistemleri("/Game") if not y.startswith("/Game/Simumav/")]
+    log(f"Fab Niagara sistemleri ({len(fab)}): " + ", ".join(fab[:120]))
+    secilen = None
+    for t in TOZ_TERCIH:
+        for yol in fab:
+            ad = yol.rsplit("/", 1)[-1].lower()
+            if t in ad and not any(h in ad for h in TOZ_HARIC):
+                secilen = yol
+                break
+        if secilen:
+            break
+    if secilen:
+        mevcut = eal.load_asset(NIAGARA_TOZ) if eal.does_asset_exist(NIAGARA_TOZ) else None
+        if mevcut and eal.get_metadata_tag(mevcut, "smv_kaynak") == secilen and not YENIDEN:
+            log(f"var: {NIAGARA_TOZ} ({secilen})")
+        elif _kopyala(secilen, NIAGARA_TOZ):
+            k = eal.load_asset(NIAGARA_TOZ)
+            if k:
+                eal.set_metadata_tag(k, "smv_kaynak", secilen)
+                eal.save_loaded_asset(k)
+            log(f"Niagara toz sistemi kopyalandı: {secilen} → {NIAGARA_TOZ}")
+    else:
+        log("Fab paketlerinde uygun toz/zerre Niagara sistemi yok (Niagara Examples Pack önerilir)")
+        if eal.does_asset_exist(NIAGARA_TOZ):
+            eal.delete_asset(NIAGARA_TOZ)
+    # 2) motor şablonu (yedek; varsayılan kapalı)
     if eal.does_asset_exist(NIAGARA_HEDEF) and not YENIDEN:
         log(f"var: {NIAGARA_HEDEF}")
         return
-    ar = unreal.AssetRegistryHelpers.get_asset_registry()
-    try:
-        ar.scan_paths_synchronous(["/Niagara"], True)
-    except Exception as e:  # noqa: BLE001
-        log(f"Niagara tarama: {e}")
-    adaylar = []
-    for kok in ("/Niagara",):
-        try:
-            for a in ar.get_assets_by_path(kok, recursive=True):
-                sinif = str(a.asset_class_path.asset_name) if hasattr(a, "asset_class_path") else str(a.asset_class)
-                if sinif == "NiagaraSystem":
-                    adaylar.append(str(a.package_name))
-        except Exception as e:  # noqa: BLE001
-            log(f"Niagara arama {kok}: {e}")
+    adaylar = _niagara_sistemleri("/Niagara")
     log(f"Niagara sistem şablonları ({len(adaylar)}): " + ", ".join(adaylar[:60]))
     secilen = None
     for t in NIAGARA_TERCIH:
@@ -562,13 +602,7 @@ def niagara_sablonu():
     if not secilen:
         log("Niagara şablonu bulunamadı — menü Slate zerreleriyle kalır (Niagara Examples Pack önerilir)")
         return
-    if eal.does_asset_exist(NIAGARA_HEDEF):
-        eal.delete_asset(NIAGARA_HEDEF)
-    if not eal.does_directory_exist("/Game/Simumav/FX"):
-        eal.make_directory("/Game/Simumav/FX")
-    kopya = eal.duplicate_asset(secilen, NIAGARA_HEDEF)
-    if kopya:
-        eal.save_asset(NIAGARA_HEDEF)
+    if _kopyala(secilen, NIAGARA_HEDEF):
         log(f"Niagara şablonu kopyalandı: {secilen} → {NIAGARA_HEDEF}")
     else:
         log(f"Niagara şablonu kopyalanamadı: {secilen}")
