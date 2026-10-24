@@ -61,9 +61,15 @@ def malzeme_v(yol, ad, surum):
 
 
 def pbr_malzemesi(ad, iki_yuz):
-    m = malzeme_v("/Game/Simumav/Materials", ad, "1")
+    # s2: iskelet ağı kullanım bayrağı (MetaHuman pilot gövdesi tulum rengi; bayraksız malzeme pakette varsayılana düşüyordu)
+    m = malzeme_v("/Game/Simumav/Materials", ad, "2")
     if m is None:
         return
+    for kullanim in (unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES):
+        try:
+            mel.set_material_usage(m, kullanim)
+        except Exception as e:  # noqa: BLE001
+            log(f"{ad}: kullanım bayrağı yazılamadı ({e})")
     if iki_yuz:
         m.set_editor_property("two_sided", True)
     renk = mel.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -900, -100)

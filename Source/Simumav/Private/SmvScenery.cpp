@@ -464,12 +464,16 @@ void ASmvScenery::BuildGroundDisk(const FVector& C, double FlatM, double OuterM,
 		GroundMid = UMaterialInstanceDynamic::Create(Tm, this);
 		const bool bDesert = Biome == TEXT("Desert");
 		GroundMid->SetScalarParameterValue(TEXT("Sand"), bDesert ? 1.f : 0.f);
-		GroundMid->SetVectorParameterValue(TEXT("Tint"), bDesert ? FLinearColor(1.f, 0.93f, 0.84f) : FLinearColor::White);
+		// Hyper kum dokusu kırmızımsıydı (adanın açık kumuyla uyumsuz) → kırmızıyı bastıran ton; çayır biraz yeşile
+		GroundMid->SetVectorParameterValue(TEXT("Tint"), bDesert ? FLinearColor(0.8f, 0.98f, 1.12f) : FLinearColor(0.85f, 1.f, 0.75f));
+		GroundMid->SetScalarParameterValue(TEXT("Snow"), Biome == TEXT("Snow") ? 0.6f : 0.f);
+		GroundMid->SetScalarParameterValue(TEXT("Wetness"), 0.f);
 		GroundMid->SetScalarParameterValue(TEXT("RockSlope"), bDesert ? 0.35f : 0.22f);
 		Ground->SetMaterial(0, GroundMid);
 	}
 	// ---- kaya / çalı (kuru) ve uzak dağlar ----
-	AddMountains(C, OuterM * 100.0 * 0.42, OuterM * 100.0 * 0.85, BaseZ, 14, Biome, Seed, 45000.0, 140000.0);
+	// çöl biyom malzemesi uzakta pembe-mor görünüyordu (duman testi) → kayalık
+	AddMountains(C, OuterM * 100.0 * 0.42, OuterM * 100.0 * 0.85, BaseZ, 14, Biome == TEXT("Desert") ? FString(TEXT("Rocky")) : Biome, Seed, 45000.0, 140000.0);
 	if (!bScatter) return;
 	FSmvScatterDensity D;
 	D.bDry = Biome == TEXT("Desert");

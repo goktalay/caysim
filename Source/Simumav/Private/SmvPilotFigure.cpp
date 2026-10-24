@@ -29,7 +29,7 @@ struct FSmvPilotHeadCfg
 {
 	static float Get(const TCHAR* K, float D) { float V = D; if (GConfig) GConfig->GetFloat(TEXT("/Script/Simumav.SmvPilot"), K, V, GGameIni); return V; }
 	static float Fwd() { return Get(TEXT("HeadFwdCm"), 2.f); }
-	static float Up() { return Get(TEXT("HeadUpCm"), 9.f); }
+	static float Up() { return Get(TEXT("HeadUpCm"), 3.f); }
 };
 
 namespace
@@ -368,6 +368,37 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 		MhGrooms.Add(Gc);
 	}
 	PoseMhArms(bWithRc);
+	// uçuş kıyafeti katmanları (MCC'de uygun giysi yok: mayo/şort): göğüs takımı yeleği, kemer, kalça/uyluk örtüsü, botlar —
+	// gövde kemiklerinin (aktör uzayı) konumundan; gövde pozlanmadığı için sabit
+	{
+		const FTransform Rel = MhBody->GetRelativeTransform();
+		auto B = [this, &Rel](const TCHAR* N, FVector& Out) { if (MhBody->GetBoneIndex(FName(N)) == INDEX_NONE) return false; Out = Rel.TransformPosition(MhBody->GetBoneLocationByName(FName(N), EBoneSpaces::ComponentSpace)); return true; };
+		const FLinearColor Dark = Suit * 0.55f, Strap(0.09f, 0.1f, 0.11f), Boot(0.06f, 0.06f, 0.07f);
+		FVector Sp2, Sp5, Pel, ClL, ClR, ThL, ThR, FtL, FtR, CaL, CaR;
+		if (B(TEXT("spine_02"), Sp2) && B(TEXT("spine_05"), Sp5) && B(TEXT("clavicle_l"), ClL) && B(TEXT("clavicle_r"), ClR))
+		{
+			const float Wd = (float)FVector::Dist(ClL, ClR) * 1.15f + 12.f;
+			const FVector C = 0.5 * (Sp2 + Sp5) + FVector(2.0, 0.0, -2.0);
+			const float H = (float)(Sp5.Z - Sp2.Z) + 8.f;
+			Mat(Part(Torso, 0, C, FVector(27.f, Wd, H), Dark), 0.7f, 0.f);
+			for (int32 s2 = -1; s2 <= 1; s2 += 2) Mat(Part(Torso, 0, C + FVector(14.0, s2 * Wd * 0.22, 0.0), FVector(1.4f, 4.f, H + 2.f), Strap), 0.45f, 0.f);
+			Mat(Part(Torso, 0, C + FVector(14.2, 0.0, -H * 0.2), FVector(1.2f, Wd * 0.6f, 3.5f), Strap), 0.45f, 0.f);
+			const FLinearColor PatchC = PfHex(A.PatchColor, FLinearColor(0.95f, 0.75f, 0.25f));
+			if (A.Patch != TEXT("none") && !A.Patch.IsEmpty()) Mat(Part(Torso, 0, C + FVector(14.4, Wd * 0.25, H * 0.25), FVector(1.f, 7.f, 6.f), PatchC), 0.5f, 0.f, PatchC * 0.15f);
+		}
+		if (B(TEXT("pelvis"), Pel) && B(TEXT("thigh_l"), ThL) && B(TEXT("thigh_r"), ThR))
+		{
+			const float Hw = (float)FVector::Dist(ThL, ThR) + 24.f;
+			Mat(Part(Torso, 1, Pel + FVector(0.0, 0.0, 9.0), FVector(26.f, Hw, 7.f), Strap), 0.4f, 0.f);                // kemer
+			Mat(Part(Torso, 0, Pel + FVector(13.5, 0.0, 9.0), FVector(1.5f, 6.5f, 4.2f), FLinearColor(0.55f, 0.57f, 0.6f)), 0.25f, 0.9f);
+			Mat(Part(Torso, 1, Pel + FVector(0.0, 0.0, -6.0), FVector(25.f, Hw - 2.f, 26.f), Dark), 0.75f, 0.f);       // kalça / uyluk örtüsü
+		}
+		if (B(TEXT("foot_l"), FtL) && B(TEXT("foot_r"), FtR) && B(TEXT("calf_l"), CaL) && B(TEXT("calf_r"), CaR))
+		{
+			for (const FVector& Ft : { FtL, FtR }) Mat(Part(Torso, 0, FVector(Ft.X + 5.0, Ft.Y, 6.0), FVector(26.f, 11.f, 12.f), Boot), 0.45f, 0.f);
+			for (const FVector& Ca : { CaL, CaR }) Mat(Part(Torso, 1, FVector(Ca.X, Ca.Y, 16.0), FVector(12.f, 12.f, 20.f), Boot), 0.45f, 0.f);
+		}
+	}
 	// baş: kemik konumu (aktör uzayı) → kask/vizör düğümü; göz yüksekliği
 	const FName HeadB(TEXT("head")), NeckB(TEXT("neck_01"));
 	MhHeadRef = MhBody->GetBoneTransformByName(HeadB, EBoneSpaces::ComponentSpace).GetRotation();
