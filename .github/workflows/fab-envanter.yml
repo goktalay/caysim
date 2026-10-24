@@ -143,6 +143,19 @@ jobs:
             Get-ChildItem (Join-Path $d.FullName 'Content') -Recurse -File -Filter *.uasset -ErrorAction SilentlyContinue | Select-Object -First 400 | ForEach-Object { W ("  A " + $_.FullName.Substring($d.FullName.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
             Get-ChildItem (Join-Path $d.FullName 'Content') -Recurse -File -Filter *.umap -ErrorAction SilentlyContinue | ForEach-Object { W ("  M " + $_.FullName.Substring($d.FullName.Length)) }
             Get-ChildItem (Join-Path $d.FullName 'Binaries') -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { W ("  B " + $_.FullName.Substring($d.FullName.Length) + "  " + $_.Length) }
+            W "--- OverCrowd API (Public basliklari: UCLASS / USTRUCT / UFUNCTION imzalari)"
+            Get-ChildItem (Join-Path $d.FullName 'Source') -Recurse -File -Filter *.h -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\Public\\' } | ForEach-Object {
+              $f = $_
+              W ("  H " + $f.FullName.Substring($d.FullName.Length))
+              $ln = @(Get-Content -LiteralPath $f.FullName -ErrorAction SilentlyContinue)
+              for ($i = 0; $i -lt $ln.Count; $i++) {
+                if ($ln[$i] -match 'UCLASS|USTRUCT|UFUNCTION|UENUM') {
+                  $nx = if ($i + 1 -lt $ln.Count) { $ln[$i + 1].Trim() } else { '' }
+                  $nx2 = if ($i + 2 -lt $ln.Count) { $ln[$i + 2].Trim() } else { '' }
+                  W ("    " + $ln[$i].Trim() + " || " + $nx + " " + $(if ($nx -notmatch '[;{]$') { $nx2 } else { '' }))
+                }
+              }
+            }
           }
           W "=== Yeni paketlerin varlik dosyalari (adlar) ==="
           $ayr = @("$fp\Content\City_Traffic_Pro\Cars", "$fp\Content\City_Traffic_Pro\Meshes", "$fp\Content\City_Traffic_Pro\Additional_Blueprints", "$fp\Content\BendylabStudios", "$fp\Content\DJI AGRAS T50.blend", "$fp\DroneMegaPackandControlle\Content\DroneMegaPack", "$fp\FPVDrone\Content\AT_Drone", "$vc\Intercepead5933957bbV1\data\Content\BendylabStudios")
