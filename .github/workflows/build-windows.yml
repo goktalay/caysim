@@ -129,6 +129,7 @@ jobs:
       # Buyuk artefakt yuklemesi ag hatasinda (ENOTFOUND blob.core.windows.net) derlemeyi dusurmesin: paket runner'da zaten var
       - name: Artefakt — Shipping
         continue-on-error: true
+        timeout-minutes: 30
         uses: actions/upload-artifact@v4
         with:
           name: Simumav-Win64-Shipping-${{ github.sha }}
@@ -139,6 +140,7 @@ jobs:
       - name: Artefakt — Development (isteğe bağlı)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dev_artefakt }}
         continue-on-error: true
+        timeout-minutes: 30
         uses: actions/upload-artifact@v4
         with:
           name: Simumav-Win64-Development-${{ github.sha }}
