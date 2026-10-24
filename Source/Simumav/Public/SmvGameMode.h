@@ -98,6 +98,8 @@ protected:
 	void SpawnCityStreetscape(double Cell, double Road);
 	bool bCityWindowsDone = false;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Drone;
+	/** Oyun türü mantığı (yük bırakma / ilaçlama / tesis ve gemi savunma; SmvGameRulesActor) */
+	UPROPERTY() TObjectPtr<class ASmvGameRulesActor> Rules;
 	UPROPERTY() TArray<TObjectPtr<ASmvGateActor>> Gates;
 	UPROPERTY() TArray<TObjectPtr<ASmvDroneActor>> Ghosts;       // botlar / rakipler
 	UPROPERTY() TArray<TObjectPtr<ASmvDroneActor>> TargetActors; // hedefler

@@ -52,6 +52,8 @@ public:
 	void Cancel();
 	void AddBot(const FString& Level);
 	void Refresh();
+	/** Davet kabulünün döndürdüğü karşılaşma anlık görüntüsüne bağlan (WS açılır) */
+	void Attach(const TSharedPtr<FJsonObject>& O) { if (O.IsValid() && O->HasField(TEXT("id"))) Apply(O); }
 
 	const FSmvMatch& Current() const { return Snapshot; }
 	bool HasMatch() const { return !Snapshot.Id.IsEmpty(); }

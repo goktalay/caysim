@@ -51,6 +51,28 @@ public:
 	/** Canlı sahnenin haritası (Fab harita adı; yoksa boş → prosedürel arazi) */
 	FText GetMapName() const;
 
+	// ---- yol haritası: gerçek 3B sahne arka planları (stüdyo yerine canlı dünyada kamera istasyonları) ----
+	/** Kamera istasyonu: Menu sinematik döngü · Hangar vitrin aracı çevresinde yörünge · Crew pilot portresi · Parkur yüksek kuş bakışı ·
+	 *  Fly kalkış alanında alçak kahraman açısı · Tour harita içinden kamera turu (karşılaşma parkuru önizlemesi) */
+	enum class EStation : uint8 { Menu, Hangar, Crew, Parkur, Fly, Tour };
+	void SetStation(EStation S);
+	EStation GetStation() const { return Station; }
+	/** Vitrin aracı (gerçek dünyada kalkış alanında; Lumen ışığı, gölge, hava) — donanım (eklenti parçaları, çıkartma, desen) dahil */
+	void SetShowcase(const FSmvDrone& D);
+	void ClearShowcase();
+	/** Vitrin pilotu (kalkış alanında RC kumandayla); bFace: yüze yakın kadraj */
+	void SetShowcasePilot(const FSmvAvatar& A, bool bFace);
+	/** Menü sahnesinin haritası (Fab kayıt anahtarı; boş/proc → prosedürel arazi) — karşılaşma parkuru turu ve duman testi için */
+	void SetMap(const FString& Key);
+	const FString& GetMapKey() const { return MapKey; }
+	/** Harita akışı bitti mi (tur başlığı "yükleniyor" yazısı) */
+	bool IsMapReady() const;
+	/** Parkur kartı: canlı dünyadan ikinci görünüm (harita içinde alçak yörünge; 640×360) — Karşılaşma kartının "video döngüsü" */
+	UTextureRenderTarget2D* GetCardTarget();
+	void SetCardActive(bool bOn);
+	/** Hangar → Kamera adımı: seçilen kamera türünün son işlemi sahne kamerasına (gece görüşü / termal / multispektral önizleme; day = kapalı) */
+	void SetCameraFx(const FString& Kind);
+
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> Capture;
@@ -87,6 +109,10 @@ protected:
 	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> DSnapActor;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> WorldPrev;
+	UPROPERTY() TObjectPtr<ASmvDroneActor> Showcase;
+	UPROPERTY() TObjectPtr<USceneCaptureComponent2D> CardCap;
+	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> CardRT;
+	UPROPERTY() TObjectPtr<ASmvPilotFigure> ShowPilot;
 
 private:
 	bool bLive = false;
@@ -125,6 +151,23 @@ private:
 	void TickSnaps();
 	void TickDroneSnaps();
 
+	EStation Station = EStation::Menu;
+	bool bCardOn = false;
+	FString CamFx = TEXT("day");
+	FPostProcessSettings BasePp;
+	bool bBasePp = false;
+	double StationAt = 0;
+	FString ShowKey, ShowPilotKey;
+	bool bShowFace = false;
+	float ShowFaceK = 0.f;
+	float ShowOrbit = 0.f;
+	FVector StationFocus = FVector::ZeroVector;
+	/** Vitrin noktası (ENU m; kalkış alanı yanı) */
+	double ShowE = -24.0, ShowN = 18.0;
+	FVector ShowGround();
+	void UpdateStationCamera(float Dt);
+	void SettleShowcase();
+	void LoadMenuMap(const FString& Key);
 	void BuildWorld();
 	FVector EnuToWorld(double E, double N, double Agl) const;
 	void ApplyPreviewChannels();

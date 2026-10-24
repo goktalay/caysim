@@ -50,6 +50,59 @@ struct SIMUMAV_API FSmvPowerSettings
 	static FSmvPowerSettings FromJson(const TSharedPtr<FJsonObject>& O);
 };
 
+/** Çıkartma / logo (sunucu `livery.decals[]` {id, slot, scale, rot}); yerelde PNG dosyası profil klasöründe (decals/<ad>.png). */
+USTRUCT(BlueprintType)
+struct SIMUMAV_API FSmvDecal
+{
+	GENERATED_BODY()
+	/** Sunucu çıkartma kimliği (0 = yalnız yerel) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int64 Id = 0;
+	/** Yerel PNG (tam yol); sunucuda yüklüyse boş olabilir */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString File;
+	/** top | bottom | left | right | front | rear | tail */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Slot = TEXT("top");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double Scale = 1.0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double Rot = 0.0;
+	/** logo | sticker */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Kind = TEXT("sticker");
+};
+
+/** Hangar donanımı (sunucu `drones.equipment`, app/simumav/equipment.py): kamera türü, eklentiler, görünüm, azami irtifa. */
+USTRUCT(BlueprintType)
+struct SIMUMAV_API FSmvEquipment
+{
+	GENERATED_BODY()
+	/** day | night | thermal | multispectral */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Camera = TEXT("day");
+	// ---- eklentiler (görünür 3B parça + SITL SPRAY_* / GRIP_* / CHUTE_*) ----
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bSprayer = false;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double SprayTankL = 10.0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double SprayWidthM = 4.0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double SprayPumpRate = 10.0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bGripper = false;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double PayloadKg = 1.0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bParachute = false;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double ChuteAltMinM = 10.0;
+	// ---- görünüm ----
+	/** solid | stripe | split | camo | checker */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Pattern = TEXT("solid");
+	/** ikinci renk (#rrggbb; boş = yok) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Color2;
+	/** gövde çağrı adı (1–8, A–Z 0–9 -) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Callsign;
+	/** gloss | matte | metal | carbon (yalnız istemci; malzeme pürüzlülük/metal) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Finish = TEXT("gloss");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") TArray<FSmvDecal> Decals;
+	/** azami irtifa (m; ≤ 0 yok) → FENCE_ALT_MAX */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double MaxAltM = -1.0;
+	/** Eklentinin aracın tipine takılabilirliği (equipment.ADDONS types) */
+	static bool AddonFits(const FString& Addon, const FString& Type);
+	/** Eklentilerin SITL parametreleri (equipment.sitl_params; kanal 9–12) */
+	TMap<FString, double> SitlParams(const FString& Type) const;
+	TSharedRef<FJsonObject> ToJson(bool bForServer) const;
+	static FSmvEquipment FromJson(const TSharedPtr<FJsonObject>& O);
+};
+
 /** Hangar dronu (`drone`). Id: sunucuda tam sayı (metin), yerelde "l-<guid>". */
 USTRUCT(BlueprintType)
 struct SIMUMAV_API FSmvDrone
@@ -68,6 +121,10 @@ struct SIMUMAV_API FSmvDrone
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bIsDefault = false;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") TMap<FString, double> Params;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FSmvPowerSettings Power;
+	/** Donanım: kamera, eklentiler, görünüm, azami irtifa (sunucu `equipment`) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FSmvEquipment Equipment;
+	/** ArduPilot Lua betiği (SCR_ENABLE; yerel SITL'de scripts/simumav.lua) — kalıcı */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Script;
 	TSharedRef<FJsonObject> ToJson(bool bForCreate) const;
 	static FSmvDrone FromJson(const TSharedPtr<FJsonObject>& O);
 };
@@ -114,6 +171,18 @@ struct SIMUMAV_API FSmvAvatar
 	static FSmvAvatar FromJson(const TSharedPtr<FJsonObject>& O);
 };
 
+/** Yerel XP kaydı (misafir uçuşları; hesaba bağlanınca POST /api/crew/{id}/xp/import ile aktarılabilir) */
+USTRUCT(BlueprintType)
+struct SIMUMAV_API FSmvXpEntry
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int32 Xp = 0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString At;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Mode;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int32 DurationS = 0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bImported = false;
+};
+
 /** Mürettebat pilotu (`pilot`). */
 USTRUCT(BlueprintType)
 struct SIMUMAV_API FSmvPilot
@@ -127,6 +196,12 @@ struct SIMUMAV_API FSmvPilot
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int32 Flights = 0;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double Hours = 0;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FSmvAvatar Avatar;
+	/** Deneyim puanı (toplam; hesapta sunucu: doğrulanmış + aktarılan) ve seviye 1…100 (app/simumav/xp.py eğrisi) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int64 Xp = 0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int64 XpUnverified = 0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int32 Level = 1;
+	/** Yerel XP defteri (yalnız misafir/yerel) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") TArray<FSmvXpEntry> XpLog;
 	TSharedRef<FJsonObject> ToJson() const;
 	static FSmvPilot FromJson(const TSharedPtr<FJsonObject>& O);
 };
@@ -162,6 +237,11 @@ struct SIMUMAV_API FSmvTrackWorld
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double Water = 0.1;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double Fog = 0.2;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") double LandingCircleM = 0;
+	/** Özel parkur biyomu (yol haritası "Parkur › Özel"): forest | city | mountain (boş = eski serbest dünya) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Biome;
+	/** Şehir: sahnede dekor olarak araç ve insan sayısı (yalnız görsel) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int32 Vehicles = 0;
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") int32 People = 0;
 };
 
 /** Parkur (`track`): konum, rüzgâr, hava, saat, dünya kipi, kapılar. */
@@ -188,6 +268,11 @@ struct SIMUMAV_API FSmvTrack
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FSmvTrackWorld World;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") TArray<FSmvGate> Gates;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bIsDefault = false;
+	/** Parkur sınıfı (yol haritası "Parkur"): custom (Özel — prosedürel biyom) | real (Gerçek Dünya — harita konumu) | "" (eski kayıt) */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString ParkurKind;
+	/** Özel / Gerçek Dünya parkuru mu (eski kayıtlar dünya kipinden çıkarılır) */
+	bool IsCustom() const { return ParkurKind == TEXT("custom") || (ParkurKind.IsEmpty() && WorldMode == TEXT("procedural")); }
+	bool IsReal() const { return ParkurKind == TEXT("real") || (ParkurKind.IsEmpty() && (WorldMode == TEXT("real") || WorldMode == TEXT("google3d"))); }
 	TSharedRef<FJsonObject> ToJson() const;
 	static FSmvTrack FromJson(const TSharedPtr<FJsonObject>& O);
 };
@@ -321,6 +406,8 @@ struct SIMUMAV_API FSmvFlightRequest
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FSmvSite Site;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bRecordBin = true;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") ESmvFlightBackend Backend = ESmvFlightBackend::LocalSitl;
+	/** Oyun türü (sunucu modes.MODES): free | rings | cargo_drop | spraying | dogfight | facility_defense | ship_defense */
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString GameMode = TEXT("free");
 	/** Bulut isteği gövdesi (`drone_id/pilot_id/track_id/...`). */
 	TSharedRef<FJsonObject> ToStartJson() const;
 };
@@ -407,6 +494,13 @@ struct SIMUMAV_API FSmvFlightSummary
 	/** Uçuş kaydı listesi için: "araç · parkur" ve yerel tarih (yerel kayıt; eski kayıtlarda boş) */
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FString Label;
 	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FString When;
+	/** Oyun türü, tür puanı, kazanılan XP, tanınan manevralar ("anahtar:sayı"), pilot (yol haritası: pilota göre uçuşlar) */
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FString GameMode;
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") int32 GameScore = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") int32 Xp = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") TArray<FString> Maneuvers;
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FString PilotId;
+	UPROPERTY(BlueprintReadOnly, Category = "Simumav") FString PilotName;
 	/** Mevcut özetin tamamı (yerel kayıt / sunucu `summary`) */
 	FString RawJson;
 	static FSmvFlightSummary FromServerFlight(const TSharedPtr<FJsonObject>& Flight);

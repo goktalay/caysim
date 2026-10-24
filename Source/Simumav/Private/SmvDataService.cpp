@@ -279,6 +279,14 @@ void USmvDataService::LoadLocal()
 				S.TargetScore = (int32)SmvJson::Num(J, TEXT("target_score"));
 				S.Label = SmvJson::Str(J, TEXT("label"));
 				S.When = SmvJson::Str(J, TEXT("when"));
+				S.ArmedS = SmvJson::Num(J, TEXT("armed_s"));
+				S.GameMode = SmvJson::Str(J, TEXT("game_mode"));
+				S.GameScore = (int32)SmvJson::Num(J, TEXT("game_score"));
+				S.Xp = (int32)SmvJson::Num(J, TEXT("xp"));
+				S.PilotId = SmvJson::Str(J, TEXT("pilot_id"));
+				S.PilotName = SmvJson::Str(J, TEXT("pilot_name"));
+				const TArray<TSharedPtr<FJsonValue>>* Mv = nullptr;
+				if (J->TryGetArrayField(TEXT("maneuvers"), Mv) && Mv) for (const TSharedPtr<FJsonValue>& X : *Mv) S.Maneuvers.Add(X->AsString());
 				FlightsCache.Add(S);
 			}
 		}
@@ -292,10 +300,11 @@ void USmvDataService::SeedDefaults()
 {
 	if (DronesCache.Num() == 0)
 	{
-		const TCHAR* Types[] = { TEXT("multirotor"), TEXT("fpv"), TEXT("plane"), TEXT("vtol") };
-		const TCHAR* Names[] = { TEXT("Iris"), TEXT("FPV Yarışçı"), TEXT("Cessna"), TEXT("VTOL") };
-		const TCHAR* Colors[] = { TEXT("#e53935"), TEXT("#fb8c00"), TEXT("#1e88e5"), TEXT("#43a047") };
-		for (int32 i = 0; i < 4; ++i)
+		// yol haritası "Hangar": yeni profilde yalnız bir hazır FPV dron (diğerleri "+ Yeni" sihirbazıyla eklenir)
+		const TCHAR* Types[] = { TEXT("fpv") };
+		const TCHAR* Names[] = { TEXT("FPV Yarışçı") };
+		const TCHAR* Colors[] = { TEXT("#fb8c00") };
+		for (int32 i = 0; i < 1; ++i)
 		{
 			FSmvDrone D;
 			D.Id = NewLocalId();
@@ -352,10 +361,22 @@ void USmvDataService::SaveLocal() const
 		SmvWriteJson(FPaths::Combine(D, File), O);
 	};
 	TArray<TSharedPtr<FJsonValue>> A;
-	for (const FSmvDrone& X : DronesCache) { TSharedRef<FJsonObject> J = X.ToJson(false); J->SetStringField(TEXT("id"), X.Id); J->SetStringField(TEXT("type"), X.Type); J->SetStringField(TEXT("drive"), X.Drive); A.Add(MakeShared<FJsonValueObject>(J)); }
+	for (const FSmvDrone& X : DronesCache) { TSharedRef<FJsonObject> J = X.ToJson(false); J->SetStringField(TEXT("id"), X.Id); J->SetStringField(TEXT("type"), X.Type); J->SetStringField(TEXT("drive"), X.Drive);
+		J->SetObjectField(TEXT("equipment"), X.Equipment.ToJson(false)); A.Add(MakeShared<FJsonValueObject>(J)); }
 	Write(TEXT("hangar.json"), TEXT("drones"), A);
 	A.Reset();
-	for (const FSmvPilot& X : PilotsCache) { TSharedRef<FJsonObject> J = X.ToJson(); J->SetStringField(TEXT("id"), X.Id); J->SetBoolField(TEXT("is_default"), X.bIsDefault); J->SetNumberField(TEXT("flights"), X.Flights); J->SetNumberField(TEXT("hours"), X.Hours); A.Add(MakeShared<FJsonValueObject>(J)); }
+	for (const FSmvPilot& X : PilotsCache) { TSharedRef<FJsonObject> J = X.ToJson(); J->SetStringField(TEXT("id"), X.Id); J->SetBoolField(TEXT("is_default"), X.bIsDefault); J->SetNumberField(TEXT("flights"), X.Flights); J->SetNumberField(TEXT("hours"), X.Hours);
+		J->SetNumberField(TEXT("xp"), (double)X.Xp); J->SetNumberField(TEXT("level"), X.Level);
+		TArray<TSharedPtr<FJsonValue>> Lg;
+		for (const FSmvXpEntry& E : X.XpLog)
+		{
+			TSharedRef<FJsonObject> Je = MakeShared<FJsonObject>();
+			Je->SetNumberField(TEXT("xp"), E.Xp); Je->SetStringField(TEXT("at"), E.At); Je->SetStringField(TEXT("mode"), E.Mode);
+			Je->SetNumberField(TEXT("duration_s"), E.DurationS); if (E.bImported) Je->SetBoolField(TEXT("imported"), true);
+			Lg.Add(MakeShared<FJsonValueObject>(Je));
+		}
+		J->SetArrayField(TEXT("xp_log"), Lg);
+		A.Add(MakeShared<FJsonValueObject>(J)); }
 	Write(TEXT("crew.json"), TEXT("pilots"), A);
 	A.Reset();
 	for (const FSmvTrack& X : TracksCache) { TSharedRef<FJsonObject> J = X.ToJson(); J->SetStringField(TEXT("id"), X.Id); J->SetBoolField(TEXT("is_default"), X.bIsDefault); if (X.GroundMsl > -1000) J->SetNumberField(TEXT("ground_msl"), X.GroundMsl); A.Add(MakeShared<FJsonValueObject>(J)); }

@@ -1,4 +1,5 @@
 #include "SmvPilotPawn.h"
+#include "SmvGameRulesActor.h"
 #include "Misc/PackageName.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -531,6 +532,15 @@ void ASmvPilotPawn::ApplyCamTypePost()
 			P.bOverride_ColorGradingLUT = true; P.ColorGradingLUT = Lut;
 			P.bOverride_ColorGradingIntensity = true; P.ColorGradingIntensity = 1.f;
 		}
+	}
+	else if (CamType == ESmvCamType::Multispectral)
+	{
+		if (UTexture2D* Lut = SmvMultispectralLut())
+		{
+			P.bOverride_ColorGradingLUT = true; P.ColorGradingLUT = Lut;
+			P.bOverride_ColorGradingIntensity = true; P.ColorGradingIntensity = 1.f;
+		}
+		P.bOverride_ColorSaturation = true; P.ColorSaturation = FVector4(1.25f, 1.25f, 1.25f, 1.f);
 	}
 	Camera->PostProcessSettings = (Mode == ESmvCamMode::Gimbal || Mode == ESmvCamMode::Fpv) ? P : FPostProcessSettings();
 	Camera->PostProcessBlendWeight = 1.f;

@@ -128,6 +128,12 @@ private:
 	SmvCore::FServoTrigger* ServoTrig = nullptr;
 	void FreeCore();
 	TArray<TPair<FString, float>> SessionUserParams;   // oturumda yazılan (MP/komut) — Sıfırla sonrası yeniden
+	/** Dronun Lua betiği (SCR_ENABLE; WorkDir/scripts/simumav.lua) — oturum başında yazılır */
+	FString SessionScript;
+public:
+	/** Oturumda Mission Planner'dan / komutla değiştirilen parametreler (uçuş sonunda dron kaydına kalıcı yazılır; SIM_* hariç) */
+	const TArray<TPair<FString, float>>& GetSessionUserParams() const { return SessionUserParams; }
+private:
 	bool bAfterReset = false;
 	bool bResetting = false;
 	FString LaunchPhase;     // armed | launch | released

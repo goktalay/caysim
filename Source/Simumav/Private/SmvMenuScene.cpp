@@ -28,6 +28,8 @@
 #include "SmvScenery.h"
 #include "Misc/PackageName.h"
 #include "SmvMapRegistry.h"
+#include "Components/AudioComponent.h"
+#include "SmvGameRulesActor.h"
 
 namespace
 {
@@ -199,29 +201,11 @@ void ASmvMenuScene::BuildWorld()
 	Tr.World.RunwayHeading = 70.0;
 	Tr.World.Water = 0.12;
 	Tr.World.Fog = 0.03;   // menüde pus en az (UDS Fog 0,2): arka plan sahnesi net görünsün
-	// Fab haritası (ini MenuMap = anahtar; boş → askeri üs / rafineri / orman önceliği) — yoksa prosedürel arazi
+	// Fab haritası (ini MenuMap = anahtar; boş → orman / rafineri / askeri üs önceliği) — yoksa prosedürel arazi
 	{
 		FString Want;
 		if (GConfig) GConfig->GetString(GSmvMenuSection, TEXT("MenuMap"), Want, GGameIni);
-		const FSmvFabMap* Pick = nullptr;
-		const TArray<FSmvFabMap>& Maps = FSmvFabContent::Maps();
-		for (const FSmvFabMap& M : Maps) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty() && M.Key == Want) Pick = &M;
-		static const TCHAR* Pref[] = { TEXT("askeri"), TEXT("military"), TEXT("base"), TEXT("rafineri"), TEXT("refinery"), TEXT("orman"), TEXT("forest") };
-		for (const TCHAR* Pf : Pref) { if (Pick || Want == TEXT("none")) break; for (const FSmvFabMap& M : Maps) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty() && M.Key.Contains(Pf)) { Pick = &M; break; } }
-		if (Pick)
-		{
-			bool bOk = false;
-			MenuLevel = ULevelStreamingDynamic::LoadLevelInstance(W, Pick->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
-			bFabMap = bOk && MenuLevel;
-			if (bFabMap) MapKey = Pick->Key;
-			FabStartE = Pick->StartE; FabStartN = Pick->StartN;
-			UE_LOG(LogTemp, Log, TEXT("Menü sahnesi Fab haritası: %s (%s)"), *Pick->Level, bFabMap ? TEXT("yükleniyor") : TEXT("yüklenemedi"));
-		}
-	}
-	if (!bFabMap)
-	{
-		Terrain = W->SpawnActor<ASmvProcTerrain>();
-		if (Terrain) Terrain->Build(Tr, GroundMsl, WorldSetup);
+		LoadMenuMap(Want);
 	}
 	// Ultra Dynamic Sky (varsa; alacakaranlık)
 	{
@@ -309,6 +293,9 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	if (MenuLevel) { MenuLevel->SetShouldBeLoaded(false); MenuLevel->SetShouldBeVisible(false); MenuLevel->SetIsRequestingUnloadAndRemoval(true); MenuLevel = nullptr; }
 	if (Preview) Preview->Destroy();
 	if (PilotPrev) PilotPrev->Destroy();
+	if (Showcase) Showcase->Destroy();
+	if (ShowPilot) ShowPilot->Destroy();
+	Showcase = nullptr; ShowPilot = nullptr;
 	if (SnapFig) SnapFig->Destroy();
 	if (DSnapActor) DSnapActor->Destroy();
 	if (WorldPrev) WorldPrev->Destroy();
@@ -491,7 +478,8 @@ void ASmvMenuScene::Tick(float Dt)
 		FRotator R = Fwd.Rotation();
 		R.Roll = FMath::Clamp(Turn * 9.f, -40.f, 40.f);
 		Flyer->SetActorLocationAndRotation(P0, R);
-		UpdateCamera(Dt, P0, Fwd);
+		if (Station == EStation::Menu) UpdateCamera(Dt, P0, Fwd);
+		else UpdateStationCamera(Dt);
 		// kopter: kalkış alanı yakınında yavaş yörünge (18 m, 25 sn); VTOL: geniş tur (1,4 km, 120 sn) yüksekte
 		if (Extras.Num() > 0 && Extras[0])
 		{
@@ -506,7 +494,11 @@ void ASmvMenuScene::Tick(float Dt)
 			FRotator Rv = (V1 - V0).Rotation(); Rv.Roll = -18.0;
 			Extras[1]->SetActorLocationAndRotation(V0, Rv);
 		}
-		if (Cam && Cam->GetCameraComponent()) Cam->GetCameraComponent()->PostProcessSettings.DepthOfFieldFocalDistance = (float)FVector::Dist(CamPos, P0);
+		if (Station == EStation::Menu && Cam && Cam->GetCameraComponent())
+		{
+			Cam->GetCameraComponent()->PostProcessSettings.DepthOfFieldFocalDistance = (float)FVector::Dist(CamPos, P0);
+			Cam->GetCameraComponent()->PostProcessSettings.DepthOfFieldFstop = 5.6f;
+		}
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
 			if (PC->GetViewTarget() != Cam)
@@ -518,6 +510,15 @@ void ASmvMenuScene::Tick(float Dt)
 	}
 	TickSnaps();
 	TickScenery();
+	SettleShowcase();
+	if (bCardOn && CardCap && bLive)
+	{
+		// karşılaşma kartı: harita içinde alçak, yavaş yörünge (vitrin aktörleri görünmez)
+		const double A = (FPlatformTime::Seconds() - T0) * 0.07;
+		const FVector At = EnuToWorld(FMath::Cos(A) * 240.0, FMath::Sin(A) * 240.0, 38.0);
+		const FVector To = EnuToWorld(FMath::Cos(A + 0.9) * 60.0, FMath::Sin(A + 0.9) * 60.0, 6.0);
+		CardCap->SetWorldLocationAndRotation(At, (To - At).Rotation());
+	}
 	if (WorldPrev && WorldSetup && !Preview && !PilotPrev)
 	{
 		// dünya önizlemesi: merkez çevresinde yavaş yörünge (eğik kuş bakışı)
@@ -820,6 +821,8 @@ float ASmvMenuScene::GroundAt(double E, double N)
 	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvMenuGround), true);
 	for (const TObjectPtr<ASmvDroneActor>& X : Extras) Q.AddIgnoredActor(X);
 	if (Flyer) Q.AddIgnoredActor(Flyer);
+	if (Showcase) Q.AddIgnoredActor(Showcase);
+	if (ShowPilot) Q.AddIgnoredActor(ShowPilot);
 	if (GetWorld() && GetWorld()->LineTraceSingleByChannel(Hit, P + FVector(0, 0, 200000.0), P - FVector(0, 0, 200000.0), ECC_Visibility, Q))
 	{
 		GroundCache.Add(Key, (float)Hit.ImpactPoint.Z);
@@ -884,4 +887,380 @@ void ASmvMenuScene::PlaceStudio(float FloorZ)
 	WallLight->SetWorldLocation(GSmvPreviewAt + FVector(2300.0, 0.0, 160.0));
 	StudioFloor->SetWorldLocation(GSmvPreviewAt + FVector(0.0, 0.0, FloorZ - 1.0));
 	StudioFloor->SetWorldScale3D(FVector(16.f, 16.f, 0.02f));
+}
+
+// ---------------------------------------------------------------------------
+// yol haritası: canlı dünyada kamera istasyonları + vitrin aracı / pilot + harita değişimi
+// ---------------------------------------------------------------------------
+
+namespace
+{
+	FSmvTrack SmvMenuTrack(double Lat, double Lon, double Msl)
+	{
+		FSmvTrack Tr;
+		Tr.Name = TEXT("Menu");
+		Tr.Lat = Lat; Tr.Lon = Lon; Tr.GroundMsl = Msl;
+		Tr.TimeOfDay = TEXT("golden");
+		Tr.World.Seed = 7;
+		Tr.World.SizeM = 4000.0;
+		Tr.World.MountainCount = 6;
+		Tr.World.MountainHeight = 260.0;
+		Tr.World.TreeDensity = 0.35;
+		Tr.World.BuildingCount = 30;
+		Tr.World.bRunway = true;
+		Tr.World.RunwayHeading = 70.0;
+		Tr.World.Water = 0.12;
+		Tr.World.Fog = 0.03;
+		return Tr;
+	}
+}
+
+void ASmvMenuScene::LoadMenuMap(const FString& Want)
+{
+	UWorld* W = GetWorld();
+	if (!W) return;
+	if (MenuLevel) { MenuLevel->SetShouldBeLoaded(false); MenuLevel->SetShouldBeVisible(false); MenuLevel->SetIsRequestingUnloadAndRemoval(true); MenuLevel = nullptr; }
+	for (TObjectPtr<AActor>& X : SceneryActors) if (X) X->Destroy();
+	SceneryActors.Reset();
+	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
+	bSceneryDone = false;
+	bFabMap = false;
+	MapKey.Empty();
+	FabStartE = FabStartN = 0;
+	GroundCache.Reset();
+	const FSmvFabMap* Pick = nullptr;
+	if (Want != TEXT("none") && Want != TEXT("proc"))
+	{
+		const TArray<FSmvFabMap>& Maps = FSmvFabContent::Maps();
+		for (const FSmvFabMap& M : Maps) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty() && M.Key == Want) Pick = &M;
+		// varsayılan öncelik: orman (Brushify), rafineri (KitBash3D), askeri üs — gerçekçi altın saat arka planı
+		static const TCHAR* Pref[] = { TEXT("orman"), TEXT("forest"), TEXT("rafineri"), TEXT("refinery"), TEXT("askeri"), TEXT("military"), TEXT("base") };
+		for (const TCHAR* Pf : Pref) { if (Pick) break; for (const FSmvFabMap& M : Maps) if (M.Kind == ESmvMapKind::Level && !M.Level.IsEmpty() && M.Key.Contains(Pf)) { Pick = &M; break; } }
+	}
+	if (Pick)
+	{
+		bool bOk = false;
+		MenuLevel = ULevelStreamingDynamic::LoadLevelInstance(W, Pick->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
+		bFabMap = bOk && MenuLevel;
+		if (bFabMap) MapKey = Pick->Key;
+		FabStartE = Pick->StartE; FabStartN = Pick->StartN;
+		UE_LOG(LogSimumav, Log, TEXT("Menü sahnesi Fab haritası: %s (%s)"), *Pick->Level, bFabMap ? TEXT("yükleniyor") : TEXT("yüklenemedi"));
+	}
+	if (!bFabMap && WorldSetup)
+	{
+		Terrain = W->SpawnActor<ASmvProcTerrain>();
+		if (Terrain) Terrain->Build(SmvMenuTrack(Lat0, Lon0, GroundMsl), GroundMsl, WorldSetup);
+	}
+	bCamInit = false;
+}
+
+void ASmvMenuScene::SetMap(const FString& Key)
+{
+	if (!bLive) return;
+	const FString K = Key.IsEmpty() ? FString(TEXT("proc")) : Key;
+	if (K == MapKey || (K == TEXT("proc") && !bFabMap && MapKey.IsEmpty() && Terrain)) return;
+	LoadMenuMap(K);
+}
+
+bool ASmvMenuScene::IsMapReady() const
+{
+	if (!bFabMap) return Terrain != nullptr;
+	return MenuLevel && MenuLevel->IsLevelVisible() && MenuLevel->GetLoadedLevel() != nullptr;
+}
+
+void ASmvMenuScene::SetStation(EStation S)
+{
+	if (S == Station) return;
+	Station = S;
+	StationAt = FPlatformTime::Seconds();
+	if (Showcase) Showcase->SetActorHiddenInGame(!(S == EStation::Hangar || S == EStation::Fly));
+	if (ShowPilot) ShowPilot->SetActorHiddenInGame(S != EStation::Crew);
+}
+
+FVector ASmvMenuScene::ShowGround()
+{
+	return EnuToWorld(ShowE, ShowN, 0.0);
+}
+
+void ASmvMenuScene::ClearShowcase()
+{
+	if (Showcase) { Showcase->Destroy(); Showcase = nullptr; }
+	ShowKey.Empty();
+}
+
+void ASmvMenuScene::SetShowcase(const FSmvDrone& D)
+{
+	UWorld* W = GetWorld();
+	if (!W || !bLive) return;
+	const FString Body = D.Type + TEXT("|") + D.ModelKey + TEXT("|");
+	const FString Key = Body + D.Color + TEXT("|") + SmvJson::ToString(D.Equipment.ToJson(false));
+	if (Showcase && Key == ShowKey) return;
+	const bool bSameBody = Showcase && ShowKey.StartsWith(Body);
+	ShowKey = Key;
+	const FLinearColor Col = SmvHexColor(D.Color);
+	const FSmvEquipment Eq = D.Equipment;
+	if (!bSameBody)
+	{
+		if (Showcase) { Showcase->Destroy(); Showcase = nullptr; }
+		FActorSpawnParameters P;
+		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Showcase = W->SpawnActor<ASmvDroneActor>(ASmvDroneActor::StaticClass(), FTransform(FRotator(0.f, 35.f, 0.f), ShowGround()), P);
+		if (!Showcase) return;
+		FCaySimSession S;
+		S.Type = SmvMenuCaysimType(D.Type);
+		S.Model.Orient.Forward = TEXT("+x");
+		S.Model.Orient.Up = TEXT("+y");
+		S.Model.Orient.Scale = 1.f;
+		Showcase->Setup(S, nullptr);
+		Showcase->SetActorTickEnabled(false);
+		ShowOrbit = 0.f;
+		PlayLanding();
+	}
+	Showcase->ConfigureVisual(D.Type, D.ModelKey, Col);
+	Showcase->SetActorHiddenInGame(!(Station == EStation::Hangar || Station == EStation::Fly));
+	if (USmvMotorSynth* M = Showcase->GetMotor()) M->Stop();
+	{
+		// vitrinde motor sesi yok (Fab motor döngüsü dahil)
+		TInlineComponentArray<UAudioComponent*> Au(Showcase.Get());
+		for (UAudioComponent* A : Au) if (A) A->Stop();
+	}
+	Showcase->ApplyEquipment(Eq, Col);
+	if (USmvGameInstance* GI = USmvGameInstance::GetSmv(this))
+	{
+		TWeakObjectPtr<ASmvDroneActor> WP(Showcase);
+		if (GI->GetData() && !D.ModelKey.IsEmpty())
+			GI->GetData()->FetchModelGlb(D.ModelKey, [WP, Eq, Col](bool bOk, const TArray<uint8>& Bytes)
+			{
+				if (bOk && WP.IsValid()) { WP->LoadGlbBytes(Bytes); WP->ApplyEquipment(Eq, Col); }
+			});
+	}
+}
+
+void ASmvMenuScene::SetShowcasePilot(const FSmvAvatar& A, bool bFace)
+{
+	UWorld* W = GetWorld();
+	if (!W || !bLive) return;
+	bShowFace = bFace;
+	const FString Key = SmvJson::ToString(A.ToJson());
+	if (ShowPilot && Key == ShowPilotKey) return;
+	ShowPilotKey = Key;
+	if (!ShowPilot)
+	{
+		FActorSpawnParameters P;
+		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ShowPilot = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(FRotator(0.f, 215.f, 0.f), ShowGround()), P);
+	}
+	if (!ShowPilot) return;
+	bool bRc = true;
+	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("CrewRcPose"), bRc, GGameIni);
+	ShowPilot->Build(A, bRc);
+	ShowPilot->SetActorHiddenInGame(Station != EStation::Crew);
+}
+
+void ASmvMenuScene::SettleShowcase()
+{
+	if (!bLive) return;
+	if (Showcase && !Showcase->IsHidden())
+	{
+		// gövdenin alt yüzü zemine oturur (GLB gövdesi yüklenince boyut değişir; her kare ucuz bir sınır kutusu); yeni araç yukarıdan süzülür
+		const FVector G = ShowGround();
+		FVector O, E;
+		Showcase->GetActorBounds(false, O, E);
+		const double Off = Showcase->GetActorLocation().Z - (O.Z - E.Z);
+		const double Lk = FMath::Clamp((FPlatformTime::Seconds() - LandAt) / 1.6, 0.0, 1.0);
+		const double Drop = Lk < 1.0 ? FMath::Pow(1.0 - Lk, 3.0) * 600.0 : 0.0;
+		Showcase->SetActorLocation(FVector(G.X, G.Y, G.Z + FMath::Clamp(Off, 0.0, 2000.0) + 3.0 + Drop));
+	}
+	if (ShowPilot && !ShowPilot->IsHidden())
+	{
+		const FVector G = ShowGround();
+		ShowPilot->SetActorLocation(FVector(G.X, G.Y, G.Z + 1.0));
+	}
+}
+
+void ASmvMenuScene::UpdateStationCamera(float Dt)
+{
+	if (!Cam) return;
+	const double T = FPlatformTime::Seconds() - StationAt;
+	FVector Want = CamPos, Look = StationFocus;
+	float Fstop = 5.6f;
+	ShowFaceK = FMath::FInterpTo(ShowFaceK, bShowFace ? 1.f : 0.f, Dt, 3.f);
+	switch (Station)
+	{
+	case EStation::Hangar:
+	case EStation::Fly:
+	{
+		FVector C = ShowGround() + FVector(0, 0, 60.0);
+		double R = 140.0;
+		if (Showcase)
+		{
+			FVector O, E;
+			Showcase->GetActorBounds(false, O, E);
+			C = O;
+			R = FMath::Max(60.0, (double)FVector(E.X, E.Y, 0.0).Size());
+		}
+		if (Station == EStation::Hangar)
+		{
+			// yavaş yörünge (vitrin): aracın çevresinde 7°/sn, hafif yukarıdan; sığ alan derinliği
+			ShowOrbit += Dt * 7.f;
+			const double A = FMath::DegreesToRadians((double)ShowOrbit + 210.0);
+			const double D = R * 3.3 + 80.0;
+			Want = C + FVector(FMath::Cos(A) * D, FMath::Sin(A) * D, R * 0.7 + 50.0);
+			Look = C + FVector(0, 0, R * 0.05);
+			Fstop = 2.8f;
+		}
+		else
+		{
+			// kalkış hazırlığı: aracın sol-arkasından alçak kahraman açısı, yavaşça yaklaşır
+			const FVector Fwd = Showcase ? Showcase->GetActorForwardVector() : FVector(1, 0, 0);
+			const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
+			const double Push = FMath::Clamp(T / 14.0, 0.0, 1.0);
+			Want = C - Fwd * (R * (4.4 - 1.4 * Push) + 60.0) - Right * R * 1.5 + FVector(0, 0, R * 0.25 + 35.0);
+			Look = C + Fwd * R * 2.5 + FVector(0, 0, R * 0.35);
+			Fstop = 4.f;
+		}
+		break;
+	}
+	case EStation::Crew:
+	{
+		const FVector G = ShowGround();
+		const float H = ShowPilot ? ShowPilot->HeadHeightCm() : 175.f;
+		const FVector Target = G + FVector(0, 0, FMath::Lerp(H * 0.6f, H - 6.f, ShowFaceK));
+		const FVector Fwd = ShowPilot ? ShowPilot->GetActorForwardVector() : FVector(1, 0, 0);
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
+		const double D = FMath::Lerp(430.0, 120.0, (double)ShowFaceK);
+		const double Sway = 0.18 * FMath::Sin(T * 0.22);
+		Want = Target + Fwd * D + Right * D * (0.32 + Sway) + FVector(0, 0, FMath::Lerp(12.0, 2.0, (double)ShowFaceK));
+		Look = Target;
+		Fstop = ShowFaceK > 0.5f ? 2.0f : 2.8f;
+		break;
+	}
+	case EStation::Parkur:
+	{
+		// yüksek kuş bakışı: harita merkezinin çevresinde çok yavaş yörünge
+		const double A = T * 0.045 + 0.6;
+		Want = EnuToWorld(FMath::Cos(A) * 640.0, FMath::Sin(A) * 640.0, 240.0);
+		Look = EnuToWorld(0.0, 0.0, 0.0);
+		Fstop = 11.f;
+		break;
+	}
+	case EStation::Tour:
+	{
+		// harita içinden tur: alçak geçiş → yörünge → yükselen vinç → dron takibi (her biri 10 sn)
+		const int32 Shot = (int32)(T / 10.0) % 4;
+		const double U = FMath::Fmod(T, 10.0) / 10.0;
+		if (Shot == 0)
+		{
+			Want = EnuToWorld(FMath::Lerp(-320.0, 320.0, U), -90.0 + 30.0 * FMath::Sin(U * 3.0), 22.0);
+			Look = EnuToWorld(FMath::Lerp(-320.0, 320.0, U) + 120.0, -40.0, 8.0);
+		}
+		else if (Shot == 1)
+		{
+			const double A = U * 1.4 + 2.0;
+			Want = EnuToWorld(FMath::Cos(A) * 280.0, FMath::Sin(A) * 280.0, 95.0);
+			Look = EnuToWorld(0.0, 0.0, 0.0);
+		}
+		else if (Shot == 2)
+		{
+			Want = EnuToWorld(140.0, 160.0, FMath::Lerp(4.0, 150.0, U));
+			Look = EnuToWorld(0.0, 0.0, 10.0);
+		}
+		else if (Flyer)
+		{
+			const FVector D0 = Flyer->GetActorLocation(), Fw = Flyer->GetActorForwardVector();
+			Want = D0 - Fw * 1300.0 + FVector(0, 0, 320.0);
+			Look = D0;
+		}
+		Fstop = 8.f;
+		break;
+	}
+	default: break;
+	}
+	StationFocus = Look;
+	if (!bCamInit || FVector::Dist(Want, CamPos) > 60000.0) { CamPos = Want; bCamInit = true; }
+	CamPos = FMath::Lerp(CamPos, Want, (double)FMath::Clamp(Dt * 2.0f, 0.f, 1.f));
+	const FRotator WantRot = (Look - CamPos).Rotation();
+	CamRot = FMath::RInterpTo(CamRot, WantRot, Dt, 4.5f);
+	Cam->SetActorLocationAndRotation(CamPos, CamRot);
+	if (UCameraComponent* Cc = Cam->GetCameraComponent())
+	{
+		Cc->PostProcessSettings.DepthOfFieldFocalDistance = (float)FVector::Dist(CamPos, Look);
+		Cc->PostProcessSettings.DepthOfFieldFstop = Fstop;
+	}
+}
+
+UTextureRenderTarget2D* ASmvMenuScene::GetCardTarget()
+{
+	if (!CardRT)
+	{
+		CardRT = NewObject<UTextureRenderTarget2D>(this, TEXT("SmvCardRT"));
+		CardRT->ClearColor = FLinearColor(0.02f, 0.03f, 0.05f, 1.f);
+		CardRT->InitAutoFormat(640, 360);
+		CardRT->UpdateResourceImmediate(true);
+	}
+	if (!CardCap)
+	{
+		CardCap = NewObject<USceneCaptureComponent2D>(this, TEXT("SmvCardCapture"));
+		CardCap->SetupAttachment(Root);
+		CardCap->RegisterComponent();
+		CardCap->TextureTarget = CardRT;
+		CardCap->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+		CardCap->FOVAngle = 70.f;
+		CardCap->bCaptureEveryFrame = false;
+		CardCap->bCaptureOnMovement = false;
+		CardCap->ShowFlags.SetMotionBlur(false);
+		CardCap->ShowFlags.SetDepthOfField(false);
+	}
+	return CardRT;
+}
+
+void ASmvMenuScene::SetCardActive(bool bOn)
+{
+	if (bOn) GetCardTarget();
+	bCardOn = bOn && bLive;
+	if (CardCap)
+	{
+		CardCap->bCaptureEveryFrame = bCardOn;
+		CardCap->HiddenActors.Reset();
+		if (Showcase) CardCap->HiddenActors.Add(Showcase);
+		if (ShowPilot) CardCap->HiddenActors.Add(ShowPilot);
+	}
+}
+
+void ASmvMenuScene::SetCameraFx(const FString& Kind)
+{
+	if (!Cam || !Cam->GetCameraComponent()) return;
+	const FString K = Kind.IsEmpty() ? FString(TEXT("day")) : Kind;
+	if (K == CamFx) return;
+	FPostProcessSettings& Pp = Cam->GetCameraComponent()->PostProcessSettings;
+	if (!bBasePp) { BasePp = Pp; bBasePp = true; }
+	// her geçişte temel sinematik ayara dön, sonra kamera türü üstüne yazılır (alan derinliği istasyon kodunda)
+	const float Fd = Pp.DepthOfFieldFocalDistance, Fs = Pp.DepthOfFieldFstop;
+	Pp = BasePp;
+	Pp.DepthOfFieldFocalDistance = Fd; Pp.DepthOfFieldFstop = Fs;
+	CamFx = K;
+	if (K == TEXT("night"))
+	{
+		Pp.bOverride_ColorSaturation = true; Pp.ColorSaturation = FVector4(0, 0, 0, 1);
+		Pp.bOverride_ColorGain = true; Pp.ColorGain = FVector4(0.35f, 1.f, 0.4f, 1.f);
+		Pp.bOverride_AutoExposureBias = true; Pp.AutoExposureBias = 2.2f;
+		Pp.bOverride_FilmGrainIntensity = true; Pp.FilmGrainIntensity = 0.55f;
+		Pp.bOverride_VignetteIntensity = true; Pp.VignetteIntensity = 0.8f;
+	}
+	else if (K == TEXT("thermal"))
+	{
+		Pp.bOverride_ColorSaturation = true; Pp.ColorSaturation = FVector4(0, 0, 0, 1);
+		Pp.bOverride_ColorContrast = true; Pp.ColorContrast = FVector4(1.8f, 1.8f, 1.8f, 1.f);
+		Pp.bOverride_ColorGamma = true; Pp.ColorGamma = FVector4(0.7f, 0.7f, 0.7f, 1.f);
+		Pp.bOverride_FilmGrainIntensity = true; Pp.FilmGrainIntensity = 0.25f;
+	}
+	else if (K == TEXT("multispectral"))
+	{
+		if (UTexture2D* Lut = SmvMultispectralLut())
+		{
+			Pp.bOverride_ColorGradingLUT = true; Pp.ColorGradingLUT = Lut;
+			Pp.bOverride_ColorGradingIntensity = true; Pp.ColorGradingIntensity = 1.f;
+		}
+		Pp.bOverride_ColorSaturation = true; Pp.ColorSaturation = FVector4(1.25f, 1.25f, 1.25f, 1.f);
+	}
 }

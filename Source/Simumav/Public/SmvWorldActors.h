@@ -56,6 +56,14 @@ public:
 	bool IsUsingGlbBody() const { return bGlbBody; }
 	/** SERVO_OUTPUT_RAW (PWM) ve SERVOn_FUNCTION — pervane devri ve kontrol yüzeyleri (oyun modu telemetriden besler). */
 	void SetServoOutputs(const TArray<int32>& Pwm, const TArray<int32>& Fn) { ServoPwm = Pwm; ServoFn = Fn; }
+	/** Hangar donanımı gövdede görünür (SmvDroneDress.cpp): ilaçlama tankı + bom + memeler, paket bırakma tutucusu + yük kutusu,
+	 *  paraşüt kabı; çıkartma/logo (decal; M_SmvDecal yoksa ince levha), kaplama (parlak/mat/metal/karbon). Gövde değişince yeniden çağrılır. */
+	void ApplyEquipment(const FSmvEquipment& E, const FLinearColor& BodyColor);
+	/** Uçuşta eklenti işlevi (yalnız görsel; fizik SITL'de): paraşüt açık, yük takılı, ilaç püskürtülüyor */
+	void SetChuteDeployed(bool bOn);
+	void SetPayloadAttached(bool bOn);
+	void SetSprayActive(bool bOn);
+	bool IsChuteDeployed() const { return bChuteOut; }
 
 protected:
 	virtual void BuildPlaceholder() override;
@@ -77,8 +85,17 @@ protected:
 	UPROPERTY() TObjectPtr<UStaticMesh> SphereMesh;
 	UPROPERTY() TObjectPtr<UStaticMesh> ConeMesh;
 	UPROPERTY() TObjectPtr<UMaterialInterface> BaseMaterial;
+	/** Donanım parçaları (ApplyEquipment) ve çıkartmalar */
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> DressParts;
+	UPROPERTY() TArray<TObjectPtr<class UDecalComponent>> DressDecals;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> ChuteParts;
+	UPROPERTY() TObjectPtr<UStaticMeshComponent> PayloadBox;
+	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> SprayParts;
 
 private:
+	bool bChuteOut = false;
+	void ClearDress();
+	UStaticMeshComponent* AddDress(UStaticMesh* M, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color, float Rough = 0.5f, float Metal = 0.1f);
 	FString SmvType = TEXT("multirotor");
 	FString SmvModelKey;
 	FLinearColor BodyColor = FLinearColor(0.8f, 0.1f, 0.1f);

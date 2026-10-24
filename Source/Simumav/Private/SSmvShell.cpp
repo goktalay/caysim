@@ -281,10 +281,11 @@ void SSmvShell::Construct(const FArguments& InArgs)
 				{
 					const bool bLive = Scene() && Scene()->IsLive();
 					if (!bLive) return 1.f;
-					return (Built == ESmvScreen::Menu || Built == ESmvScreen::Welcome) ? 0.30f : 0.80f;
+					// yol haritası: gerçek 3B sahne arka planı — sahne ekranlarında yalnız okunurluk için hafif kenar degradesi
+					return IsSceneScreen(Built) ? 0.22f : 0.80f;
 				})
 				.Tint_Lambda([]() { return SmvUi::ReducedMotion() ? FLinearColor::Transparent : SeasonColor(SeasonId()); })
-				.Cinematic_Lambda([this]() { return Scene() && Scene()->IsLive() && (Built == ESmvScreen::Menu || Built == ESmvScreen::Welcome); })
+				.Cinematic_Lambda([this]() { return Scene() && Scene()->IsLive() && IsSceneScreen(Built); })
 				.Scene_Lambda([this]()
 				{
 					// bölüme özel arka plan (web bölüm arka planları): canlı 3B sahne varken menüde gizli kalır
@@ -523,6 +524,10 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 			if (Built == ESmvScreen::Support) { Sup.OpenId.Empty(); Sup.Detail.Reset(); SupLoad(); }
 			if (Built == ESmvScreen::Replay) { RepList = SmvReplay::List(); RepLoaded.Empty(); RepSelect(FMath::Clamp(RepSel, 0, FMath::Max(0, RepList.Num() - 1))); }
 			if (Built == ESmvScreen::Wizard) WizStep = 0;
+			if (Built == ESmvScreen::Customize && Data()->DefaultPilot()) EditPilot = *Data()->DefaultPilot();
+			if (Built == ESmvScreen::Friends) { Flow->FetchFriends(); Flow->FetchInvites(); }
+			if (Built == ESmvScreen::Progress) ProgressAt = FPlatformTime::Seconds();
+			if (Built == ESmvScreen::Logbook && Data()->DefaultPilot()) Flow->FetchPilotFlights(Data()->DefaultPilot()->Id);
 			FSmvUiSound::Play(ESmvSnd::Open);
 		}
 		DefaultFocus.Reset();
@@ -540,6 +545,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 		if (Built == ESmvScreen::Menu && !FSmvUiPrefs::Get().bTutorialDone && !bOverlay) OpenTutorial();
 	}
 	TickSmoke();
+	UpdateStation();
 	// dünya oluşturucu canlı önizlemesi: parametre değişince 0,6 sn sonra yeniden kur
 	if (Built == ESmvScreen::Tracks && MapMode == TEXT("3d"))
 	{
@@ -621,8 +627,16 @@ FReply SSmvShell::OnKeyDown(const FGeometry& G, const FKeyEvent& E)
 	}
 	if (Act == EUINavigationAction::Back && !bTyping)
 	{
-		if (Built == ESmvScreen::Menu || Built == ESmvScreen::Welcome || Built == ESmvScreen::Loading || Built == ESmvScreen::Summary) return FReply::Handled();
+		if (Built == ESmvScreen::Menu || Built == ESmvScreen::Welcome || Built == ESmvScreen::Loading || Built == ESmvScreen::Summary || Built == ESmvScreen::Progress) return FReply::Handled();
 		if (Built == ESmvScreen::Wizard && WizStep > 0) { WizStep--; Refresh(); FSmvUiSound::Play(ESmvSnd::Back); return FReply::Handled(); }
+		// yol haritası sihirbazları: Esc / B önce bir adım geri
+		{
+			int32* St = Built == ESmvScreen::HangarWizard ? &HwStep : Built == ESmvScreen::ParkurWizard ? &PwStep : Built == ESmvScreen::RealWizard ? &RwStep
+				: Built == ESmvScreen::CrewWizard ? &CwStep : Built == ESmvScreen::FlyFlow ? &Flow->FlyStep : nullptr;
+			const int32 Min = (Built == ESmvScreen::HangarWizard && bHwEdit) ? 2 : 0;
+			if (St && *St > Min) { (*St)--; Refresh(); FSmvUiSound::Play(ESmvSnd::Back); return FReply::Handled(); }
+			if (Built == ESmvScreen::ParkurList && !TourKey.IsEmpty()) { TourKey.Empty(); Refresh(); FSmvUiSound::Play(ESmvSnd::Back); return FReply::Handled(); }
+		}
 		FSmvUiSound::Play(ESmvSnd::Back);
 		Flow->Back();
 		return FReply::Handled();
@@ -1007,10 +1021,20 @@ TSharedRef<SWidget> SSmvShell::BuildScreen(ESmvScreen S)
 	{
 	case ESmvScreen::Welcome: return Welcome();
 	case ESmvScreen::Login: return Login();
-	case ESmvScreen::Menu: return Menu();
-	case ESmvScreen::Hangar: return Hangar();
-	case ESmvScreen::Crew: return Crew();
-	case ESmvScreen::Tracks: return Tracks();
+	// yol haritası: sade ana menü (Hangar · Parkur · Mürettebat · Uçuş + Pilot menüsü); eski ekranlar Pilot menüsünden / akışlardan açılır
+	case ESmvScreen::Menu: return MenuV2();
+	case ESmvScreen::Hangar: return HangarV2();
+	case ESmvScreen::Crew: return CrewV2();
+	case ESmvScreen::Tracks: return ParkurHub();
+	case ESmvScreen::HangarWizard: return HangarWizard();
+	case ESmvScreen::ParkurList: return ParkurList();
+	case ESmvScreen::ParkurWizard: return ParkurWizard();
+	case ESmvScreen::RealWizard: return RealWizard();
+	case ESmvScreen::CrewWizard: return CrewWizard();
+	case ESmvScreen::FlyFlow: return FlyFlow();
+	case ESmvScreen::Progress: return ProgressScreen();
+	case ESmvScreen::Friends: return FriendsScreen();
+	case ESmvScreen::Customize: return Crew();
 	case ESmvScreen::Missions: return Missions();
 	case ESmvScreen::Wizard: return Wizard();
 	case ESmvScreen::Loading: return Loading();
@@ -1021,7 +1045,7 @@ TSharedRef<SWidget> SSmvShell::BuildScreen(ESmvScreen S)
 	case ESmvScreen::Logbook: return Logbook();
 	case ESmvScreen::Settings: return Settings();
 	case ESmvScreen::Account: return Account();
-	case ESmvScreen::FlyMode: return FlyMode();
+	case ESmvScreen::FlyMode: return FlyFlow();
 	case ESmvScreen::FpvGallery: return FpvGallery();
 	case ESmvScreen::Replay: return ReplayScreen();
 	case ESmvScreen::Support: return Support();

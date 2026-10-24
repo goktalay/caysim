@@ -233,7 +233,61 @@ private:
 	class USimumavClient* Client() const;
 	class ASmvMenuScene* Scene() const;
 	static FText Tx(const TCHAR* Key);
+	// ---- yol haritası ekranları (docs/yol-haritasi.md; SSmvShellYol.cpp) ----
+	TSharedRef<SWidget> MenuV2();
+	TSharedRef<SWidget> HangarV2();
+	TSharedRef<SWidget> HangarWizard();
+	TSharedRef<SWidget> HwType();
+	TSharedRef<SWidget> HwModel();
+	TSharedRef<SWidget> HwParams();
+	TSharedRef<SWidget> HwCamera();
+	TSharedRef<SWidget> HwAddons();
+	TSharedRef<SWidget> HwLook();
+	void HwSave();
+	TSharedRef<SWidget> ParkurHub();
+	TSharedRef<SWidget> ParkurList();
+	TSharedRef<SWidget> ParkurWizard();
+	TSharedRef<SWidget> RealWizard();
+	TSharedRef<SWidget> CrewV2();
+	TSharedRef<SWidget> CrewWizard();
+	TSharedRef<SWidget> FlyFlow();
+	TSharedRef<SWidget> ProgressScreen();
+	TSharedRef<SWidget> FriendsScreen();
+	/** Sağ üst Pilot menüsü (Özelleştir · Önceki uçuşlarım · Arkadaşlarım · TOP 10 · Ayarlar · Hesap · Destek · Çıkış …) */
+	void OpenPilotMenu();
+	/** Seçenek diyaloğu (ör. kayıtlı dron: Düzenle / Sil) */
+	struct FChoice { FText Label; ESmvIcon Icon = ESmvIcon::None; int32 Kind = 0; TFunction<void()> Fn; };
+	void OpenChoice(const FText& Title, const FText& Body, const TArray<FChoice>& Items);
+	/** Ekranın canlı 3B sahne istasyonu (kamera, vitrin aracı / pilot, harita) */
+	void UpdateStation();
+	TSharedRef<SWidget> YhPage(const FText& InTitle, const FText& Sub, TSharedRef<SWidget> Body, TFunction<void()> OnBack = nullptr, TSharedPtr<SWidget> TitleExtra = nullptr);
+	TSharedRef<SWidget> YhSteps(const TArray<FText>& Steps, int32 Cur, TFunction<void(int32)> OnPick);
+	TSharedRef<SWidget> PilotChip();
+	TSharedRef<SWidget> XpBar(int64 Xp, float W, float H = 6.f);
+	TSharedRef<SWidget> DroneThumb(const FSmvDrone& D, float W, float H);
+	TSharedRef<SWidget> ModelThumb(const FString& Type, const FString& Model, float W, float H);
+	TSharedRef<SWidget> SatThumb(double Lat, double Lon, float W, float H, bool bAnimate);
+	// sihirbaz durumları
+	int32 HwStep = 0;
+	FString HwKind = TEXT("multi");
+	bool bHwEdit = false;
+	FString HwParamName, HwParamValue;
+	double HwMaxSpeed = -1, HwMaxAlt = -1;
+	int32 PwStep = 0;
+	int32 RwStep = 0;
+	int32 CwStep = 0;
+	FSmvPilot NewPilot;
+	FSmvTrack NewTrack;
+	FString FlyEmail, FriendEmail, TourKey, FlyTrackCat;
+	FString DecalSlot = TEXT("top");
+	double DecalScale = 1.0;
+	double ProgressAt = 0;
+	bool bPilotMenu = false;
+	TSharedPtr<class SSmvTileMap> RealMap;
+	TArray<TSharedPtr<FSlateBrush>> YhBrushes;
 public:
+	/** Bu ekranın arkasında canlı 3B sahne tam görünür mü (sinematik arka plan; düz degrade yok) */
+	static bool IsSceneScreen(ESmvScreen S);
 	/** Bayram / mevsim teması (tarih tabanlı TR takvimi; yoksa boş) */
 	static FString SeasonId();
 	static FLinearColor SeasonColor(const FString& Id);

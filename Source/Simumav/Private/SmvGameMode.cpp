@@ -1,4 +1,5 @@
 #include "SmvGameMode.h"
+#include "SmvGameRulesActor.h"
 #include "SimumavModule.h"
 #include "SmvGameInstance.h"
 #include "SmvFlow.h"
@@ -347,7 +348,8 @@ void ASmvGameMode::BuildScene()
 		P->Expo = (float)Set.StickExpo;
 		P->RcAxisMap = Set.RcAxisMap;
 		P->RcInvert = Set.RcInvert;
-		P->SetCamType(Req.Camera == TEXT("thermal") ? ESmvCamType::Thermal : Req.Camera == TEXT("night") ? ESmvCamType::Night : ESmvCamType::Day);
+		P->SetCamType(Req.Camera == TEXT("thermal") ? ESmvCamType::Thermal : Req.Camera == TEXT("night") ? ESmvCamType::Night
+			: Req.Camera == TEXT("multispectral") ? ESmvCamType::Multispectral : ESmvCamType::Day);
 		P->OnRc.AddLambda([Weak](const TArray<int32>& Rc)
 		{
 			ASmvGameMode* Self = Weak.Get();
@@ -411,6 +413,27 @@ void ASmvGameMode::BuildScene()
 	{
 		if (ASmvDroneActor* T = SpawnGhost(TEXT("plane"), FLinearColor(0.9f, 0.2f, 0.9f))) TargetActors.Add(T);
 	}
+
+	// ---- oyun türü (yol haritası): yük bırakma, tarla ilaçlama, kritik tesis / gemi savunma ----
+	if (Req.GameMode == TEXT("cargo_drop") || Req.GameMode == TEXT("spraying") || Req.GameMode == TEXT("facility_defense") || Req.GameMode == TEXT("ship_defense"))
+	{
+		FActorSpawnParameters Rp;
+		Rp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		Rules = W->SpawnActor<ASmvGameRulesActor>(ASmvGameRulesActor::StaticClass(), FTransform::Identity, Rp);
+		if (Rules)
+		{
+			const double Lat0 = Req.Track.Lat, Lon0 = Req.Track.Lon, Msl0 = GroundMsl;
+			Rules->OnEvent = [this](const FString& Txt, int32 Sev) { PushEvent(Txt, Sev); };
+			Rules->OnCommand = [this](const FString& Name, TSharedPtr<FJsonObject> P) { Command(Name, P); };
+			Rules->Setup(Req, Flow.Get(), Drone, [this, Lat0, Lon0, Msl0](double E, double N, double Up)
+			{
+				double La = Lat0, Lo = Lon0;
+				SmvCore::TargetLatLon(Lat0, Lon0, E, N, La, Lo);
+				return Geo(La, Lo, Msl0 + Up);
+			});
+		}
+	}
+	else if (Drone) Drone->SetPayloadAttached(true);
 
 	// ---- halkalar / yarış ----
 	SetupRace();
@@ -624,6 +647,7 @@ void ASmvGameMode::StopScene()
 	for (TObjectPtr<ASmvDroneActor>& G : Ghosts) if (G) G->Destroy();
 	for (TObjectPtr<ASmvDroneActor>& G : TargetActors) if (G) G->Destroy();
 	Gates.Reset(); Ghosts.Reset(); TargetActors.Reset(); GhostIndex.Reset();
+	if (Rules) { Rules->Destroy(); Rules = nullptr; }
 	if (Drone) { Drone->Destroy(); Drone = nullptr; }
 	if (FpvActor) { FpvActor->Destroy(); FpvActor = nullptr; }
 	if (PilotFigure) { PilotFigure->Destroy(); PilotFigure = nullptr; }
@@ -660,6 +684,7 @@ void ASmvGameMode::HandleTele(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 {
 	if (!bScene || !Drone) return;
 	Drone->PushTelemetry(T);
+	if (Rules) Rules->OnTele(T);
 	Drone->SetServoOutputs(X.Servo, X.ServoFn);   // GLB gövdesi: motor/gaz → pervane devri, kanal 1/2/4 → kontrol yüzeyleri
 	UpdateGpws(T, X);
 	// 5 Hz iz (kayıt / rota haritası / rapor) — kayıttan oynatmada yazılmaz
@@ -1574,6 +1599,7 @@ void ASmvGameMode::AugmentSummary(FSmvFlightSummary& S)
 		if (MyTracker->Finished()) S.Laps = FMath::Max(S.Laps, 1);
 	}
 	if (!RaceResultBadge.IsEmpty()) S.Badges.AddUnique(RaceResultBadge);
+	if (Rules) Rules->Augment(S);
 	if (Flow.IsValid() && Flow->LastFpv.bValid && Flow->LastFpv.bNewPb) S.Badges.AddUnique(TEXT("fpv_pb"));
 	if (Tones && Flow.IsValid() && Flow->Race.Kind != TEXT("none")) Tones->Sfx(RaceResultBadge.IsEmpty() ? 17 : 16);
 	// podyum + oyun puanı (yerel yarış / it dalaşı)

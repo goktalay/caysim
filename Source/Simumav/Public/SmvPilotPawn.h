@@ -35,7 +35,9 @@ enum class ESmvCamMode : uint8
 UENUM(BlueprintType)
 enum class ESmvCamType : uint8
 {
-	Day, Thermal, Night, None
+	Day, Thermal, Night, None,
+	/** Multispektral (yol haritası "Hangar › Kamera"): NDVI benzeri sahte renk — bitki örtüsü kırmızı-eflatun */
+	Multispectral
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FSmvPawnAction, FName /*Action*/);

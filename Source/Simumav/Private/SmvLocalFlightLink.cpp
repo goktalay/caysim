@@ -149,7 +149,20 @@ bool USmvLocalFlightLink::LaunchSitl(bool bClean)
 			if (!bUser) Text += Kv.first + " " + std::string(TCHAR_TO_UTF8(*FString::SanitizeFloat(Kv.second, 0))) + "\n";
 		}
 	}
+	// kullanıcı / donanım parametreleri açılış dosyasına da yazılır: SPRAY_ENABLE, GRIP_ENABLE, CHUTE_ENABLED, SCR_ENABLE, FENCE_* gibi
+	// yeniden başlatma isteyenler ilk açılışta etkin olsun (ilk heartbeat'te ayrıca PARAM_SET ile gönderilir)
+	if (!Session->UserParams.empty())
+	{
+		Text += "# SIMUMAV dron parametreleri (hangar: kullanici + donanim)\n";
+		for (const auto& U : Session->UserParams) Text += U.first + " " + std::string(TCHAR_TO_UTF8(*FString::SanitizeFloat(U.second, 0))) + "\n";
+	}
 	FFileHelper::SaveStringToFile(FString(UTF8_TO_TCHAR(Text.c_str())), *Parm, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	if (!SessionScript.TrimStartAndEnd().IsEmpty())
+	{
+		const FString ScrDir = FPaths::Combine(WorkDir, TEXT("scripts"));
+		FM.MakeDirectory(*ScrDir, true);
+		FFileHelper::SaveStringToFile(SessionScript, *FPaths::Combine(ScrDir, TEXT("simumav.lua")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	}
 	// çeşidin çerçeve / kanat JSON'u: --model "<çerçeve>:<ad>.json" GÖRELİ yolla okunur (süreç çalışma dizini = WorkDir)
 	std::string JName, JText;
 	if (SmvCore::SessionJson(*Session, JName, JText))
@@ -303,6 +316,9 @@ void USmvLocalFlightLink::Start(const FSmvFlightRequest& Request)
 	Session->Launch.ReleaseKmh = Req.Launch.ReleaseKmh;
 	Session->Launch.AzimuthDeg = Req.Launch.AimAzDeg;
 	for (const TPair<FString, double>& Kv : Req.Drone.Params) Session->UserParams.push_back({ std::string(TCHAR_TO_UTF8(*Kv.Key)), Kv.Value });
+	// Lua betiği (hangar → dron → Betik): SCR_ENABLE açılış dosyasında, betik WorkDir/scripts altında
+	SessionScript = Req.Drone.Script;
+	if (!SessionScript.TrimStartAndEnd().IsEmpty()) Session->UserParams.push_back({ std::string("SCR_ENABLE"), 1.0 });
 	// araç çeşidi (katalog anahtarı → SITL çerçevesi/JSON/parametre seti; SmvVehicles). Tip uyuşmazsa çekirdek eski eşlemeye düşer.
 	Session->Vehicle = std::string(TCHAR_TO_UTF8(*Req.Drone.ModelKey));
 	bHeliInterlock = SmvCore::SessionBinary(*Session) == "ArduHeli";
@@ -994,6 +1010,21 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 		bUeRest = true;
 		ForcedDisarm();
 		EmitEvent(TEXT("Yüzey üstüne iniş (3B fizik): motorlar durduruldu"), 5);
+	}
+	else if (Name == TEXT("gripper"))
+	{
+		// paket bırakma aparatı (MAV_CMD_DO_GRIPPER 211: p1 tutucu no, p2 0 = bırak / 1 = tut)
+		CommandLong(211, 1.f, SmvJson::Str(P, TEXT("action"), TEXT("release")) == TEXT("grab") ? 1.f : 0.f);
+	}
+	else if (Name == TEXT("sprayer"))
+	{
+		// ilaçlama (MAV_CMD_DO_SPRAYER 216: p1 1 aç / 0 kapat)
+		CommandLong(216, SmvJson::Bool(P, TEXT("on"), true) ? 1.f : 0.f);
+	}
+	else if (Name == TEXT("parachute"))
+	{
+		// paraşüt (MAV_CMD_DO_PARACHUTE 208: p1 2 = aç/bırak)
+		CommandLong(208, 2.f);
 	}
 	else if (Name == TEXT("camera") || Name == TEXT("gpws"))
 	{

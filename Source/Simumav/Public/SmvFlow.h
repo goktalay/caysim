@@ -26,7 +26,26 @@ enum class ESmvScreen : uint8
 	/** Kayıttan oynatma */
 	Replay,
 	/** Destek: sorun bildir / taleplerim */
-	Support
+	Support,
+	// ---- yol haritası (docs/yol-haritasi.md) ----
+	/** Hangar → "+ Yeni" sihirbazı (tip → model 3B → parametreler → kamera → eklentiler → görünüm) / kayıtlı dronu düzenle */
+	HangarWizard,
+	/** Parkur kategorisi listesi (Karşılaşma / Özel / Gerçek Dünya — USmvFlow::ParkurCat) */
+	ParkurList,
+	/** Özel parkur sihirbazı (Orman / Şehir / Dağlık + hava + ad + deniz seviyesi) */
+	ParkurWizard,
+	/** Gerçek dünya sihirbazı (harita: adres arama, işaret sürükleme, harita boyutu + hava + ad) */
+	RealWizard,
+	/** Yeni pilot sihirbazı (cinsiyet → vücut → yüz → aksesuar → ad soyad) */
+	CrewWizard,
+	/** Uçuş akışı (dron → parkur → oyun türü → tek / çok oyunculu → UÇ) */
+	FlyFlow,
+	/** Uçuş sonrası deneyim ekranı (XP, manevralar, seviye atlama) */
+	Progress,
+	/** Pilot menüsü → Arkadaşlarım (birlikte uçulanlar + davetler) */
+	Friends,
+	/** Pilot menüsü → Özelleştir (etkin pilotun görünümü) */
+	Customize
 };
 
 /** Yarış sonu sırası (uçuş özeti podyumu) */
@@ -125,6 +144,71 @@ public:
 	/** GameMode özet ekler (GPWS, halkalar, yarış sonucu) — bulut özetine üstün gelmez, eksikleri tamamlar. */
 	TFunction<void(FSmvFlightSummary&)> SummaryAugmenter;
 
+	// ---- yol haritası: uçuş akışı / oyun türü / ilerleme / sosyal ----
+	/** Uçuş akışı adımı (0 dron, 1 parkur kategorisi, 2 parkur, 3 oyun türü, 4 oyuncular, 5 özet) */
+	int32 FlyStep = 0;
+	/** Parkur kategorisi: encounter | custom | real */
+	FString ParkurCat = TEXT("encounter");
+	/** Çok oyunculu mu; davet edilecek e-postalar ve arkadaş kimlikleri; eklenecek yapay zekâ sayısı / zorluk */
+	bool bMulti = false;
+	TArray<FString> InviteEmails;
+	TArray<int64> InviteFriends;
+	int32 AiCount = 0;
+	FString AiLevel = TEXT("normal");
+	/** Seçili oyun türünü taslağa ve yerel yarış ayarına uygular (halka/it dalaşı yerel botlar; diğer türler SmvGameRules) */
+	void ApplyGameMode();
+	/** "UÇ": tek oyunculu → StartFlight; çok oyunculu (halka / it dalaşı) → karşılaşma kur + davet + yapay zekâ → bekleme salonu */
+	void StartGame();
+	/** Oyun türünün gerektirdiği eklenti (cargo_drop → gripper, spraying → sprayer; yoksa boş) */
+	static FString RequiredAddon(const FString& Mode);
+	/** Tür bu araç tipiyle oynanabilir mi (sunucu modes.MODES types; yerelde savunma tüm uçan tiplerle) */
+	static bool ModeAllowsType(const FString& Mode, const FString& Type, bool bOnline);
+	static bool ModeIsMultiplayer(const FString& Mode) { return Mode == TEXT("rings") || Mode == TEXT("dogfight"); }
+
+	/** Yerel oyun mantığının sonucu (SmvGameRules aktörü uçuş sonunda yazar) */
+	struct FGameResult
+	{
+		FString Mode;
+		int32 Score = 0;
+		bool bReleased = false; double DropBestM = -1; int32 Payloads = 0, Hits = 0;
+		double SprayCoverage = -1; double SprayTankLeft = -1;
+		double DefenseScore = -1; bool bDefenseOk = false; int32 Neutralized = 0, Impacts = 0, Hp = -1, Threats = 0;
+	} LastGame;
+
+	/** Uçuş sonu deneyim (yerel hesap ya da sunucu yanıtı) */
+	struct FXpResult
+	{
+		bool bValid = false, bServer = false, bPending = false;
+		int32 Xp = 0;
+		int64 Before = 0, After = 0;
+		int32 LevelBefore = 1, LevelAfter = 1;
+		TArray<TPair<FString, int32>> Parts;
+		TArray<TPair<FString, int32>> Maneuvers;   // anahtar → sayı
+		TArray<FString> NewMedals;
+		FString Note;
+	} LastXp;
+
+	/** Arkadaşlarım (GET /api/friends) */
+	struct FFriend { int64 Id = 0; FString Name, Email, Last; int32 Played = 0; bool bAuto = false, bFriend = false; FSmvAvatar Avatar; };
+	TArray<FFriend> Friends;
+	bool bFriendsBusy = false;
+	FString FriendsError;
+	void FetchFriends();
+	void AddFriend(const FString& Email);
+	void RemoveFriend(int64 Id);
+	/** Gelen davetler (GET /api/invites) */
+	TArray<TSharedPtr<FJsonObject>> Invites;
+	void FetchInvites();
+	void AnswerInvite(int64 Id, bool bAccept);
+	/** Pilot seviyesi (hesap: GET /api/crew/{id}/level → Xp/Level güncellenir) */
+	void FetchPilotLevel(const FString& PilotId);
+	/** Pilota göre uçuşlar (hesap: GET /api/crew/{id}/flights; misafir: yerel kayıtlar pilot kimliğiyle süzülür) */
+	TArray<FSmvFlightSummary> PilotFlights;
+	bool bPilotFlightsBusy = false;
+	void FetchPilotFlights(const FString& PilotId);
+	/** Etkin pilot (mürettebatta "pilot değiştir"): varsayılan pilot yapılır, taslağa yazılır */
+	void SwitchPilot(const FString& PilotId);
+
 	// ---- liderlik ----
 	TArray<FSmvLeaderRow> Leaderboard;
 	FString LeaderboardPeriod = TEXT("30d");
@@ -156,4 +240,8 @@ private:
 	FSmvLocalRace ReplaySavedRace;
 	FSmvFpvCfg ReplaySavedFpv;
 	void EvaluateAchievements(const FSmvFlightSummary& S);
+	/** Uçuş sonu XP: yerel (misafir) hesap + pilot kaydı; hesapta bulut uçuşu → sunucu seviyesi, yerel SITL → xp/import */
+	void AwardXp();
+	bool bPendingInvites = false;
+	void SendPendingInvites();
 };

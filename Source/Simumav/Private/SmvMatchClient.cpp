@@ -22,8 +22,9 @@ TSharedRef<FJsonObject> USmvMatchClient::BaseBody(const FSmvFlightRequest& Draft
 	if (const TSharedPtr<FJsonValue> DroneId = StartJson->TryGetField(TEXT("drone_id"))) B->SetField(TEXT("drone_id"), DroneId);
 	if (const TSharedPtr<FJsonValue> TrackId = StartJson->TryGetField(TEXT("track_id"))) B->SetField(TEXT("track_id"), TrackId);
 	if (const TSharedPtr<FJsonObject> L = Draft.Launch.ToJson()) B->SetObjectField(TEXT("launch"), L);
-	B->SetStringField(TEXT("camera"), Draft.Camera);
+	B->SetStringField(TEXT("camera"), Draft.Camera == TEXT("multispectral") ? FString(TEXT("day")) : Draft.Camera);
 	B->SetStringField(TEXT("kind"), Kind);
+	if (Draft.GameMode == TEXT("rings") || Draft.GameMode == TEXT("dogfight")) B->SetStringField(TEXT("mode"), Draft.GameMode);
 	if (Rings.IsValid()) B->SetObjectField(TEXT("rings"), Rings);
 	if (Dogfight.IsValid()) B->SetObjectField(TEXT("dogfight"), Dogfight);
 	return B;

@@ -131,6 +131,141 @@ FSmvPowerSettings FSmvPowerSettings::FromJson(const TSharedPtr<FJsonObject>& O)
 	return P;
 }
 
+bool FSmvEquipment::AddonFits(const FString& Addon, const FString& Type)
+{
+	// equipment.ADDONS types: ilaçlama yalnız kopter ailesi; paket bırakma uçan araçlar + kara aracı; paraşüt uçan araçlar
+	const bool bCopter = Type == TEXT("multirotor") || Type == TEXT("fpv") || Type == TEXT("heli");
+	const bool bFlying = bCopter || Type == TEXT("plane") || Type == TEXT("interceptor") || Type == TEXT("vtol");
+	if (Addon == TEXT("sprayer")) return bCopter;
+	if (Addon == TEXT("gripper")) return bFlying || Type == TEXT("rover");
+	if (Addon == TEXT("parachute")) return bFlying;
+	return false;
+}
+
+TMap<FString, double> FSmvEquipment::SitlParams(const FString& Type) const
+{
+	// app/simumav/equipment.py sitl_params ile aynı kanallar: ilaçlama SERVO9/10, tutucu SERVO11, paraşüt SERVO12
+	TMap<FString, double> P;
+	if (bSprayer && AddonFits(TEXT("sprayer"), Type))
+	{
+		P.Add(TEXT("SPRAY_ENABLE"), 1); P.Add(TEXT("SERVO9_FUNCTION"), 22); P.Add(TEXT("SERVO10_FUNCTION"), 23);
+		P.Add(TEXT("SPRAY_PUMP_RATE"), FMath::Clamp(SprayPumpRate, 0.0, 100.0));
+	}
+	if (bGripper && AddonFits(TEXT("gripper"), Type))
+	{
+		P.Add(TEXT("GRIP_ENABLE"), 1); P.Add(TEXT("GRIP_TYPE"), 1); P.Add(TEXT("SERVO11_FUNCTION"), 28);
+	}
+	if (bParachute && AddonFits(TEXT("parachute"), Type))
+	{
+		P.Add(TEXT("CHUTE_ENABLED"), 1); P.Add(TEXT("CHUTE_TYPE"), 10); P.Add(TEXT("SERVO12_FUNCTION"), 27);
+		P.Add(TEXT("CHUTE_ALT_MIN"), FMath::Clamp(ChuteAltMinM, 0.0, 100.0));
+	}
+	if (MaxAltM > 0 && Type != TEXT("rover"))
+	{
+		// azami irtifa: irtifa çiti (Copter/Plane FENCE_TYPE bit 0 = azami irtifa)
+		P.Add(TEXT("FENCE_ENABLE"), 1); P.Add(TEXT("FENCE_TYPE"), 1); P.Add(TEXT("FENCE_ALT_MAX"), FMath::Clamp(MaxAltM, 10.0, 5000.0));
+	}
+	return P;
+}
+
+TSharedRef<FJsonObject> FSmvEquipment::ToJson(bool bForServer) const
+{
+	TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+	O->SetStringField(TEXT("camera"), Camera);
+	TSharedRef<FJsonObject> A = MakeShared<FJsonObject>();
+	if (bSprayer)
+	{
+		TSharedRef<FJsonObject> X = MakeShared<FJsonObject>();
+		X->SetNumberField(TEXT("tank_l"), FMath::Clamp(SprayTankL, 1.0, 40.0));
+		X->SetNumberField(TEXT("width_m"), FMath::Clamp(SprayWidthM, 1.0, 12.0));
+		X->SetNumberField(TEXT("pump_rate"), FMath::Clamp(SprayPumpRate, 0.0, 100.0));
+		A->SetObjectField(TEXT("sprayer"), X);
+	}
+	if (bGripper)
+	{
+		TSharedRef<FJsonObject> X = MakeShared<FJsonObject>();
+		X->SetNumberField(TEXT("payload_kg"), FMath::Clamp(PayloadKg, 0.1, 20.0));
+		A->SetObjectField(TEXT("gripper"), X);
+	}
+	if (bParachute)
+	{
+		TSharedRef<FJsonObject> X = MakeShared<FJsonObject>();
+		X->SetNumberField(TEXT("alt_min_m"), FMath::Clamp(ChuteAltMinM, 0.0, 100.0));
+		A->SetObjectField(TEXT("parachute"), X);
+	}
+	O->SetObjectField(TEXT("addons"), A);
+	TSharedRef<FJsonObject> L = MakeShared<FJsonObject>();
+	L->SetStringField(TEXT("pattern"), Pattern.IsEmpty() ? FString(TEXT("solid")) : Pattern);
+	if (Color2.Len() == 7) L->SetStringField(TEXT("color2"), Color2.ToLower()); else L->SetField(TEXT("color2"), MakeShared<FJsonValueNull>());
+	if (!Callsign.IsEmpty()) L->SetStringField(TEXT("callsign"), Callsign.Left(8).ToUpper()); else L->SetField(TEXT("callsign"), MakeShared<FJsonValueNull>());
+	TArray<TSharedPtr<FJsonValue>> D;
+	for (const FSmvDecal& X : Decals)
+	{
+		if (bForServer && X.Id <= 0) continue;   // yalnız yerel çıkartma sunucuya gönderilmez (yüklenince kimlik alır)
+		TSharedRef<FJsonObject> J = MakeShared<FJsonObject>();
+		J->SetNumberField(TEXT("id"), (double)X.Id);
+		J->SetStringField(TEXT("slot"), X.Slot);
+		J->SetNumberField(TEXT("scale"), FMath::Clamp(X.Scale, 0.2, 2.0));
+		J->SetNumberField(TEXT("rot"), FMath::Clamp(X.Rot, 0.0, 360.0));
+		if (!bForServer) { J->SetStringField(TEXT("file"), X.File); J->SetStringField(TEXT("kind"), X.Kind); }
+		D.Add(MakeShared<FJsonValueObject>(J));
+		if (D.Num() >= 6) break;
+	}
+	L->SetArrayField(TEXT("decals"), D);
+	O->SetObjectField(TEXT("livery"), L);
+	if (MaxAltM > 0) O->SetNumberField(TEXT("max_alt_m"), FMath::Clamp(MaxAltM, 10.0, 5000.0)); else O->SetField(TEXT("max_alt_m"), MakeShared<FJsonValueNull>());
+	if (!bForServer) O->SetStringField(TEXT("finish"), Finish);
+	return O;
+}
+
+FSmvEquipment FSmvEquipment::FromJson(const TSharedPtr<FJsonObject>& O)
+{
+	FSmvEquipment E;
+	if (!O.IsValid()) return E;
+	E.Camera = SmvJson::Str(O, TEXT("camera"), TEXT("day"));
+	if (const TSharedPtr<FJsonObject> A = SmvJson::Obj(O, TEXT("addons")))
+	{
+		if (const TSharedPtr<FJsonObject> X = SmvJson::Obj(A, TEXT("sprayer")))
+		{
+			E.bSprayer = true;
+			E.SprayTankL = SmvJson::Num(X, TEXT("tank_l"), E.SprayTankL);
+			E.SprayWidthM = SmvJson::Num(X, TEXT("width_m"), E.SprayWidthM);
+			E.SprayPumpRate = SmvJson::Num(X, TEXT("pump_rate"), E.SprayPumpRate);
+		}
+		else E.bSprayer = SmvJson::Bool(A, TEXT("sprayer"), false);
+		if (const TSharedPtr<FJsonObject> X = SmvJson::Obj(A, TEXT("gripper"))) { E.bGripper = true; E.PayloadKg = SmvJson::Num(X, TEXT("payload_kg"), E.PayloadKg); }
+		else E.bGripper = SmvJson::Bool(A, TEXT("gripper"), false);
+		if (const TSharedPtr<FJsonObject> X = SmvJson::Obj(A, TEXT("parachute"))) { E.bParachute = true; E.ChuteAltMinM = SmvJson::Num(X, TEXT("alt_min_m"), E.ChuteAltMinM); }
+		else E.bParachute = SmvJson::Bool(A, TEXT("parachute"), false);
+	}
+	if (const TSharedPtr<FJsonObject> L = SmvJson::Obj(O, TEXT("livery")))
+	{
+		E.Pattern = SmvJson::Str(L, TEXT("pattern"), TEXT("solid"));
+		E.Color2 = SmvJson::Str(L, TEXT("color2"));
+		E.Callsign = SmvJson::Str(L, TEXT("callsign"));
+		const TArray<TSharedPtr<FJsonValue>>* D = nullptr;
+		if (L->TryGetArrayField(TEXT("decals"), D) && D)
+		{
+			for (const TSharedPtr<FJsonValue>& V : *D)
+			{
+				const TSharedPtr<FJsonObject> J = V.IsValid() ? V->AsObject() : nullptr;
+				if (!J.IsValid()) continue;
+				FSmvDecal X;
+				X.Id = (int64)SmvJson::Num(J, TEXT("id"), 0);
+				X.File = SmvJson::Str(J, TEXT("file"));
+				X.Slot = SmvJson::Str(J, TEXT("slot"), TEXT("top"));
+				X.Scale = SmvJson::Num(J, TEXT("scale"), 1.0);
+				X.Rot = SmvJson::Num(J, TEXT("rot"), 0.0);
+				X.Kind = SmvJson::Str(J, TEXT("kind"), TEXT("sticker"));
+				E.Decals.Add(X);
+			}
+		}
+	}
+	E.MaxAltM = SmvJson::Num(O, TEXT("max_alt_m"), -1.0);
+	E.Finish = SmvJson::Str(O, TEXT("finish"), TEXT("gloss"));
+	return E;
+}
+
 TSharedRef<FJsonObject> FSmvDrone::ToJson(bool bForCreate) const
 {
 	TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
@@ -144,6 +279,8 @@ TSharedRef<FJsonObject> FSmvDrone::ToJson(bool bForCreate) const
 	for (const TPair<FString, double>& Kv : Params) P->SetNumberField(FString(*Kv.Key), Kv.Value);
 	O->SetObjectField(TEXT("params"), P);
 	O->SetObjectField(TEXT("power"), Power.ToJson());
+	O->SetObjectField(TEXT("equipment"), Equipment.ToJson(true));
+	if (!Script.IsEmpty()) O->SetStringField(TEXT("script"), Script.Left(64000));
 	if (!bForCreate) O->SetBoolField(TEXT("is_default"), bIsDefault);
 	return O;
 }
@@ -167,6 +304,8 @@ FSmvDrone FSmvDrone::FromJson(const TSharedPtr<FJsonObject>& O)
 		}
 	}
 	D.Power = FSmvPowerSettings::FromJson(SmvJson::Obj(O, TEXT("power")));
+	D.Equipment = FSmvEquipment::FromJson(SmvJson::Obj(O, TEXT("equipment")));
+	D.Script = SmvJson::Str(O, TEXT("script"));
 	return D;
 }
 
@@ -255,6 +394,25 @@ FSmvPilot FSmvPilot::FromJson(const TSharedPtr<FJsonObject>& O)
 	P.Flights = (int32)SmvJson::Num(O, TEXT("flights"));
 	P.Hours = SmvJson::Num(O, TEXT("hours"));
 	P.Avatar = FSmvAvatar::FromJson(SmvJson::Obj(O, TEXT("avatar")));
+	P.Xp = (int64)SmvJson::Num(O, TEXT("xp"), 0);
+	P.XpUnverified = (int64)SmvJson::Num(O, TEXT("xp_unverified"), 0);
+	P.Level = FMath::Clamp((int32)SmvJson::Num(O, TEXT("level"), 1), 1, 100);
+	const TArray<TSharedPtr<FJsonValue>>* L = nullptr;
+	if (O.IsValid() && O->TryGetArrayField(TEXT("xp_log"), L) && L)
+	{
+		for (const TSharedPtr<FJsonValue>& V : *L)
+		{
+			const TSharedPtr<FJsonObject> J = V.IsValid() ? V->AsObject() : nullptr;
+			if (!J.IsValid()) continue;
+			FSmvXpEntry E;
+			E.Xp = (int32)SmvJson::Num(J, TEXT("xp"));
+			E.At = SmvJson::Str(J, TEXT("at"));
+			E.Mode = SmvJson::Str(J, TEXT("mode"));
+			E.DurationS = (int32)SmvJson::Num(J, TEXT("duration_s"));
+			E.bImported = SmvJson::Bool(J, TEXT("imported"));
+			P.XpLog.Add(E);
+		}
+	}
 	return P;
 }
 
@@ -285,6 +443,9 @@ TSharedRef<FJsonObject> FSmvTrack::ToJson() const
 	Wd->SetNumberField(TEXT("water"), World.Water);
 	Wd->SetNumberField(TEXT("fog"), World.Fog);
 	if (World.LandingCircleM > 0) Wd->SetNumberField(TEXT("landing_circle_m"), World.LandingCircleM);
+	if (!World.Biome.IsEmpty()) Wd->SetStringField(TEXT("biome"), World.Biome);
+	if (World.Vehicles > 0) Wd->SetNumberField(TEXT("vehicles"), FMath::Clamp(World.Vehicles, 0, 400));
+	if (World.People > 0) Wd->SetNumberField(TEXT("people"), FMath::Clamp(World.People, 0, 400));
 	O->SetObjectField(TEXT("world"), Wd);
 	TArray<TSharedPtr<FJsonValue>> G;
 	for (int32 i = 0; i < Gates.Num() && i < 50; ++i)
@@ -301,6 +462,8 @@ TSharedRef<FJsonObject> FSmvTrack::ToJson() const
 		G.Add(MakeShared<FJsonValueObject>(J));
 	}
 	O->SetArrayField(TEXT("gates"), G);
+	if (!ParkurKind.IsEmpty()) O->SetStringField(TEXT("category"), ParkurKind);
+	if (GroundMsl > -1000) O->SetNumberField(TEXT("ground_msl"), GroundMsl);
 	return O;
 }
 
@@ -333,7 +496,11 @@ FSmvTrack FSmvTrack::FromJson(const TSharedPtr<FJsonObject>& O)
 		T.World.Water = SmvJson::Num(Wd, TEXT("water"), T.World.Water);
 		T.World.Fog = SmvJson::Num(Wd, TEXT("fog"), T.World.Fog);
 		T.World.LandingCircleM = SmvJson::Num(Wd, TEXT("landing_circle_m"), 0);
+		T.World.Biome = SmvJson::Str(Wd, TEXT("biome"));
+		T.World.Vehicles = (int32)SmvJson::Num(Wd, TEXT("vehicles"), 0);
+		T.World.People = (int32)SmvJson::Num(Wd, TEXT("people"), 0);
 	}
+	T.ParkurKind = SmvJson::Str(O, TEXT("category"));
 	const TArray<TSharedPtr<FJsonValue>>* G = nullptr;
 	if (O.IsValid() && O->TryGetArrayField(TEXT("gates"), G) && G)
 	{
@@ -444,7 +611,9 @@ TSharedRef<FJsonObject> FSmvFlightRequest::ToStartJson() const
 	O->SetObjectField(TEXT("record"), Rec);
 	O->SetObjectField(TEXT("power"), Power.ToJson());
 	if (Speedup != 1.0) O->SetNumberField(TEXT("speedup"), Speedup);
-	O->SetStringField(TEXT("camera"), Camera);
+	// multispektral çekirdekte gündüz kamerası olarak koşar (equipment.CAMERA_CORE); bantları istemci işler
+	O->SetStringField(TEXT("camera"), Camera == TEXT("multispectral") ? FString(TEXT("day")) : Camera);
+	if (!GameMode.IsEmpty() && GameMode != TEXT("rings") && GameMode != TEXT("dogfight")) O->SetStringField(TEXT("mode"), GameMode);
 	if (Targets.Num())
 	{
 		TSharedRef<FJsonObject> T = MakeShared<FJsonObject>();
@@ -606,6 +775,17 @@ TSharedRef<FJsonObject> FSmvFlightSummary::ToJson() const
 	O->SetBoolField(TEXT("servo_trigger"), bServoTriggerFired);
 	if (!Label.IsEmpty()) O->SetStringField(TEXT("label"), Label);
 	if (!When.IsEmpty()) O->SetStringField(TEXT("when"), When);
+	if (!GameMode.IsEmpty()) O->SetStringField(TEXT("game_mode"), GameMode);
+	if (GameScore) O->SetNumberField(TEXT("game_score"), GameScore);
+	if (Xp) O->SetNumberField(TEXT("xp"), Xp);
+	if (Maneuvers.Num())
+	{
+		TArray<TSharedPtr<FJsonValue>> Mv;
+		for (const FString& X : Maneuvers) Mv.Add(MakeShared<FJsonValueString>(X));
+		O->SetArrayField(TEXT("maneuvers"), Mv);
+	}
+	if (!PilotId.IsEmpty()) O->SetStringField(TEXT("pilot_id"), PilotId);
+	if (!PilotName.IsEmpty()) O->SetStringField(TEXT("pilot_name"), PilotName);
 	return O;
 }
 
