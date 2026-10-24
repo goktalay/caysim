@@ -19,6 +19,8 @@
 #include "SmvReplay.h"
 #include "SmvTileMap.h"
 #include "SmvProgress.h"
+#include "AssetRegistry/AssetData.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "SmvGameRules.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
@@ -130,6 +132,42 @@ namespace
 		}
 		Brushes.Add(M.Key, Br);
 		return Br.Get();
+	}
+
+	/** Pilot rütbe simgesi (Fab "2D Icons – 150 Space Rank"; /Game/150SpaceRank/PNG/128): seviye 1–100 → 150 rütbe sırasına yayılır.
+	 *  Paket yoksa nullptr (seviye rakamı kalır). */
+	const FSlateBrush* YhRankBrush(int32 Level, float Size)
+	{
+		static TArray<UTexture2D*> Tex;
+		static bool bRead = false;
+		static TMap<int32, TSharedPtr<FSlateBrush>> Cache;
+		if (!bRead)
+		{
+			bRead = true;
+			TArray<FAssetData> A;
+			IAssetRegistry::GetChecked().GetAssetsByPath(FName(TEXT("/Game/150SpaceRank/PNG/128")), A, true);
+			auto Num = [](const FAssetData& X)
+			{
+				const FString N = X.AssetName.ToString();
+				int32 i = N.Len();
+				while (i > 0 && FChar::IsDigit(N[i - 1])) --i;
+				return i < N.Len() ? FCString::Atoi(*N.Mid(i)) : 0;
+			};
+			A.Sort([&](const FAssetData& X, const FAssetData& Y) { const int32 a = Num(X), b = Num(Y); return a != b ? a < b : X.AssetName.LexicalLess(Y.AssetName); });
+			for (const FAssetData& X : A)
+				if (X.AssetClassPath == UTexture2D::StaticClass()->GetClassPathName())
+					if (UTexture2D* T = Cast<UTexture2D>(X.GetAsset())) { T->AddToRoot(); Tex.Add(T); }
+		}
+		if (Tex.Num() == 0) return nullptr;
+		const int32 Ix = FMath::Clamp((int32)FMath::RoundToInt((FMath::Clamp(Level, 1, 100) - 1) * (Tex.Num() - 1) / 99.0), 0, Tex.Num() - 1);
+		const int32 Key = Ix * 1000 + (int32)Size;
+		if (TSharedPtr<FSlateBrush>* B = Cache.Find(Key)) return B->Get();
+		TSharedPtr<FSlateBrush> B = MakeShared<FSlateBrush>();
+		B->SetResourceObject(Tex[Ix]);
+		B->ImageSize = FVector2D(Size, Size);
+		B->DrawAs = ESlateBrushDrawType::Image;
+		Cache.Add(Key, B);
+		return B.Get();
 	}
 
 	/** Dosyadan PNG seç (Windows ortak iletişim kutusu; diğer platformlarda yok) */
@@ -465,6 +503,10 @@ TSharedRef<SWidget> SSmvShell::PilotChip()
 				+ SVerticalBox::Slot().AutoHeight()
 				[
 					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, YhRankBrush(Lv, 18.f) ? 6.f : 0.f, 0)
+					[
+						YhRankBrush(Lv, 18.f) ? YhW<SImage>(SNew(SImage).Image(YhRankBrush(Lv, 18.f))) : SNullWidget::NullWidget
+					]
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SmvUi::Text(FText::FromString(Name), 13, "Bold", Fg(), false)]
 					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(8, 0, 0, 0)
 					[
@@ -2177,9 +2219,14 @@ TSharedRef<SWidget> SSmvShell::CrewV2()
 				+ SOverlay::Slot()[SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(Accent().CopyWithNewOpacity(0.14f))]
 				+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
 				[
-					SNew(SVerticalBox)
-					+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SmvUi::Text(Tx(TEXT("crew2.level")), 9, "Bold", Dim(), false)]
-					+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[Title(FText::AsNumber(Lv), 32, Accent())]
+					// rütbe simgesi (Space Rank paketi) varsa simge + küçük seviye rakamı, yoksa yalnız rakam
+					YhRankBrush(Lv, 60.f)
+					? YhW<SVerticalBox>(SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SNew(SImage).Image(YhRankBrush(Lv, 60.f))]
+						+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SmvUi::Text(FSmvI18n::Format(TEXT("level.short"), { { TEXT("n"), FString::FromInt(Lv) } }), 10, "Bold", Accent(), false)])
+					: YhW<SVerticalBox>(SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SmvUi::Text(Tx(TEXT("crew2.level")), 9, "Bold", Dim(), false)]
+						+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[Title(FText::AsNumber(Lv), 32, Accent())])
 				]
 			]
 		]

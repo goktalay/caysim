@@ -246,6 +246,12 @@ try {
 		$isler += [pscustomobject]@{ tur = 'incele'; hedef = '/OverCrowd'; sinir = 600; api = @('OverCrowd', 'OverNiagara', 'OverVat', 'VertexAnim', 'Vat') }
 		$imzalar['/OverCrowd'] = @($ocDamga, 'tamam')
 	}
+	# OverCrowd VAT pisirme denemesi (kalabalik): UE5 Manny/Quinn + yurume/bekleme -> /Game/Fab/Crowd (bir kez; sonuc gunlukte "VAT")
+	$vatDamga = Join-Path $content 'Fab\.vat-v1'
+	if (((Get-Content -LiteralPath $uproject -Raw) -match '"OverCrowd"') -and (Test-Path -LiteralPath (Join-Path $content 'AT_Drone')) -and -not (Test-Path -LiteralPath $vatDamga)) {
+		$isler += [pscustomobject]@{ tur = 'vat'; hedef = '/Game/Fab/Crowd'; agler = @('/Game/AT_Drone/Demo/Character/Mannequins/Meshes/SKM_Manny_Simple', '/Game/AT_Drone/Demo/Character/Mannequins/Meshes/SKM_Quinn_Simple') }
+		$imzalar['/Game/Fab/Crowd'] = @($vatDamga, 'tamam')
+	}
 	if ($isler.Count -gt 0) {
 		$editor = Join-Path $UeRoot 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
 		if (-not (Test-Path -LiteralPath $editor)) { Uyari "editor yok: $editor - ice aktarma atlandi" }
@@ -262,7 +268,7 @@ try {
 			$ddc = @($env:UE_ZEN_ARGS -split ' ' | Where-Object { $_ })   # CI'nin kendi Zen DDC sunucusu (build-windows.yml)
 			& $editor $uproject "-ExecutePythonScript=$betik" -unattended -nop4 -nosplash -NullRHI -stdout -FullStdOutLogOutput @ddc 2>&1 | ForEach-Object {
 				$l = "$_"
-				if ($l -match 'fab_import|LogInterchange.*(Error|Warning)|LogFbx.*(Error|Warning)') { Write-Host "    $l" }
+				if ($l -match 'fab_import|OverCrowd|LogInterchange.*(Error|Warning)|LogFbx.*(Error|Warning)') { Write-Host "    $l" }
 			}
 			Bilgi "editor cikis kodu: $LASTEXITCODE"
 			if (Test-Path -LiteralPath $sonucYol) {

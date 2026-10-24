@@ -32,6 +32,7 @@ namespace
 		TEXT("/Game/DroneMegaPack/Drone_C/Blueprint"),
 		TEXT("/Game/DroneMegaPack/Drone_D/Models"),
 		TEXT("/Game/Drone-Sounds/Cue/44_1kHz-24bit"),
+		TEXT("/Game/150SpaceRank/PNG/128"),
 		// </PISIR-KLASORLERI>
 	};
 	const TCHAR* GCarDir = TEXT("/Game/City_Traffic_Pro/Cars/Meshes/Skeletal_Meshes");

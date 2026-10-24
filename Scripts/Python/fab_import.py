@@ -434,6 +434,77 @@ def paket_incele(j):
     return sonuc
 
 
+def vat_pisir(j):
+    """OverCrowd ile kalabalık VAT pişirme denemesi (Pure WPO VAT): iskeletli insan ağı + yürüme/bekleme animasyonu →
+    statik ağ + konum/normal dokuları (/Game/Fab/Crowd). Sonuç ve API imzaları günlüğe ("VAT ...")."""
+    hedef = j.get("hedef", "/Game/Fab/Crowd")
+    sonuc = {"hedef": hedef, "ok": False}
+    for ad in ("bake_pure_wpo_vat", "bake_pure_wpo_debug", "inject_pure_vat_params", "create_uv_channel_for_vertex_indices"):
+        f = getattr(getattr(unreal, "OverCrowdPureVatLibrary", None), ad, None)
+        log(f"VAT doc {ad}: {(f.__doc__ or '-')[:1500]}" if f else f"VAT doc {ad}: yok")
+    for ad in ("convert_skeletal_mesh_to_static_mesh", "create_static_mesh_from_skeletal_lod", "generate_vat_mesh_master", "create_premade_vmp"):
+        f = getattr(getattr(unreal, "OverCrowdEditorLibrary", None), ad, None)
+        log(f"VAT doc {ad}: {(f.__doc__ or '-')[:1200]}" if f else f"VAT doc {ad}: yok")
+    for st in ("OverPureVatClip", "OverPureVatBakeResult", "OverPureVatData"):
+        c = getattr(unreal, st, None)
+        log(f"VAT yapi {st}: {(c.__doc__ or '-')[:1500]}" if c else f"VAT yapi {st}: yok")
+    ar = unreal.AssetRegistryHelpers.get_asset_registry()
+    anims = [a for a in ar.get_assets_by_path(j.get("anim_kok", "/Game/AT_Drone/Demo/Character/Mannequins/Animations"), recursive=True)
+             if "AnimSequence" in str(a.asset_class_path.asset_name)]
+    log("VAT animasyonlar: " + ", ".join(str(a.asset_name) for a in anims[:80]))
+    lib = getattr(unreal, "OverCrowdPureVatLibrary", None)
+    ed = getattr(unreal, "OverCrowdEditorLibrary", None)
+    if not lib or not ed:
+        uyar("VAT: OverCrowd Python API yok (eklenti etkin değil?)")
+        return sonuc
+    tamam = 0
+    for yol in j.get("agler", []):
+        try:
+            sk = unreal.load_asset(yol)
+            if not sk:
+                uyar(f"VAT: ağ yok {yol}")
+                continue
+            ad = sk.get_name()
+            skel = sk.get_editor_property("skeleton")
+            klipler = []
+            for anahtar in ("Walk_Fwd", "Idle"):
+                aday = [a for a in anims if anahtar in str(a.asset_name)]
+                for a in aday:
+                    an = unreal.load_asset(str(a.package_name))
+                    if an and an.get_editor_property("skeleton") == skel:
+                        k = unreal.OverPureVatClip()
+                        k.set_editor_property("anim", an)
+                        try:
+                            k.set_editor_property("sample_rate", 20.0)
+                        except Exception:  # noqa: BLE001
+                            pass
+                        klipler.append(k)
+                        log(f"VAT klip: {ad} <- {an.get_name()}")
+                        break
+            if not klipler:
+                uyar(f"VAT: {ad} için klip yok")
+                continue
+            sm = ed.convert_skeletal_mesh_to_static_mesh(sk, f"{hedef}/SM_{ad}_VAT", True, -1)
+            log(f"VAT statik ağ: {sm.get_path_name() if sm else '-'}")
+            if not sm:
+                continue
+            try:
+                r = lib.bake_pure_wpo_vat(sk, sm, klipler, hedef, f"VAT_{ad}")
+            except TypeError as ex:
+                uyar(f"VAT imza: {ex}")
+                continue
+            log(f"VAT sonuc {ad}: {r}")
+            ok = bool(r.get_editor_property("success")) if r else False
+            if ok:
+                tamam += 1
+            eal.save_directory(hedef, only_if_is_dirty=True, recursive=True)
+        except Exception as ex:  # noqa: BLE001
+            uyar(f"VAT hata {yol}: {ex}")
+    sonuc["ok"] = True   # deneme her durumda bir kez (sonuç günlükte)
+    log(f"VAT: {tamam} ağ pişirildi")
+    return sonuc
+
+
 def main():
     yol = os.environ.get("FAB_IS_LISTESI")
     if not yol or not os.path.isfile(yol):
@@ -447,7 +518,7 @@ def main():
     for j in isler:
         try:
             tur = j.get("tur")
-            sonuclar.append(uds_incele() if tur == "uds" else paket_incele(j) if tur == "incele" else ses_kopyala(j) if tur == "ses" else simgeler(j) if tur == "simge" else bir_is(j))
+            sonuclar.append(uds_incele() if tur == "uds" else paket_incele(j) if tur == "incele" else vat_pisir(j) if tur == "vat" else ses_kopyala(j) if tur == "ses" else simgeler(j) if tur == "simge" else bir_is(j))
         except Exception as e:  # noqa: BLE001
             unreal.log_error(f"[fab_import] hata: {j.get('kaynak')}: {e}")
             sonuclar.append({"hedef": j.get("hedef"), "ok": False})

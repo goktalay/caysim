@@ -12,6 +12,8 @@
 #include "Misc/CommandLine.h"
 #include "UObject/UnrealType.h"
 #include "UObject/UObjectArray.h"
+#include "UObject/UObjectGlobals.h"
+#include "Misc/PackageName.h"
 
 namespace
 {
@@ -20,6 +22,18 @@ namespace
 	 *  Başvurulan nesneler kök kümesine alınır (eklenti yoksa hiçbir şey yapılmaz). */
 	void SmvPinPluginSettingRefs()
 	{
+		// başvurulan Blueprint sınıfları önceden yüklenip köke alınır (CDO onları tembel yükleyebiliyor: ilk denemede 0 nesne bulundu)
+		static bool bPreloaded = false;
+		if (!bPreloaded)
+		{
+			bPreloaded = true;
+			for (const TCHAR* Cls : { TEXT("/OverCrowd/Blueprints/Niagara/BP_NiagaraCrowd.BP_NiagaraCrowd_C"), TEXT("/OverCrowd/Blueprints/Niagara/BP_BlueprintActorCrowd.BP_BlueprintActorCrowd_C"),
+				TEXT("/OverCrowd/Blueprints/Niagara/BP_NiagaraCrowdSpline.BP_NiagaraCrowdSpline_C"), TEXT("/OverCrowd/Blueprints/Base/BP_CrowdMember_Actor.BP_CrowdMember_Actor_C") })
+			{
+				if (!FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(FString(Cls)))) continue;
+				if (UClass* C = StaticLoadClass(UObject::StaticClass(), nullptr, Cls, nullptr, LOAD_NoWarn | LOAD_Quiet)) { C->AddToRoot(); UE_LOG(LogSimumav, Log, TEXT("Eklenti sınıfı köke alındı: %s"), Cls); }
+			}
+		}
 		for (const TCHAR* Path : { TEXT("/Script/OverCrowd.OverCrowdDeveloperSettings") })
 		{
 			UClass* C = FindObject<UClass>(nullptr, Path);
@@ -31,7 +45,7 @@ namespace
 				UObject* O = It.Key()->GetObjectPropertyValue(It.Value());
 				if (O && !O->IsRooted() && !GUObjectArray.IsDisregardForGC(O)) { O->AddToRoot(); ++N; }
 			}
-			UE_LOG(LogSimumav, Log, TEXT("Eklenti ayar başvuruları kök kümesine alındı: %s (%d nesne)"), Path, N);
+			if (N) UE_LOG(LogSimumav, Log, TEXT("Eklenti ayar başvuruları kök kümesine alındı: %s (%d nesne)"), Path, N);
 		}
 	}
 }
@@ -40,6 +54,8 @@ void USmvGameInstance::Init()
 {
 	Super::Init();
 	SmvPinPluginSettingRefs();
+	// her çöp toplamadan önce yeniden (tembel yüklenen başvurular için; ucuz)
+	FCoreUObjectDelegates::GetPreGarbageCollectDelegate().AddStatic(&SmvPinPluginSettingRefs);
 	// motorun ekran üstü hata ayıklama iletileri (ör. "Runtime Virtual Texture ... needs to be rebuilt") oyuncuya gösterilmez
 	// (Development paketinde de; günlükte kalır). -SmvScreenMessages ile açılabilir.
 	if (!FParse::Param(FCommandLine::Get(), TEXT("SmvScreenMessages")))

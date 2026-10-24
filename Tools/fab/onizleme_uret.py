@@ -167,6 +167,63 @@ def askeri():
     kaydet(im, 'askeri')
 
 
+def pist():
+    """Şehir yarış pisti: bariyerli asfalt viraj, tribün, şehir silueti."""
+    r = random.Random(6)
+    im = Image.new('RGB', (G, Y))
+    d = ImageDraw.Draw(im)
+    gok(d, (95, 140, 195), (225, 210, 185), 200)
+    x = -10
+    while x < G:
+        w = r.uniform(30, 60)
+        h = r.uniform(50, 130)
+        d.rectangle([x, 200 - h, x + w, 210], fill=(110, 118, 135))
+        x += w + r.uniform(2, 8)
+    zemin(d, 205, (95, 105, 85), (70, 80, 62))
+    # viraj (asfalt şerit) + kırmızı-beyaz kerb
+    d.polygon([(0, 360), (210, 360), (420, 250), (640, 235), (640, 210), (400, 222), (150, 300), (0, 312)], fill=(55, 56, 60))
+    for k in range(14):
+        t = k / 13
+        xa, ya = 0 + 420 * t, 312 - 90 * t
+        d.rectangle([xa, ya - 4, xa + 16, ya + 2], fill=(200, 40, 40) if k % 2 else (235, 235, 235))
+    # beton bariyer + tribün
+    d.line([(0, 300), (400, 214), (640, 205)], fill=(190, 190, 185), width=5)
+    d.rectangle([430, 160, 620, 205], fill=(85, 95, 110))
+    for yy in range(166, 204, 8):
+        d.line([(436, yy), (614, yy)], fill=(140, 150, 165), width=2)
+    dron(d, 300, 110, 1.3)
+    kaydet(im, 'pist')
+
+
+def kosk():
+    """Göl kenarı köşk: geleneksel çatılı köşk, sakin göl, çam ve kayalar."""
+    r = random.Random(7)
+    im = Image.new('RGB', (G, Y))
+    d = ImageDraw.Draw(im)
+    gok(d, (150, 185, 215), (235, 225, 205), 200)
+    # uzak dağlar
+    d.polygon([(0, 200), (120, 140), (230, 185), (360, 120), (500, 175), (640, 140), (640, 200)], fill=(120, 140, 135))
+    zemin(d, 200, (95, 135, 150), (60, 95, 115))   # göl
+    for k in range(18):
+        yy = 210 + k * 8
+        d.line([(r.uniform(0, 300), yy), (r.uniform(340, 640), yy)], fill=(130, 165, 175), width=1)
+    # kıyı ve kayalar
+    d.polygon([(0, 260), (180, 240), (330, 262), (330, 360), (0, 360)], fill=(70, 95, 60))
+    for _ in range(6):
+        x = r.uniform(20, 300)
+        d.ellipse([x, 300 + r.uniform(0, 30), x + 40, 330 + r.uniform(0, 20)], fill=(120, 118, 110))
+    # köşk: kırmızı direkler, kavisli koyu çatı
+    d.rectangle([110, 205, 250, 214], fill=(150, 120, 90))
+    for x in (120, 160, 200, 240):
+        d.rectangle([x - 3, 180, x + 3, 210], fill=(150, 50, 40))
+    d.polygon([(90, 182), (125, 150), (245, 150), (280, 182), (250, 176), (120, 176)], fill=(55, 60, 65))
+    # çamlar
+    for x in (40, 300, 320):
+        d.polygon([(x, 150), (x - 22, 250), (x + 22, 250)], fill=(40, 75, 50))
+    dron(d, 420, 95, 1.3)
+    kaydet(im, 'kosk')
+
+
 if __name__ == '__main__':
-    for f in (orman, yikik, sehir, rafineri, askeri):
+    for f in (orman, yikik, sehir, rafineri, askeri, pist, kosk):
         f()
