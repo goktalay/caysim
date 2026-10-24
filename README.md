@@ -14,6 +14,8 @@ Bu depo iki ürünü tek Unreal Engine 5.8 projesinde (`Simumav.uproject`) taş�
 | [docs/simumav-api-esleme.md](docs/simumav-api-esleme.md) | simumav.com API / WS ↔ C++ eşlemesi, yerel karşılıklar |
 | [docs/derleme-windows.md](docs/derleme-windows.md) | Şirket bilgisayarı kurulumu, self-hosted runner, derleme, paketleme |
 | [docs/steam-yayin.md](docs/steam-yayin.md) | Steamworks, App ID, depot, mağaza varlıkları, yaş derecelendirme, yükleme |
+| [docs/ekranlar/README.md](docs/ekranlar/README.md) | **Ekran görüntüleri galerisi** (otomatik duman testi; yol haritası ekranları, Fab haritaları, şehir trafiği/kalabalığı, gemi savunma) |
+| [docs/fab-icerik.md](docs/fab-icerik.md) | Fab içerikleri: hazırlama, haritalar, şehir hayatı (City Traffic Pro, kalabalık), yeni dron gövdeleri, Mogami |
 
 Sınamalar (Unreal'sız, bu sunucuda): `tests/cpp/test_mavlink.py` (pymavlink), `tests/cpp/test_kdf.py` (hashlib), `tests/cpp/test_core.py`
 (sunucu Python modülleri + flightsim_gpws.js), `tests/ue_denetim.py` (UHT/include/modül), `tests/test_sozlesme_simumav.py` (yerel SIMUMAV ile canlı sözleşme).

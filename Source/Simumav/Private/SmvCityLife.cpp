@@ -12,6 +12,8 @@
 #include "Engine/World.h"
 #include "Misc/ConfigCacheIni.h"
 #include "ReferenceSkeleton.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "SmvUiKit.h"
 
 namespace
 {
@@ -315,6 +317,21 @@ int32 ASmvCityLife::BuildCrowd(const TArray<TArray<FVector>>& Walk, const TArray
 		C->SetCachedMaxDrawDistance(CullCm);
 		C->SetupAttachment(Root);
 		C->RegisterComponent();
+		// manken gövdesi gümüş/robot gibi görünüyordu: yuvalara mat giysi renkleri (üst: canlı/ton, alt: koyu pantolon)
+		if (UMaterialInterface* Solid = SmvSolidMat(C->GetMaterial(0)))
+		{
+			static const FLinearColor Tops[] = { FLinearColor(0.32f, 0.05f, 0.05f), FLinearColor(0.05f, 0.12f, 0.3f), FLinearColor(0.55f, 0.5f, 0.42f), FLinearColor(0.08f, 0.2f, 0.1f),
+				FLinearColor(0.6f, 0.6f, 0.62f), FLinearColor(0.35f, 0.22f, 0.08f), FLinearColor(0.04f, 0.04f, 0.05f), FLinearColor(0.45f, 0.3f, 0.36f) };
+			static const FLinearColor Bottoms[] = { FLinearColor(0.03f, 0.04f, 0.07f), FLinearColor(0.06f, 0.06f, 0.06f), FLinearColor(0.18f, 0.15f, 0.11f), FLinearColor(0.05f, 0.08f, 0.16f) };
+			for (int32 k = 0; k < C->GetNumMaterials(); ++k)
+			{
+				UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Solid, C);
+				SmvSetSolidColor(D, k == 0 ? Tops[(int32)(SmvRand(Rs) * 8) % 8] : Bottoms[(int32)(SmvRand(Rs) * 4) % 4]);
+				D->SetScalarParameterValue(TEXT("Roughness"), 0.85f);
+				D->SetScalarParameterValue(TEXT("Metallic"), 0.f);
+				C->SetMaterial(k, D);
+			}
+		}
 		if (A)
 		{
 			C->PlayAnimation(A, true);
