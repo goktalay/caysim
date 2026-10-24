@@ -22,6 +22,10 @@ on:
         description: "Steam dalı (boş = varsayılan dala yükleme yapılmaz, yalnız beta)"
         type: string
         default: "beta"
+      ship_artefakt:
+        description: "Shipping paketini artefakt olarak yükle (~7 GB, ~30 dk; push derlemelerinde yüklenmez, paket runner diskinde kalır)"
+        type: boolean
+        default: false
       dev_artefakt:
         description: "Development paketini de artefakt olarak yükle (büyük; varsayılan yalnız Shipping)"
         type: boolean
@@ -128,6 +132,7 @@ jobs:
 
       # Buyuk artefakt yuklemesi ag hatasinda (ENOTFOUND blob.core.windows.net) derlemeyi dusurmesin: paket runner'da zaten var
       - name: Artefakt — Shipping
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.ship_artefakt }}
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:

@@ -354,6 +354,78 @@ def ses_kopyala(j):
     return sonuc
 
 
+def paket_incele(j):
+    """Yeni Fab paketlerinin envanteri (yalnız günlük): sınıf sayıları, Blueprint üst sınıfları, Niagara kullanıcı parametreleri,
+    malzeme parametreleri, iskeletli ağ kemikleri ve sınırları. Oyun kodu (SmvCityLife, katalog) bu adları kullanır."""
+    kok = j["hedef"]
+    sonuc = {"hedef": kok, "ok": True}
+    ar = unreal.AssetRegistryHelpers.get_asset_registry()
+    try:
+        ar.scan_paths_synchronous([kok], True)
+    except Exception:  # noqa: BLE001
+        pass
+    v = ar.get_assets_by_path(kok, recursive=True)
+    say = {}
+    for a in v:
+        c = str(a.asset_class_path.asset_name)
+        say[c] = say.get(c, 0) + 1
+    log(f"INCELE {kok}: {len(v)} varlik; " + ", ".join(f"{k}={n}" for k, n in sorted(say.items(), key=lambda x: -x[1])[:25]))
+    sinir = int(j.get("sinir", 400))
+    n = 0
+    for a in sorted(v, key=lambda x: str(x.package_name)):
+        c = str(a.asset_class_path.asset_name)
+        p = str(a.package_name)
+        if c in ("Texture2D", "MaterialFunction", "SoundWave", "AnimSequence", "PhysicsAsset", "Skeleton", "Font", "FontFace", "TextureCube"):
+            continue
+        n += 1
+        if n > sinir:
+            break
+        ek = ""
+        try:
+            if c == "Blueprint" or c.endswith("BlueprintGeneratedClass") or c == "WidgetBlueprint":
+                b = unreal.load_asset(p)
+                pc = b.get_editor_property("parent_class") if b else None
+                ek = f" ust={pc.get_name() if pc else '-'}"
+            elif c in ("StaticMesh", "SkeletalMesh") and n < sinir:
+                m = unreal.load_asset(p)
+                e = m.get_bounds().box_extent
+                ek = f" sinir={2 * e.x:.0f}x{2 * e.y:.0f}x{2 * e.z:.0f}"
+                if c == "SkeletalMesh":
+                    try:
+                        sk = m.get_editor_property("skeleton")
+                        ek += f" iskelet={sk.get_name() if sk else '-'}"
+                    except Exception:  # noqa: BLE001
+                        pass
+                    k = kemikler(m)
+                    ek += f" kemik({len(k)})=" + ",".join(k[:60])
+                else:
+                    try:
+                        ek += f" malzeme={m.get_material(0).get_path_name() if m.get_material(0) else '-'}"
+                    except Exception:  # noqa: BLE001
+                        pass
+            elif c == "NiagaraSystem":
+                ns = unreal.load_asset(p)
+                try:
+                    ups = ns.get_editor_property("exposed_parameters")
+                    ek = f" kullanici={ups}"[:600]
+                except Exception as ex:  # noqa: BLE001
+                    ek = f" (param okunamadi: {ex})"[:200]
+            elif c in ("Material", "MaterialInstanceConstant"):
+                mi = unreal.load_asset(p)
+                mel = unreal.MaterialEditingLibrary
+                try:
+                    s = mel.get_scalar_parameter_names(mi)
+                    vv = mel.get_vector_parameter_names(mi)
+                    t = mel.get_texture_parameter_names(mi)
+                    ek = f" s={list(map(str, s))[:20]} v={list(map(str, vv))[:12]} t={list(map(str, t))[:12]}"
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as ex:  # noqa: BLE001
+            ek = f" (hata {ex})"[:200]
+        log(f"INCELE {c:<26} {p}{ek}"[:1500])
+    return sonuc
+
+
 def main():
     yol = os.environ.get("FAB_IS_LISTESI")
     if not yol or not os.path.isfile(yol):
@@ -367,7 +439,7 @@ def main():
     for j in isler:
         try:
             tur = j.get("tur")
-            sonuclar.append(uds_incele() if tur == "uds" else ses_kopyala(j) if tur == "ses" else simgeler(j) if tur == "simge" else bir_is(j))
+            sonuclar.append(uds_incele() if tur == "uds" else paket_incele(j) if tur == "incele" else ses_kopyala(j) if tur == "ses" else simgeler(j) if tur == "simge" else bir_is(j))
         except Exception as e:  # noqa: BLE001
             unreal.log_error(f"[fab_import] hata: {j.get('kaynak')}: {e}")
             sonuclar.append({"hedef": j.get("hedef"), "ok": False})

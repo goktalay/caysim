@@ -34,6 +34,7 @@ $iniYol = Join-Path $Proje 'Config\DefaultGame.ini'
 $korunan = @('Drones', 'Input', 'Launch', 'Maps', 'Simumav', 'UI', 'Fab', 'Collections', 'Developers', 'StarterContent')
 $kopyalanan = New-Object System.Collections.ArrayList   # Content altı göreli yollar (ör. RuinedConstruction, __ExternalActors__\RuinedConstruction)
 $paketler = New-Object System.Collections.ArrayList     # üst düzey paket klasörleri (harita aramak için)
+$ilkKaynak = @{}                                         # paket klasörü → ilk kaynak yolu (ortak yayıncı klasörlerinin birleştirilmesi)
 
 function Kopyala([string]$kaynak, [string]$hedef) {
 	# /XO: hedefte daha yeni olan dosya (fab_carpisma.py'nin duzelttigi ag) kaynaktan ezilmez; kaynak guncellenirse kopyalanir
@@ -68,10 +69,23 @@ function PaketKopyala([string]$srcContent, [string]$etiket) {
 			}
 			continue
 		}
+		if ($ad -match '[\s\.]') { Uyari "atlandi (UE paket adi degil - bosluk/nokta; or. .blend klasoru): $etiket\$ad"; continue }
 		if ($korunan -contains $ad) { Uyari "atlandi (proje klasoruyle cakisiyor): $etiket\$ad"; continue }
-		if ($kopyalanan -contains $ad) { Bilgi "zaten alindi (ilk kaynak gecerli): $ad"; continue }
+		if ($kopyalanan -contains $ad) {
+			# ayni yayincinin ortak klasoru (or. BendylabStudios: Hexacopter hazirlama projesinde, Interceptor VaultCache'te):
+			# ilk kaynakta olmayan alt klasorler eklenir (ilk kaynagin /MIR kopyasi onlari siler; her derlemede yeniden eklenir)
+			$ilk = $ilkKaynak[$ad]
+			$ekAlt = @(Get-ChildItem -LiteralPath $d.FullName -Directory -ErrorAction SilentlyContinue | Where-Object { $ilk -and -not (Test-Path -LiteralPath (Join-Path $ilk $_.Name)) })
+			if ($ekAlt.Count -eq 0) { Bilgi "zaten alindi (ilk kaynak gecerli): $ad"; continue }
+			foreach ($s in $ekAlt) {
+				Bilgi "alt klasor ekleniyor: $etiket\$ad\$($s.Name)"
+				[void](Kopyala $s.FullName (Join-Path $content "$ad\$($s.Name)"))
+				[void]$paketler.Add("$ad/$($s.Name)")
+			}
+			continue
+		}
 		Bilgi "kopyalaniyor: $etiket\$ad"
-		if (Kopyala $d.FullName (Join-Path $content $ad)) { [void]$kopyalanan.Add($ad); [void]$paketler.Add($ad) }
+		if (Kopyala $d.FullName (Join-Path $content $ad)) { [void]$kopyalanan.Add($ad); [void]$paketler.Add($ad); $ilkKaynak[$ad] = $d.FullName }
 	}
 }
 
@@ -211,6 +225,14 @@ try {
 	if ((Test-Path -LiteralPath $sesDir) -and -not (Test-Path -LiteralPath $sesDamga)) {
 		$isler += [pscustomobject]@{ tur = 'ses'; hedef = '/Game/Fab/Sounds'; kok = '/Game/cplomedia_AircraftEngineSounds' }
 		$imzalar['/Game/Fab/Sounds'] = @($sesDamga, 'tamam')
+	}
+	# Yeni paketlerin varlik envanteri (yalniz gunluk, paket basina bir kez; "INCELE" satirlari): kalabalik / trafik / dron / gemi paketleri
+	foreach ($pk in $paketler) {
+		if ($pk -notmatch '(?i)crowd|traffic|hexa|drone|uav|mogami|frigate|ffm|agras|ship|vehicle|interceptor|bendylab') { continue }
+		$damga = Join-Path $content ("Fab\.incele-" + ($pk -replace '[\\/ ]', '_'))
+		if (Test-Path -LiteralPath $damga) { continue }
+		$isler += [pscustomobject]@{ tur = 'incele'; hedef = "/Game/$pk"; sinir = 500 }
+		$imzalar["/Game/$pk"] = @($damga, 'tamam')
 	}
 	if ($isler.Count -gt 0) {
 		$editor = Join-Path $UeRoot 'Engine\Binaries\Win64\UnrealEditor-Cmd.exe'

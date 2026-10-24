@@ -136,6 +136,25 @@ jobs:
           }
           Get-CimInstance Win32_Process -Filter "Name='zenserver.exe'" -ErrorAction SilentlyContinue | ForEach-Object { $o = try { (Invoke-CimMethod -InputObject $_ -MethodName GetOwner).User } catch { '?' }; W ("  zenserver pid " + $_.ProcessId + " sahip " + $o + " : " + $_.CommandLine) }
           Get-CimInstance Win32_Process -Filter "Name='UnrealEditor.exe'" -ErrorAction SilentlyContinue | ForEach-Object { W ("  UnrealEditor pid " + $_.ProcessId) }
+          W "=== Motor eklentisi ayrinti (.uplugin + klasor agaci) ==="
+          foreach ($d in (Get-ChildItem "$ue\Engine\Plugins\Marketplace" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)overcrow' })) {
+            Get-ChildItem $d.FullName -Filter *.uplugin -File -Recurse -Depth 1 -ErrorAction SilentlyContinue | ForEach-Object { W ("--- " + $_.FullName); $t = Get-Content -LiteralPath $_.FullName -Raw; W $t.Substring(0, [Math]::Min(3000, $t.Length)) }
+            Get-ChildItem $d.FullName -Directory -Recurse -Depth 3 -ErrorAction SilentlyContinue | ForEach-Object { $n = @(Get-ChildItem $_.FullName -File -ErrorAction SilentlyContinue).Count; W ("  " + $_.FullName.Substring($d.FullName.Length) + "  (" + $n + " dosya)") }
+            Get-ChildItem (Join-Path $d.FullName 'Content') -Recurse -File -Filter *.uasset -ErrorAction SilentlyContinue | Select-Object -First 400 | ForEach-Object { W ("  A " + $_.FullName.Substring($d.FullName.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
+            Get-ChildItem (Join-Path $d.FullName 'Content') -Recurse -File -Filter *.umap -ErrorAction SilentlyContinue | ForEach-Object { W ("  M " + $_.FullName.Substring($d.FullName.Length)) }
+            Get-ChildItem (Join-Path $d.FullName 'Binaries') -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { W ("  B " + $_.FullName.Substring($d.FullName.Length) + "  " + $_.Length) }
+          }
+          W "=== Yeni paketlerin varlik dosyalari (adlar) ==="
+          $ayr = @("$fp\Content\City_Traffic_Pro\Cars", "$fp\Content\City_Traffic_Pro\Meshes", "$fp\Content\City_Traffic_Pro\Additional_Blueprints", "$fp\Content\BendylabStudios", "$fp\Content\DJI AGRAS T50.blend", "$fp\DroneMegaPackandControlle\Content\DroneMegaPack", "$fp\FPVDrone\Content\AT_Drone", "$vc\Intercepead5933957bbV1\data\Content\BendylabStudios")
+          foreach ($k in $ayr) {
+            if (-not (Test-Path -LiteralPath $k)) { W ("  (yok) " + $k); continue }
+            W ("--- " + $k)
+            Get-ChildItem -LiteralPath $k -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^(T_|TX_)' } | Select-Object -First 300 | ForEach-Object { W ("  " + $_.FullName.Substring($k.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
+          }
+          W "=== Blender ==="
+          $bl = @(Get-ChildItem 'C:\Program Files\Blender Foundation' -Recurse -Filter blender.exe -File -Depth 2 -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+          $bl += @(Get-Command blender -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
+          if ($bl.Count) { $bl | ForEach-Object { W ("  " + $_) } } else { W "  blender yok" }
           W "=== Disk bos alan ==="
           Get-PSDrive -PSProvider FileSystem | ForEach-Object { W ("  " + $_.Name + ": bos " + ('{0:N0} GB' -f ($_.Free / 1GB))) }
       - name: Artefakt
