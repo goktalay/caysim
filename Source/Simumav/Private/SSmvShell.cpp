@@ -4558,13 +4558,14 @@ void SSmvShell::TickSmoke()
 	}
 	// uçuşlar (yerel SITL): Fab haritası + saat/hava; yer → kalkış (GPS/EKF hazır olunca kuyruktan) → ~10 m askı → (ilk uçuşta FPV/HUD, duraklatma, özet)
 	// Not: ekran görüntüsü sonraki karede çizilir — görüntü ile durum değiştiren eylem aynı adımda yapılmaz.
-	struct FFl { const TCHAR* Map; const TCHAR* Tod; const TCHAR* Wx; const TCHAR* Code; bool bFull; };
+	struct FFl { const TCHAR* Map; const TCHAR* Tod; const TCHAR* Wx; const TCHAR* Code; bool bFull; const TCHAR* Vehicle = nullptr; };
 	static const FFl Fls[] = {
 		{ TEXT("orman"), TEXT("dusk"), TEXT("rain"), TEXT("f1"), true },
 		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f2"), false },
 		{ TEXT("sehir"), TEXT("day"), TEXT("cloudy"), TEXT("f3"), false },
 		// prosedürel dünya (Hyper arazi malzemesi, Brushify ağaçları, ia_scatter kaya/ot, ufuk dağları)
-		{ TEXT("proc"), TEXT("golden"), TEXT("clear"), TEXT("f4"), false },
+		// VTOL: pilot omuz görünümü (MetaHuman pilot RC ile) ve FPV'de jet HUD karesi
+		{ TEXT("proc"), TEXT("golden"), TEXT("clear"), TEXT("f4"), false, TEXT("vtol") },
 	};
 	if (SmokeFl >= NFlights)
 	{
@@ -4594,6 +4595,11 @@ void SSmvShell::TickSmoke()
 		}
 		else if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Fx.Map)) Flow->Draft.Track = FSmvFabContent::MakeTrack(*M);
 		else UE_LOG(LogTemp, Display, TEXT("SMOKE map %s yok — varsayılan parkur"), Fx.Map);
+		if (Fx.Vehicle)
+		{
+			Flow->Draft.Drone.Type = Fx.Vehicle;
+			Flow->Draft.Drone.ModelKey = USmvDataService::DefaultModelFor(Fx.Vehicle);
+		}
 		Flow->Draft.Track.TimeOfDay = Fx.Tod;
 		Flow->Draft.Track.Weather = Fx.Wx;
 		Flow->Draft.bHasMission = false;
@@ -4615,7 +4621,7 @@ void SSmvShell::TickSmoke()
 		if (Alt < 8.5f && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
 		UE_LOG(LogTemp, Display, TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);
 		SmokeAt = Now + 4.0; ++SmokeSub; return;
-	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.bFull ? 6 : 11; return;
+	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.bFull ? 6 : Fx.Vehicle ? 13 : 11; return;
 	case 6: if (GameMode.IsValid()) GameMode->UiAction(TEXT("CamCycle"), FString()); SmokeAt = Now + 3.0; ++SmokeSub; return;
 	case 7: Shot(Base + TEXT("_fpv")); SmokeAt = Now + 0.8; ++SmokeSub; return;
 	case 8: if (GameMode.IsValid()) GameMode->TogglePause(); SmokeAt = Now + 2.0; ++SmokeSub; return;
@@ -4624,7 +4630,13 @@ void SSmvShell::TickSmoke()
 	case 11:
 		UE_LOG(LogTemp, Display, TEXT("SMOKE end %s alt=%.1f"), Fx.Code, Alt);
 		Flow->EndFlight(TEXT("user")); SmokeAt = Now + 8.0; ++SmokeSub; return;
-	case 12: if (Fx.bFull) Shot(TEXT("24_summary")); SmokeAt = Now + 1.5; ++SmokeSub; return;
+	case 12: if (Fx.bFull) Shot(TEXT("24_summary")); SmokeAt = Now + 1.5; SmokeSub = 99; return;
+	// pilot omuz görünümü + FPV (jet HUD), ardından takip kamerasına dönüp bitir
+	case 13: if (GameMode.IsValid()) GameMode->SmokeCam(7); SmokeAt = Now + 3.0; ++SmokeSub; return;
+	case 14: Shot(Base + TEXT("_pilot")); SmokeAt = Now + 0.8; ++SmokeSub; return;
+	case 15: if (GameMode.IsValid()) GameMode->SmokeCam(1); SmokeAt = Now + 3.0; ++SmokeSub; return;
+	case 16: Shot(Base + TEXT("_fpv")); SmokeAt = Now + 0.8; ++SmokeSub; return;
+	case 17: if (GameMode.IsValid()) GameMode->SmokeCam(0); SmokeAt = Now + 1.0; SmokeSub = 11; return;
 	default: ++SmokeFl; SmokeSub = 0; SmokeAt = Now + 0.5; return;
 	}
 }

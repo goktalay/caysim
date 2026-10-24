@@ -1,7 +1,24 @@
 # Pilot görünümü → MetaHuman (MCC – Meta Character Creator) entegrasyonu
 
-Durum: MCC eklentisi henüz projede yok. Pilot şu an `ASmvPilotFigure` ile temel şekillerden (küp / silindir / küre / koni) kodla kurulur.
-Bu belge, eklenti gelince nereye bağlanacağını ve `FSmvAvatar` alanlarının MetaHuman parametrelerine nasıl eşleneceğini tanımlar.
+Durum: **MCC entegre** (Fab paketi `MetaCharacterCreator`, UE 5.7 projesi; VaultCache'ten derleme anında `Content/MetaCharacterCreator`).
+Kit yoksa (eski paket, `[/Script/Simumav.SmvPilot] MetaHuman=False`) pilot eskisi gibi temel şekillerden (`ASmvPilotFigure` temel yolu) kurulur.
+
+## Uygulama (bu sürüm)
+
+| Parça | Yer | Ne yapar |
+| --- | --- | --- |
+| Kit üretimi | `Scripts/Python/simumav_varliklar.py` → `pilot_kiti()` | MCC'den seçilenleri `/Game/Simumav/Pilot/DA_SmvPilotKit` (`USmvPilotKit`) içine **yumuşak başvuru** olarak yazar: 2 gövde (`SKM_Human_Male/Female`), 12 gerçekçi yüz (`MCC_YUZLER`: ad, kadın mı, yaklaşık ten kademesi), 21 groom (`MCC_GROOMLAR`) ve yüz başına groom bağlamaları (`GB_<groom>_<yüz>`). Yalnız bunlar pakete pişirilir; MCC'nin geri kalanı (~15 GB; anime / kara elf / goblin yüzleri, mayo / kulak / kuyruk aksesuarları, sahneler) pakete girmez |
+| Seçim | `Source/Simumav/Private/SmvMetaPilot.cpp` (`FSmvMetaPilot::Resolve`) | cinsiyet → gövde; ten `s1–s8` → en yakın ten kademesindeki yüzler, aralarından yüz/burun/göz/ağız seçimine göre; saç modeli → MCC saç groom'u (yalnız kasksızken), kaş kalınlığı → `Eyebrows_M_Thin/Natural/Thick`, sakal → `Beard_S_Stubble` / `Mustache_S_Full` / `Goatee_M_Pointed` / `Beard_S_Full`, kirpik |
+| Figür | `SmvPilotFigure.cpp` → `BuildMetaHuman` | `UPoseableMeshComponent` gövde (tek parça uçuş tulumu rengi, `Suit`), lider pozlu yüz (`SetLeaderPoseComponent`), `UGroomComponent` tüyler (saç rengi `hairMelanin` / `hairRedness`); kask, vizör, şapka, kulaklık, gözlük, mikrofon temel şekil parçaları baş kemiğini izler (`HeadFwdCm`, `HeadUpCm`) |
+| Poz | `PoseMhArms` | kemikler bileşen uzayında **çocuk kemiğe yönlendirilir** (kemik eksenlerinden bağımsız): RC tutma (dirsek gövdeye yakın, önkol öne-içe, eller kumandada) ya da serbest duruş. Baş ve boyun (%40) drona bakar (`SetPose`) |
+| Küçük resimler | `SmvMenuScene.cpp` → `TickSnaps` | `bLowDetail` → temel şekil (64 küçük resim için yüz ağı yüklenmez) |
+
+Eklentiler (`Simumav.uproject`): `HairStrands`, `RigLogic` (isteğe bağlı). `DefaultEngine.ini`: `r.GPUSkin.Support16BitBoneIndex`,
+`r.GPUSkin.UnlimitedBoneInfluences`, `SkeletalMesh.UseExperimentalChunking` (MetaHuman yüz ağları için). MCC'nin kendi karakter Blueprint'i
+(`BP_ThirdPersonCharacter` + `BP_CP_CustomizationComponent`) kullanılmaz: girdi eşlemesi / kamera / oyun modu getirir; parçalar doğrudan kurulur.
+Ten kademeleri yüz adına göre yaklaşıktır (`MCC_YUZLER`), gerekirse oradan düzeltilir.
+
+## İlk plan (referans)
 
 ## Bugünkü akış (bağlantı noktaları)
 

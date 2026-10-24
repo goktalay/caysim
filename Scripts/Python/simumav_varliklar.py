@@ -318,7 +318,7 @@ def hyper_arazi_malzemesi():
     if eksik:
         log("Hyper dokuları yok (" + ", ".join(eksik) + ") — M_SmvTerrainHyper üretilmedi (M_SmvTerrainWx kalır)")
         return
-    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "4")
+    m = malzeme_v("/Game/Simumav/Materials", "M_SmvTerrainHyper", "5")
     if m is None:
         return
     try:
@@ -344,7 +344,7 @@ def hyper_arazi_malzemesi():
 
         def doku(ad, uv, normal=False):
             t = dokular[ad]
-            sanal = bool(t.get_editor_property("virtual_texture_streaming")) and vt_acik
+            sanal = bool(t.get_editor_property("virtual_texture_streaming"))  # proje VT desteği açık (T_Grass_Blobby_Tiling_N sanal)
             x = g.e(unreal.MaterialExpressionTextureSample, texture=t, sampler_type=ornek_tipi(t, normal, sanal),
                     sampler_source=unreal.SamplerSourceMode.SSM_WRAP_WORLD_GROUP_SETTINGS)
             g.bag(uv, x, "UVs")
@@ -474,7 +474,7 @@ def pilot_kiti():
         e.set_editor_property("kind", tur)
         e.set_editor_property("name", ad)
         e.set_editor_property("extra", ek)
-        e.set_editor_property("b_female", kadin)
+        e.set_editor_property("female", kadin)
         e.set_editor_property("tone", ton)
         e.set_editor_property("asset", nesne)
         girdiler.append((tur, ad, ek, tam))

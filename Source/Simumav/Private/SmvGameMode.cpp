@@ -611,6 +611,8 @@ void ASmvGameMode::StopScene()
 	if (ASmvPilotPawn* P = GetPilot()) { P->OnRc.Clear(); P->OnAction.RemoveAll(this); P->SetFlying(false); P->SetTarget(nullptr, TEXT("multirotor")); }
 	if (Hud) { Hud->RemoveFromParent(); Hud = nullptr; }
 	if (Overlay) { Overlay->RemoveFromParent(); Overlay = nullptr; }
+	if (JetHud) { JetHud->RemoveFromParent(); JetHud = nullptr; }
+	bJetHudTried = false;
 	if (FlightUiHost.IsValid() && GEngine && GEngine->GameViewport) GEngine->GameViewport->RemoveViewportWidgetContent(FlightUiHost.ToSharedRef());
 	FlightUiHost.Reset();
 	FlightUi.Reset();
@@ -1286,6 +1288,11 @@ bool ASmvGameMode::SmokeTele(float& OutAltRel, bool& bOutArmed, int32& OutPosRea
 	return true;
 }
 
+void ASmvGameMode::SmokeCam(int32 Mode)
+{
+	if (ASmvPilotPawn* P = GetPilot()) P->SetMode(Mode == 1 ? ESmvCamMode::Fpv : Mode == 7 ? ESmvCamMode::Pilot : ESmvCamMode::Chase);
+}
+
 void ASmvGameMode::UpdateHud()
 {
 	USmvGameInstance* GI = USmvGameInstance::GetSmv(this);
@@ -1320,8 +1327,9 @@ void ASmvGameMode::UpdateHud()
 				FSmvI18n::T(TEXT("hud.w_gcs")).ToString(), FSmvI18n::T(TEXT("hud.w_low")).ToString() };
 		}
 		const bool bHudMode = Pw && Pw->IsHudOn() && (Pw->GetMode() == ESmvCamMode::Fpv || Pw->GetMode() == ESmvCamMode::Gimbal) && Set.GaugeTheme == TEXT("military");
-		Hud->SetVisibility(bHudMode ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		Hud->SetVisibility(bHudMode && !(JetHud && JetHud->IsVisible()) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
+	UpdateJetHud(T, Pw);
 	if (!Overlay) return;
 	FSmvHudState S;
 	const double LinkAge = L->LinkAgeMs();
@@ -2009,6 +2017,67 @@ void ASmvGameMode::SpawnCityStreetscape(double Cell, double Road)
 	}
 	Sc->AddMountains(FVector::ZeroVector, 600000.0, 1100000.0, -2000.0, 12, TEXT("Rocky"), 31, 50000.0, 150000.0);
 	UE_LOG(LogSimumav, Log, TEXT("Şehir sokak dokusu: %d çizgi, %d yaya geçidi şeridi, %d lamba (%s), %d manzara örneği"), Dash.Num(), Zebra.Num(), Heads.Num(), bLit ? TEXT("yanık") : TEXT("sönük"), Sc->GetInstanceCount());
+}
+
+void ASmvGameMode::UpdateJetHud(const FCaySimTelemetry& T, ASmvPilotPawn* Pw)
+{
+	const bool bPlane = Req.Drone.Type == TEXT("plane") || Req.Drone.Type == TEXT("vtol");
+	bool bOn = true;
+	if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvScenery"), TEXT("JetHud"), bOn, GGameIni);
+	const bool bWant = bOn && bPlane && Pw && Pw->IsHudOn() && Pw->GetMode() == ESmvCamMode::Fpv;
+	if (!JetHud && bWant && !bJetHudTried)
+	{
+		bJetHudTried = true;
+		if (FPackageName::DoesPackageExist(TEXT("/Game/Aircraft_HUD/UI/HUD/WBP_Jet_HUD")))
+		{
+			if (UClass* C = LoadClass<UUserWidget>(nullptr, TEXT("/Game/Aircraft_HUD/UI/HUD/WBP_Jet_HUD.WBP_Jet_HUD_C"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				JetHud = CreateWidget<UUserWidget>(GetWorld(), C);
+				if (JetHud) JetHud->AddToViewport(4);
+				UE_LOG(LogSimumav, Log, TEXT("Jet HUD (Fab Aircraft HUD): %s"), JetHud ? TEXT("kuruldu") : TEXT("kurulamadı"));
+			}
+		}
+	}
+	if (!JetHud) return;
+	JetHud->SetVisibility(bWant ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	if (!bWant || !Drone) return;
+	UFunction* F = JetHud->FindFunction(FName(TEXT("Update HUD")));
+	if (!F) return;
+	float RollR = 0.f, PitchR = 0.f, YawR = 0.f;
+	Drone->GetRenderedPose(RollR, PitchR, YawR);
+	const float SpdKmh = (T.Airspeed > 0.1f ? T.Airspeed : T.Groundspeed) * 3.6f;
+	TArray<uint8> Buf;
+	Buf.SetNumZeroed(F->ParmsSize);
+	for (TFieldIterator<FProperty> It(F); It && It->HasAnyPropertyFlags(CPF_Parm); ++It) It->InitializeValue_InContainer(Buf.GetData());
+	auto Num = [&](const TCHAR* N, double V)
+	{
+		if (FNumericProperty* P = CastField<FNumericProperty>(F->FindPropertyByName(FName(N)))) { void* Ptr = P->ContainerPtrToValuePtr<void>(Buf.GetData()); if (P->IsFloatingPoint()) P->SetFloatingPointPropertyValue(Ptr, V); else P->SetIntPropertyValue(Ptr, (int64)V); }
+	};
+	auto Txt = [&](const TCHAR* N, const FString& V)
+	{
+		if (FTextProperty* P = CastField<FTextProperty>(F->FindPropertyByName(FName(N)))) P->SetPropertyValue_InContainer(Buf.GetData(), FText::FromString(V));
+	};
+	auto Vis = [&](const TCHAR* N, ESlateVisibility V)
+	{
+		FProperty* P = F->FindPropertyByName(FName(N));
+		if (FEnumProperty* E = CastField<FEnumProperty>(P)) E->GetUnderlyingProperty()->SetIntPropertyValue(E->ContainerPtrToValuePtr<void>(Buf.GetData()), (int64)V);
+		else if (FByteProperty* B = CastField<FByteProperty>(P)) B->SetIntPropertyValue(B->ContainerPtrToValuePtr<void>(Buf.GetData()), (int64)V);
+	};
+	Num(TEXT("Altitude"), T.AltRel);
+	Num(TEXT("Pitch Value"), FMath::RadiansToDegrees(PitchR));
+	Num(TEXT("Roll Value"), FMath::RadiansToDegrees(RollR));
+	Num(TEXT("Speed"), SpdKmh);
+	Num(TEXT("Yaw Value"), T.Heading);
+	Txt(TEXT("Altitude_T"), FString::Printf(TEXT("%.0f"), T.AltRel));
+	Txt(TEXT("Speed_T"), FString::Printf(TEXT("%.0f"), SpdKmh));
+	Vis(TEXT("WRN_V"), ActiveAlerts.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	Vis(TEXT("InAir_V"), T.AltRel > 1.0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	// hedef kilidi göstergeleri kullanılmaz (yalnız uçuş göstergesi)
+	Vis(TEXT("Lock_V"), ESlateVisibility::Collapsed);
+	Vis(TEXT("Lock_A"), ESlateVisibility::Collapsed);
+	Vis(TEXT("Lock_B"), ESlateVisibility::Collapsed);
+	JetHud->ProcessEvent(F, Buf.GetData());
+	for (TFieldIterator<FProperty> It(F); It && It->HasAnyPropertyFlags(CPF_Parm); ++It) It->DestroyValue_InContainer(Buf.GetData());
 }
 
 void ASmvGameMode::TickCityWindows()

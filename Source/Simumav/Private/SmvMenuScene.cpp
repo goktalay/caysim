@@ -256,8 +256,9 @@ void ASmvMenuScene::BuildWorld()
 		Pp.bOverride_ColorGainShadows = true; Pp.ColorGainShadows = FVector4(0.92f, 0.98f, 1.08f, 1.f);
 		Pp.bOverride_ColorGainHighlights = true; Pp.ColorGainHighlights = FVector4(1.06f, 1.0f, 0.92f, 1.f);
 		Pp.bOverride_SceneFringeIntensity = true; Pp.SceneFringeIntensity = 0.6f;
-		// hafif hız çizgileri (Fab Speed Effects son işlem malzemesi; MenuSpeedLines ağırlığı, 0 kapalı)
-		const float SpeedW = SmvCfg(TEXT("MenuSpeedLines"), 0.3f);
+		// hız çizgileri (Fab Speed Effects son işlem malzemesi; MenuSpeedLines ağırlığı) — duman testinde arayüzün üstünde fazla yoğun
+		// göründüğü için menüde varsayılan kapalı (0); uçuş kamerasında hıza bağlı kullanılır
+		const float SpeedW = SmvCfg(TEXT("MenuSpeedLines"), 0.f);
 		if (SpeedW > 0.f && FPackageName::DoesPackageExist(TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines")))
 		{
 			if (UMaterialInterface* Sl = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines.M_SpeedEffects_SpeedLines"), nullptr, LOAD_NoWarn | LOAD_Quiet))
@@ -669,8 +670,8 @@ void ASmvMenuScene::TickScenery()
 		if (UClass* FogC = LoadClass<AActor>(nullptr, TEXT("/Game/NiagaraExamples/FX_Fog/BP_FogBankCard.BP_FogBankCard_C"), nullptr, LOAD_NoWarn | LOAD_Quiet))
 		{
 			FSmvFabContent::DumpClassApi(FogC, TEXT("FogBankCard"));
-			const float Sc = SmvCfg(TEXT("MenuFogScale"), 6.f);
-			static const double Spots[][2] = { { 900.0, 700.0 }, { -1100.0, 600.0 }, { 400.0, -1300.0 }, { -700.0, -900.0 }, { 1500.0, -200.0 } };
+			const float Sc = SmvCfg(TEXT("MenuFogScale"), 40.f);
+			static const double Spots[][2] = { { 600.0, 450.0 }, { -650.0, 380.0 }, { 300.0, -700.0 }, { -450.0, -520.0 }, { 900.0, -150.0 } };
 			int32 k = 0;
 			for (const auto& Sp2 : Spots)
 			{

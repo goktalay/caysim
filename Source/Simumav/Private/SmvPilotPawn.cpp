@@ -401,7 +401,14 @@ void ASmvPilotPawn::UpdateSpeedFx(float Dt)
 		if (bOn && FPackageName::DoesPackageExist(TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines")))
 		{
 			if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines.M_SpeedEffects_SpeedLines"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
 				SpeedMid = UMaterialInstanceDynamic::Create(M, this);
+				// paket varsayılanı ekranı kaplıyordu (duman testi): yoğunluk ve çizgi boyu yarıya, renk yarı saydam beyaz
+				float V = 0.f;
+				if (M->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(TEXT("LineDensity"))), V)) SpeedMid->SetScalarParameterValue(TEXT("LineDensity"), V * 0.5f);
+				if (M->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(TEXT("LineSize"))), V)) SpeedMid->SetScalarParameterValue(TEXT("LineSize"), V * 0.6f);
+				SpeedMid->SetVectorParameterValue(TEXT("LineColor"), FLinearColor(0.7f, 0.75f, 0.8f, 0.5f));
+			}
 		}
 	}
 	if (!SpeedMid) return;
@@ -410,7 +417,7 @@ void ASmvPilotPawn::UpdateSpeedFx(float Dt)
 	SpdLast = P;
 	bSpdInit = true;
 	SpdSmooth = FMath::FInterpTo(SpdSmooth, FMath::Min(V, 120.f), Dt, 2.f);
-	float MaxW = 0.8f;
+	float MaxW = 0.5f;
 	if (GConfig) GConfig->GetFloat(TEXT("/Script/Simumav.SmvScenery"), TEXT("SpeedLinesMax"), MaxW, GGameIni);
 	const float W = FMath::Clamp((SpdSmooth - 18.f) / 40.f, 0.f, 1.f) * MaxW;
 	TArray<FWeightedBlendable>& Arr = Camera->PostProcessSettings.WeightedBlendables.Array;
