@@ -1,4 +1,5 @@
 #include "SSmvShell.h"
+#include "SmvInputGlyphs.h"
 #include "SimumavModule.h"
 #include "SimumavClient.h"
 #include "SmvDataService.h"
@@ -189,6 +190,7 @@ void SSmvShell::Construct(const FArguments& InArgs)
 {
 	Flow = InArgs._Flow;
 	GameMode = InArgs._GameMode;
+	FSmvInputGlyphs::Init();   // giriş cihazı algılama (son kullanılan cihaz; kumanda bağlan/ayrıl) + Joystix simgeleri
 	TextStyle = FCoreStyle::Get().GetWidgetStyle<FEditableTextBoxStyle>("NormalEditableTextBox");
 	TextStyle.SetBackgroundImageNormal(FSlateRoundedBoxBrush(Hex(0x0b1222, 0.92f), 10.f, Edge(), 1.f));
 	TextStyle.SetBackgroundImageHovered(FSlateRoundedBoxBrush(Hex(0x0f1a30, 0.95f), 10.f, Hex(0x8eaae6, 0.35f), 1.f));
@@ -2572,7 +2574,7 @@ TSharedRef<SWidget> SSmvShell::WizControl()
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("stickmode.title")))];
 	V->AddSlot().AutoHeight()[ModeGrid];
-	V->AddSlot().AutoHeight().Padding(6, 10, 0, 14)[SmvUi::Text(FText::FromString(StickKeyHint(D->Settings().StickMode)), 14, "Bold", Accent(), false)];
+	V->AddSlot().AutoHeight().Padding(6, 10, 0, 14)[SmvUi::StickKeyHintWidget(D->Settings().StickMode, 14, Accent())];
 	V->AddSlot().AutoHeight().Padding(6, 0, 0, 14)[SmvUi::Text(Tx(TEXT("stickmode.hint")), 11, "Regular", Mute())];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("settings.input")), Accent2())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.device")), Chips(&WizDevice, { TEXT("keyboard"), TEXT("gamepad"), TEXT("rc") },
@@ -3729,7 +3731,7 @@ TSharedRef<SWidget> SSmvShell::SetControls()
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("stickmode.title")))];
 	V->AddSlot().AutoHeight()[ModeGrid];
-	V->AddSlot().AutoHeight().Padding(5, 8, 0, 4)[SmvUi::Text(FText::FromString(StickKeyHint(S.StickMode)), 13, "Bold", Accent(), false)];
+	V->AddSlot().AutoHeight().Padding(5, 8, 0, 4)[SmvUi::StickKeyHintWidget(S.StickMode, 13, Accent())];
 	V->AddSlot().AutoHeight().Padding(5, 0, 0, 10)[SmvUi::Text(Tx(TEXT("stickmode.hint")), 10, "Regular", Mute())];
 	V->AddSlot().AutoHeight().Padding(0, 6, 0, 8)[Section(Tx(TEXT("settings.input")), Accent2())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.device")), Chips(&S.InputDevice, { TEXT("keyboard"), TEXT("gamepad"), TEXT("rc") },

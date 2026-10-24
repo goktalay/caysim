@@ -1,6 +1,8 @@
 #include "SmvUiKit.h"
 #include "SmvI18n.h"
 #include "SmvUiPrefs.h"
+#include "SmvInputGlyphs.h"
+#include "Widgets/Images/SImage.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Layout/SBox.h"
@@ -466,7 +468,39 @@ namespace SmvUi
 		return K.GetDisplayName().ToString();
 	}
 
+	TSharedRef<SWidget> KeyCapText(const FString& Key);
+
+	/** Tuş başlığı: Joystix simgesi (etkin cihaz ailesine göre; çizim anında çözülür → cihaz değişince hemen güncellenir), yoksa metin rozeti.
+	 *  "W A S D" gibi birleşik metinler parça parça simgelenir. */
 	TSharedRef<SWidget> KeyCap(const FString& Key)
+	{
+		FSmvInputGlyphs::Init();
+		if (!FSmvInputGlyphs::HasPack()) return KeyCapText(Key);
+		TArray<FString> Parts;
+		if (!Key.StartsWith(TEXT("pad:")) && Key.Contains(TEXT(" ")) && Key.ParseIntoArray(Parts, TEXT(" ")) > 1)
+		{
+			bool bAll = true;
+			for (const FString& P : Parts) if (!FSmvInputGlyphs::Brush(P)) bAll = false;
+			if (bAll)
+			{
+				TSharedRef<SHorizontalBox> H = SNew(SHorizontalBox);
+				for (const FString& P : Parts) H->AddSlot().AutoWidth().Padding(0, 0, 2, 0)[KeyCap(P)];
+				return H;
+			}
+		}
+		return SNew(SOverlay)
+			+ SOverlay::Slot().VAlign(VAlign_Center)
+			[
+				SNew(SImage).Image_Lambda([Key]() { return FSmvInputGlyphs::Brush(Key); })
+				.Visibility_Lambda([Key]() { return FSmvInputGlyphs::Brush(Key) ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+			]
+			+ SOverlay::Slot().VAlign(VAlign_Center)
+			[
+				SNew(SBox).Visibility_Lambda([Key]() { return FSmvInputGlyphs::Brush(Key) ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })[KeyCapText(Key)]
+			];
+	}
+
+	TSharedRef<SWidget> KeyCapText(const FString& Key)
 	{
 		if (Key.StartsWith(TEXT("pad:")))
 		{
@@ -531,14 +565,61 @@ namespace SmvUi
 		return FString::Printf(TEXT("W/S %s · A/D %s · ↑↓ %s · ←→ %s"), *N(A[1]), *N(A[0]), *N(A[3]), *N(A[2]));
 	}
 
+	TSharedRef<SWidget> StickKeyHintWidget(int32 Mode, int32 Size, const FLinearColor& Color)
+	{
+		FString A[4];
+		StickMap(Mode, A);
+		auto N = [](const FString& X) { return AxisName(X).ToString().ToLower(); };
+		auto Build = [&](bool bPad) -> TSharedRef<SWidget>
+		{
+			TSharedRef<SHorizontalBox> H = SNew(SHorizontalBox);
+			auto Pair = [&](const TCHAR* K1, const TCHAR* K2, const FString& Label, bool bLast)
+			{
+				H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 2, 0)[KeyCap(K1)];
+				if (K2) H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 4, 0)[KeyCap(K2)];
+				H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, bLast ? 0 : 12, 0)[Text(FText::FromString(Label), Size, "Bold", Color, false)];
+			};
+			if (bPad)
+			{
+				Pair(TEXT("pad:LS"), nullptr, TEXT("↕ ") + N(A[1]) + TEXT(" · ↔ ") + N(A[0]), false);
+				Pair(TEXT("pad:RS"), nullptr, TEXT("↕ ") + N(A[3]) + TEXT(" · ↔ ") + N(A[2]), true);
+			}
+			else
+			{
+				Pair(TEXT("W"), TEXT("S"), N(A[1]), false);
+				Pair(TEXT("A"), TEXT("D"), N(A[0]), false);
+				Pair(TEXT("↑"), TEXT("↓"), N(A[3]), false);
+				Pair(TEXT("←"), TEXT("→"), N(A[2]), true);
+			}
+			return H;
+		};
+		return SNew(SOverlay)
+			+ SOverlay::Slot()[SNew(SBox).Visibility_Lambda([]() { return PadActive() ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })[Build(false)]]
+			+ SOverlay::Slot()[SNew(SBox).Visibility_Lambda([]() { return PadActive() ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })[Build(true)]];
+	}
+
 	void DrStickMode(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& P, const FVector2D& S, int32 Mode, const FLinearColor& Col)
 	{
 		FString A[4];
 		StickMap(Mode, A);
-		const float R = (float)FMath::Min(S.X * 0.22, S.Y * 0.36);
+		float R = (float)FMath::Min(S.X * 0.22, S.Y * 0.36);
+		// Joystix kumanda görseli varsa: görsel ortada, çubuk eksenleri görselin üzerindeki gerçek çubuk konumlarında
+		FVector2D StL(0.27, 0.52), StR(0.73, 0.52);
+		FVector2D ImgP = P, ImgS = S;
+		if (const FSlateBrush* Cb = FSmvInputGlyphs::ControllerBrush(StL, StR))
+		{
+			const FVector2D Isz = Cb->ImageSize;
+			const float K = (float)FMath::Min(S.X / FMath::Max(1.0, Isz.X), S.Y * 0.9 / FMath::Max(1.0, Isz.Y));
+			ImgS = Isz * K;
+			ImgP = P + (S - ImgS) * 0.5;
+			DrBox(Out, L, G, ImgP, ImgS, FLinearColor(1, 1, 1, 0.85f), Cb);
+			R = (float)ImgS.Y * 0.16f;
+		}
+		else { StL = FVector2D(0.27, 0.52); StR = FVector2D(0.73, 0.52); }
 		for (int32 Side = 0; Side < 2; ++Side)
 		{
-			const FVector2D C = P + FVector2D(S.X * (Side == 0 ? 0.27 : 0.73), S.Y * 0.52);
+			const FVector2D St = Side == 0 ? StL : StR;
+			const FVector2D C = ImgP + FVector2D(ImgS.X * St.X, ImgS.Y * St.Y);
 			DrArc(Out, L, G, C, R, 0.f, 360.f, Col.CopyWithNewOpacity(0.5f), 1.5f);
 			DrSeg(Out, L, G, C - FVector2D(R * 0.75f, 0), C + FVector2D(R * 0.75f, 0), Col.CopyWithNewOpacity(0.35f), 1.f);
 			DrSeg(Out, L, G, C - FVector2D(0, R * 0.75f), C + FVector2D(0, R * 0.75f), Col.CopyWithNewOpacity(0.35f), 1.f);
@@ -640,7 +721,7 @@ namespace SmvUi
 							[
 								SNew(SVerticalBox)
 								+ SVerticalBox::Slot().AutoHeight()[Text(FSmvI18n::Format(TEXT("help.stick_mode"), { { TEXT("m"), FString::FromInt(StickMode) } }), 13, "Bold", Accent())]
-								+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 0)[Text(FText::FromString(StickKeyHint(StickMode)), 12, "Regular", Fg())]
+								+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 0)[StickKeyHintWidget(StickMode, 12, Fg())]
 								+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 0)[Text(T(bFlight ? TEXT("help.flight_note") : TEXT("help.menu_note")), 11, "Regular", Mute())]
 							]
 						], FMargin(30.f, 24.f))
@@ -1434,6 +1515,16 @@ int32 SSmvKeyCapture::OnPaint(const FPaintArgs& Args, const FGeometry& G, const 
 	DrBox(Out, L, G, FVector2D::ZeroVector, Sz, bListening ? Accent().CopyWithNewOpacity(bBlink ? 0.35f : 0.2f) : FLinearColor(1, 1, 1, 0.06f), Round(8.f));
 	DrRoundRect(Out, L + 1, G, FVector2D(0.5f, 0.5f), Sz - FVector2D(1, 1), 8.f, bNavFocus || bListening ? Hex(0x7dd3fc) : Edge(), bNavFocus ? 2.f : 1.f);
 	FString S = bListening ? FSmvI18n::T(TEXT("bind.press_key")).ToString() : Current.Get(FString());
+	// Joystix simgesi (gamepad sütununda gamepad ailesi, klavye sütununda klavye simgesi)
+	if (!bListening && !S.IsEmpty())
+	{
+		if (const FSlateBrush* Gb = FSmvInputGlyphs::Brush(S, 24.f))
+		{
+			const FVector2D Isz = Gb->ImageSize;
+			DrBox(Out, L + 2, G, FVector2D((Sz.X - Isz.X) * 0.5f, (Sz.Y - Isz.Y) * 0.5f), Isz, FLinearColor::White, Gb);
+			return L + 3;
+		}
+	}
 	if (S.StartsWith(TEXT("pad:"))) S = FString(TEXT("Pad ")) + S.Mid(4);
 	DrText(Out, L + 2, G, S, FVector2D(Sz.X * 0.5f, Sz.Y * 0.5f), Font(11, "Bold"), bListening ? FLinearColor::White : Fg(), 0);
 	return L + 3;

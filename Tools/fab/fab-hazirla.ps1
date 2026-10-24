@@ -158,6 +158,21 @@ try {
 			$imzalar[$hedefYol] = @($imzaDosya, $imza)
 		}
 	}
+	# Tus / kumanda simge paketi (Joystix): FabLibrary urun klasorundeki PNG'ler ya da .unitypackage icindeki PNG'ler /Game/Fab/Joystix'e
+	if (Test-Path -LiteralPath $lib) {
+		foreach ($u in (Get-ChildItem -LiteralPath $lib -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)joystix|button_?overlay|button_?prompt|input_?prompt' })) {
+			$dosyalar = @(Get-ChildItem -LiteralPath $u.FullName -Recurse -File -ErrorAction SilentlyContinue | Where-Object { ($_.Extension -eq '.png' -and $_.Name -ne 'thumbnail.png') -or $_.Extension -eq '.unitypackage' })
+			$boyut = ($dosyalar | Measure-Object Length -Sum).Sum
+			Bilgi "simge paketi: $($u.Name) - $($dosyalar.Count) dosya, $([math]::Round($boyut / 1KB)) KB"
+			if ($boyut -lt 50KB) { Uyari "simge paketi bos ya da indirme eksik ($($u.Name)): Fab'den PNG / Unreal bicimini indirin"; continue }
+			$hedefDisk = Join-Path $content 'Fab\Joystix'
+			$imza = "$($u.FullName)|$($dosyalar.Count)|$boyut"
+			$imzaDosya = Join-Path $hedefDisk '.kaynak-imza'
+			if ((Test-Path -LiteralPath $imzaDosya) -and ((Get-Content -LiteralPath $imzaDosya -Raw).Trim() -eq $imza)) { Bilgi "  degismemis, ice aktarma atlandi"; continue }
+			$isler += [pscustomobject]@{ tur = 'simge'; kaynak = $u.FullName; hedef = '/Game/Fab/Joystix' }
+			$imzalar['/Game/Fab/Joystix'] = @($imzaDosya, $imza)
+		}
+	}
 	# Ultra Dynamic Sky: degisken adlari ve hava on ayarlari bir kez gunluge yazilir (oyun bunlari adla baglar)
 	$udsDir = Join-Path $content 'UltraDynamicSky'
 	$udsDamga = Join-Path $content 'Fab\.uds-incelendi'

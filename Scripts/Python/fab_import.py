@@ -46,6 +46,71 @@ def meta_ozet(yol):
         uyar(f"metadata okunamadi: {e}")
 
 
+def simgeler(j):
+    """Tuş / kumanda simge paketi (Joystix): kaynak klasördeki PNG'ler ya da .unitypackage içindeki PNG'ler → hedef (UI dokusu,
+    mip yok, UserInterface2D sıkıştırma). Alt klasör adları ve dosya adları korunur (oyun adlardan eşler: SmvInputGlyphs)."""
+    import tarfile
+    import tempfile
+    kaynak, hedef = j["kaynak"], j["hedef"]
+    pngler = []
+    for kok, _, dosyalar in os.walk(kaynak):
+        for d in dosyalar:
+            tam = os.path.join(kok, d)
+            if d.lower().endswith(".png") and d.lower() != "thumbnail.png":
+                pngler.append((os.path.relpath(tam, kaynak), tam))
+            elif d.lower().endswith(".unitypackage"):
+                gecici = tempfile.mkdtemp(prefix="smv_joystix_")
+                try:
+                    with tarfile.open(tam, "r:gz") as tf:
+                        uyeler = {m.name: m for m in tf.getmembers()}
+                        for ad, m in uyeler.items():
+                            if not ad.endswith("/pathname"):
+                                continue
+                            yol = tf.extractfile(m).read().decode("utf-8", "replace").splitlines()[0].strip()
+                            veri = uyeler.get(ad[: -len("pathname")] + "asset")
+                            if not yol.lower().endswith(".png") or veri is None:
+                                continue
+                            hedef_dosya = os.path.join(gecici, *yol.split("/")[-3:])
+                            os.makedirs(os.path.dirname(hedef_dosya), exist_ok=True)
+                            with open(hedef_dosya, "wb") as f:
+                                f.write(tf.extractfile(veri).read())
+                            pngler.append((os.path.relpath(hedef_dosya, gecici), hedef_dosya))
+                except Exception as e:  # noqa: BLE001
+                    uyar(f"unitypackage okunamadi ({tam}): {e}")
+    log(f"simge paketi: {len(pngler)} PNG ({kaynak})")
+    if not pngler:
+        return {"hedef": hedef, "ok": False, "iskelet": False, "varliklar": [], "kemikler": []}
+    if eal.does_directory_exist(hedef):
+        eal.delete_directory(hedef)
+    gorevler = []
+    for rel, tam in pngler:
+        alt = "/".join(p for p in os.path.dirname(rel).replace("\\", "/").split("/") if p and p != ".")
+        alt = "".join(c if c.isalnum() or c in "_/" else "_" for c in alt)
+        t = unreal.AssetImportTask()
+        t.set_editor_property("filename", tam)
+        t.set_editor_property("destination_path", hedef + ("/" + alt if alt else ""))
+        t.set_editor_property("automated", True)
+        t.set_editor_property("replace_existing", True)
+        t.set_editor_property("save", False)
+        gorevler.append(t)
+    at.import_asset_tasks(gorevler)
+    say = 0
+    for t in gorevler:
+        for yol in list(t.get_editor_property("imported_object_paths") or []):
+            a = eal.load_asset(yol.split(".")[0])
+            if isinstance(a, unreal.Texture2D):
+                try:
+                    a.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_EDITOR_ICON)
+                    a.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+                    a.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_UI)
+                except Exception as e:  # noqa: BLE001
+                    uyar(f"doku ayari: {e}")
+                eal.save_loaded_asset(a)
+                say += 1
+    log(f"simge paketi: {say} doku → {hedef}")
+    return {"hedef": hedef, "ok": say > 0, "iskelet": False, "varliklar": [], "kemikler": []}
+
+
 def gorev(kaynak, hedef, ad, iskelet):
     t = unreal.AssetImportTask()
     t.set_editor_property("filename", kaynak)
@@ -287,7 +352,7 @@ def main():
     for j in isler:
         try:
             tur = j.get("tur")
-            sonuclar.append(uds_incele() if tur == "uds" else ses_kopyala(j) if tur == "ses" else bir_is(j))
+            sonuclar.append(uds_incele() if tur == "uds" else ses_kopyala(j) if tur == "ses" else simgeler(j) if tur == "simge" else bir_is(j))
         except Exception as e:  # noqa: BLE001
             unreal.log_error(f"[fab_import] hata: {j.get('kaynak')}: {e}")
             sonuclar.append({"hedef": j.get("hedef"), "ok": False})

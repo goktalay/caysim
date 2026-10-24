@@ -1436,7 +1436,7 @@ TSharedRef<SWidget> SSmvFlightUi::Tips()
 				SNew(SVerticalBox)
 				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(Loc(TEXT("fui.tips_title")))).Font(Font(10, true)).ColorAndOpacity(Accent)]
 				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(Line)).Font(Font(10)).ColorAndOpacity(Txt)]
-				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(SmvUi::StickKeyHint(St.StickMode))).Font(Mono(8)).ColorAndOpacity(Dim)]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0, 2, 0, 0)[SmvUi::StickKeyHintWidget(St.StickMode, 9, Dim)]
 			]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(14, 0, 0, 0)
 			[

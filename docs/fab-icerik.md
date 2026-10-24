@@ -79,7 +79,7 @@ eski temel şekil dünyası kalır. Pakete pişirilen klasörler dosyadaki `MANZ
 | ia_scatter | kaya (`rock1`, `rock2`) ve ot / eğrelti / yabani ot ağları. Eklentinin dağıtım Blueprint'i (`BP_ia_scatter`, kontrol paneli) editör aracıdır; çalışma anında dağıtımı `ASmvScenery::Scatter` yapar (tohumlu, pist/su alanı boş, kesme mesafeli HISM) |
 | Hyper Auto Landscape Material v4 | dokuları `M_SmvTerrainHyper` malzemesinde (Editor Python üretir): eğime göre kaya, kar çizgisi + hava karı, çöl kumu (`Sand`), ıslaklık. Hyper'ın kendi malzemesi Landscape katman düğümleri kullandığından ProceduralMesh arazisine doğrudan uygulanmaz |
 | Interior Cubemap System | şehirde City Sample pencere malzemesi (`M_Window`) bu paketin ön ayarlarıyla değiştirilir (`CityWindowSwap`); gece aşırı parlayan pencereler yerine iç mekân görünümü |
-| Flying AI | gökte uzak trafik: 3 araç büyük elips yörüngelerde (`SkyTraffic`, `SkyTrafficLengthM`) |
+| Planes in the Sky + Flying AI | gökte uzak trafik: yolcu uçakları (SM_Airliner / SM_Regional_Jet) 2,5–5 km'de iz bulutuyla, Flying AI alçakta (`SkyTraffic`, `SkyTrafficLengthM`) |
 | Niagara (Fab paketlerinden) | Editor Python tüm Fab Niagara sistemleri içinden toz / zerre / kor türünü `NS_SmvDust` olarak kopyalar; ana menü kamerasının önünde süzülür (`MenuDust`) |
 
 **Askeri Üs** haritası boşlukta bir ada olduğu için kayıt tablosunda çevre biyomu `Desert` tanımlıdır: uçuşta ve ana menüde adanın altından
@@ -91,6 +91,21 @@ alt %10 yüzeyinden, `SurroundPercentile`, `SurroundSinkCm`). Yeni bir "havada a
 
 Ayarlar `Config/DefaultGame.ini` → `[/Script/Simumav.SmvScenery]`: `Enabled`, `HyperTerrain`, `TreeCullM` (ağaç kesme mesafesi, m),
 `GrassCount`, `SkyTraffic`, `SkyTrafficLengthM`, `CityWindowSwap`, `CityWindowEmissive`, `SurroundRadiusM`, `SurroundPercentile`.
+
+## Fab paketleri — kullanım durumu
+
+| Paket | Durum | Not |
+|---|---|---|
+| MCC – Meta Character Creator | kullanılıyor | MetaHuman pilot (docs/pilot-metahuman.md); yalnız seçilen yüz/gövde/groom'lar pakete girer |
+| Brushify, ia_scatter, Hyper Auto Landscape, Interior Cubemap, Planes in the Sky, Flying AI | kullanılıyor | yukarıdaki Manzara tablosu |
+| Niagara Examples Pack | kısmen | menüde sis kümeleri (`BP_FogBankCard`, `MenuFogBanks`); uygun ortam tozu yok — menü zerresi Ultra Dynamic Sky `Particles/Dust` (`NS_SmvDust`) |
+| Speed effects | kullanılıyor | `M_SpeedEffects_SpeedLines` uçuş kamerasında hıza bağlı (`SpeedLines`, `SpeedLinesMax`); menüde varsayılan kapalı (`MenuSpeedLines`) |
+| Aircraft HUD | kullanılıyor | uçak/VTOL FPV'de `WBP_Jet_HUD` ("Update HUD"); hedef kilidi öğeleri hep gizli (`JetHud`) |
+| Hyper Generic Radial Menu v4 | kullanılmıyor | yetenek/özellik sistemi içeren büyük Blueprint çerçevesi, mevcut Slate radyal tekerlekten iyi değil; ayrıca içerik klasörü `Hyper` adıyla Hyper Auto Landscape ile çakışıyor (ilk kaynak geçerli) |
+| Universal Flat GUI UI Kit, Slider X | kullanılmıyor | fantastik/oyunsu simge ve UMG bileşenleri (iksir, kılıç, büyü kartı); Slate arayüzün havacılık diliyle uyumsuz |
+| Crimson Experience (motor eklentisi) | kullanılmıyor | Lyra tarzı GameFeatures "Experience" oyun modu çerçevesi; Simumav C++/Slate akışında karşılığı yok |
+| WebNativeBrowser (motor eklentisi) | kullanılmıyor | CEF tabanlı UMG tarayıcı (2,3 GB, lisans denetimli); destek / hesap ekranları yerel Slate + simumav API ile; gerekirse motorun WebBrowser eklentisi |
+| Main Menu & Settings, Effect Forge, Lux | kullanılmıyor | önceki turlardan; arayüz Slate, Effect Forge oyun içi buff sistemi, Lux editör aracı |
 
 ## Adım adım (şirket bilgisayarı)
 

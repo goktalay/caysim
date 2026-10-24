@@ -123,6 +123,8 @@ namespace SmvUi
 	SIMUMAV_API TSharedRef<SWidget> HelpOverlay(TFunction<void()> OnClose, bool bFlight, int32 StickMode);
 	/** Kumanda modu (1–4) eşlemesi: [solX, solY, sağX, sağY] eksen adları (yaw|thr|pitch|roll) */
 	SIMUMAV_API void StickMap(int32 Mode, FString Out[4]);
+	/** Kumanda modu eksen ipucu, tuş/çubuk simgeleriyle (klavye: W/S A/D ↑↓ ←→; gamepad: LS / RS) — etkin cihaza göre anında değişir */
+	SIMUMAV_API TSharedRef<SWidget> StickKeyHintWidget(int32 Mode, int32 Size, const FLinearColor& Color);
 	/** Eksen adı → dil anahtarı metni */
 	SIMUMAV_API FText AxisName(const FString& Axis);
 	/** Mod için klavye ipucu: "W/S gaz · A/D yaw · ↑↓ pitch · ←→ roll" */
