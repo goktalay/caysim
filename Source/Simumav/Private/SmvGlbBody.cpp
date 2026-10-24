@@ -465,6 +465,7 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 			for (FPart& P : Parts)
 			{
 				if (P.Kind != EKind::Light || !P.Pivot || P.Name.ToLower().Contains(TEXT("tail"))) continue;
+				if (Bounds.GetSize().GetMax() < 150.f) continue;   // küçük araç: yalnız parlayan küre (gövdeyi boyamasın)
 				UPointLightComponent* Lc = NewObject<UPointLightComponent>(GetOwner(), NAME_None);
 				Lc->SetupAttachment(P.Pivot);
 				Lc->SetIntensityUnits(ELightUnits::Candelas);
@@ -531,7 +532,9 @@ void USmvGlbBody::AddNavLight(const FString& Name, const FVector& PosCm, const F
 		}
 		Owned.Add(S);
 	}
-	if (!bNightLighting || Name == TEXT("nav_tail")) return;   // gündüz yalnız parlayan küre (yerel ışık sayısı / VSM sınırı)
+	// gündüz yalnız parlayan küre (yerel ışık sayısı / VSM sınırı); küçük araçta gece de yalnız küre:
+	// ışık gövdeye birkaç cm uzakta olduğu için gövdeyi renkli boyuyordu (orman alacakaranlık duman testi)
+	if (!bNightLighting || Name == TEXT("nav_tail") || Bounds.GetSize().GetMax() < 150.f) return;
 	UPointLightComponent* Lc = NewObject<UPointLightComponent>(GetOwner(), NAME_None);
 	Lc->SetupAttachment(Pv);
 	Lc->SetIntensityUnits(ELightUnits::Candelas);
