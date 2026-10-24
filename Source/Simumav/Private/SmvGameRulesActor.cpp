@@ -207,7 +207,7 @@ void ASmvGameRulesActor::BuildDrop()
 		AddPart(CubeMesh, G + FVector(60.0, 0, 760.0), FVector(1.2, 0.03, 0.7), FRotator(0, 25.0 * i, 0), FLinearColor(1.f, 0.35f, 0.05f), true, 1.5f);
 		++i;
 	}
-	Emit(TEXT("game.drop_start"), 5, { { TEXT("n"), FString::FromInt(C.Payloads) }, { TEXT("z"), FString::FromInt(Impl->Drop.Zones().Num()) } });
+	Emit(TEXT("game.drop_start"), 5, { { TEXT("n"), FString::FromInt(C.Payloads) }, { TEXT("z"), FString::FromInt((int32)Impl->Drop.Zones().size()) } });
 }
 
 // ---------------------------------------------------------------------------
