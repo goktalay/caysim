@@ -36,6 +36,7 @@ namespace SmvCore
 		std::vector<FGpwsEpisode> Shown;
 		double AirAt = NaN, LastT = NaN;
 		std::string PhaseStr = "ground";
+		std::string VcCur;
 		bool Suppressed(const std::string& Code, const FGpwsInput& I, bool bPlane, double BankCfg) const;
 	};
 

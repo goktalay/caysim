@@ -2043,8 +2043,9 @@ bool ASmvGameMode::AlignRealRim()
 		for (const TObjectPtr<AActor>& A : FabDecor)
 		{
 			if (!A) continue;
-			const FBox Ab = A->GetComponentsBoundingBox(true);
-			if (Ab.IsValid && Ab.GetSize().GetMax() < 2.0e6) { B += Ab; Own.Add(A); }
+			Own.Add(A);
+			TInlineComponentArray<UPrimitiveComponent*> Pc(A);
+			for (UPrimitiveComponent* C : Pc) if (C && C->IsRegistered() && C->Bounds.BoxExtent.GetMax() < 60000.0 && C->Bounds.GetBox().IsValid) B += C->Bounds.GetBox();
 		}
 	}
 	if (!B.IsValid || B.GetSize().X < 500.0 || B.GetSize().Y < 500.0) { SMV_KLOG(TEXT("Gerçek dünya kenar eşleme: harita kutusu yok / çok küçük")); return false; }
@@ -2468,7 +2469,9 @@ void ASmvGameMode::SpawnFabCity()
 	// zemin (24 km; üstü Z 0 = SITL düz zemini; şehir dışı park çimi; ufuk dağları üstünde), caddeler (asfalt), adalarda kaldırım taşı (12 cm bordür),
 	// ortada kalkış meydanı (iri karo, üstü +2 cm)
 	const double Span = 5.0 * Cell + Road;
-	Slab(FVector(0, 0, -50), FVector(2400000, 2400000, 100), Hyper ? FLinearColor(0.9f, 0.95f, 0.85f) : FLinearColor(0.16f, 0.2f, 0.12f), true, 2);
+	// gerçek dünya çevresinde zemin yalnız şehir bloğu kadar (çevresi 3D Tiles); yoksa 24 km park çimi
+	const double GroundCm = bRealSurround ? Span + 8000.0 : 2400000.0;
+	Slab(FVector(0, 0, -50), FVector(GroundCm, GroundCm, 100), Hyper ? FLinearColor(0.9f, 0.95f, 0.85f) : FLinearColor(0.16f, 0.2f, 0.12f), true, 2);
 	for (int32 k = -2; k <= 3; ++k)
 	{
 		const double C = (k - 0.5) * Cell;
@@ -2661,9 +2664,10 @@ void ASmvGameMode::SpawnCityStreetscape(double Cell, double Road)
 		FSmvScatterDensity D;
 		D.Trees = 900; D.Bushes = 300; D.Rocks = 80; D.Grass = 0;
 		const double Edge = Half / 100.0 + 40.0;
-		Sc->Scatter(Edge, 1450.0, D, 23, [](double E, double N, FVector& P, FVector& Up) { P = FVector(E * 100.0, -N * 100.0, 0.0); Up = FVector::UpVector; return true; });
+		if (!bRealSurround) Sc->Scatter(Edge, 1450.0, D, 23, [](double E, double N, FVector& P, FVector& Up) { P = FVector(E * 100.0, -N * 100.0, 0.0); Up = FVector::UpVector; return true; });
 	}
-	Sc->AddMountains(FVector::ZeroVector, 600000.0, 1100000.0, -2000.0, 12, TEXT("Rocky"), 31, 50000.0, 150000.0);
+	// sahte ufuk dağları yalnız gerçek dünya yokken (gerçek ufuk 3D Tiles'tan)
+	if (!bRealSurround) Sc->AddMountains(FVector::ZeroVector, 600000.0, 1100000.0, -2000.0, 12, TEXT("Rocky"), 31, 50000.0, 150000.0);
 	UE_LOG(LogSimumav, Log, TEXT("Şehir sokak dokusu: %d çizgi, %d yaya geçidi şeridi, %d lamba (%s), %d manzara örneği"), Dash.Num(), Zebra.Num(), Heads.Num(), bLit ? TEXT("yanık") : TEXT("sönük"), Sc->GetInstanceCount());
 }
 

@@ -18,6 +18,7 @@ namespace SmvCore
 
 	bool FAlertPolicy::Suppressed(const std::string& Code, const FGpwsInput& I, bool bPlane, double BankCfg) const
 	{
+		const bool VcIsVtol = VcCur == "vtol" || VcCur == "icept";
 		const bool bTk = PhaseStr == "takeoff" || PhaseStr == "ground";
 		const bool bApp = PhaseStr == "approach";
 		// kalkış / iniş: beklenen durumlar
@@ -35,6 +36,9 @@ namespace SmvCore
 			if (Code == "STALL" && bTk && (!Has(I.Agl) || I.Agl < 20.0)) return true;   // kalkış koşusu / fırlatma: hız henüz yok
 			if (Code == "OVERSPEED" && bTk) return true;
 		}
+		// VTOL / önleyici dikey uçuşta (askı, düşük yer hızı) havahızı yok — STALL beklenen durum
+		if (Code == "STALL" && !bPlane) return true;
+		if (Code == "STALL" && Has(I.Gs) && I.Gs < 6.0 && std::fabs(I.Vs) < 3.0 && (VcIsVtol)) return true;
 		// otomatik kip: otopilot kendi yatış / yunuslama sınırında uçar (ArduPlane ROLL_LIMIT_DEG 45, LOITER/TAKEOFF dönüşleri)
 		if (IsAutoMode(I.Mode))
 		{
@@ -50,6 +54,7 @@ namespace SmvCore
 		const double T = I.T;
 		if (Has(LastT) && T < LastT - 0.5) Reset();
 		LastT = T;
+		VcCur = VClass;
 		const bool bPlane = VClass == "plane" || ((VClass == "vtol" || VClass == "icept") && !(I.Mode.size() && I.Mode[0] == 'Q'));
 		// ---- evre ----
 		const double AirAgl = bPlane ? 5.0 : 1.5;
