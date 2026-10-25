@@ -262,6 +262,9 @@ namespace SmvCore
 			O << "# SIMUMAV cerceve (--model " << Spec->Frame << ")\n";
 			for (auto& P : Spec->FrameParams) O << P.first << " " << Num(P.second) << "\n";
 		}
+		// SITL batarya modeli çeşidin paketine eşlenir (kayıtlı parametrelerden SONRA): katalog varsayılanlarındaki SIM_BATT_VOLTAGE 16,8
+		// 12S hexada "boş batarya" (5 V'a çöküş, Potential Thrust Loss + Battery Failsafe) demekti
+		if (Spec) for (auto& P : Spec->Params) if (P.first.rfind("SIM_BATT_", 0) == 0) O << P.first << " " << Num(P.second) << "\n";
 		else if (S.SitlType == "multirotor") O << "# SIMUMAV cerceve (--model +)\nFRAME_CLASS 1\nFRAME_TYPE 0\n";
 		else if (S.SitlType == "hexarotor") O << "# SIMUMAV cerceve (--model hexa)\nFRAME_CLASS 2\nFRAME_TYPE 0\n";
 		return O.str();
@@ -285,7 +288,11 @@ namespace SmvCore
 		// 4. kayıtlı parametreler (sensör adları hariç)
 		const bool bCok = (S.SitlType == "multirotor" || S.SitlType == "hexarotor");
 		std::set<std::string> FrameNames;
-		if (const FVehicleSpec* Spec = SpecOf(S)) for (auto& F : Spec->FrameParams) FrameNames.insert(F.first);
+		if (const FVehicleSpec* Spec = SpecOf(S))
+		{
+			for (auto& F : Spec->FrameParams) FrameNames.insert(F.first);
+			for (auto& F : Spec->Params) if (F.first.rfind("SIM_BATT_", 0) == 0) FrameNames.insert(F.first);
+		}
 		for (auto& Kv : S.UserParams)
 		{
 			if (IsSensorName(Kv.first) || FrameNames.count(Kv.first)) continue;

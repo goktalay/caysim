@@ -1,4 +1,5 @@
 #include "SmvScenery.h"
+#include "SmvUiKit.h"
 #include "SimumavModule.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -459,8 +460,21 @@ void ASmvScenery::BuildGroundDisk(const FVector& C, double FlatM, double OuterM,
 	Ground->SetCastShadow(false);
 	// çöl: Hyper malzemesinin kum katmanı geniş diskte beyaz-mor iri bloklar gibi görünüyordu (Askerî Üs çevresi, duman testi) →
 	// düz köşe rengi malzemesi (M_SmvTerrainWx: kum rengi × gürültü), ada kumuyla aynı ton
+	// M_SmvTerrainWx de aynı beyaz-mor benekleri verdi (smoke 40189834701) → çölde düz, mat kum rengi (SmvSolidMat; pürüzlülük 0,95)
+	if (Biome == TEXT("Desert"))
+	{
+		if (UMaterialInterface* Sm = SmvSolidMat(LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"))))
+		{
+			UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Sm, this);
+			SmvSetSolidColor(D, FLinearColor(0.50f, 0.39f, 0.25f));
+			D->SetScalarParameterValue(TEXT("Roughness"), 0.95f);
+			D->SetScalarParameterValue(TEXT("Metallic"), 0.f);
+			D->SetScalarParameterValue(TEXT("Specular"), 0.2f);
+			Ground->SetMaterial(0, D);
+		}
+	}
 	UMaterialInterface* Tm = Biome == TEXT("Desert") ? nullptr : FSmvScenery::TerrainMaterial();
-	if (!Tm) Tm = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Simumav/Materials/M_SmvTerrainWx.M_SmvTerrainWx"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (!Tm && Biome != TEXT("Desert")) Tm = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Simumav/Materials/M_SmvTerrainWx.M_SmvTerrainWx"), nullptr, LOAD_NoWarn | LOAD_Quiet);
 	if (Tm)
 	{
 		GroundMid = UMaterialInstanceDynamic::Create(Tm, this);

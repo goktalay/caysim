@@ -334,9 +334,16 @@ void ASmvGameRulesActor::BuildDefense(bool bShip)
 			const FVector Ctr = B.GetCenter();
 			const double GunAlong = GunAt.IsNearlyZero() ? 1.0 : (bAlongY ? GunAt.Y - Ctr.Y : GunAt.X - Ctr.X);
 			const float Yaw = (bAlongY ? -90.f : 0.f) + (GunAlong < 0.0 ? 180.f : 0.f);
-			const FRotator R(0.f, Yaw, 0.f);
+			// OBJ Y-yukarı: içe aktarılan gemi yan yatmış olabilir (en > yükseklik; birleşik ağda üst yapı yana / tepeye taşıyordu) —
+			// ikinci yatay eksen düşey eksenden belirgin büyükse uzun eksen çevresinde 90° (ShipUpRollDeg ile değiştirilebilir) döndürülür
+			const double Side = bAlongY ? Sz.X : Sz.Y;
+			const float UpRoll = Side > Sz.Z * 1.25 ? SmvRulesCfg(TEXT("ShipUpRollDeg"), 90.f) : 0.f;
+			const FQuat Qup = bAlongY ? FQuat(FVector::YAxisVector, FMath::DegreesToRadians(UpRoll)) : FQuat(FVector::XAxisVector, FMath::DegreesToRadians(UpRoll));
+			const FRotator R = (FQuat(FVector::ZAxisVector, FMath::DegreesToRadians(Yaw)) * Qup).Rotator();
+			const FBox Bw = B.TransformBy(FTransform(R.Quaternion(), FVector::ZeroVector, FVector(Sc)));
 			const double Draft = SmvRulesCfg(TEXT("ShipDraftM"), 5.f) * 100.0;
-			const FVector Loc = F - R.RotateVector(FVector(Ctr.X, Ctr.Y, 0.0) * Sc) + FVector(0, 0, -B.Min.Z * Sc - 30.0 - Draft);
+			const FVector Loc = F - FVector(Bw.GetCenter().X, Bw.GetCenter().Y, 0.0) + FVector(0, 0, -Bw.Min.Z - 30.0 - Draft);
+			UE_LOG(LogSimumav, Log, TEXT("Gemi ağı sınırı (yerel): %.0f x %.0f x %.0f; yan yatma düzeltmesi %.0f°"), Sz.X, Sz.Y, Sz.Z, UpRoll);
 			for (UStaticMesh* M : ShipMeshes)
 			{
 				UStaticMeshComponent* P = NewObject<UStaticMeshComponent>(this);

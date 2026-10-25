@@ -678,6 +678,8 @@ void ASmvMenuScene::RecenterFabMap()
 			++N;
 		}
 	}
+	UE_LOG(LogSimumav, Log, TEXT("Menü Fab haritası %s içerik: %d aktör, %d ağ, kutu %s, World Partition %s"), *MapKey, MenuLevel->GetLoadedLevel()->Actors.Num(), N,
+		Box.IsValid ? *Box.GetSize().ToString() : TEXT("-"), (MenuLevel->GetLoadedLevel()->GetTypedOuter<UWorld>() && MenuLevel->GetLoadedLevel()->GetTypedOuter<UWorld>()->IsPartitionedWorld()) ? TEXT("evet") : TEXT("hayır"));
 	if (!Box.IsValid || N < 5) return;
 	const double La = Lat0 + FMath::RadiansToDegrees(FabStartN / 6378137.0);
 	const double Lo = Lon0 + FMath::RadiansToDegrees(FabStartE / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));

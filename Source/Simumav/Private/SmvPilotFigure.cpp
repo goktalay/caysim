@@ -406,6 +406,20 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 		Gc->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Gc->RegisterComponent();
 		Gc->SetLeaderPoseComponent(MhBody);
+		// Fab giysi FBX'leri dokusuz geliyor (malzemeler beyaz): yuvalar tulum rengi tonlarıyla boyanır (kumaş / teçhizat / kayış)
+		bool bTint = true;
+		if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvPilot"), TEXT("TintOutfit"), bTint, GGameIni);
+		if (UMaterialInterface* Sm = bTint ? SmvSolidMat(BaseMat) : nullptr)
+		{
+			const FLinearColor Tones[] = { Suit, Suit * 0.55f, FLinearColor(0.05f, 0.055f, 0.05f), FMath::Lerp(Suit, FLinearColor(0.35f, 0.33f, 0.27f), 0.6f) };
+			for (int32 i = 0; i < Gc->GetNumMaterials(); ++i)
+			{
+				UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(Sm, this);
+				SmvSetSolidColor(M, Tones[i % UE_ARRAY_COUNT(Tones)]);
+				M->SetScalarParameterValue(TEXT("Roughness"), 0.8f);
+				Gc->SetMaterial(i, M);
+			}
+		}
 		MhGrooms.Add(Gc);
 	}
 	if (Garments.Num())
@@ -414,12 +428,17 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 		for (USkeletalMesh* Gm : Garments) Names += (Names.IsEmpty() ? TEXT("") : TEXT(", ")) + Gm->GetName();
 		UE_LOG(LogSimumav, Log, TEXT("MetaHuman pilot giysisi (%s / %s): %s"), *A.Body, *A.Outfit, *Names);
 	}
-	if (UMaterialInterface* Sm = Garments.Num() ? nullptr : SmvSolidMat(BaseMat))
+	// tam boy giysi (≥ 120 cm yüksek parça) gövdeyi örter → gövde kendi malzemesinde; yalnız kemer / teçhizat gibi kısmi parçalar varsa
+	// gövde tulum renginde kalır ve temel şekil katmanları (yelek, bot) da kurulur
+	bool bFullOutfit = false;
+	for (USkeletalMesh* Gm : Garments) if (Gm && Gm->GetBounds().BoxExtent.Z > 60.0) bFullOutfit = true;
+	if (UMaterialInterface* Sm = SmvSolidMat(BaseMat))
 	{
 		for (int32 i = 0; i < MhBody->GetNumMaterials(); ++i)
 		{
 			UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(Sm, this);
-			SmvSetSolidColor(M, A.Outfit == TEXT("casual") ? FMath::Lerp(Suit, FLinearColor::White, 0.3f) : Suit);
+			// tam boy giysi altında gövde yalnız ellerde / boyunda görünür → ten rengi
+			SmvSetSolidColor(M, bFullOutfit ? PfSkin(A.Skin) : A.Outfit == TEXT("casual") ? FMath::Lerp(Suit, FLinearColor::White, 0.3f) : Suit);
 			M->SetScalarParameterValue(TEXT("Roughness"), 0.72f);
 			MhBody->SetMaterial(i, M);
 		}
@@ -457,7 +476,7 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 	PoseMhArms(bWithRc);
 	// uçuş kıyafeti katmanları (Fab giysi paketi yoksa; MCC'de uygun giysi yok: mayo/şort): göğüs takımı yeleği, kemer, kalça/uyluk örtüsü,
 	// botlar — gövde kemiklerinin (aktör uzayı) konumundan; gövde pozlanmadığı için sabit
-	if (Garments.Num() == 0)
+	if (!bFullOutfit)
 	{
 		const FTransform Rel = MhBody->GetRelativeTransform();
 		auto B = [this, &Rel](const TCHAR* N, FVector& Out) { if (MhBody->GetBoneIndex(FName(N)) == INDEX_NONE) return false; Out = Rel.TransformPosition(MhBody->GetBoneLocationByName(FName(N), EBoneSpaces::ComponentSpace)); return true; };
