@@ -155,7 +155,18 @@ def gorev(kaynak, hedef, ad, iskelet):
         try:
             pipe = unreal.InterchangeGenericAssetsPipeline()
             mp = pipe.get_editor_property("mesh_pipeline")
-            mp.set_editor_property("combine_static_meshes", True)
+            # UE 5.8: bCombineStaticMeshes yerine CombineStaticMeshesBehavior (enum) — "tümünü birleştir" üyesi adla seçilir
+            try:
+                cur = mp.get_editor_property("combine_static_meshes_behavior")
+                cls = type(cur)
+                uyeler = [a for a in dir(cls) if a.isupper()]
+                sec = [a for a in uyeler if "ALL" in a and "NOT" not in a and "NONE" not in a] or [a for a in uyeler if "COMBINE" in a and "NOT" not in a and "NONE" not in a and "DONT" not in a]
+                log(f"Interchange CombineStaticMeshesBehavior uyeleri: {', '.join(uyeler)}; secilen: {sec[0] if sec else '-'}")
+                if sec:
+                    mp.set_editor_property("combine_static_meshes_behavior", getattr(cls, sec[0]))
+            except Exception as ex2:  # noqa: BLE001
+                uyar(f"CombineStaticMeshesBehavior kurulamadi: {ex2}")
+                mp.set_editor_property("combine_static_meshes", True)
             try:
                 mp.set_editor_property("import_skeletal_meshes", False)
             except Exception:  # noqa: BLE001

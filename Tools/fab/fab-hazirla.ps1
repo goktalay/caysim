@@ -346,14 +346,11 @@ try {
 		}
 		return $null
 	}
-	# MetaHuman kiyafet urunleri (giysi parcalari ayri .fbx): uçus tulumu, taktik / koruyucu giysi, bomber ceket, kargo pantolon
-	$kiyafetDesen = '(?i)(outfit|suit|cloth|jacket|pants|shirt|bomber|gear|uniform).*metahuman|metahuman.*(outfit|suit|cloth|gear)|flight.?suit|astronaut'
 	$urunKlasorleri = @()
 	if (Test-Path -LiteralPath $lib) { $urunKlasorleri += @(Get-ChildItem -LiteralPath $lib -Directory -ErrorAction SilentlyContinue) }
 	foreach ($mk in $modelKlasorleri) { $urunKlasorleri += @(Get-Item -LiteralPath $mk) }
 	if ($urunKlasorleri.Count -gt 0) {
 		foreach ($u in $urunKlasorleri) {
-			if ($u.Name -match $kiyafetDesen) { continue }   # MetaHuman kiyafetleri asagida (parca parca iskeletli ag)
 			$temizOn = (($u.Name -replace '-[0-9a-f]{6,}$', '') -replace '[^A-Za-z0-9]', '')
 			$dosya = ModelBul $u.FullName $temizOn
 			if (-not $dosya) { continue }
@@ -373,7 +370,7 @@ try {
 			$hedefDisk = Join-Path $content "Fab\$hedefAd"
 			$imza = "$($dosya.FullName)|$($dosya.Length)|$($dosya.LastWriteTimeUtc.Ticks)"
 			# statik OBJ/glTF dekor: v2 = parcalar tek agda birlestirilir (Interchange combine_static_meshes) -> bir kez yeniden ice aktarilir
-			if ($statik -and $dosya.Extension -ne '.fbx') { $imza += '|birlesik2' }
+			if ($statik -and $dosya.Extension -ne '.fbx') { $imza += '|birlesik3' }
 			$imzaDosya = Join-Path $hedefDisk '.kaynak-imza'
 			$var = (Test-Path -LiteralPath $imzaDosya) -and ((Get-Content -LiteralPath $imzaDosya -Raw).Trim() -eq $imza) -and (Get-ChildItem -LiteralPath $hedefDisk -Filter *.uasset -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
 			$hedefYol = '/Game/Fab/' + ($hedefAd -replace '\\', '/')
@@ -385,25 +382,9 @@ try {
 			$imzalar[$hedefYol] = @($imzaDosya, $imza)
 		}
 	}
-	# MetaHuman kiyafetleri (pilot giysisi): FabLibrary urunundeki TUM .fbx parcalari iskeletli ag olarak /Game/Fab/Outfits/<urun>;
-	# iskelet MCC govdesi (SKM_Human_Male/Female) - oyun lider poz ile govdeye giydirir (SmvPilotFigure). Kaynak imzasi: dosya adlari + boyutlar
-	if (Test-Path -LiteralPath $lib) {
-		foreach ($u in (Get-ChildItem -LiteralPath $lib -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $kiyafetDesen })) {
-			$fbx = @(Get-ChildItem -LiteralPath $u.FullName -Recurse -File -Filter *.fbx -ErrorAction SilentlyContinue | Sort-Object FullName)
-			if ($fbx.Count -eq 0) { Uyari "kiyafet paketi: $($u.Name) - .fbx yok (Fab'den FBX bicimini indirin; .mhpkg / MetaHuman Creator giysisi CI'da giydirilemez)"; continue }
-			$urun = ($u.Name -replace '-[0-9a-f]{6,}$', '')
-			$temiz = ($urun -replace '[^A-Za-z0-9]', '')
-			$hedefYol = "/Game/Fab/Outfits/$temiz"
-			$hedefDisk = Join-Path $content "Fab\Outfits\$temiz"
-			$imza = (($fbx | ForEach-Object { $_.Name + ':' + $_.Length }) -join '|') + '|k1'
-			$imzaDosya = Join-Path $hedefDisk '.kaynak-imza'
-			$kadin = $urun -match '(?i)female|woman|_f_'
-			Bilgi "kiyafet paketi: $urun ($($fbx.Count) parca) -> $hedefYol$(if ($kadin) { ' (kadin)' })"
-			if ((Test-Path -LiteralPath $imzaDosya) -and ((Get-Content -LiteralPath $imzaDosya -Raw).Trim() -eq $imza) -and (Get-ChildItem -LiteralPath $hedefDisk -Filter *.uasset -ErrorAction SilentlyContinue | Select-Object -First 1)) { Bilgi "  degismemis, ice aktarma atlandi"; continue }
-			$isler += [pscustomobject]@{ tur = 'kiyafet'; hedef = $hedefYol; kaynaklar = @($fbx | ForEach-Object { $_.FullName }); kadin = [bool]$kadin }
-			$imzalar[$hedefYol] = @($imzaDosya, $imza)
-		}
-	}
+	# MetaHuman kiyafetleri: yukaridaki genel urun dongusunde (en buyuk .fbx -> /Game/Fab/<urun>) iskeletli ag olarak alinir. Fab "SM_*" giysileri
+	# tek kemikli (deri baglamasi yok) - oyun yalniz cok kemikli (MetaHuman iskeletine bagli) parcalari giydirir (SmvPilotFigure).
+	# Parca parca yeniden ice aktarma yapilmaz: Tactical Soldier Outfit (23 MB FBX) Interchange ile ~35 dk suruyor.
 	# Tus / kumanda simge paketi (Joystix): FabLibrary urun klasorundeki PNG'ler ya da .unitypackage icindeki PNG'ler /Game/Fab/Joystix'e
 	if (Test-Path -LiteralPath $lib) {
 		foreach ($u in (Get-ChildItem -LiteralPath $lib -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)joystix|button_?overlay|button_?prompt|input_?prompt' })) {

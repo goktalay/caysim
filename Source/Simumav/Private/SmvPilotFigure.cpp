@@ -46,19 +46,25 @@ namespace
 
 namespace
 {
-	/** Fab MetaHuman giysi paketi (/Game/Fab/Outfits/<paket>): iskeletli ağ parçaları (bir kez yüklenir, kök kümede tutulur) */
+	/** Fab MetaHuman giysi paketi (/Game/Fab/<paket>, fab-hazirla genel ürün içe aktarması): MetaHuman iskeletine deri bağlamalı
+	 *  (≥ 20 kemik) iskeletli ağ parçaları; tek kemikli "SM_*" giysiler (MetaHuman Creator'da uydurulmak üzere statik) atlanır */
 	const TArray<USkeletalMesh*>& PfOutfitParts(const FString& Set)
 	{
 		static TMap<FString, TArray<USkeletalMesh*>> Cache;
 		if (const TArray<USkeletalMesh*>* F = Cache.Find(Set)) return *F;
 		TArray<USkeletalMesh*>& Out = Cache.Add(Set);
 		TArray<FAssetData> As;
-		IAssetRegistry::GetChecked().GetAssetsByPath(FName(*(FString(TEXT("/Game/Fab/Outfits/")) + Set)), As, true);
+		IAssetRegistry::GetChecked().GetAssetsByPath(FName(*(FString(TEXT("/Game/Fab/")) + Set)), As, true);
 		As.Sort([](const FAssetData& A, const FAssetData& B) { return A.PackageName.LexicalLess(B.PackageName); });
 		for (const FAssetData& A : As)
 		{
 			if (A.AssetClassPath != USkeletalMesh::StaticClass()->GetClassPathName()) continue;
-			if (USkeletalMesh* M = Cast<USkeletalMesh>(A.GetAsset())) { M->AddToRoot(); Out.Add(M); }
+			USkeletalMesh* M = Cast<USkeletalMesh>(A.GetAsset());
+			if (!M) continue;
+			const int32 Nb = M->GetRefSkeleton().GetNum();
+			const bool bBody = M->GetRefSkeleton().FindBoneIndex(TEXT("spine_03")) != INDEX_NONE || M->GetRefSkeleton().FindBoneIndex(TEXT("pelvis")) != INDEX_NONE;
+			if (Nb < 20 || !bBody) { UE_LOG(LogSimumav, Log, TEXT("Pilot giysi parçası atlandı (%s: %d kemik, MetaHuman gövde kemiği %s)"), *M->GetName(), Nb, bBody ? TEXT("var") : TEXT("yok")); continue; }
+			M->AddToRoot(); Out.Add(M);
 		}
 		UE_LOG(LogSimumav, Log, TEXT("Pilot giysi paketi %s: %d parça"), *Set, Out.Num());
 		return Out;
@@ -77,8 +83,8 @@ namespace
 		if (bF) Choices.Add({ TEXT("FemaleOutfitBomberMetahuman") });
 		else if (Kind == TEXT("jacket")) { Choices.Add({ TEXT("BomberJeansOutfitMetahuman") }); Choices.Add({ TEXT("BomberMetahuman"), TEXT("ShirtCombatPantsMetahuman") }); }
 		else if (Kind == TEXT("casual")) { Choices.Add({ TEXT("ShirtCombatPantsMetahuman"), TEXT("BomberJeansOutfitMetahuman:Boots") }); }
-		else { Choices.Add({ TEXT("AstronautsFlightSuitsMetahumanClothing") }); Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56"), TEXT("ProtectiveSuit01Metahuman:Gloves") }); }
-		Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56") });
+		else { Choices.Add({ TEXT("AstronautsFlightSuitsMetahumanClothing") }); Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56") }); }
+		if (!bF) Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56") });
 		TArray<USkeletalMesh*> Out;
 		for (const TArray<FString>& G : Choices)
 		{
