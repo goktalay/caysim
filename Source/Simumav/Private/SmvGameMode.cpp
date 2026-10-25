@@ -2209,6 +2209,7 @@ void ASmvGameMode::PlaceFabLevels()
 	TArray<AActor*> Drop;
 	TArray<ULevel*> Levels;
 	TArray<FVector> PlayerStarts;
+	TArray<UStaticMeshComponent*> BigComps;
 	bool bLandscape = false;
 	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
 	{
@@ -2251,7 +2252,10 @@ void ASmvGameMode::PlaceFabLevels()
 			{
 				if (!SC || !SC->IsRegistered() || !SC->GetStaticMesh()) continue;
 				const FBox SB = SC->Bounds.GetBox();
-				if (SB.IsValid && SB.GetSize().GetMax() < 2.0e6) Box += SB;   // 20 km'den büyük (gök küresi vb.) sayılmaz
+				// tek başına 800 m'den büyük ağlar (uzak dağ / ufuk arka planı, dev zemin düzlemi, su) oyun alanı kutusuna sayılmaz
+				// (Brushify Forest'ın Background_Mesh dağları kutuyu 28 × 36 km yapıyordu: kalkış dağ ağına düşüyor, gerçek dünya kırpması tüm bölgeyi siliyordu)
+				if (SB.IsValid && SC->Bounds.BoxExtent.GetMax() > 40000.0) { BigComps.Add(SC); continue; }
+				if (SB.IsValid) Box += SB;
 			}
 			if (Cn.Contains(TEXT("Landscape")))
 			{
@@ -2261,6 +2265,20 @@ void ASmvGameMode::PlaceFabLevels()
 		}
 	}
 	for (AActor* A : Drop) A->Destroy();
+	// gerçek dünya çevresi: oyun alanının dışına taşan arka plan ağları (sahte ufuk dağları) gizlenir — ufku 3D Tiles verir
+	if (bRealSurround && Box.IsValid)
+	{
+		const FBox Keep = Box.ExpandBy(Box.GetExtent().GetMax() * 0.15);
+		int32 Hidden = 0;
+		for (UStaticMeshComponent* SC : BigComps)
+		{
+			if (!SC || Keep.IsInsideXY(SC->Bounds.GetBox())) continue;
+			SC->SetHiddenInGame(true);
+			SC->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			++Hidden;
+		}
+		if (Hidden) SMV_KLOG(TEXT("Gerçek dünya: %d arka plan ağı (oyun alanı dışı) gizlendi"), Hidden);
+	}
 	// gerçek çarpışma: kalkış araması ve uçuş öncesi kapalı çarpışmaları aç (seviye eklenince zaten yapılır; burada eksik kalan olmasın)
 	for (ULevel* L : Levels) PreparePhysicsLevel(L);
 	if (!Box.IsValid)

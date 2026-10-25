@@ -4785,7 +4785,7 @@ void SSmvShell::TickSmoke()
 	{
 		bOnlyInit = true;
 		FString Only;
-		if (FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeOnly="), Only))
+		if (FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeOnly="), Only, false))
 		{
 			TArray<FString> Parts; Only.ParseIntoArray(Parts, TEXT(","), true);
 			for (const FString& X : Parts) OnlyFl.Add(FCString::Atoi(*X) - 1);
