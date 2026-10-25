@@ -166,6 +166,7 @@ private:
 	FVector2D Look = FVector2D::ZeroVector;
 
 	void BuildInput();
+	void MapDjiKeys();
 	void MapAllKeys();
 	UInputAction* MakeAction(FName Name, int32 ValueType);
 	void MapKey(FName Action, const FKey& Key, bool bNegate = false, bool bSwizzle = false);

@@ -133,6 +133,50 @@ void ASmvPilotPawn::RemapKeys()
 	}
 }
 
+void ASmvPilotPawn::MapDjiKeys()
+{
+	// "DJI Remote Controller Link" (DJIRemoteController eklentisi; DJI RC 2 / RM330, WiFi AE): eklentinin kaydettiği tuşlar adla bulunur
+	// (eklenti yoksa hiçbiri yoktur). Fiziksel çubuklar gamepad çubukları gibi Left/Right eylemlerine bağlanır — Mod 1–4 eşlemesi
+	// (ComputeRc) ve Joystix simgeleri aynen geçerli; RTH → Eve dön, C1 → ARM, C2 → Kalkış, uçuş modu anahtarı C/N/S → Mod1/2/3.
+	TArray<FKey> All;
+	EKeys::GetAllKeys(All);
+	int32 N = 0;
+	FString Names;
+	auto Map = [this, &N, &Names](FName Action, const FKey& K, bool bSwizzle)
+	{
+		UInputAction* A = Actions.FindRef(Action);
+		if (!A || !Imc) return;
+		FEnhancedActionKeyMapping& M = Imc->MapKey(A, K);
+		if (bSwizzle) { UInputModifierSwizzleAxis* S = NewObject<UInputModifierSwizzleAxis>(Imc); S->Order = EInputAxisSwizzle::YXZ; M.Modifiers.Add(S); }
+		++N;
+		Names += FString::Printf(TEXT(" %s→%s"), *K.GetFName().ToString(), *Action.ToString());
+	};
+	for (const FKey& K : All)
+	{
+		const FString Nm = K.GetFName().ToString();
+		if (!Nm.StartsWith(TEXT("DJI"), ESearchCase::IgnoreCase)) continue;
+		const FString L = Nm.ToLower();
+		const bool bLeft = L.Contains(TEXT("left")), bRight = L.Contains(TEXT("right"));
+		if (K.IsAxis2D() && (bLeft || bRight)) { Map(bLeft ? FName(TEXT("Left")) : FName(TEXT("Right")), K, false); continue; }
+		if (K.IsAxis1D() && (bLeft || bRight) && L.Contains(TEXT("stick")))
+		{
+			const bool bY = L.EndsWith(TEXT("y")) || L.Contains(TEXT("_y")) || L.Contains(TEXT("vertical")) || L.Contains(TEXT("up"));
+			Map(bLeft ? FName(TEXT("Left")) : FName(TEXT("Right")), K, bY);
+			continue;
+		}
+		if (K.IsAxis1D() || K.IsAxis2D()) continue;   // tekerlekler (kamera / zum) eklentinin kendi eylemlerinde
+		if (L.Contains(TEXT("rth")) || L.Contains(TEXT("home"))) Map(TEXT("Rtl"), K, false);
+		else if (L.Contains(TEXT("c1"))) Map(TEXT("ArmToggle"), K, false);
+		else if (L.Contains(TEXT("c2"))) Map(TEXT("Takeoff"), K, false);
+		else if (L.Contains(TEXT("cine"))) Map(TEXT("Mode1"), K, false);
+		else if (L.Contains(TEXT("normal"))) Map(TEXT("Mode2"), K, false);
+		else if (L.Contains(TEXT("sport"))) Map(TEXT("Mode3"), K, false);
+		else if (L.Contains(TEXT("video")) || L.Contains(TEXT("photo"))) Map(TEXT("CamCycle"), K, false);
+	}
+	static bool bLogged = false;
+	if (!bLogged) { bLogged = true; UE_LOG(LogSimumav, Log, TEXT("DJI kumanda tuşları: %d eşleme%s"), N, N ? *Names : TEXT(" (DJIRemoteController eklentisi yüklü değil)")); }
+}
+
 void ASmvPilotPawn::MapAllKeys()
 {
 
@@ -144,6 +188,7 @@ void ASmvPilotPawn::MapAllKeys()
 	MapKey(TEXT("Zoom"), EKeys::MouseWheelAxis);
 	// RC verici (RawInput eklentisi; Ayarlar → Kumanda'dan eksen eşlemesi)
 	for (int32 i = 0; i < 8; ++i) MapKey(*FString::Printf(TEXT("RcAxis%d"), i + 1), FKey(*FString::Printf(TEXT("GenericUSBController_Axis%d"), i + 1)));
+	MapDjiKeys();
 
 	// klavye: W/S/A/D + oklar çubukları sürer (ComputeRc); Q/E ch5, Boşluk gaz orta (web virtualRC)
 	MapKey(TEXT("Ch5Down"), EKeys::Q);
