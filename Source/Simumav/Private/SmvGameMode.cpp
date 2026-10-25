@@ -1,5 +1,6 @@
 #include "SmvGameMode.h"
 #include "SmvLaunchRig.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "SmvGameRulesActor.h"
 #include "SimumavModule.h"
 #include "SmvGameInstance.h"
@@ -254,7 +255,7 @@ void ASmvGameMode::BuildScene()
 	// yükleme kapısı: Uçuş ekranı ancak tüm aşamalar bitince (TickLoadGate)
 	Gate.Begin(TEXT("ucus"), { ESmvLoad::World, ESmvLoad::Scenery, ESmvLoad::Atmos, ESmvLoad::Sitl, ESmvLoad::Shaders, ESmvLoad::Streaming, ESmvLoad::Warmup });
 	AtmosT0 = WarmT0 = StreamT0 = 0; AtmosF0 = WarmF0 = 0; WarmRecap = 0; StreamPeak = ShaderPeak = 0;
-	RimAt = 0; RimStartAt = 0; bRimStarted = false; bTilesSkipped = false; FabPlacedBox = FBox(ForceInit); FabLevelPath.Reset();
+	RimAt = 0; RimStartAt = 0; bRimStarted = false; bFabSelfContained = false; bTilesSkipped = false; FabPlacedBox = FBox(ForceInit); FabLevelPath.Reset();
 	SmvPhysics::SetClipRegion(nullptr, FBox2D(ForceInit));
 	FlightEnterAt = -100.0;
 	bIntroPending = false;
@@ -2074,6 +2075,12 @@ bool ASmvGameMode::AlignRealRim()
 	TArray<FVector> Poly = { FVector(C.X - Hs.X * In, C.Y - Hs.Y * In, 0.0), FVector(C.X + Hs.X * In, C.Y - Hs.Y * In, 0.0), FVector(C.X + Hs.X * In, C.Y + Hs.Y * In, 0.0), FVector(C.X - Hs.X * In, C.Y + Hs.Y * In, 0.0) };
 	const bool bClip = WorldSetup->ClipPolygon(Poly);
 	SmvPhysics::SetClipRegion(Tiles, FBox2D(FVector2D(C.X - Hs.X * In, C.Y - Hs.Y * In), FVector2D(C.X + Hs.X * In, C.Y + Hs.Y * In)));
+	if (bFabSelfContained)
+	{
+		SMV_KLOG(TEXT("Gerçek dünya (%s): kendi arka planlı harita — yalnız kırpma (%.1f × %.1f km), kenar kaydırması yok"), *FabMapKey, B.GetSize().X / 1e5, B.GetSize().Y / 1e5);
+		bRimDone = true; RimAt = FPlatformTime::Seconds();
+		return bClip;
+	}
 	// kenar örnekleri: içte harita zemini (ışın), dışta 3D Tiles yüzeyi (Cesium SampleHeightMostDetailed — çarpışma ağı / görünürlükten bağımsız)
 	TArray<double> Zin;
 	TArray<FVector> Out;
@@ -2228,6 +2235,7 @@ void ASmvGameMode::PlaceFabLevels()
 	TArray<ULevel*> Levels;
 	TArray<FVector> PlayerStarts;
 	TArray<UStaticMeshComponent*> BigComps;
+	FBox BigBox(ForceInit);
 	bool bLandscape = false;
 	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
 	{
@@ -2272,7 +2280,12 @@ void ASmvGameMode::PlaceFabLevels()
 				const FBox SB = SC->Bounds.GetBox();
 				// tek başına 800 m'den büyük ağlar (uzak dağ / ufuk arka planı, dev zemin düzlemi, su) oyun alanı kutusuna sayılmaz
 				// (Brushify Forest'ın Background_Mesh dağları kutuyu 28 × 36 km yapıyordu: kalkış dağ ağına düşüyor, gerçek dünya kırpması tüm bölgeyi siliyordu)
-				if (SB.IsValid && SC->Bounds.BoxExtent.GetMax() > 40000.0) { BigComps.Add(SC); continue; }
+				if (SB.IsValid && SC->Bounds.BoxExtent.GetMax() > 40000.0)
+				{
+					// örnekli ağlar (bitki / ağaç kümeleri: sınırı tüm alanı kaplar ama içeriği yereldir) gizlenmez, kutuya da sayılmaz
+					if (!SC->IsA<UInstancedStaticMeshComponent>()) { BigComps.Add(SC); BigBox += SB; }
+					continue;
+				}
 				if (SB.IsValid) Box += SB;
 			}
 			if (Cn.Contains(TEXT("Landscape")))
@@ -2283,8 +2296,12 @@ void ASmvGameMode::PlaceFabLevels()
 		}
 	}
 	for (AActor* A : Drop) A->Destroy();
-	// gerçek dünya çevresi: oyun alanının dışına taşan arka plan ağları (sahte ufuk dağları) gizlenir — ufku 3D Tiles verir
-	if (bRealSurround && Box.IsValid)
+	// gerçek dünya çevresi: haritanın arka planı kendi başına bir dünyaysa (≥ 10 km; ör. Brushify Forest'ın 28 × 36 km dağ halkası) bütün olarak
+	// korunur — gerçek dünya onun dışında başlar (kırpma tüm arka plan kutusu, kenar kaydırması yok); değilse oyun alanı dışına taşan arka plan
+	// ağları (sahte ufuk dağları) gizlenir — ufku 3D Tiles verir
+	bFabSelfContained = bRealSurround && BigBox.IsValid && BigBox.GetSize().GetMax() > 1.0e6;
+	if (bFabSelfContained) SMV_KLOG(TEXT("Gerçek dünya: harita arka planı kendi başına dünya (%.1f × %.1f km) — korunuyor, gerçek dünya dışında"), BigBox.GetSize().X / 1e5, BigBox.GetSize().Y / 1e5);
+	if (bRealSurround && Box.IsValid && !bFabSelfContained)
 	{
 		const FBox Keep = Box.ExpandBy(Box.GetExtent().GetMax() * 0.15);
 		int32 Hidden = 0;
@@ -2389,7 +2406,7 @@ void ASmvGameMode::PlaceFabLevels()
 	// gerçek dünya çevresi (Cesium): harita kutusu karolardan kırpılır, kenar yükseklikleri eşlenir (karolar yüklenince TickLoadGate → AlignRealRim)
 	if (bRealSurround)
 	{
-		FabPlacedBox = Box.ShiftBy(Off);
+		FabPlacedBox = (bFabSelfContained ? Box + BigBox : Box).ShiftBy(Off);
 		bRimPending = true;
 	}
 	// "havada ada" haritaları (kayıt tablosu Surround biyomu; gerçek dünya yoksa): çevreye Hyper malzemeli arazi diski + kaya/çalı + uzak dağlar

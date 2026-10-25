@@ -4963,7 +4963,7 @@ void SSmvShell::TickSmoke()
 		// sabit kanat: kalkış yöntemleri + yüksek irtifa / hızlı uçuş (harita dışına çıkınca gerçek dünya: Google 3B / arazi)
 		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f6"), false, TEXT("plane"), nullptr, nullptr, TEXT("ramp"), 220.f },
 		{ TEXT("orman"), TEXT("day"), TEXT("clear"), TEXT("f7"), false, TEXT("plane"), nullptr, nullptr, TEXT("vehicle"), 180.f },
-		{ TEXT("kosk"), TEXT("day"), TEXT("clear"), TEXT("f8"), false, TEXT("plane"), nullptr, nullptr, TEXT("hand"), 160.f },
+		{ TEXT("askeri"), TEXT("golden"), TEXT("clear"), TEXT("f8"), false, TEXT("plane"), nullptr, nullptr, TEXT("hand"), 160.f },
 		{ TEXT("pist"), TEXT("day"), TEXT("clear"), TEXT("f9"), false, TEXT("plane"), nullptr, nullptr, TEXT("wheels"), 200.f },
 		// VTOL dikey 150 m: şehir kenarının gerçek dünyadaki görünümü
 		{ TEXT("sehir"), TEXT("day"), TEXT("clear"), TEXT("f10"), false, TEXT("vtol"), nullptr, nullptr, nullptr, 150.f },
