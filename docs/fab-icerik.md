@@ -56,7 +56,7 @@ tablosundaki **gerçek konumuna** (`FSmvMapDef::Lat/Lon/GroundMsl`) demirlenir v
 
 | Harita | Konum | Not |
 |---|---|---|
-| Orman | İstanbul Belgrad Ormanı 41.190, 28.970 (~100 m) | Brushify Forest arka plan dağları gerçek dünyada gizlenir |
+| Orman | Karabük Yenice ormanları (Filyos vadisi) 41.200, 32.400 (157 m) | çevre sırtları ~+230 m (haritanın tepe halkasıyla uyumlu); Brushify arka plan dağları gizlenir |
 | Askerî Üs | Konya Karapınar bozkırı 37.730, 33.550 (995 m) | düz step (SRTM ±3 m) |
 | Şehir | Ankara Yapracık 39.858, 32.640 (1031 m) | kodla kurulan şehir bloğu |
 | Yıkık İnşaat | Ankara Etimesgut–Sincan 39.965, 32.580 (795 m) | şehir kenarı sanayi |
@@ -69,7 +69,7 @@ tablosundaki **gerçek konumuna** (`FSmvMapDef::Lat/Lon/GroundMsl`) demirlenir v
   Google 3B 25 sn'de karo getirmezse World Terrain + Bing'e düşülür. Belirteç: `secrets.CESIUM_ION_TOKEN` (CI pakete yazar).
 - Harita alanı karolardan kırpılır (`UCesiumPolygonRasterOverlay`, çokgen = oyun alanı kutusu); kırpılan alanda karo çarpışması yok
   sayılır (`SmvPhysics::SetClipRegion`). Kenar boyunca 40 örnekte harita zemini (içte) ile karo yüzeyi (dışta) farkının ortancası kadar
-  georeference düşeyde kaydırılır (`ACaySimWorldSetup::ShiftVertical`; yer ofseti birlikte değişir → MSL konumlar sabit kalır).
+  georeference düşeyde kaydırılır (±60 m sınırlı) (`ACaySimWorldSetup::ShiftVertical`; yer ofseti birlikte değişir → MSL konumlar sabit kalır).
 - Yükleme kapısı karolar yüklenip kenar eşlenmeden uçuşa geçmez; 75 sn'de karo gelmezse harita kendi zeminiyle sürer; harita / zemin
   90 sn'de yoksa **uçuşa girilmez** ("Harita yüklenemedi" + Yeniden dene / Menüye dön).
 - Atıf: `CesiumCreditSystemBP` ekran atıfları (Google logosu + veri sağlayıcıları) — Google koşulları gereği görünür kalmalı.

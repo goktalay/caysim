@@ -2118,7 +2118,9 @@ bool ASmvGameMode::AlignRealRim()
 		if (Dz.Num() >= 6)
 		{
 			Dz.Sort();
-			const double Med = Dz[Dz.Num() / 2];
+			// ortanca fark; haritanın kenarı tepe halkasıysa (Orman) fark büyüktür — gerçek araziyi yüzlerce metre kaydırmak uçuş yüksekliklerini
+			// bozar: ±60 m ile sınırlı (kalan fark doğal yamaç gibi görünür)
+			const double Med = FMath::Clamp(Dz[Dz.Num() / 2], -60.0, 60.0);
 			Self->WorldSetup->ShiftVertical(Med);
 			SMV_KLOG(TEXT("Gerçek dünya kenar eşleme (%s, %s): kutu %.0f×%.0f m, %d örnek, fark ortanca %.1f m (aralık %.1f…%.1f) → karolar kaydırıldı; kırpma %s"),
 				*Key, *Self->WorldSetup->SourceName(), Bs.X / 100.0, Bs.Y / 100.0, Dz.Num(), Med, Dz[0], Dz.Last(), bClip ? TEXT("tamam") : TEXT("yok"));

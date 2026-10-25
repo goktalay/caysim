@@ -13,7 +13,7 @@ namespace
 	const FSmvMapDef GSmvMaps[] =
 	{
 		// <HARITA-TABLOSU>
-		{ TEXT("orman"),   TEXT("fabmap.forest"),   TEXT("fabmap.forest.desc"),   TEXT("Simumav/MapPreviews/orman.png"),    TEXT("/Game/Brushify/Maps/Forest/Forest"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Brushify"), nullptr, 41.1900, 28.9700, 102.0, false },   // İstanbul Belgrad Ormanı (meşe-kayın ormanı, ~100 m)
+		{ TEXT("orman"),   TEXT("fabmap.forest"),   TEXT("fabmap.forest.desc"),   TEXT("Simumav/MapPreviews/orman.png"),    TEXT("/Game/Brushify/Maps/Forest/Forest"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Brushify"), nullptr, 41.2000, 32.4000, 157.0, false },   // Karabük Yenice ormanları, Filyos vadisi (çevre sırtları ~+230 m — haritanın tepe halkasıyla uyumlu)
 		{ TEXT("yikik"),   TEXT("fabmap.ruined"),   TEXT("fabmap.ruined.desc"),   TEXT("Simumav/MapPreviews/yikik.png"),    TEXT("/Game/Ruined_Construction/Levels/Master_Level/P_Ruined_Construction"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Ruined_Construction"), TEXT("Desert"), 39.9650, 32.5800, 795.0, false },   // Ankara batı yakası, Etimesgut–Sincan sanayi kuşağı
 		{ TEXT("sehir"),   TEXT("fabmap.city"),     TEXT("fabmap.city.desc"),     TEXT("Simumav/MapPreviews/sehir.png"),    TEXT(""), ESmvMapKind::ProcCity, 0, 0, 0, false, TEXT("EuropeanBuildings_Asset;CitySampleBuildings"), nullptr, 39.8580, 32.6400, 1031.0, false },   // Ankara güneybatı şehir kenarı (Yapracık)
 		{ TEXT("rafineri"), TEXT("fabmap.refinery"), TEXT("fabmap.refinery.desc"), TEXT("Simumav/MapPreviews/rafineri.png"), TEXT("/Game/Main"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("refineries"), nullptr, 40.7650, 29.7750, 39.0, true },   // Kocaeli Körfez kıyısı, İzmit rafinerisi yanı (gerçek tesis 3B karolarda)
