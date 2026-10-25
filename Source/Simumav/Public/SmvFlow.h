@@ -141,6 +141,12 @@ public:
 		TArray<TArray<double>> Sectors;
 	} LastFpv;
 	FString LoadingText;
+	/** Bağlantı hazır (HAZIR / hello) — Yükleniyor → Uçuş geçişi ayrıca sahne yükleme kapısını bekler (GameMode FlightGate). */
+	bool bLinkHazir = false;
+	/** Sahne yükleme kapısı (GameMode): true → tüm aşamalar bitti; atanmamışsa bağlantı hazır olunca doğrudan Uçuş. */
+	TFunction<bool()> FlightGate;
+	/** Bağlantı hazır: kapı açıksa Uçuş'a geç (değilse GameMode her karede yeniden dener) */
+	void RequestFlight();
 	/** GameMode özet ekler (GPWS, halkalar, yarış sonucu) — bulut özetine üstün gelmez, eksikleri tamamlar. */
 	TFunction<void(FSmvFlightSummary&)> SummaryAugmenter;
 

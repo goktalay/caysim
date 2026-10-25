@@ -26,6 +26,7 @@
 #include "Misc/ConfigCacheIni.h"
 #include "SmvFabContent.h"
 #include "Engine/LevelStreamingDynamic.h"
+#include "UObject/UObjectGlobals.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "SmvScenery.h"
@@ -511,6 +512,7 @@ void ASmvMenuScene::Tick(float Dt)
 			}
 		}
 	}
+	TickGate();
 	TickSnaps();
 	TickScenery();
 	if (bSceneryDone) ClearShowcaseGrass();
@@ -1011,6 +1013,78 @@ void ASmvMenuScene::LoadMenuMap(const FString& Want)
 		if (Terrain) Terrain->Build(SmvMenuTrack(Lat0, Lon0, GroundMsl), GroundMsl, WorldSetup);
 	}
 	bCamInit = false;
+	// hazırlık kapısı: ilk yükleme açılış ("menu"), sonrakiler harita turu ("tur")
+	Gate.Begin(GateCount++ == 0 ? TEXT("menu") : TEXT("tur"), { ESmvLoad::World, ESmvLoad::Atmos, ESmvLoad::Shaders, ESmvLoad::Streaming, ESmvLoad::Warmup });
+	GAtmosT0 = GWarmT0 = GStreamT0 = 0; GAtmosF0 = GWarmF0 = 0; GStreamPeak = GShaderPeak = 0; GWarmRecap = 0;
+}
+
+void ASmvMenuScene::TickGate()
+{
+	if (!Gate.IsActive() || Gate.IsDone()) return;
+	UWorld* W = GetWorld();
+	const double Now = FPlatformTime::Seconds();
+	if (!Gate.Done(ESmvLoad::World))
+	{
+		float P = 0.05f;
+		if (bFabMap && MenuLevel)
+		{
+			if (MenuLevel->IsLevelVisible()) P = 1.f;
+			else if (MenuLevel->HasLoadedLevel()) P = 0.9f;
+			else { const float A = GetAsyncLoadPercentage(MenuLevel->GetWorldAssetPackageFName()); P = A > 0.f ? 0.85f * A / 100.f : 0.05f; }
+		}
+		else if (Terrain) P = 1.f;
+		Gate.Update(ESmvLoad::World, P, IsMapReady() && FSmvLoadGate::WorldPartitionDone(W) && !(W && W->IsVisibilityRequestPending()), MapKey, 45.0, 3);
+	}
+	const bool bWorld = Gate.Done(ESmvLoad::World);
+	if (!Gate.Done(ESmvLoad::Atmos))
+	{
+		float P = 0.2f; bool bReady = false;
+		if (bWorld)
+		{
+			if (GAtmosT0 <= 0) { GAtmosT0 = Now; GAtmosF0 = GFrameCounter; FSmvLoadGate::RecaptureSky(W); }
+			const double K = FMath::Min((double)(GFrameCounter - GAtmosF0) / 20.0, (Now - GAtmosT0) / 0.6);
+			P = 0.2f + 0.8f * (float)FMath::Clamp(K, 0.0, 1.0);
+			bReady = K >= 1.0;
+		}
+		Gate.Update(ESmvLoad::Atmos, P, bReady, SkyActors.Num() ? TEXT("UDS") : TEXT("builtin"), 50.0);
+	}
+	if (!Gate.Done(ESmvLoad::Shaders))
+	{
+		const int32 J = FSmvLoadGate::ShaderJobs() + FSmvLoadGate::PsoPending();
+		GShaderPeak = FMath::Max(GShaderPeak, J);
+		Gate.Update(ESmvLoad::Shaders, !bWorld ? 0.f : GShaderPeak > 0 ? 1.f - (float)J / GShaderPeak : 1.f, bWorld && J == 0, FString::FromInt(J), 60.0, 8);
+	}
+	if (!Gate.Done(ESmvLoad::Streaming))
+	{
+		const int32 Np = FSmvLoadGate::StreamingPending();
+		float P = 0.f; bool bReady = false;
+		if (bWorld && Gate.Done(ESmvLoad::Atmos))
+		{
+			if (GStreamT0 <= 0) GStreamT0 = Now;
+			GStreamPeak = FMath::Max(GStreamPeak, Np);
+			P = GStreamPeak > 0 ? 1.f - (float)Np / GStreamPeak : 1.f;
+			bReady = Np <= (Now - GStreamT0 > 5.0 ? FMath::Max(2, GStreamPeak / 50) : 0);
+		}
+		Gate.Update(ESmvLoad::Streaming, P, bReady, FString::FromInt(Np), 60.0, 10);
+	}
+	bool bOthers = true;
+	for (int32 i = 0; i < (int32)ESmvLoad::Warmup; ++i) if (!Gate.Done((ESmvLoad)i)) bOthers = false;
+	if (bOthers && !Gate.Done(ESmvLoad::Warmup))
+	{
+		if (GWarmT0 <= 0) { GWarmT0 = Now; GWarmF0 = GFrameCounter; FSmvLoadGate::RecaptureSky(W); GWarmRecap = 1; }
+		if (GWarmRecap > 0 && Now - GWarmT0 > 0.5) { FSmvLoadGate::RecaptureSky(W); GWarmRecap = 0; }
+		const double K = FMath::Min((double)(GFrameCounter - GWarmF0) / 30.0, (Now - GWarmT0) / 1.0);
+		Gate.Update(ESmvLoad::Warmup, (float)FMath::Clamp(K, 0.0, 1.0), K >= 1.0, FString(), FMath::Max(70.0, Gate.Elapsed() + 6.0 - (Now - GWarmT0)));
+	}
+	// hazırlık boyunca göz uyumu hızlı (sahne açıldığında pozlama oturmuş olsun)
+	if (Cam && Cam->GetCameraComponent())
+	{
+		FPostProcessSettings& Pp = Cam->GetCameraComponent()->PostProcessSettings;
+		const bool bFast = !Gate.IsDone();
+		Pp.bOverride_AutoExposureSpeedUp = bFast; Pp.AutoExposureSpeedUp = 30.f;
+		Pp.bOverride_AutoExposureSpeedDown = bFast; Pp.AutoExposureSpeedDown = 30.f;
+	}
+	if (Gate.IsDone()) Gate.LogSummary();
 }
 
 void ASmvMenuScene::SetMap(const FString& Key)

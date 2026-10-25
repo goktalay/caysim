@@ -4,6 +4,7 @@
 // çok oyunculu → UÇ), uçuş sonrası deneyim ekranı, Arkadaşlarım. Arka planlar GERÇEK 3B sahne: menü sahnesinin kamera istasyonları
 // (ASmvMenuScene::SetStation) — vitrin aracı / pilot gerçek dünyada, Lumen ışığında; düz degrade yok. Eski ekranlar Pilot menüsünden açılır.
 #include "SSmvShell.h"
+#include "SmvLoadGate.h"
 #include "SimumavModule.h"
 #include "SimumavClient.h"
 #include "SmvDataService.h"
@@ -1751,9 +1752,23 @@ TSharedRef<SWidget> SSmvShell::ParkurList()
 					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[NextB]
 					+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).Text(Tx(TEXT("parkur.tour_close"))).OnClick([Self]() { Self->TourKey.Empty(); Self->Refresh(); })]
 				], FMargin(22.f), 0.82f);
-			return YhPage(Tx(TEXT("parkur.enc")), FSmvI18n::Format(TEXT("parkur.tour_of"), { { TEXT("i"), FString::FromInt(Ix + 1) }, { TEXT("n"), FString::FromInt(Keys.Num()) } }),
+			TSharedRef<SWidget> Page = YhPage(Tx(TEXT("parkur.enc")), FSmvI18n::Format(TEXT("parkur.tour_of"), { { TEXT("i"), FString::FromInt(Ix + 1) }, { TEXT("n"), FString::FromInt(Keys.Num()) } }),
 				SNew(SBox).VAlign(VAlign_Bottom).HAlign(HAlign_Left).Padding(FMargin(0, 0, 0, 10))[Card],
 				[Self]() { Self->TourKey.Empty(); Self->Refresh(); });
+			// harita turu yükleme katmanı: menü sahnesinin kapısı (harita akışı, atmosfer ilk karesi, PSO, doku, ön ısınma) bitene dek
+			// tam ekran yükleme görünümü (haritanın önizleme görseli + aşamalar); hazır olunca kalkar → tur hazır sahneyle başlar
+			FSmvTrack TourTr = Cur ? FSmvFabContent::MakeTrack(*Cur) : FSmvTrack();
+			TourTr.TimeOfDay = TEXT("golden"); TourTr.Weather = TEXT("clear");
+			TSharedRef<FSmvLoadView> Lv = MakeShared<FSmvLoadView>(MakeLoadView(TourTr, TEXT("tour"), FString()));
+			TSharedRef<SSmvCanvas> LoadC = SNew(SSmvCanvas).Size(FVector2D(1600, 900));
+			LoadC->Painter = [WS, Lv](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+			{
+				if (!WS.IsValid() || WS->IsSceneReady()) return;
+				Lv->Gate = &WS->GetLoadGate();
+				PaintLoad(*Lv, G, Out, L);
+			};
+			LoadC->SetVisibility(TAttribute<EVisibility>::CreateLambda([WS]() { return WS.IsValid() && !WS->IsSceneReady() ? EVisibility::HitTestInvisible : EVisibility::Collapsed; }));
+			return SNew(SOverlay) + SOverlay::Slot()[Page] + SOverlay::Slot()[LoadC];
 		}
 		TSharedRef<SWrapBox> Wrap = SNew(SWrapBox).PreferredSize(1500.f).UseAllottedSize(true);
 		int32 N = 0;

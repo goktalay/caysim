@@ -11,6 +11,7 @@
 #include "SmvFlow.h"
 #include "SmvVideoRec.h"
 #include "SSmvFlightUi.h"
+#include "SmvLoadGate.h"
 #include "SmvGameMode.generated.h"
 
 class ACaySimWorldSetup;
@@ -174,6 +175,10 @@ public:
 	/** Radar ekranında temas seç (EO izler; hedefse kilit) */
 	void RadarPick(int32 Id);
 	void CycleEoType();
+	/** Uçuşa giriş yükleme kapısı (yükleme ekranı aşamaları ve ilerlemesi) */
+	const FSmvLoadGate& GetLoadGate() const { return Gate; }
+	/** Yükleniyor → Uçuş geçiş anı (yükleme ekranının kararma çıkışı için) */
+	double GetFlightEnterAt() const { return FlightEnterAt; }
 	/** Uçuşu bitir (arayüz düğmesi; onay sonrası) */
 	void EndFlightUi() { if (Flow.IsValid()) Flow->EndFlight(TEXT("user")); }
 	/** Uçuşta onay diyaloğu (kabuk katmanı) */
@@ -206,6 +211,16 @@ public:
 	FString ToastText; int32 ToastSev = 6; double ToastUntil = 0;
 	double EndAt = 0; FString EndReasonPending;
 
+	// ---- yükleme kapısı (SmvLoadGate): tüm aşamalar bitmeden Uçuş ekranına geçilmez ----
+	FSmvLoadGate Gate;
+	void TickLoadGate();
+	bool bGlbPending = false;
+	bool bIntroPending = false;
+	double AtmosT0 = 0, WarmT0 = 0, FlightEnterAt = -100.0, StreamT0 = 0;
+	uint64 AtmosF0 = 0, WarmF0 = 0;
+	int32 WarmRecap = 0, StreamPeak = 0, ShaderPeak = 0;
+	/** Yükleme sırasında hızlı göz uyumu (otomatik pozlama hızı 30) — girişte kaldırılır */
+	UPROPERTY() TObjectPtr<class APostProcessVolume> LoadPp;
 	UFUNCTION() void HandleScreen(ESmvScreen Screen);
 	UFUNCTION() void HandleToast(const FString& Text, int32 Severity);
 	void BuildScene();

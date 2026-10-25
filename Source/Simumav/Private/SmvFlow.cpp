@@ -206,6 +206,7 @@ void USmvFlow::StartFlight()
 	LastPath.Reset();
 	LastRequest = Draft;
 	LoadingText = FSmvI18n::T(TEXT("loading.starting")).ToString();
+	bLinkHazir = false;
 	SetScreen(ESmvScreen::Loading);
 	Link->Start(Draft);
 }
@@ -223,10 +224,17 @@ void USmvFlow::BindLink()
 		if (T == TEXT("state"))
 		{
 			const FString St = SmvJson::Str(M, TEXT("state"));
-			if (St == TEXT("HAZIR") && Self->Screen == ESmvScreen::Loading) Self->SetScreen(ESmvScreen::Flight);
+			if (St == TEXT("HAZIR") && Self->Screen == ESmvScreen::Loading) Self->RequestFlight();
 			if (St == TEXT("HATA") && Self->Screen == ESmvScreen::Loading) { Self->Toast(Self->LoadingText, 3); Self->SetScreen(ESmvScreen::Wizard); }
 		}
 	});
+}
+
+void USmvFlow::RequestFlight()
+{
+	bLinkHazir = true;
+	if (Screen != ESmvScreen::Loading) return;
+	if (!FlightGate || FlightGate()) SetScreen(ESmvScreen::Flight);
 }
 
 bool USmvFlow::StartReplay(const FString& File, float Speed)
@@ -250,6 +258,7 @@ bool USmvFlow::StartReplay(const FString& File, float Speed)
 	Link = L;
 	BindLink();
 	LoadingText = FSmvI18n::T(TEXT("replay.loading")).ToString();
+	bLinkHazir = false;
 	SetScreen(ESmvScreen::Loading);
 	Link->Start(Draft);
 	return true;
@@ -381,11 +390,12 @@ void USmvFlow::EnsureMatchClient()
 			Self->bEnding = false;
 			L->OnSummary.AddLambda([Weak](const FSmvFlightSummary& S) { if (USmvFlow* S2 = Weak.Get()) S2->HandleSummary(S); });
 			Self->LoadingText = FSmvI18n::T(TEXT("loading.match")).ToString();
+			Self->bLinkHazir = false;
 			Self->SetScreen(ESmvScreen::Loading);
 			L->OnMessage.AddLambda([Weak](const TSharedPtr<FJsonObject>& Msg)
 			{
 				USmvFlow* S3 = Weak.Get();
-				if (S3 && SmvJson::Str(Msg, TEXT("t")) == TEXT("hello") && S3->Screen == ESmvScreen::Loading) S3->SetScreen(ESmvScreen::Flight);
+				if (S3 && SmvJson::Str(Msg, TEXT("t")) == TEXT("hello") && S3->Screen == ESmvScreen::Loading) S3->RequestFlight();
 			});
 			L->AttachExisting(M.MyFlightId);
 		}

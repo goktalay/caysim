@@ -8,6 +8,7 @@
 #include "SmvLocalFlightLink.h"
 #include "SmvMatchClient.h"
 #include "SmvGameMode.h"
+#include "SmvLoadGate.h"
 #include "SmvPilotPawn.h"
 #include "SmvGameInstance.h"
 #include "SmvSteam.h"
@@ -209,6 +210,7 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		{
 			bLogoShown = true;
 			LogoAt = FPlatformTime::Seconds();
+			bBootGate = true;
 			TArray<uint8> Png;
 			if (FFileHelper::LoadFileToArray(Png, *(FPaths::ProjectContentDir() / TEXT("Simumav/Brand/icon-512.png"))))
 				if (UTexture2D* Tx2 = FImageUtils::ImportBufferAsTexture2D(Png))
@@ -222,19 +224,29 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		}
 	}
 	TSharedRef<SSmvCanvas> Logo = SNew(SSmvCanvas);
-	Logo->SetVisibility(TAttribute<EVisibility>::CreateLambda([this]() { return FPlatformTime::Seconds() - LogoAt < 3.6 ? EVisibility::HitTestInvisible : EVisibility::Collapsed; }));
+	// açılış: menü sahnesi (harita akışı + atmosfer ilk karesi + PSO + doku + ön ısınma) hazır olana dek logo ekranı kalır, altında ilerleme;
+	// hazır olunca (en erken 3,6 sn) 0,8 sn'de solar. Görünürken alttaki menü tıklanmaz (Visible).
+	Logo->SetVisibility(TAttribute<EVisibility>::CreateLambda([this]() { return !BootFinished() || FPlatformTime::Seconds() - LogoAt < 3.6 ? EVisibility::Visible : EVisibility::Collapsed; }));
 	Logo->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
 	{
-		const double T = FPlatformTime::Seconds() - LogoAt;
-		if (T > 3.6) return;
+		const double Now = FPlatformTime::Seconds();
+		const ASmvMenuScene* Sc = Scene();
+		if (bBootGate && BootReadyAt < 0 && Now - LogoAt > 0.5 && (!Sc || Sc->IsSceneReady() || Now - LogoAt > 45.0))
+		{
+			BootReadyAt = Now;
+			UE_LOG(LogTemp, Display, TEXT("SMOKE boot hazır %.2f sn (%s)"), Now - LogoAt, !Sc ? TEXT("sahne yok") : Sc->IsSceneReady() ? TEXT("sahne hazır") : TEXT("zaman aşımı"));
+		}
+		const double End = FMath::Max(LogoAt + 3.6, bBootGate ? (BootReadyAt > 0 ? BootReadyAt + 0.8 : Now + 10.0) : LogoAt + 3.6);
+		const double T = FMath::Min(Now - LogoAt, 3.0);
+		if (Now > End) return;
 		const FVector2D Sz = FVector2D(G.GetLocalSize()), C = Sz * 0.5;
-		const float Fade = (float)FMath::Clamp((3.6 - T) / 0.8, 0.0, 1.0);
+		const float Fade = (float)FMath::Clamp((End - Now) / 0.8, 0.0, 1.0);
 		DrBox(Out, L, G, FVector2D::ZeroVector, Sz, FLinearColor(0.01f, 0.015f, 0.03f, Fade), nullptr);
 		// ışık halkası + simge (ölçeklenip döner)
 		const float In = (float)FMath::Clamp(T / 1.1, 0.0, 1.0), E = 1.f - FMath::Pow(1.f - In, 3.f);
 		const float Ls = 150.f * (0.7f + 0.3f * E);
 		DrGlow(Out, L + 1, G, C - FVector2D(0, 40), Ls * 1.8f, Accent().CopyWithNewOpacity(0.35f * E * Fade));
-		for (int32 k = 0; k < 3; ++k) DrArc(Out, L + 2, G, C - FVector2D(0, 40), Ls * (0.75f + k * 0.12f), (float)(T * (90 + k * 40)), (float)(T * (90 + k * 40)) + 120.f + k * 60.f, Accent().CopyWithNewOpacity(0.7f * Fade * E), 2.f);
+		for (int32 k = 0; k < 3; ++k) { const float Ra = (float)((Now - LogoAt) * (90 + k * 40)); DrArc(Out, L + 2, G, C - FVector2D(0, 40), Ls * (0.75f + k * 0.12f), Ra, Ra + 120.f + k * 60.f, Accent().CopyWithNewOpacity(0.7f * Fade * E), 2.f); }
 		if (LogoTex.IsValid())
 			FSlateDrawElement::MakeBox(Out, L + 3, G.ToPaintGeometry(FVector2f(Ls, Ls), FSlateLayoutTransform(FVector2f(C - FVector2D(Ls * 0.5, 40 + Ls * 0.5)))), &LogoBrush, ESlateDrawEffect::None, FLinearColor(1, 1, 1, E * Fade));
 		// kelime işareti: harf harf belirir + ışık süpürmesi
@@ -250,6 +262,34 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		DrGlow(Out, L + 5, G, FVector2D(Sx, C.Y + 120), 60.f, FLinearColor(1, 1, 1, 0.35f * Fade));
 		const float Sub = (float)FMath::Clamp((T - 1.6) / 0.5, 0.0, 1.0);
 		DrText(Out, L + 5, G, TEXT("CAYSIM · ") + FSmvI18n::T(TEXT("menu.fly_sub")).ToString(), FVector2D(C.X, C.Y + 176), SmvUi::Font(14, "Regular"), Dim().CopyWithNewOpacity(Sub * Fade), 0);
+		// açılış ilerlemesi (menü sahnesi kapısı)
+		if (bBootGate)
+		{
+			const FSmvLoadGate* Gt = Sc ? &Sc->GetLoadGate() : nullptr;
+			const float P = BootReadyAt > 0 ? 1.f : Gt && Gt->IsActive() ? Gt->Overall() : FMath::Clamp((float)((Now - LogoAt) / 20.0), 0.f, 0.9f);
+			const float Bw = 360.f, Bx = (float)C.X - Bw * 0.5f, By = (float)C.Y + 222.f;
+			const float A = Sub * Fade;
+			DrBox(Out, L + 6, G, FVector2D(Bx, By), FVector2D(Bw, 4.f), Fg().CopyWithNewOpacity(0.12f * A), Round(2.f));
+			DrGradient(Out, L + 7, G, FVector2D(Bx, By), FVector2D(FMath::Max(4.f, Bw * P), 4.f), { { 0.f, Accent2().CopyWithNewOpacity(A) }, { 1.f, Accent().CopyWithNewOpacity(A) } }, false);
+			FString St;
+			if (Gt && Gt->IsActive())
+			{
+				const ESmvLoad Cur = Gt->Current();
+				St = FSmvI18n::T(Cur == ESmvLoad::Num ? TEXT("load.st.done") : FSmvLoadGate::StageKey(Cur)).ToString();
+			}
+			else St = FSmvI18n::T(TEXT("load.st.world")).ToString();
+			DrText(Out, L + 7, G, FString::Printf(TEXT("%s  ·  %%%d"), *St, FMath::RoundToInt(P * 100.f)), FVector2D(C.X, By + 22.f), SmvUi::Font(11, "Regular"), Mute().CopyWithNewOpacity(A), 0);
+		}
+	};
+	// uçuşa giriş: yükleme ekranından sahneye yumuşak geçiş (siyahtan açılma, 0,6 sn) — sahne kapı bittiği için zaten hazır
+	TSharedRef<SSmvCanvas> EnterFade = SNew(SSmvCanvas);
+	EnterFade->SetVisibility(EVisibility::HitTestInvisible);
+	EnterFade->Painter = [this](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		if (Built != ESmvScreen::Flight || !GameMode.IsValid()) return;
+		const float K = (float)(FPlatformTime::Seconds() - GameMode->GetFlightEnterAt()) / 0.6f;
+		if (K < 0.f || K >= 1.f) return;
+		DrBox(Out, L, G, FVector2D::ZeroVector, FVector2D(G.GetLocalSize()), FLinearColor(0.01f, 0.015f, 0.03f, 1.f - K * K), nullptr);
 	};
 	TSharedRef<SSmvCanvas> Sweep = SNew(SSmvCanvas);
 	Sweep->SetVisibility(EVisibility::HitTestInvisible);
@@ -311,13 +351,13 @@ void SSmvShell::Construct(const FArguments& InArgs)
 			SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("NoBorder")).Padding(0.f).Visibility(EVisibility::SelfHitTestInvisible)
 			.ColorAndOpacity_Lambda([this]()
 			{
-				if (ReducedMotion()) return FLinearColor::White;
+				if (ReducedMotion() || Built == ESmvScreen::Loading) return FLinearColor::White;
 				const float K = FMath::Clamp((float)(FPlatformTime::Seconds() - TransAt) / 0.32f, 0.f, 1.f);
 				return FLinearColor(1, 1, 1, 1.f - (1.f - K) * (1.f - K));
 			})
 			.RenderTransform_Lambda([this]()
 			{
-				const float K = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - TransAt) / 0.38f, 0.f, 1.f);
+				const float K = (ReducedMotion() || Built == ESmvScreen::Loading) ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - TransAt) / 0.38f, 0.f, 1.f);
 				const float E = 1.f - FMath::Pow(1.f - K, 3.f);
 				return TOptional<FSlateRenderTransform>(FSlateRenderTransform(FVector2f((1.f - E) * 46.f * TransDir, (1.f - E) * 10.f)));
 			})
@@ -343,6 +383,10 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		]
 		+ SOverlay::Slot()
 		[
+			EnterFade
+		]
+		+ SOverlay::Slot()
+		[
 			Logo
 		]
 	];
@@ -352,6 +396,12 @@ void SSmvShell::Construct(const FArguments& InArgs)
 }
 
 void SSmvShell::Refresh() { bDirty = true; }
+
+bool SSmvShell::BootFinished() const
+{
+	if (!bBootGate) return true;
+	return BootReadyAt > 0 && FPlatformTime::Seconds() > FMath::Max(LogoAt + 3.6, BootReadyAt + 0.8);
+}
 
 void SSmvShell::Confirm(const FText& Title, const FText& Body, const FText& YesLabel, bool bDanger, TFunction<void()> OnYes)
 {
@@ -2885,58 +2935,180 @@ void SSmvShell::StartFromWizard()
 
 TSharedRef<SWidget> SSmvShell::Loading()
 {
+	// Tam ekran yükleme ekranı: hedef haritanın önizleme görseli (yavaş yakınlaşma) + harita adı, oyun türü, dron, saat/hava;
+	// gerçek aşamalar (SmvLoadGate: harita akışı, dekor, atmosfer ilk karesi, SITL GPS/EKF, gölgelendirici/PSO, doku akışı, ön ısınma)
+	// ilerleme yüzdesi ve ayrıntısıyla. Opak: sahne arkada çizilip ısınırken oyuncu görmez; kapı bitince GameMode Uçuş'a geçirir.
 	TWeakObjectPtr<USmvFlow> F = Flow;
-	TSharedRef<SSmvCanvas> Radar = SNew(SSmvCanvas).Size(FVector2D(220, 220));
-	Radar->Painter = [](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	TWeakObjectPtr<ASmvGameMode> GM = GameMode;
+	const FSmvFlightRequest& Dr = Flow.IsValid() ? Flow->Draft : FSmvFlightRequest();
+	TSharedRef<FSmvLoadView> V = MakeShared<FSmvLoadView>(MakeLoadView(Dr.Track, Dr.GameMode, Dr.Drone.Name));
+	TSharedRef<SSmvCanvas> C = SNew(SSmvCanvas).Size(FVector2D(1600, 900));
+	C->Painter = [F, GM, V](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
 	{
-		const FVector2D C = FVector2D(G.GetLocalSize()) * 0.5;
-		const float R = (float)C.X - 8.f;
-		const double T = FPlatformTime::Seconds();
-		DrGlow(Out, L, G, C, R * 1.2f, Accent().CopyWithNewOpacity(0.25f));
-		DrBox(Out, L + 1, G, C - FVector2D(R, R), FVector2D(2 * R, 2 * R), Hex(0x06101e, 0.9f), Circle());
-		for (int32 k = 1; k <= 3; ++k) DrArc(Out, L + 2, G, C, R * k / 3.f, 0.f, 360.f, Accent().CopyWithNewOpacity(0.25f), 1.f);
-		DrSeg(Out, L + 2, G, C - FVector2D(R, 0), C + FVector2D(R, 0), Accent().CopyWithNewOpacity(0.15f), 1.f);
-		DrSeg(Out, L + 2, G, C - FVector2D(0, R), C + FVector2D(0, R), Accent().CopyWithNewOpacity(0.15f), 1.f);
-		const float A = (float)FMath::Fmod(T * 120.0, 360.0);
-		for (int32 k = 0; k < 24; ++k)
-		{
-			const float Aa = FMath::DegreesToRadians(A - k * 2.5f);
-			DrSeg(Out, L + 3, G, C, C + FVector2D(FMath::Cos(Aa), FMath::Sin(Aa)) * R, Accent().CopyWithNewOpacity(0.5f * (1.f - k / 24.f)), 2.f);
-		}
-		for (int32 k = 0; k < 5; ++k)
-		{
-			const float Ba = k * 1.3f + 0.4f, Br = R * (0.3f + 0.13f * k);
-			const FVector2D P = C + FVector2D(FMath::Cos(Ba), FMath::Sin(Ba)) * Br;
-			const float Age = FMath::Fmod(A - FMath::RadiansToDegrees(Ba) + 720.f, 360.f) / 360.f;
-			DrBox(Out, L + 4, G, P - FVector2D(3, 3), FVector2D(6, 6), Accent3().CopyWithNewOpacity(FMath::Max(0.f, 1.f - Age * 1.5f)), Circle());
-		}
+		V->Gate = GM.IsValid() ? &GM->GetLoadGate() : nullptr;
+		V->Status = F.IsValid() ? F->LoadingText : FString();
+		PaintLoad(*V, G, Out, L);
 	};
-	static const TCHAR* TipKeys[] = { TEXT("tip.1"), TEXT("tip.2"), TEXT("tip.3"), TEXT("tip.4"), TEXT("tip.5"), TEXT("tip.6"), TEXT("tip.7"), TEXT("tip.8") };
 	TSharedRef<SSmvButton> Cancel = SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).Text(Tx(TEXT("common.cancel"))).OnClick([F]() { if (F.IsValid()) F->EndFlight(TEXT("abort")); });
 	DefaultFocus = Cancel;
-	return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)
-	[
-		SNew(SBox).WidthOverride(680.f)
-		[
-			Glass(SNew(SVerticalBox)
-				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[Radar]
-				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 16, 0, 0)[Title(Tx(TEXT("loading.title")), 22)]
-				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 10)
-				[
-					SNew(STextBlock).Text_Lambda([F]()
-					{
-						const int32 Dots = (int32)(FPlatformTime::Seconds() * 2.0) % 4;
-						return FText::FromString((F.IsValid() ? F->LoadingText : FString()) + FString::ChrN(Dots, TEXT('.')));
-					}).Font(Font(13)).ColorAndOpacity(Fg()).AutoWrapText(true).Justification(ETextJustify::Center)
-				]
-				+ SVerticalBox::Slot().AutoHeight().Padding(0, 6, 0, 0)
-				[
-					SNew(STextBlock).Font(Font(11)).ColorAndOpacity(Dim()).AutoWrapText(true).Justification(ETextJustify::Center)
-					.Text_Lambda([]() { const int32 I = (int32)(FPlatformTime::Seconds() / 6.0) % 8; return FSmvI18n::T(TipKeys[I]); })
-				]
-				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 20, 0, 0)[Cancel], FMargin(32.f))
-		]
-	];
+	return SNew(SOverlay)
+		+ SOverlay::Slot()[C]
+		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(0, 40, 56, 0)[Cancel];
+}
+
+FSmvLoadView SSmvShell::MakeLoadView(const FSmvTrack& Track, const FString& GameModeId, const FString& DroneName)
+{
+	FSmvLoadView V;
+	const FSmvFabMap* Fm = FSmvFabContent::FindMap(Track.WorldMode);
+	if (!Fm) Fm = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Track.WorldMode);
+	if (Fm) if (const FSlateBrush* B = SmvMapPreview(*Fm)) V.Bg = MakeShared<FSlateBrush>(*B);
+	V.MapName = Fm ? Fm->Name.ToString() : (Track.Name.IsEmpty() ? FSmvI18n::T(TEXT("menu.live_proc_map")).ToString() : Track.Name);
+	V.Mode = SmvUpper(FSmvI18n::T(FString(TEXT("gmode.")) + (GameModeId.IsEmpty() ? FString(TEXT("free")) : GameModeId)).ToString());
+	TArray<FString> Bits;
+	if (!DroneName.IsEmpty()) Bits.Add(DroneName);
+	Bits.Add(FSmvI18n::T(FString(TEXT("time.")) + (Track.TimeOfDay.IsEmpty() ? FString(TEXT("day")) : Track.TimeOfDay)).ToString());
+	Bits.Add(FSmvI18n::T(FString(TEXT("weather.")) + (Track.Weather.IsEmpty() ? FString(TEXT("clear")) : Track.Weather)).ToString());
+	V.Sub = FString::Join(Bits, TEXT("  ·  "));
+	V.Tod = Track.TimeOfDay;
+	V.T0 = FPlatformTime::Seconds();
+	V.Seed = GetTypeHash(Track.WorldMode + Track.Name);
+	return V;
+}
+
+void SSmvShell::PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+{
+	static const TCHAR* TipKeys[] = { TEXT("tip.1"), TEXT("tip.2"), TEXT("tip.3"), TEXT("tip.4"), TEXT("tip.5"), TEXT("tip.6"), TEXT("tip.7"), TEXT("tip.8") };
+	const TSharedPtr<FSlateBrush>& Bg = V.Bg;
+	const FString& MapName = V.MapName; const FString& Mode = V.Mode; const FString& Sub = V.Sub; const FString& Tod = V.Tod;
+	const double T0 = V.T0; const uint32 Seed = V.Seed;
+	const FVector2D Sz = FVector2D(G.GetLocalSize());
+	const float W = (float)Sz.X, H = (float)Sz.Y;
+	const double T = FPlatformTime::Seconds() - T0;
+	const float K = FMath::Clamp(H / 900.f, 0.6f, 2.f);   // çözünürlük ölçeği
+	// ---- arka plan: opak taban + harita görseli (kaplayacak biçimde, Ken Burns yakınlaşması) ya da saate göre gök degradesi ----
+	DrBox(Out, L, G, FVector2D::ZeroVector, Sz, Hex(0x040811), nullptr);
+	if (Bg.IsValid() && Bg->ImageSize.X > 1 && Bg->ImageSize.Y > 1)
+	{
+		const float Ia = (float)(Bg->ImageSize.X / Bg->ImageSize.Y), Sa = W / FMath::Max(1.f, H);
+		float Uw = 1.f, Vh = 1.f;
+		if (Sa > Ia) Vh = Ia / Sa; else Uw = Sa / Ia;
+		const float Zm = 1.f / (1.f + 0.06f * (float)FMath::Clamp(T / 24.0, 0.0, 1.0));
+		Uw *= Zm; Vh *= Zm;
+		const float Cx = 0.5f + 0.02f * (float)FMath::Sin(T * 0.05), Cy = 0.5f;
+		Bg->SetUVRegion(FBox2f(FVector2f(Cx - Uw * 0.5f, Cy - Vh * 0.5f), FVector2f(Cx + Uw * 0.5f, Cy + Vh * 0.5f)));
+		const float In = (float)FMath::Clamp(T / 0.6, 0.0, 1.0);
+		FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(W, H), FSlateLayoutTransform()), Bg.Get(), ESlateDrawEffect::None, FLinearColor(1, 1, 1, In));
+	}
+	else
+	{
+		const bool bNight = Tod == TEXT("night"), bDusk = Tod == TEXT("dusk") || Tod == TEXT("golden") || Tod == TEXT("dawn");
+		const FLinearColor Top = bNight ? Hex(0x050a1c) : bDusk ? Hex(0x1d2a52) : Hex(0x2a5d94);
+		const FLinearColor Mid = bNight ? Hex(0x0b1630) : bDusk ? Hex(0xd9824a) : Hex(0x9cc6e6);
+		const FLinearColor Low = bNight ? Hex(0x050810) : bDusk ? Hex(0x2a2018) : Hex(0x2f4a2a);
+		DrGradient(Out, L + 1, G, FVector2D::ZeroVector, FVector2D(W, H * 0.62f), { { 0.f, Top }, { 1.f, Mid } }, true);
+		DrGradient(Out, L + 1, G, FVector2D(0, H * 0.62f), FVector2D(W, H * 0.38f), { { 0.f, Low.CopyWithNewOpacity(1.f) }, { 1.f, Hex(0x05080c) } }, true);
+		// sıradağ siluetleri (tohumlu), uzaktan yakına koyulaşan
+		for (int32 Ly = 0; Ly < 3; ++Ly)
+		{
+			TArray<FVector2D> P;
+			const float Base = H * (0.56f + Ly * 0.05f), Amp = H * (0.10f - Ly * 0.025f);
+			const float Ph = (float)((Seed >> (Ly * 5)) % 97) * 0.13f;
+			for (int32 i = 0; i <= 64; ++i)
+			{
+				const float x = W * i / 64.f;
+				P.Add(FVector2D(x, Base - Amp * (0.5f + 0.35f * FMath::Sin(x * 0.004f + Ph) + 0.15f * FMath::Sin(x * 0.013f + Ph * 2.f))));
+			}
+			const FLinearColor Mc = FMath::Lerp(Mid, Low, 0.45f + Ly * 0.25f).CopyWithNewOpacity(1.f);
+			for (int32 i = 0; i < 64; ++i)
+			{
+				const float Hh = H - (float)P[i].Y;
+				DrBox(Out, L + 2 + Ly, G, FVector2D(P[i].X, P[i].Y), FVector2D(W / 64.f + 1.f, Hh), Mc, nullptr);
+			}
+		}
+	}
+	// okunurluk: sol ve alt koyu degrade, üstte hafif kararma, kenar vinyeti
+	DrGradient(Out, L + 6, G, FVector2D::ZeroVector, FVector2D(W * 0.62f, H), { { 0.f, Hex(0x03060d, 0.80f) }, { 0.6f, Hex(0x03060d, 0.35f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, false);
+	DrGradient(Out, L + 6, G, FVector2D(0, H * 0.45f), FVector2D(W, H * 0.55f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, Hex(0x02040a, 0.92f) } }, true);
+	DrGradient(Out, L + 6, G, FVector2D::ZeroVector, FVector2D(W, H * 0.18f), { { 0.f, Hex(0x02040a, 0.6f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, true);
+	// ---- üst sol: marka + başlık ----
+	const float X0 = 72.f * K;
+	DrText(Out, L + 8, G, TEXT("SIMUMAV"), FVector2D(X0, 58.f * K), SmvUi::Font(FMath::RoundToInt(15 * K), "Black", 420), Accent(), -1);
+	DrText(Out, L + 8, G, SmvUpper(FSmvI18n::T(TEXT("loading.title")).ToString()), FVector2D(X0, 84.f * K), SmvUi::Font(FMath::RoundToInt(11 * K), "Bold", 220), Dim(), -1);
+	// ---- sol alt: oyun türü rozeti, harita adı, alt satır ----
+	const float Yb = H - 300.f * K;
+	{
+		const FSlateFontInfo Cf = SmvUi::Font(FMath::RoundToInt(11 * K), "Bold", 160);
+		const FVector2D Ms = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Mode, Cf);
+		DrBox(Out, L + 8, G, FVector2D(X0, Yb - 14.f * K), FVector2D(Ms.X + 24.f * K, 28.f * K), Accent().CopyWithNewOpacity(0.22f), Round(14.f));
+		DrText(Out, L + 9, G, Mode, FVector2D(X0 + 12.f * K, Yb), Cf, Accent(), -1);
+	}
+	DrText(Out, L + 8, G, MapName, FVector2D(X0, Yb + 52.f * K), SmvUi::Font(FMath::RoundToInt(46 * K), "Black"), FLinearColor::White, -1);
+	DrText(Out, L + 8, G, Sub, FVector2D(X0, Yb + 100.f * K), SmvUi::Font(FMath::RoundToInt(15 * K), "Regular"), Fg().CopyWithNewOpacity(0.85f), -1);
+	// ---- aşamalar ----
+	const FSmvLoadGate* Gt = V.Gate;
+	const bool bGate = Gt && Gt->IsActive();
+	const float Pw = 470.f * K, Px = W - Pw - 64.f * K, Rh = 40.f * K;
+	int32 NRows = 0;
+	if (bGate) for (int32 i = 0; i < (int32)ESmvLoad::Num; ++i) if (Gt->Get((ESmvLoad)i).bUsed) ++NRows;
+	const float Ph = NRows * Rh + 36.f * K;
+	const float Py = H - 136.f * K - Ph;
+	if (bGate)
+	{
+		DrBox(Out, L + 8, G, FVector2D(Px, Py), FVector2D(Pw, Ph), Hex(0x07101f, 0.72f), Round(16.f));
+		DrBox(Out, L + 8, G, FVector2D(Px, Py), FVector2D(3.f, Ph), Accent().CopyWithNewOpacity(0.6f), nullptr);
+		const ESmvLoad Cur = Gt->Current();
+		float Y = Py + 18.f * K + Rh * 0.5f;
+		for (int32 i = 0; i < (int32)ESmvLoad::Num; ++i)
+		{
+			const FSmvLoadStage& St = Gt->Get((ESmvLoad)i);
+			if (!St.bUsed) continue;
+			const bool bCur = (ESmvLoad)i == Cur;
+			const FVector2D Ic(Px + 30.f * K, Y);
+			if (St.bDone)
+			{
+				DrBox(Out, L + 9, G, Ic - FVector2D(9, 9) * K, FVector2D(18, 18) * K, (St.bTimeout ? Warn() : Accent3()).CopyWithNewOpacity(0.9f), Circle());
+				DrSeg(Out, L + 10, G, Ic + FVector2D(-4.5f, 0.5f) * K, Ic + FVector2D(-1.f, 4.f) * K, Hex(0x04121a), 2.f * K);
+				DrSeg(Out, L + 10, G, Ic + FVector2D(-1.f, 4.f) * K, Ic + FVector2D(5.f, -3.5f) * K, Hex(0x04121a), 2.f * K);
+			}
+			else
+			{
+				DrArc(Out, L + 9, G, Ic, 8.f * K, 0.f, 360.f, Fg().CopyWithNewOpacity(0.18f), 2.f * K);
+				if (St.Progress > 0.f || bCur) DrArc(Out, L + 10, G, Ic, 8.f * K, -90.f, -90.f + 360.f * FMath::Max(0.08f, St.Progress), Accent(), 2.5f * K);
+				if (bCur) { const float A = (float)FMath::Fmod(T * 300.0, 360.0); DrArc(Out, L + 10, G, Ic, 12.f * K, A, A + 70.f, Accent().CopyWithNewOpacity(0.5f), 1.5f * K); }
+			}
+			const FLinearColor Nc = St.bDone ? Fg() : bCur ? FLinearColor::White : Dim();
+			DrText(Out, L + 9, G, FSmvI18n::T(FSmvLoadGate::StageKey((ESmvLoad)i)).ToString(), FVector2D(Px + 54.f * K, Y - 7.f * K), SmvUi::Font(FMath::RoundToInt(13 * K), bCur ? "Bold" : "Regular"), Nc, -1);
+			if (!St.Detail.IsEmpty() && (bCur || !St.bDone))
+				DrText(Out, L + 9, G, St.Detail, FVector2D(Px + 54.f * K, Y + 10.f * K), SmvUi::Font(FMath::RoundToInt(10 * K), "Regular"), Mute(), -1);
+			const FString Pc = St.bDone ? (St.bTimeout ? FString(TEXT("—")) : FSmvI18n::Format(TEXT("load.secs"), { { TEXT("n"), FString::Printf(TEXT("%.1f"), St.DoneAt) } }).ToString()) : FString::Printf(TEXT("%%%d"), FMath::RoundToInt(St.Progress * 100.f));
+			DrText(Out, L + 9, G, Pc, FVector2D(Px + Pw - 22.f * K, Y), SmvUi::Font(FMath::RoundToInt(11 * K), "Bold"), St.bDone ? Mute() : Accent(), 1);
+			Y += Rh;
+		}
+	}
+	// ---- alt: ilerleme çubuğu + yüzde + şu anki aşama + süre ----
+	const float P = bGate ? Gt->Overall() : FMath::Clamp((float)(T / 30.0), 0.f, 0.9f);
+	const float By = H - 64.f * K, Bx = X0, Bw = W - X0 * 2.f, Bh = 6.f * K;
+	DrBox(Out, L + 8, G, FVector2D(Bx, By), FVector2D(Bw, Bh), Fg().CopyWithNewOpacity(0.12f), Round(3.f));
+	DrGradient(Out, L + 9, G, FVector2D(Bx, By), FVector2D(FMath::Max(Bh, Bw * P), Bh), { { 0.f, Accent2() }, { 1.f, Accent() } }, false);
+	{
+		const float Sx = Bx + Bw * P;
+		DrGlow(Out, L + 10, G, FVector2D(Sx, By + Bh * 0.5f), 18.f * K, Accent().CopyWithNewOpacity(0.5f + 0.2f * FMath::Sin((float)T * 6.f)));
+	}
+	DrText(Out, L + 9, G, FString::Printf(TEXT("%%%d"), FMath::RoundToInt(P * 100.f)), FVector2D(Bx + Bw, By - 26.f * K), SmvUi::Font(FMath::RoundToInt(28 * K), "Black"), FLinearColor::White, 1);
+	FString Now;
+	if (bGate)
+	{
+		const ESmvLoad Cur = Gt->Current();
+		Now = Cur == ESmvLoad::Num ? FSmvI18n::T(TEXT("load.st.done")).ToString() : FSmvI18n::T(FSmvLoadGate::StageKey(Cur)).ToString();
+		if (Cur == ESmvLoad::Sitl && !V.Status.IsEmpty()) Now += TEXT(" — ") + V.Status;
+	}
+	else Now = V.Status;
+	const int32 Dots = (int32)(T * 2.0) % 4;
+	DrText(Out, L + 9, G, Now + FString::ChrN(Dots, TEXT('.')), FVector2D(Bx, By - 22.f * K), SmvUi::Font(FMath::RoundToInt(13 * K), "Bold"), Fg(), -1);
+	DrText(Out, L + 9, G, FSmvI18n::Format(TEXT("load.secs"), { { TEXT("n"), FString::Printf(TEXT("%.0f"), bGate ? Gt->Elapsed() : T) } }).ToString(), FVector2D(Bx + Bw - 110.f * K, By - 20.f * K), SmvUi::Font(FMath::RoundToInt(11 * K), "Regular"), Mute(), 1);
+	// ipucu
+	const int32 Ti = (int32)(FPlatformTime::Seconds() / 7.0) % 8;
+	DrText(Out, L + 9, G, FSmvI18n::T(TipKeys[Ti]).ToString(), FVector2D(X0, Yb + 140.f * K), SmvUi::Font(FMath::RoundToInt(12 * K), "Regular"), Dim(), -1);
 }
 
 TSharedRef<SWidget> SSmvShell::FlightPause()
@@ -4575,13 +4747,21 @@ void SSmvShell::TickSmoke()
 	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 5); }
 	if (SmokeStep < 0)
 	{
-		SmokeStep = 0; SmokeAt = Now + 12.0; LogoAt = -100.0;
+		// açılış: logo + menü sahnesi kapısı görüntüsü (00_boot), sahne hazır olunca tur başlar
+		SmokeStep = 0; SmokeAt = Now + 1.5; SmokeBoot = 0;
 		FSmvUiPrefs::Get().bTutorialDone = true; FSmvUiPrefs::Get().bFlightTipsDone = true;
 		if (bLang) { FSmvI18n::SetLanguage(SmokeLang); Refresh(); UE_LOG(LogTemp, Display, TEXT("SMOKE lang %s"), *SmokeLang); }
 		if (bOverlay) CloseOverlay();
 		return;
 	}
 	if (Now < SmokeAt) return;
+	if (SmokeBoot == 0) { SmokeBoot = 1; SmokeBootT0 = Now; FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke")))) / TEXT("00_boot.png"), true, false); UE_LOG(LogTemp, Display, TEXT("SMOKE shot 00_boot")); SmokeAt = Now + 0.5; return; }
+	if (SmokeBoot == 1)
+	{
+		if (!BootFinished() && Now - SmokeBootT0 < 60.0) { SmokeAt = Now + 0.5; return; }
+		UE_LOG(LogTemp, Display, TEXT("SMOKE boot bitti (%.1f sn bekleme)"), Now - SmokeBootT0);
+		SmokeBoot = 2; SmokeAt = Now + 1.0; return;
+	}
 	// yol haritası turu: sade menü + Pilot menüsü, Hangar (+ Yeni sihirbazının 6 adımı), Parkur (merkez, Karşılaşma listesi + harita içi tur, Özel / Gerçek
 	// Dünya listeleri ve sihirbazları), Mürettebat (+ yeni pilot sihirbazı), Uçuş akışı, Arkadaşlarım, Önceki uçuşlarım; ardından Pilot menüsünden erişilen
 	// eski ekranlar. Wiz: ekranın alt adımı; ParkurList'te Tab = kategori (0 karşılaşma, 1 özel, 2 gerçek), Log = 1 harita turu.
@@ -4593,9 +4773,9 @@ void SSmvShell::TickSmoke()
 		{ ESmvScreen::HangarWizard, 2, -1, -1, TEXT("03_hw2_params"), 3.f }, { ESmvScreen::HangarWizard, 3, -1, -1, TEXT("03_hw3_camera"), 3.f },
 		{ ESmvScreen::HangarWizard, 4, -1, -1, TEXT("03_hw4_addons"), 3.f }, { ESmvScreen::HangarWizard, 5, -1, -1, TEXT("03_hw5_look"), 3.f },
 		{ ESmvScreen::Tracks, -1, -1, -1, TEXT("04_parkur"), 7.f },
-		{ ESmvScreen::ParkurList, -1, 0, -1, TEXT("05_enc_list"), 3.f }, { ESmvScreen::ParkurList, -1, 0, 1, TEXT("05_enc_tour"), 14.f },
-		{ ESmvScreen::ParkurList, -1, 0, 2, TEXT("05_enc_tour2"), 14.f }, { ESmvScreen::ParkurList, -1, 0, 3, TEXT("05_enc_tour3"), 14.f },
-		{ ESmvScreen::ParkurList, -1, 0, 4, TEXT("05_enc_tour4"), 14.f },
+		{ ESmvScreen::ParkurList, -1, 0, -1, TEXT("05_enc_list"), 3.f }, { ESmvScreen::ParkurList, -1, 0, 1, TEXT("05_enc_tour"), 18.f },
+		{ ESmvScreen::ParkurList, -1, 0, 2, TEXT("05_enc_tour2"), 18.f }, { ESmvScreen::ParkurList, -1, 0, 3, TEXT("05_enc_tour3"), 18.f },
+		{ ESmvScreen::ParkurList, -1, 0, 4, TEXT("05_enc_tour4"), 18.f },
 		{ ESmvScreen::ParkurList, -1, 1, -1, TEXT("05_custom_list"), 4.f },
 		{ ESmvScreen::ParkurWizard, 0, -1, -1, TEXT("06_pw0_biome"), 3.f }, { ESmvScreen::ParkurWizard, 1, -1, -1, TEXT("06_pw1_world"), 6.f },
 		{ ESmvScreen::ParkurWizard, 2, -1, -1, TEXT("06_pw2_weather"), 2.5f }, { ESmvScreen::ParkurWizard, 3, -1, -1, TEXT("06_pw3_name"), 2.5f },
@@ -4729,6 +4909,7 @@ void SSmvShell::TickSmoke()
 	const FString Base = FString::Printf(TEXT("%d_%s"), 20 + SmokeFl * 5, Fx.Code);
 	float Alt = 0.f; bool bArmed = false; int32 Ready = -1;
 	const bool bTele = GameMode.IsValid() && GameMode->SmokeTele(Alt, bArmed, Ready);
+	static double LoadT0 = 0; static int32 LoadShots = 0;
 	switch (SmokeSub)
 	{
 	case 0:
@@ -4768,13 +4949,26 @@ void SSmvShell::TickSmoke()
 		Flow->Draft.bHasMission = false;
 		UE_LOG(LogTemp, Display, TEXT("SMOKE flight %s map=%s tod=%s wx=%s"), Fx.Code, *Flow->Draft.Track.WorldMode, Fx.Tod, Fx.Wx);
 		StartFromWizard();
-		SmokeDeadline = Now + 90.0; SmokeAt = Now + 5.0; ++SmokeSub;
+		SmokeDeadline = Now + 180.0; SmokeAt = Now + 0.2; ++SmokeSub;
+		LoadT0 = Now; LoadShots = 0;
 		return;
 	}
 	case 1:
-		// bağlantı ve ilk tele bekle; sahne (harita akışı, gök) otursun
-		if (!bTele && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
-		SmokeAt = Now + 8.0; ++SmokeSub; return;
+	{
+		// yükleme ekranı: tüm aşamalar (harita, dekor, atmosfer, SITL GPS/EKF, PSO, doku, ön ısınma) bitince GameMode Uçuş'a geçirir;
+		// bu arada iki yükleme karesi (_load ~3 sn, _load2 ilerleme %60 ya da 20 sn), Uçuş'ta giriş karesi (_entry) ve 5 sn sonrası (_ground)
+		if (Flow->GetScreen() == ESmvScreen::Loading && Now < SmokeDeadline)
+		{
+			const float P = GameMode.IsValid() ? GameMode->GetLoadGate().Overall() : 0.f;
+			if (LoadShots == 0 && Now - LoadT0 >= 3.0) { Shot(Base + TEXT("_load")); ++LoadShots; }
+			else if (LoadShots == 1 && (P >= 0.6f || Now - LoadT0 >= 20.0)) { Shot(Base + TEXT("_load2")); ++LoadShots; }
+			SmokeAt = Now + 0.25; return;
+		}
+		UE_LOG(LogTemp, Display, TEXT("SMOKE entry %s: %.1f sn yükleme (ekran %d, tele %d, pos_ready %d)"), Fx.Code, Now - LoadT0, (int32)Flow->GetScreen(), bTele ? 1 : 0, Ready);
+		SmokeAt = Now + 0.7; SmokeSub = 40; return;
+	}
+	case 40: Shot(Base + TEXT("_entry")); SmokeAt = Now + 5.0; SmokeSub = 41; return;
+	case 41: Shot(Base + TEXT("_ground")); SmokeAt = Now + 0.8; SmokeSub = 3; return;
 	case 2: Shot(Base + TEXT("_ground")); SmokeAt = Now + 0.8; ++SmokeSub; return;
 	case 3:
 		UE_LOG(LogTemp, Display, TEXT("SMOKE takeoff (pos_ready=%d)"), Ready);

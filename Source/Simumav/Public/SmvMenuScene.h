@@ -8,6 +8,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "SimumavTypes.h"
+#include "SmvLoadGate.h"
 #include "SmvMenuScene.generated.h"
 
 class ACaySimWorldSetup;
@@ -67,6 +68,10 @@ public:
 	const FString& GetMapKey() const { return MapKey; }
 	/** Harita akışı bitti mi (tur başlığı "yükleniyor" yazısı) */
 	bool IsMapReady() const;
+	/** Harita (yeniden) yüklemesinin hazırlık kapısı: harita akışı, atmosfer ilk karesi, gölgelendirici/PSO, doku akışı, ön ısınma.
+	 *  Açılış logosu ve harita turu yükleme katmanı bu kapı bitene dek sahneyi örter. */
+	const FSmvLoadGate& GetLoadGate() const { return Gate; }
+	bool IsSceneReady() const { return !bLive || !Gate.IsActive() || Gate.IsDone(); }
 	/** Parkur kartı: canlı dünyadan ikinci görünüm (harita içinde alçak yörünge; 640×360) — Karşılaşma kartının "video döngüsü" */
 	UTextureRenderTarget2D* GetCardTarget();
 	void SetCardActive(bool bOn);
@@ -118,6 +123,12 @@ protected:
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> ShowPilot;
 
 private:
+	FSmvLoadGate Gate;
+	int32 GateCount = 0;
+	double GAtmosT0 = 0, GWarmT0 = 0, GStreamT0 = 0;
+	uint64 GAtmosF0 = 0, GWarmF0 = 0;
+	int32 GStreamPeak = 0, GShaderPeak = 0, GWarmRecap = 0;
+	void TickGate();
 	bool bLive = false;
 	bool bPreviewOn = false;
 	double T0 = 0;

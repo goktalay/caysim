@@ -47,6 +47,8 @@ public class Simumav : ModuleRules
 			"OnlineSubsystemUtils",
 			"ProceduralMeshComponent",
 			"RenderCore",
+			// yükleme kapısı: PSO ön önbellekleme durumu (PipelineStateCache)
+			"RHI",
 			// video kaydı: JPEG kareler (SmvVideoRec)
 			"ImageWrapper",
 			"Projects",

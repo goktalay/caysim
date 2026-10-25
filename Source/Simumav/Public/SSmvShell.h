@@ -18,6 +18,17 @@
 class ASmvGameMode;
 class SBox;
 class SVerticalBox;
+class FSmvLoadGate;
+
+/** Yükleme ekranı görünümü (uçuşa giriş / harita turu): arka plan görseli, harita adı, oyun türü, alt satır, aşamalar (kapı) */
+struct FSmvLoadView
+{
+	TSharedPtr<FSlateBrush> Bg;
+	FString MapName, Mode, Sub, Tod, Status;
+	double T0 = 0;
+	uint32 Seed = 0;
+	const FSmvLoadGate* Gate = nullptr;
+};
 
 class SIMUMAV_API SSmvShell : public SCompoundWidget
 {
@@ -104,6 +115,15 @@ private:
 	TSharedRef<SWidget> Missions();
 	TSharedRef<SWidget> Wizard();
 	TSharedRef<SWidget> Loading();
+	/** Tam ekran yükleme ekranı çizimi (Loading ve harita turu katmanı ortak) */
+	static void PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindowElementList& Out, int32 L);
+	static FSmvLoadView MakeLoadView(const FSmvTrack& Track, const FString& GameModeId, const FString& DroneName);
+	/** Açılış: menü sahnesi (harita + atmosfer) hazır olana dek logo + ilerleme; hazır olunca solar */
+	bool bBootGate = false;
+	double BootReadyAt = -1.0;
+	bool BootFinished() const;
+	int32 SmokeBoot = 0;
+	double SmokeBootT0 = 0;
 	TSharedRef<SWidget> FlightPause();
 	TSharedRef<SWidget> Summary();
 	TSharedRef<SWidget> Lobby();

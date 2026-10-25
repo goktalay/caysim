@@ -38,6 +38,10 @@
 #include "SmvFabContent.h"
 #include "SmvPhysics.h"
 #include "SmvScenery.h"
+#include "SmvLoadGate.h"
+#include "SmvLocalFlightLink.h"
+#include "Engine/PostProcessVolume.h"
+#include "UObject/UObjectGlobals.h"
 #include "Widgets/SWindow.h"
 #include "Framework/Application/SlateApplication.h"
 #include "SmvInputGlyphs.h"
@@ -101,6 +105,8 @@ void ASmvGameMode::BeginPlay()
 	Flow->OnScreenChanged.AddDynamic(this, &ASmvGameMode::HandleScreen);
 	Flow->OnToast.AddDynamic(this, &ASmvGameMode::HandleToast);
 	Flow->SummaryAugmenter = [this](FSmvFlightSummary& S) { AugmentSummary(S); };
+	// Yükleniyor → Uçuş: bağlantı hazır olsa da sahne yükleme kapısı (harita, dekor, atmosfer, SITL GPS/EKF, PSO, doku, ön ısınma) bitmeli
+	Flow->FlightGate = [this]() { return !bScene || Gate.IsDone(); };
 
 	if (GEngine && GEngine->GameViewport)
 	{
@@ -145,6 +151,7 @@ void ASmvGameMode::EndPlay(const EEndPlayReason::Type Reason)
 		Flow->OnScreenChanged.RemoveAll(this);
 		Flow->OnToast.RemoveAll(this);
 		Flow->SummaryAugmenter = nullptr;
+		Flow->FlightGate = nullptr;
 	}
 	if (Shell.IsValid() && GEngine && GEngine->GameViewport) GEngine->GameViewport->RemoveAllViewportWidgets();
 	Shell.Reset();
@@ -176,6 +183,16 @@ void ASmvGameMode::HandleScreen(ESmvScreen Screen)
 	}
 	EnsureMouse();
 	if (ASmvPilotPawn* P = GetPilot()) P->SetFlying(Screen == ESmvScreen::Flight);
+	if (Screen == ESmvScreen::Flight && bScene && FlightEnterAt < SceneT0)
+	{
+		// yükleme kapısı bitti: giriş anı (kabuk kararmadan açılır), hızlı göz uyumu kaldırılır, tanıtım kamerası şimdi oynar
+		FlightEnterAt = FPlatformTime::Seconds();
+		Gate.LogSummary();
+		UE_LOG(LogSimumav, Log, TEXT("SMVLOAD [%s] uçuşa giriş: %.2f sn (sahne kurulumundan)"), *Gate.Label(), FlightEnterAt - SceneT0);
+		if (LoadPp) { LoadPp->Destroy(); LoadPp = nullptr; }
+		if (bIntroPending) if (ASmvPilotPawn* P = GetPilot()) P->PlayIntro(3.7f);
+		bIntroPending = false;
+	}
 	if (Shell.IsValid()) Shell->Refresh();
 }
 
@@ -231,6 +248,25 @@ void ASmvGameMode::BuildScene()
 	SceneT0 = FPlatformTime::Seconds();
 	GroundMsl = Req.Track.GroundMsl > -1000 ? Req.Track.GroundMsl : 100.0;
 	UWorld* W = GetWorld();
+	// yükleme kapısı: Uçuş ekranı ancak tüm aşamalar bitince (TickLoadGate)
+	Gate.Begin(TEXT("ucus"), { ESmvLoad::World, ESmvLoad::Scenery, ESmvLoad::Atmos, ESmvLoad::Sitl, ESmvLoad::Shaders, ESmvLoad::Streaming, ESmvLoad::Warmup });
+	AtmosT0 = WarmT0 = StreamT0 = 0; AtmosF0 = WarmF0 = 0; WarmRecap = 0; StreamPeak = ShaderPeak = 0;
+	FlightEnterAt = -100.0;
+	bIntroPending = false;
+	// yükleme boyunca göz uyumu hızlı: giriş karesinde pozlama oturmuş olsun (yalnız hız alanları ezilir; UDS pozlama eğrisi korunur)
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		LoadPp = W->SpawnActor<APostProcessVolume>(APostProcessVolume::StaticClass(), FTransform::Identity, Sp);
+		if (LoadPp)
+		{
+			LoadPp->bUnbound = true;
+			LoadPp->Priority = 1000.f;
+			LoadPp->BlendWeight = 1.f;
+			LoadPp->Settings.bOverride_AutoExposureSpeedUp = true; LoadPp->Settings.AutoExposureSpeedUp = 30.f;
+			LoadPp->Settings.bOverride_AutoExposureSpeedDown = true; LoadPp->Settings.AutoExposureSpeedDown = 30.f;
+		}
+	}
 
 	// ---- dünya ----
 	FCaySimSession S;
@@ -332,10 +368,13 @@ void ASmvGameMode::BuildScene()
 		L->OnTele.AddUObject(this, &ASmvGameMode::HandleTele);
 		L->OnMessage.AddUObject(this, &ASmvGameMode::HandleMessage);
 	}
+	bGlbPending = true;
 	Data->FetchModelGlb(Req.Drone.ModelKey, [Weak](bool bOk, const TArray<uint8>& Bytes)
 	{
 		ASmvGameMode* Self = Weak.Get();
-		if (Self && bOk && Self->Drone) Self->Drone->LoadGlbBytes(Bytes);
+		if (!Self) return;
+		Self->bGlbPending = false;
+		if (bOk && Self->Drone) Self->Drone->LoadGlbBytes(Bytes);
 	});
 
 	// ---- pilot piyonu ----
@@ -357,7 +396,11 @@ void ASmvGameMode::BuildScene()
 			if (Self && Self->Link() && !Self->bPauseMenu) Self->Link()->SendRc(Rc);
 		});
 		P->OnAction.AddUObject(this, &ASmvGameMode::HandleAction);
-		if (Flow->Race.Kind == TEXT("none") && !(Flow->GetMatch() && Flow->GetMatch()->HasMatch())) P->PlayIntro(3.7f);
+		// tanıtım kamerası (100 m yukarıdan inen süzülüş): yükleme ekranı sahneyi takip kamerasının son konumunda ısıttığı için varsayılan
+		// kapalı — giriş karesi ısınmış görünümle aynı olsun. [/Script/Simumav.SmvGameMode] FlightIntro=True ile girişte oynar.
+		bool bIntroCfg = false;
+		if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvGameMode"), TEXT("FlightIntro"), bIntroCfg, GGameIni);
+		bIntroPending = bIntroCfg && Flow->Race.Kind == TEXT("none") && !(Flow->GetMatch() && Flow->GetMatch()->HasMatch());
 	}
 	// video kaydı (Ayarlar / sihirbaz: uçuş başında başlar)
 	if (FSmvUiPrefs::Get().bRecordVideo) ToggleVideo();
@@ -633,6 +676,8 @@ void ASmvGameMode::StopScene()
 {
 	if (!bScene) return;
 	bScene = false;
+	Gate.Clear();
+	if (LoadPp) { LoadPp->Destroy(); LoadPp = nullptr; }
 	if (VideoRec.IsValid() && VideoRec->IsOn()) { const FString P = VideoRec->Stop(); if (!P.IsEmpty() && Flow.IsValid()) Flow->Toast(FSmvI18n::Format(TEXT("video.saved"), { { TEXT("p"), P } }).ToString(), 6); }
 	if (USmvFlightLink* L = Link()) { L->OnTele.RemoveAll(this); L->OnMessage.RemoveAll(this); }
 	if (Flow.IsValid() && Flow->GetMatch()) Flow->GetMatch()->OnPositions.RemoveAll(this);
@@ -1003,6 +1048,7 @@ void ASmvGameMode::Tick(float Dt)
 	if (!bScene) return;
 	if (EndAt > 0 && FPlatformTime::Seconds() >= EndAt) { EndAt = 0; if (Flow.IsValid()) Flow->EndFlight(EndReasonPending); }
 	if (VideoRec.IsValid() && VideoRec->IsOn()) VideoRec->Tick(Dt);
+	if (Flow.IsValid() && Flow->GetScreen() == ESmvScreen::Loading) TickLoadGate();
 	TickPhysics(Dt);
 	TickDebris(Dt);
 	TickCityWindows();
@@ -1033,6 +1079,133 @@ void ASmvGameMode::Tick(float Dt)
 		Command(TEXT("gpws"), P);
 	}
 	UpdateHud();
+}
+
+// ---------------------------------------------------------------------------
+// yükleme kapısı: Yükleniyor ekranı açıkken her karede aşamalar yoklanır (oyun iş parçacığı kilitlenmez; sahne arkada çizilir)
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::TickLoadGate()
+{
+	if (!Gate.IsActive()) return;
+	UWorld* W = GetWorld();
+	const double Now = FPlatformTime::Seconds();
+	auto Fmt = [](const TCHAR* Key, const TMap<FString, FString>& A) { return FSmvI18n::Format(Key, A).ToString(); };
+	// 1) harita + alt seviyeler (seviye akışı / World Partition)
+	if (!Gate.Done(ESmvLoad::World))
+	{
+		float P = 1.f; bool bReady = true; FString D;
+		const TArray<TObjectPtr<ULevelStreamingDynamic>>& Lvs = FabLevels.Num() ? FabLevels : CityLevels;
+		if (Lvs.Num())
+		{
+			float Sum = 0.f; int32 Vis = 0;
+			for (const TObjectPtr<ULevelStreamingDynamic>& Lv : Lvs)
+			{
+				float Pl = 1.f;
+				if (Lv && Lv->IsLevelVisible()) ++Vis;
+				else if (Lv && Lv->HasLoadedLevel()) Pl = 0.9f;
+				else if (Lv)
+				{
+					float A = GetAsyncLoadPercentage(Lv->GetWorldAssetPackageFName());
+					if (A < 0.f && !Lv->PackageNameToLoad.IsNone()) A = GetAsyncLoadPercentage(Lv->PackageNameToLoad);
+					Pl = A > 0.f ? 0.85f * A / 100.f : 0.03f;
+				}
+				Sum += Pl;
+			}
+			const bool bPlacedOk = FabLevels.Num() ? bFabPlaced : (Vis == Lvs.Num());
+			P = bPlacedOk ? 1.f : 0.95f * Sum / Lvs.Num() * (FabLevels.Num() && !bFabSubsRequested ? 0.5f : 1.f);
+			bReady = bPlacedOk;
+			D = Fmt(TEXT("load.d.levels"), { { TEXT("a"), FString::FromInt(Vis) }, { TEXT("b"), FString::FromInt(Lvs.Num()) } });
+		}
+		else D = FSmvI18n::T(WorldSetup && WorldSetup->GetSource() != ECaySimWorldSource::Flat ? TEXT("load.d.real") : TEXT("load.d.procedural")).ToString();
+		bReady = bReady && FSmvLoadGate::WorldPartitionDone(W) && !(W && W->IsVisibilityRequestPending());
+		Gate.Update(ESmvLoad::World, P, bReady, D, 90.0, 3);
+	}
+	const bool bWorld = Gate.Done(ESmvLoad::World);
+	// 2) dekor / kalabalık / trafik / araç gövdesi (Fab dekoru harita yerleşince kurulur; GLB gövdesi geri çağrıyla; kalan paket yüklemeleri)
+	if (!Gate.Done(ESmvLoad::Scenery))
+	{
+		const int32 Pk = FSmvLoadGate::AsyncPackages();
+		const bool bCity = CityLevels.Num() > 0;
+		const bool bWin = !bCity || bCityWindowsDone;
+		const float P = (bWorld ? 0.4f : 0.f) + (bGlbPending ? 0.f : 0.3f) + (Pk == 0 ? 0.2f : 0.f) + (bWin ? 0.1f : 0.f);
+		const FString D = Pk > 0 ? Fmt(TEXT("load.d.packages"), { { TEXT("n"), FString::FromInt(Pk) } }) : FSmvI18n::T(TEXT("load.d.body")).ToString();
+		Gate.Update(ESmvLoad::Scenery, P, bWorld && !bGlbPending && Pk == 0 && bWin, D, 60.0, 5);
+	}
+	// 3) atmosfer: harita yerleşince (haritanın kendi gök/ışık aktörleri kaldırıldıktan sonra) gök ışığı yeniden yakalanır, ilk kareler çizilir
+	if (!Gate.Done(ESmvLoad::Atmos))
+	{
+		const bool bUds = FabSkyActors.Num() > 0;
+		float P = 0.25f;
+		bool bReady = false;
+		if (bWorld)
+		{
+			if (AtmosT0 <= 0) { AtmosT0 = Now; AtmosF0 = GFrameCounter; const int32 N = FSmvLoadGate::RecaptureSky(W); UE_LOG(LogSimumav, Log, TEXT("SMVLOAD [ucus] gök ışığı yakalama: %d bileşen (%s)"), N, bUds ? TEXT("UDS") : TEXT("yerleşik")); }
+			const double K = FMath::Min((double)(GFrameCounter - AtmosF0) / 24.0, (Now - AtmosT0) / 0.8);
+			P = 0.25f + 0.75f * (float)FMath::Clamp(K, 0.0, 1.0);
+			bReady = K >= 1.0;
+		}
+		Gate.Update(ESmvLoad::Atmos, P, bReady, FSmvI18n::T(bUds ? TEXT("load.d.sky_uds") : TEXT("load.d.sky_builtin")).ToString(), 60.0);
+	}
+	// 4) ArduPilot SITL: bağlantı (HAZIR) + GPS 3B kilit + EKF konum tahmini (pos_ready); bulut/kayıt oynatmada yalnız bağlantı
+	if (!Gate.Done(ESmvLoad::Sitl))
+	{
+		USmvFlightLink* L = Link();
+		const int32 Pr = L ? L->LastExtra().PosReady : -1;
+		const FCaySimTelemetry& T = L ? L->LastTele() : FCaySimTelemetry();
+		const bool bLocal = Cast<USmvLocalFlightLink>(L) != nullptr;
+		float P = 0.08f; FString D;
+		if (!Flow->bLinkHazir) D = FSmvI18n::T(bLocal ? TEXT("load.d.sitl_start") : TEXT("load.d.link")).ToString();
+		else if (Pr == 0)
+		{
+			P = T.GpsFix >= 3 ? 0.75f : 0.45f;
+			D = Fmt(TEXT("load.d.gps"), { { TEXT("fix"), T.GpsFix >= 3 ? FString(TEXT("3D")) : FString::FromInt(T.GpsFix) }, { TEXT("n"), FString::FromInt(FMath::Max(0, T.Sats)) } });
+		}
+		else { P = 1.f; D = FSmvI18n::T(TEXT("load.d.pos_ready")).ToString(); }
+		Gate.Update(ESmvLoad::Sitl, P, Flow->bLinkHazir && Pr != 0, D, 120.0, 2);
+	}
+	// 5) gölgelendirici + PSO (harita ve dekor yüklendikten sonra; yeni malzemeler gelmesin)
+	const bool bContent = bWorld && Gate.Done(ESmvLoad::Scenery);
+	if (!Gate.Done(ESmvLoad::Shaders))
+	{
+		const int32 J = FSmvLoadGate::ShaderJobs() + FSmvLoadGate::PsoPending();
+		ShaderPeak = FMath::Max(ShaderPeak, J);
+		const float P = !bContent ? 0.f : ShaderPeak > 0 ? 1.f - (float)J / ShaderPeak : 1.f;
+		Gate.Update(ESmvLoad::Shaders, P, bContent && J == 0, Fmt(TEXT("load.d.jobs"), { { TEXT("n"), FString::FromInt(J) } }), 100.0, 10);
+	}
+	// 6) doku / ağ akışı (kamera kalkış noktasında; 8 sn sonra çok küçük kalan kuyruk da kabul)
+	if (!Gate.Done(ESmvLoad::Streaming))
+	{
+		const int32 Np = FSmvLoadGate::StreamingPending();
+		float P = 0.f; bool bReady = false;
+		if (bContent && Gate.Done(ESmvLoad::Atmos))
+		{
+			if (StreamT0 <= 0) StreamT0 = Now;
+			StreamPeak = FMath::Max(StreamPeak, Np);
+			P = StreamPeak > 0 ? 1.f - (float)Np / StreamPeak : 1.f;
+			const int32 Thr = Now - StreamT0 > 8.0 ? FMath::Max(2, StreamPeak / 50) : 0;
+			bReady = Np <= Thr;
+		}
+		Gate.Update(ESmvLoad::Streaming, P, bReady, Fmt(TEXT("load.d.stream"), { { TEXT("n"), FString::FromInt(Np) } }), 110.0, 15);
+	}
+	// 7) son ön ısınma: diğer her şey bitti, kamera son konumunda → gök ışığı yeniden yakalanır, Lumen yüzey önbelleği / hacimsel bulut /
+	//    göz uyumu için en az 45 kare + 1,5 sn çizilir (ortada bir yakalama daha)
+	bool bOthers = true;
+	for (int32 i = 0; i < (int32)ESmvLoad::Warmup; ++i) if (!Gate.Done((ESmvLoad)i)) bOthers = false;
+	if (bOthers && !Gate.Done(ESmvLoad::Warmup))
+	{
+		if (WarmT0 <= 0) { WarmT0 = Now; WarmF0 = GFrameCounter; WarmRecap = FSmvLoadGate::RecaptureSky(W); }
+		if (WarmRecap >= 0 && Now - WarmT0 > 0.7) { FSmvLoadGate::RecaptureSky(W); WarmRecap = -1; }
+		const uint64 Fr = GFrameCounter - WarmF0;
+		const double K = FMath::Min((double)Fr / 45.0, (Now - WarmT0) / 1.5);
+		Gate.Update(ESmvLoad::Warmup, (float)FMath::Clamp(K, 0.0, 1.0), K >= 1.0, Fmt(TEXT("load.d.frames"), { { TEXT("n"), FString::Printf(TEXT("%llu"), Fr) } }),
+			FMath::Max(150.0, Gate.Elapsed() + (WarmT0 > 0 ? 8.0 - (Now - WarmT0) : 8.0)));
+	}
+	if (Gate.IsDone())
+	{
+		Gate.LogSummary();
+		if (Flow->bLinkHazir) Flow->SetScreen(ESmvScreen::Flight);
+	}
 }
 
 // ---------------------------------------------------------------------------
