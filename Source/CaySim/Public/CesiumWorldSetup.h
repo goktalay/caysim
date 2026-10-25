@@ -81,6 +81,9 @@ public:
 	bool ClipPolygon(const TArray<FVector>& UnrealPoints);
 	/** Kaynak, ilk karolar gelmediği için yedeğe düştü mü (Google 3B → World Terrain + Bing) */
 	bool DidFallback() const { return bFellBack; }
+	/** Unreal XY noktalarında 3D Tiles yüzeyinin Unreal Z'si (Cesium SampleHeightMostDetailed; zaman uyumsuz, oyun iş parçacığında geri çağrı).
+	 *  Karolar görünmese / çarpışma ağı olmasa da çalışır. Cesium yoksa hemen boş döner. */
+	void SampleSurfaceZ(const TArray<FVector>& UnrealPoints, TFunction<void(const TArray<double>& UnrealZ, const TArray<bool>& bOk)> Done);
 	/** Etkin 3D Tiles aktörü (yoksa nullptr) */
 	AActor* GetTilesActor() const;
 
@@ -104,6 +107,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) int64 GoogleIonAssetId = 2275207;
 	/** Google 3B bu sürede hiç karo yüklemezse World Terrain + Bing'e düşülür (sn). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double GoogleFallbackS = 25.0;
+	/** Cesium karo seçim istatistikleri günlüğe (tanı; komut satırı -CesiumStats) */
+	bool bLogTileStats = false;
 	/** 3D Tiles ekran-uzayı hata sınırı (küçük = daha ayrıntılı). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double TilesScreenSpaceError = 12.0;
 	/** Geoid ayrımı (MSL → WGS84 elipsoid) m; Türkiye için ≈ 30–40 m. Ev irtifası ile 3D Tiles yüzeyi arası farktan kalkışta otomatik düzeltilir. */

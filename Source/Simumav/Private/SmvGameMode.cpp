@@ -254,7 +254,7 @@ void ASmvGameMode::BuildScene()
 	// yükleme kapısı: Uçuş ekranı ancak tüm aşamalar bitince (TickLoadGate)
 	Gate.Begin(TEXT("ucus"), { ESmvLoad::World, ESmvLoad::Scenery, ESmvLoad::Atmos, ESmvLoad::Sitl, ESmvLoad::Shaders, ESmvLoad::Streaming, ESmvLoad::Warmup });
 	AtmosT0 = WarmT0 = StreamT0 = 0; AtmosF0 = WarmF0 = 0; WarmRecap = 0; StreamPeak = ShaderPeak = 0;
-	RimAt = 0; bTilesSkipped = false; FabPlacedBox = FBox(ForceInit); FabLevelPath.Reset();
+	RimAt = 0; RimStartAt = 0; bRimStarted = false; bTilesSkipped = false; FabPlacedBox = FBox(ForceInit); FabLevelPath.Reset();
 	SmvPhysics::SetClipRegion(nullptr, FBox2D(ForceInit));
 	FlightEnterAt = -100.0;
 	bIntroPending = false;
@@ -1232,12 +1232,12 @@ void ASmvGameMode::TickLoadGate()
 			const float Tp = FMath::Clamp(WorldSetup->GetLoadProgress() / 100.f, 0.f, 1.f);
 			const bool bTilesReady = WorldSetup->IsReady();
 			const double El = Gate.Elapsed();
-			if (bTilesReady && bRimPending && !bRimDone && bLevelsOk)
+			if (bTilesReady && bRimPending && !bRimStarted && bLevelsOk)
 			{
-				AlignRealRim();
-				bRimDone = true;
-				RimAt = Now;
+				bRimStarted = true; RimStartAt = Now;
+				AlignRealRim();   // zaman uyumsuz: yükseklik örnekleri gelince bRimDone
 			}
+			if (bRimStarted && !bRimDone && Now - RimStartAt > 20.0) { SMV_KLOG(TEXT("Gerçek dünya kenar eşleme 20 sn'de bitmedi — kaydırmasız sürdürülüyor")); bRimDone = true; RimAt = Now; }
 			// karolar gelmiyor ama haritanın kendi zemini var: gerçek çevresiz sürdür (günlükte uyarı)
 			if (!bTilesReady && bLevelsOk && FabLevels.Num() && El > 75.0 && !bRimDone)
 			{
@@ -2074,13 +2074,13 @@ bool ASmvGameMode::AlignRealRim()
 	TArray<FVector> Poly = { FVector(C.X - Hs.X * In, C.Y - Hs.Y * In, 0.0), FVector(C.X + Hs.X * In, C.Y - Hs.Y * In, 0.0), FVector(C.X + Hs.X * In, C.Y + Hs.Y * In, 0.0), FVector(C.X - Hs.X * In, C.Y + Hs.Y * In, 0.0) };
 	const bool bClip = WorldSetup->ClipPolygon(Poly);
 	SmvPhysics::SetClipRegion(Tiles, FBox2D(FVector2D(C.X - Hs.X * In, C.Y - Hs.Y * In), FVector2D(C.X + Hs.X * In, C.Y + Hs.Y * In)));
-	// kenar örnekleri: içte %4 (en az 8 m), dışta %5 (en az 12 m)
-	TArray<double> Dz;
+	// kenar örnekleri: içte harita zemini (ışın), dışta 3D Tiles yüzeyi (Cesium SampleHeightMostDetailed — çarpışma ağı / görünürlükten bağımsız)
+	TArray<double> Zin;
+	TArray<FVector> Out;
 	const int32 N = 40;
 	const double ZTop = B.Max.Z + 300000.0, ZBot = B.Min.Z - 300000.0;
 	for (int32 i = 0; i < N; ++i)
 	{
-		// çevre boyunca parametre (dikdörtgen)
 		const double T = (double)i / N * 4.0;
 		const int32 Side = FMath::Min(3, (int32)T);
 		const double F = T - Side;
@@ -2093,25 +2093,40 @@ bool ASmvGameMode::AlignRealRim()
 		default: P = FVector2D(C.X - Hs.X, C.Y + Hs.Y - 2.0 * Hs.Y * F); Nrm = FVector2D(-1, 0); break;
 		}
 		const double Span = FMath::Abs(Nrm.X) > 0 ? Hs.X : Hs.Y;
-		const FVector2D Pi = P - Nrm * FMath::Max(800.0, Span * 0.08);
-		const FVector2D Po = P + Nrm * FMath::Max(1200.0, Span * 0.10);
-		double Zi = 0, Zo = 0;
-		FHitResult Ht;
+		const FVector2D Pi = P - Nrm * FMath::Max(800.0, Span * 0.06);
+		const FVector2D Po = P + Nrm * FMath::Max(1500.0, Span * 0.08);
+		double Zi = 0;
 		if (!OwnHit(FVector(Pi.X, Pi.Y, ZTop), FVector(Pi.X, Pi.Y, ZBot), Zi)) continue;
-		if (!WorldSetup->TraceTiles(FVector(Po.X, Po.Y, ZTop), FVector(Po.X, Po.Y, ZBot), Ht)) continue;
-		Zo = Ht.ImpactPoint.Z;
-		Dz.Add((Zo - Zi) / 100.0);
+		Zin.Add(Zi);
+		Out.Add(FVector(Po.X, Po.Y, Zi));
 	}
-	if (Dz.Num() < 6)
+	if (Zin.Num() < 6)
 	{
-		SMV_KLOG(TEXT("Gerçek dünya kenar eşleme: yeterli örnek yok (%d/%d) — kırpma %s"), Dz.Num(), N, bClip ? TEXT("tamam") : TEXT("yok"));
+		SMV_KLOG(TEXT("Gerçek dünya kenar eşleme: harita kenarında zemin örneği az (%d/%d) — kırpma %s"), Zin.Num(), N, bClip ? TEXT("tamam") : TEXT("yok"));
+		bRimDone = true; RimAt = FPlatformTime::Seconds();
 		return bClip;
 	}
-	Dz.Sort();
-	const double Med = Dz[Dz.Num() / 2];
-	WorldSetup->ShiftVertical(Med);
-	SMV_KLOG(TEXT("Gerçek dünya kenar eşleme (%s, %s): kutu %.0f×%.0f m, %d örnek, fark ortanca %.1f m (aralık %.1f…%.1f) → karolar kaydırıldı; kırpma %s"),
-		*FabMapKey, *WorldSetup->SourceName(), B.GetSize().X / 100.0, B.GetSize().Y / 100.0, Dz.Num(), Med, Dz[0], Dz.Last(), bClip ? TEXT("tamam") : TEXT("yok"));
+	TWeakObjectPtr<ASmvGameMode> Weak(this);
+	const FString Key = FabMapKey;
+	const FVector Bs = B.GetSize();
+	WorldSetup->SampleSurfaceZ(Out, [Weak, Zin, Key, Bs, bClip](const TArray<double>& Zo, const TArray<bool>& Ok)
+	{
+		ASmvGameMode* Self = Weak.Get();
+		if (!Self || !Self->WorldSetup) return;
+		TArray<double> Dz;
+		for (int32 i = 0; i < Zo.Num() && i < Zin.Num(); ++i) if (Ok[i]) Dz.Add((Zo[i] - Zin[i]) / 100.0);
+		if (Dz.Num() >= 6)
+		{
+			Dz.Sort();
+			const double Med = Dz[Dz.Num() / 2];
+			Self->WorldSetup->ShiftVertical(Med);
+			SMV_KLOG(TEXT("Gerçek dünya kenar eşleme (%s, %s): kutu %.0f×%.0f m, %d örnek, fark ortanca %.1f m (aralık %.1f…%.1f) → karolar kaydırıldı; kırpma %s"),
+				*Key, *Self->WorldSetup->SourceName(), Bs.X / 100.0, Bs.Y / 100.0, Dz.Num(), Med, Dz[0], Dz.Last(), bClip ? TEXT("tamam") : TEXT("yok"));
+		}
+		else SMV_KLOG(TEXT("Gerçek dünya kenar eşleme (%s): karo yüksekliği örneklenemedi (%d/%d)"), *Key, Dz.Num(), Zo.Num());
+		Self->bRimDone = true;
+		Self->RimAt = FPlatformTime::Seconds();
+	});
 	return true;
 }
 
@@ -2151,7 +2166,7 @@ void ASmvGameMode::RetryWorldLoad()
 	FabLevels.Reset();
 	bFabSubsRequested = false;
 	bFabPlaced = false;
-	bRimPending = bRimDone = false; bTilesSkipped = false; RimAt = 0; FabPlacedBox = FBox(ForceInit);
+	bRimPending = bRimDone = bRimStarted = false; bTilesSkipped = false; RimAt = 0; FabPlacedBox = FBox(ForceInit);
 	SmvPhysics::SetClipRegion(nullptr, FBox2D(ForceInit));
 	if (!FabLevelPath.IsEmpty()) LoadFabLevel(FabLevelPath);
 	Gate.Begin(TEXT("ucus"), { ESmvLoad::World, ESmvLoad::Scenery, ESmvLoad::Atmos, ESmvLoad::Sitl, ESmvLoad::Shaders, ESmvLoad::Streaming, ESmvLoad::Warmup });

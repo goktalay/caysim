@@ -218,8 +218,8 @@ public:
 	double EndAt = 0; FString EndReasonPending;
 
 	// ---- gerçek dünya (Cesium) içine oturtulan Fab haritası ----
-	bool bRealSurround = false, bRimPending = false, bRimDone = false, bTilesSkipped = false;
-	double RimAt = 0;
+	bool bRealSurround = false, bRimPending = false, bRimDone = false, bRimStarted = false, bTilesSkipped = false;
+	double RimAt = 0, RimStartAt = 0;
 	FBox FabPlacedBox = FBox(ForceInit);
 	FString FabLevelPath;
 	bool LoadFabLevel(const FString& Level);

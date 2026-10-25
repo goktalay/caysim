@@ -27,6 +27,7 @@
 #include "Cesium3DTileset.h"
 #include "CesiumSunSky.h"
 #include "CesiumCreditSystem.h"
+#include "CesiumSampleHeightResult.h"
 #include "CesiumIonRasterOverlay.h"
 #include "CesiumPolygonRasterOverlay.h"
 #include "CesiumCartographicPolygon.h"
@@ -67,6 +68,7 @@ void ACaySimWorldSetup::Build(const FCaySimSession& Session, UHepgoClient* Clien
 	LoadProgress = 0.f;
 	CenterGroundMsl = Center.bHasAlt ? Center.Alt : 0.0;
 	ActiveSource = Source;
+	bLogTileStats = FParse::Param(FCommandLine::Get(), TEXT("CesiumStats"));
 
 #if !CAYSIM_WITH_CESIUM
 	if (Source == ECaySimWorldSource::CesiumIon || Source == ECaySimWorldSource::GooglePhotoreal)
@@ -275,6 +277,7 @@ void ACaySimWorldSetup::SetupCesiumIon()
 		Tiles->SetCreatePhysicsMeshes(true);
 		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
 		Tiles->ShowCreditsOnScreen = true;
+		Tiles->LogSelectionStats = bLogTileStats;
 		// Bing uydu dokusu
 		UCesiumIonRasterOverlay* Overlay = NewObject<UCesiumIonRasterOverlay>(Tiles, TEXT("Imagery"));
 		Overlay->IonAssetID = CesiumImageryAssetId;
@@ -381,6 +384,7 @@ void ACaySimWorldSetup::SetupGoogleIon()
 		Tiles->SetCreatePhysicsMeshes(true);
 		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
 		Tiles->ShowCreditsOnScreen = true;   // Google atıf zorunluluğu (logo + veri sağlayıcıları)
+		Tiles->LogSelectionStats = bLogTileStats;
 	}
 	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
@@ -457,6 +461,37 @@ bool ACaySimWorldSetup::TraceTiles(const FVector& Top, const FVector& Bottom, FH
 	}
 #endif
 	return false;
+}
+
+void ACaySimWorldSetup::SampleSurfaceZ(const TArray<FVector>& UnrealPoints, TFunction<void(const TArray<double>& UnrealZ, const TArray<bool>& bOk)> Done)
+{
+#if CAYSIM_WITH_CESIUM
+	ACesium3DTileset* T = ActiveTiles();
+	if (!T || UnrealPoints.Num() == 0) { Done(TArray<double>(), TArray<bool>()); return; }
+	TArray<FVector> Llh;
+	for (const FVector& P : UnrealPoints)
+	{
+		double Lon, Lat, H;
+		UnrealToGeo(P, Lon, Lat, H);
+		Llh.Add(FVector(Lon, Lat, 0.0));
+	}
+	TWeakObjectPtr<ACaySimWorldSetup> Self(this);
+	T->SampleHeightMostDetailed(Llh, FCesiumSampleHeightMostDetailedCallback::CreateLambda(
+		[Self, Done](ACesium3DTileset*, const TArray<FCesiumSampleHeightResult>& R, const TArray<FString>& Warnings)
+		{
+			TArray<double> Z; TArray<bool> Ok;
+			ACaySimWorldSetup* S = Self.Get();
+			for (const FCesiumSampleHeightResult& X : R)
+			{
+				Ok.Add(S && X.SampleSuccess);
+				Z.Add(S && X.SampleSuccess ? S->GeoToUnreal(X.LongitudeLatitudeHeight.X, X.LongitudeLatitudeHeight.Y, X.LongitudeLatitudeHeight.Z).Z : 0.0);
+			}
+			if (Warnings.Num()) UE_LOG(LogCaySim, Warning, TEXT("3D Tiles yükseklik örneği uyarısı: %s"), *Warnings[0]);
+			Done(Z, Ok);
+		}));
+#else
+	Done(TArray<double>(), TArray<bool>());
+#endif
 }
 
 bool ACaySimWorldSetup::ClipPolygon(const TArray<FVector>& UnrealPoints)
