@@ -22,6 +22,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "CollisionQueryParams.h"
 #include "UObject/UObjectIterator.h"
+#include "RHI.h"
 
 #if CAYSIM_WITH_CESIUM
 #include "CesiumGeoreference.h"
@@ -87,6 +88,18 @@ void ACaySimWorldSetup::Build(const FCaySimSession& Session, UHepgoClient* Clien
 	CenterGroundMsl = Center.bHasAlt ? Center.Alt : 0.0;
 	ActiveSource = Source;
 	bLogTileStats = FParse::Param(FCommandLine::Get(), TEXT("CesiumStats"));
+#if CAYSIM_WITH_CESIUM
+	// Google 3B karoları işçi kuyruğunda takılıyordu (500+ "Loading-Worker", hiç "Loading-Main", 0 glTF bileşeni; 1588 glb HTTP 200 ile
+	// indirilmişken): Cesium for Unreal glTF dokularını D3D12'de işçi iş parçacığında RHIAsyncCreateTexture2D + CompletionEvent->Wait() ile
+	// oluşturur (CesiumTextureResource.cpp createAsyncTextureAndWait) — UE 5.8 D3D12'de bu bekleme dönmüyor, karo hiç ana iş parçacığına
+	// geçmiyor. Arazi + Bing'de karo başına doku yok (bindirme ayrı, az sayıda) — o yüzden yalnız Google'da görülüyordu. Eşzamanlı doku
+	// oluşturma kapatılınca Cesium dokuyu oyun / çizim iş parçacığında kurar (D3D dışındaki bütün RHI'larda zaten böyle). -CesiumAsyncTex: eski yol.
+	if (GRHISupportsAsyncTextureCreation && !FParse::Param(FCommandLine::Get(), TEXT("CesiumAsyncTex")))
+	{
+		GRHISupportsAsyncTextureCreation = false;
+		UE_LOG(LogCaySim, Log, TEXT("3D Tiles: eşzamansız RHI doku oluşturma kapatıldı (Cesium glTF dokuları çizim iş parçacığında)"));
+	}
+#endif
 
 #if !CAYSIM_WITH_CESIUM
 	if (Source == ECaySimWorldSource::CesiumIon || Source == ECaySimWorldSource::GooglePhotoreal)
