@@ -1,4 +1,6 @@
 #include "CesiumWorldSetup.h"
+// spline başlıkları Cesium başlıklarından ÖNCE (Cesium yolu Windows min/max makrolarını tanımlayabiliyor; SplineMath.h std::numeric_limits<>::min() bozuluyordu)
+#include "Components/SplineComponent.h"
 #include "CaySim.h"
 #include "HepgoClient.h"
 #include "Engine/World.h"
@@ -24,7 +26,12 @@
 #include "CesiumIonRasterOverlay.h"
 #include "CesiumPolygonRasterOverlay.h"
 #include "CesiumCartographicPolygon.h"
-#include "Components/SplineComponent.h"
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 #endif
 
 ACaySimWorldSetup::ACaySimWorldSetup()
