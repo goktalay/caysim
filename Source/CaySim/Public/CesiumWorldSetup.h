@@ -18,6 +18,7 @@ class AVolumetricCloud;
 class ACesiumGeoreference;
 class ACesium3DTileset;
 class ACesiumSunSky;
+class ACesiumCreditSystem;
 #endif
 
 /** Dünya kaynağı seçimi (sihirbaz "Dünya" adımı). */
@@ -143,7 +144,9 @@ private:
 	TWeakObjectPtr<ACesium3DTileset> GoogleTiles;
 	TWeakObjectPtr<ACesiumSunSky> SunSky;
 	TWeakObjectPtr<AActor> ClipActor;
+	TWeakObjectPtr<ACesiumCreditSystem> CreditSys;
 	ACesium3DTileset* ActiveTiles() const;
+	ACesium3DTileset* SpawnTiles(ACesiumGeoreference* Geo);
 #endif
 
 	void SetupLighting();

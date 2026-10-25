@@ -23,6 +23,7 @@
 #include "CesiumGeoreference.h"
 #include "Cesium3DTileset.h"
 #include "CesiumSunSky.h"
+#include "CesiumCreditSystem.h"
 #include "CesiumIonRasterOverlay.h"
 #include "CesiumPolygonRasterOverlay.h"
 #include "CesiumCartographicPolygon.h"
@@ -257,7 +258,7 @@ void ACaySimWorldSetup::SetupCesiumIon()
 
 	if (!Terrain.IsValid())
 	{
-		ACesium3DTileset* Tiles = W->SpawnActor<ACesium3DTileset>();
+		ACesium3DTileset* Tiles = SpawnTiles(Geo);
 		if (!Tiles)
 		{
 			Finish(false);
@@ -305,7 +306,7 @@ void ACaySimWorldSetup::SetupGoogle(const FString& Key)
 	Geo->SetOriginLongitudeLatitudeHeight(FVector(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM));
 	if (!GoogleTiles.IsValid())
 	{
-		ACesium3DTileset* Tiles = W->SpawnActor<ACesium3DTileset>();
+		ACesium3DTileset* Tiles = SpawnTiles(Geo);
 		if (!Tiles)
 		{
 			Finish(false);
@@ -326,6 +327,36 @@ void ACaySimWorldSetup::SetupGoogle(const FString& Key)
 #endif
 }
 
+#if CAYSIM_WITH_CESIUM
+// Paketli oyunda ACesiumCreditSystem::GetDefaultCreditSystem tileset OnConstruction sırasında çöküyordu (erişim ihlali, BP yükleyici):
+// atıf sistemi önceden kurulur (Cesium BP'si — ekran atıfları — yoksa C++ taban sınıfı) ve tileset ertelenmiş doğuşla ona bağlanır.
+ACesium3DTileset* ACaySimWorldSetup::SpawnTiles(ACesiumGeoreference* Geo)
+{
+	UWorld* W = GetWorld();
+	if (!W) return nullptr;
+	if (!CreditSys.IsValid())
+	{
+		TArray<AActor*> Found;
+		UGameplayStatics::GetAllActorsOfClass(W, ACesiumCreditSystem::StaticClass(), Found);
+		if (Found.Num()) CreditSys = Cast<ACesiumCreditSystem>(Found[0]);
+		else
+		{
+			UClass* Bp = LoadClass<ACesiumCreditSystem>(nullptr, TEXT("/CesiumForUnreal/CesiumCreditSystemBP.CesiumCreditSystemBP_C"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+			FActorSpawnParameters Sp;
+			Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			CreditSys = W->SpawnActor<ACesiumCreditSystem>(Bp ? Bp : ACesiumCreditSystem::StaticClass(), FTransform::Identity, Sp);
+			UE_LOG(LogCaySim, Log, TEXT("Cesium atıf sistemi: %s"), Bp ? TEXT("CesiumCreditSystemBP (ekran atıfları)") : TEXT("C++ taban (ekran atıfı yok)"));
+		}
+	}
+	ACesium3DTileset* T = W->SpawnActorDeferred<ACesium3DTileset>(ACesium3DTileset::StaticClass(), FTransform::Identity, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!T) return nullptr;
+	if (CreditSys.IsValid()) T->SetCreditSystem(TSoftObjectPtr<ACesiumCreditSystem>(CreditSys.Get()));
+	if (Geo) T->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
+	T->FinishSpawning(FTransform::Identity);
+	return T;
+}
+#endif
+
 void ACaySimWorldSetup::SetupGoogleIon()
 {
 #if CAYSIM_WITH_CESIUM
@@ -337,7 +368,7 @@ void ACaySimWorldSetup::SetupGoogleIon()
 	Geo->SetOriginLongitudeLatitudeHeight(FVector(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM));
 	if (!GoogleTiles.IsValid())
 	{
-		ACesium3DTileset* Tiles = W->SpawnActor<ACesium3DTileset>();
+		ACesium3DTileset* Tiles = SpawnTiles(Geo);
 		if (!Tiles) { Finish(false); return; }
 		GoogleTiles = Tiles;
 		Tiles->SetTilesetSource(ETilesetSource::FromCesiumIon);
