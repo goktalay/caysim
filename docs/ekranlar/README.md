@@ -1,6 +1,6 @@
 # Simumav (UE5) — ekran görüntüleri
 
-Şirket bilgisayarında otomatik duman testiyle (ekransız çizim, `-RenderOffScreen`, Türkçe) çekildi; build 0cdf6d5. Yol haritası ekranları (docs/yol-haritasi.md): sade ana menü, Hangar sihirbazı, Parkur, Mürettebat, Uçuş akışı, deneyim ekranı. Gök/bulut/yansımalar gerçek pencerede daha canlı olabilir.
+Şirket bilgisayarında otomatik duman testiyle (ekransız çizim, `-RenderOffScreen`, Türkçe) çekildi; build 70f50d4. Yol haritası ekranları (docs/yol-haritasi.md): sade ana menü, Hangar sihirbazı, Parkur, Mürettebat, Uçuş akışı, deneyim ekranı. Fab haritaları gerçek konumlarına demirli; harita dışı Cesium World Terrain + Bing uydu (docs/fab-icerik.md). Gök/bulut/yansımalar gerçek pencerede daha canlı olabilir.
 
 ## 1. Açılış — logo + menü sahnesi hazırlık ilerlemesi (atmosfer hazır olmadan menü açılmaz)
 
@@ -353,3 +353,183 @@
 ## 88. Yükleme ekranı — Gemi savunma / Hexacopter (ilerleme ≥ %60)
 
 ![Yükleme ekranı — Gemi savunma / Hexacopter (ilerleme ≥ %60)](88_40_f5_load2.jpg)
+
+## 89. Uçuşa giriş karesi — Askerî Üs / rampa (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+
+![Uçuşa giriş karesi — Askerî Üs / rampa (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](89_45_f6_entry.jpg)
+
+## 90. Uçuş — Askerî Üs (Konya Karapınar) — sabit kanat (yerde)
+
+![Uçuş — Askerî Üs (Konya Karapınar) — sabit kanat (yerde)](90_45_f6_ground.jpg)
+
+## 91. Askerî Üs (Konya Karapınar) — sabit kanat — yüksek irtifada FPV / jet HUD
+
+![Askerî Üs (Konya Karapınar) — sabit kanat — yüksek irtifada FPV / jet HUD](91_45_f6_hfpv.jpg)
+
+## 92. Askerî Üs (Konya Karapınar) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+
+![Askerî Üs (Konya Karapınar) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](92_45_f6_high.jpg)
+
+## 93. Askerî Üs (Konya Karapınar) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
+
+![Askerî Üs (Konya Karapınar) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](93_45_f6_high2.jpg)
+
+## 94. Kalkış yöntemi — pnömatik rampa (fırlatma öncesi; HUD durumu)
+
+![Kalkış yöntemi — pnömatik rampa (fırlatma öncesi; HUD durumu)](94_45_f6_launch0.jpg)
+
+## 95. Kalkış yöntemi — pnömatik rampa (bırakmadan ~1 sn sonra)
+
+![Kalkış yöntemi — pnömatik rampa (bırakmadan ~1 sn sonra)](95_45_f6_launch1.jpg)
+
+## 96. Yükleme ekranı — Askerî Üs / rampa (~3 sn)
+
+![Yükleme ekranı — Askerî Üs / rampa (~3 sn)](96_45_f6_load.jpg)
+
+## 97. Yükleme ekranı — Askerî Üs / rampa (ilerleme ≥ %60)
+
+![Yükleme ekranı — Askerî Üs / rampa (ilerleme ≥ %60)](97_45_f6_load2.jpg)
+
+## 98. Uçuşa giriş karesi — Orman / araç üstü (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+
+![Uçuşa giriş karesi — Orman / araç üstü (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](98_50_f7_entry.jpg)
+
+## 99. Uçuş — Orman (Karabük Yenice) — sabit kanat (yerde)
+
+![Uçuş — Orman (Karabük Yenice) — sabit kanat (yerde)](99_50_f7_ground.jpg)
+
+## 100. Orman (Karabük Yenice) — sabit kanat — yüksek irtifada FPV / jet HUD
+
+![Orman (Karabük Yenice) — sabit kanat — yüksek irtifada FPV / jet HUD](100_50_f7_hfpv.jpg)
+
+## 101. Orman (Karabük Yenice) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+
+![Orman (Karabük Yenice) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](101_50_f7_high.jpg)
+
+## 102. Orman (Karabük Yenice) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
+
+![Orman (Karabük Yenice) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](102_50_f7_high2.jpg)
+
+## 103. Kalkış yöntemi — araç üstü fırlatma (fırlatma öncesi; HUD durumu)
+
+![Kalkış yöntemi — araç üstü fırlatma (fırlatma öncesi; HUD durumu)](103_50_f7_launch0.jpg)
+
+## 104. Kalkış yöntemi — araç üstü fırlatma (bırakmadan ~1 sn sonra)
+
+![Kalkış yöntemi — araç üstü fırlatma (bırakmadan ~1 sn sonra)](104_50_f7_launch1.jpg)
+
+## 105. Yükleme ekranı — Orman / araç üstü (~3 sn)
+
+![Yükleme ekranı — Orman / araç üstü (~3 sn)](105_50_f7_load.jpg)
+
+## 106. Yükleme ekranı — Orman / araç üstü (ilerleme ≥ %60)
+
+![Yükleme ekranı — Orman / araç üstü (ilerleme ≥ %60)](106_50_f7_load2.jpg)
+
+## 107. Uçuşa giriş karesi — Askerî Üs / elden atış (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+
+![Uçuşa giriş karesi — Askerî Üs / elden atış (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](107_55_f8_entry.jpg)
+
+## 108. Uçuş — Askerî Üs, altın saat — sabit kanat (yerde)
+
+![Uçuş — Askerî Üs, altın saat — sabit kanat (yerde)](108_55_f8_ground.jpg)
+
+## 109. Askerî Üs, altın saat — sabit kanat — yüksek irtifada FPV / jet HUD
+
+![Askerî Üs, altın saat — sabit kanat — yüksek irtifada FPV / jet HUD](109_55_f8_hfpv.jpg)
+
+## 110. Askerî Üs, altın saat — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+
+![Askerî Üs, altın saat — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](110_55_f8_high.jpg)
+
+## 111. Askerî Üs, altın saat — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
+
+![Askerî Üs, altın saat — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](111_55_f8_high2.jpg)
+
+## 112. Kalkış yöntemi — elden atış (fırlatma öncesi; HUD durumu)
+
+![Kalkış yöntemi — elden atış (fırlatma öncesi; HUD durumu)](112_55_f8_launch0.jpg)
+
+## 113. Kalkış yöntemi — elden atış (bırakmadan ~1 sn sonra)
+
+![Kalkış yöntemi — elden atış (bırakmadan ~1 sn sonra)](113_55_f8_launch1.jpg)
+
+## 114. Yükleme ekranı — Askerî Üs / elden atış (~3 sn)
+
+![Yükleme ekranı — Askerî Üs / elden atış (~3 sn)](114_55_f8_load.jpg)
+
+## 115. Yükleme ekranı — Askerî Üs / elden atış (ilerleme ≥ %60)
+
+![Yükleme ekranı — Askerî Üs / elden atış (ilerleme ≥ %60)](115_55_f8_load2.jpg)
+
+## 116. Uçuşa giriş karesi — Yarış Pisti / pist (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+
+![Uçuşa giriş karesi — Yarış Pisti / pist (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](116_60_f9_entry.jpg)
+
+## 117. Uçuş — Yarış Pisti (İstanbul Park) — sabit kanat (yerde)
+
+![Uçuş — Yarış Pisti (İstanbul Park) — sabit kanat (yerde)](117_60_f9_ground.jpg)
+
+## 118. Yarış Pisti (İstanbul Park) — sabit kanat — yüksek irtifada FPV / jet HUD
+
+![Yarış Pisti (İstanbul Park) — sabit kanat — yüksek irtifada FPV / jet HUD](118_60_f9_hfpv.jpg)
+
+## 119. Yarış Pisti (İstanbul Park) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+
+![Yarış Pisti (İstanbul Park) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](119_60_f9_high.jpg)
+
+## 120. Yarış Pisti (İstanbul Park) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
+
+![Yarış Pisti (İstanbul Park) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](120_60_f9_high2.jpg)
+
+## 121. Kalkış yöntemi — tekerlekli pist kalkışı (fırlatma öncesi; HUD durumu)
+
+![Kalkış yöntemi — tekerlekli pist kalkışı (fırlatma öncesi; HUD durumu)](121_60_f9_launch0.jpg)
+
+## 122. Kalkış yöntemi — tekerlekli pist kalkışı (bırakmadan ~1 sn sonra)
+
+![Kalkış yöntemi — tekerlekli pist kalkışı (bırakmadan ~1 sn sonra)](122_60_f9_launch1.jpg)
+
+## 123. Yükleme ekranı — Yarış Pisti / pist (~3 sn)
+
+![Yükleme ekranı — Yarış Pisti / pist (~3 sn)](123_60_f9_load.jpg)
+
+## 124. Yükleme ekranı — Yarış Pisti / pist (ilerleme ≥ %60)
+
+![Yükleme ekranı — Yarış Pisti / pist (ilerleme ≥ %60)](124_60_f9_load2.jpg)
+
+## 125. Uçuşa giriş karesi — Şehir / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+
+![Uçuşa giriş karesi — Şehir / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](125_65_f10_entry.jpg)
+
+## 126. Uçuş — Şehir (Ankara Yapracık) — VTOL (yerde)
+
+![Uçuş — Şehir (Ankara Yapracık) — VTOL (yerde)](126_65_f10_ground.jpg)
+
+## 127. Şehir (Ankara Yapracık) — VTOL — yüksek irtifada FPV / jet HUD
+
+![Şehir (Ankara Yapracık) — VTOL — yüksek irtifada FPV / jet HUD](127_65_f10_hfpv.jpg)
+
+## 128. Şehir (Ankara Yapracık) — VTOL — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+
+![Şehir (Ankara Yapracık) — VTOL — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](128_65_f10_high.jpg)
+
+## 129. Şehir (Ankara Yapracık) — VTOL — hedef irtifa (150–220 m): gerçek ufuk
+
+![Şehir (Ankara Yapracık) — VTOL — hedef irtifa (150–220 m): gerçek ufuk](129_65_f10_high2.jpg)
+
+## 130. Kalkış yöntemi — dikey kalkış (fırlatma öncesi; HUD durumu)
+
+![Kalkış yöntemi — dikey kalkış (fırlatma öncesi; HUD durumu)](130_65_f10_launch0.jpg)
+
+## 131. Kalkış yöntemi — dikey kalkış (bırakmadan ~1 sn sonra)
+
+![Kalkış yöntemi — dikey kalkış (bırakmadan ~1 sn sonra)](131_65_f10_launch1.jpg)
+
+## 132. Yükleme ekranı — Şehir / VTOL (~3 sn)
+
+![Yükleme ekranı — Şehir / VTOL (~3 sn)](132_65_f10_load.jpg)
+
+## 133. Yükleme ekranı — Şehir / VTOL (ilerleme ≥ %60)
+
+![Yükleme ekranı — Şehir / VTOL (ilerleme ≥ %60)](133_65_f10_load2.jpg)
