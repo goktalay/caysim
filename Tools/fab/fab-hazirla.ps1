@@ -39,16 +39,36 @@ $modelKlasorleri = New-Object System.Collections.ArrayList   # model dosyasi ice
 
 function Kopyala([string]$kaynak, [string]$hedef) {
 	# /XO: hedefte daha yeni olan dosya (fab_carpisma.py'nin duzelttigi ag) kaynaktan ezilmez; kaynak guncellenirse kopyalanir
-	robocopy $kaynak $hedef /MIR /XO /R:1 /W:1 /NP /NFL /NDL /NJH /XJ | Select-Object -Last 6 | ForEach-Object { if ("$_".Trim()) { Write-Host "    $_" } }
+	# *_BuiltData (harita isik haritalari / onceden hesaplanmis isik verisi) KOPYALANMAZ: proje r.AllowStaticLighting=False
+	# (Lumen + Ultra Dynamic Sky) - calisma aninda hic okunmaz. Pisirmede ise yuzlerce lightmap dokusu ayni anda insa
+	# ediliyordu (US_Military Showreel_Scene: 541 doku, tahmini ~95 GB) ve bellek tukenip pisirme 3 saat sessiz asili kaldi.
+	robocopy $kaynak $hedef /MIR /XO /R:1 /W:1 /NP /NFL /NDL /NJH /XJ /XF $script:builtDataDesen | Select-Object -Last 6 | ForEach-Object { if ("$_".Trim()) { Write-Host "    $_" } }
 	$rc = $LASTEXITCODE
 	if ($rc -ge 8) { Uyari "robocopy hata kodu $rc : $kaynak"; return $false }
+	BuiltDataSil $hedef
 	return $true
+}
+
+$script:builtDataDesen = @('*_BuiltData.uasset', '*_BuiltData.uexp', '*_BuiltData.ubulk')
+$script:builtDataSayi = 0; $script:builtDataBayt = [int64]0
+function BuiltDataSil([string]$kok) {
+	# /XF dislanan dosyalar /MIR ile hedeften de silinmez: onceki derlemelerden kalanlari kaldir
+	foreach ($f in (Get-ChildItem -LiteralPath $kok -Recurse -File -Filter '*_BuiltData.*' -ErrorAction SilentlyContinue)) {
+		$script:builtDataSayi++; $script:builtDataBayt += $f.Length
+		Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue
+	}
 }
 
 function PaketKopyala([string]$srcContent, [string]$etiket) {
 	# Content kökündeki harita/varlık dosyaları (ör. KitBash3D Refineries: Content\Main.umap -> /Game/Main)
 	foreach ($f in (Get-ChildItem -LiteralPath $srcContent -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.umap', '.uasset' })) {
 		if ($kopyalanan -contains $f.Name) { continue }
+		if ($f.Name -like '*_BuiltData.*') {
+			# isik verisi kopyalanmaz (Kopyala notu); onceki derlemeden kalan kok kopyasi silinir
+			$eski = Join-Path $content $f.Name
+			if (Test-Path -LiteralPath $eski) { $script:builtDataSayi++; $script:builtDataBayt += (Get-Item -LiteralPath $eski).Length; Remove-Item -LiteralPath $eski -Force }
+			continue
+		}
 		$hedefDosya = Join-Path $content $f.Name
 		if ((Test-Path -LiteralPath $hedefDosya) -and -not ($oncekiListe -contains $f.Name)) { Uyari "atlandi (projede ayni adli dosya var): $etiket\$($f.Name)"; continue }
 		$h = Get-Item -LiteralPath $hedefDosya -ErrorAction SilentlyContinue
@@ -174,18 +194,53 @@ try {
 	}
 
 	# ---------------- b) FabLibrary FBX/OBJ ürünleri ----------------
+	if ($script:builtDataSayi -gt 0) { Bilgi ("harita isik verisi (*_BuiltData) disarida birakildi: {0} dosya, {1:N0} MB (r.AllowStaticLighting=False)" -f $script:builtDataSayi, ($script:builtDataBayt / 1MB)) }
+	else { Bilgi "harita isik verisi (*_BuiltData): projede yok (kopyalanmaz)" }
 	$isler = @()
 	$imzalar = @{}
 	$lib = Join-Path $Vault 'FabLibrary'
 	$droneAlindi = $false
 	# Blender (yalniz .blend olarak inen urunler icin: arka planda GLB'ye donusturulur)
+	# sira: BLENDER_EXE (vars) > kayit defteri (kaldirma kaydi InstallLocation, .blend dosya iliskisi, App Paths) > bilinen klasorler > PATH.
+	# Not: Microsoft Store (WindowsApps) ve kullanici profiline (AppData\Local\Programs) kurulan Blender'i runner hesabi
+	# (NETWORK SERVICE) cogu zaman okuyamaz - bu durumda bulunan ama erisilemeyen yol uyari olarak yazilir.
 	$blender = $null
-	foreach ($bk in @('C:\Program Files\Blender Foundation', 'C:\Program Files (x86)\Blender Foundation', 'C:\claude', 'C:\Program Files\Steam\steamapps\common', 'C:\Program Files (x86)\Steam\steamapps\common')) {
-		$bf = Get-ChildItem -Path $bk -Filter blender.exe -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
-		if ($bf) { $blender = $bf.FullName; break }
+	$blenderAday = New-Object System.Collections.ArrayList
+	if ($env:BLENDER_EXE) { [void]$blenderAday.Add($env:BLENDER_EXE) }
+	foreach ($rk in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*', 'Registry::HKEY_USERS\*\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+		foreach ($k in (Get-ItemProperty -Path $rk -ErrorAction SilentlyContinue | Where-Object { "$($_.DisplayName)" -match '(?i)^blender' })) {
+			if ($k.InstallLocation) { [void]$blenderAday.Add((Join-Path $k.InstallLocation 'blender.exe')) }
+			if ($k.DisplayIcon) { [void]$blenderAday.Add(("$($k.DisplayIcon)" -replace '^"|",?\d*$|,\d+$', '')) }
+		}
+	}
+	foreach ($rk in @('Registry::HKEY_CLASSES_ROOT\blendfile\shell\open\command', 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\blender.exe')) {
+		$v = (Get-ItemProperty -Path $rk -ErrorAction SilentlyContinue).'(default)'
+		if ($v -and ("$v" -match '"?([^"]*blender[^"]*\.exe)"?')) { [void]$blenderAday.Add($Matches[1]) }
+	}
+	foreach ($a in $blenderAday) {
+		if ($a -and $a -like '*.exe') {
+			if (Test-Path -LiteralPath $a -PathType Leaf) { $blender = $a; break }
+			Uyari "Blender kaydi var ama runner hesabi dosyaya erisemiyor: $a (C:\Program Files altina 'tum kullanicilar' kurulumu ya da vars.BLENDER_EXE)"
+		}
+	}
+	if (-not $blender) {
+		foreach ($bk in @('C:\Program Files\Blender Foundation', 'C:\Program Files (x86)\Blender Foundation', 'D:\Program Files\Blender Foundation', 'C:\Blender', 'D:\Blender', 'C:\claude', 'C:\Program Files\Steam\steamapps\common', 'C:\Program Files (x86)\Steam\steamapps\common')) {
+			$bf = Get-ChildItem -Path $bk -Filter blender.exe -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+			if ($bf) { $blender = $bf.FullName; break }
+		}
+	}
+	if (-not $blender) {
+		foreach ($u in (Get-ChildItem -Path 'C:\Users' -Directory -ErrorAction SilentlyContinue)) {
+			$bf = Get-ChildItem -Path (Join-Path $u.FullName 'AppData\Local\Programs') -Filter blender.exe -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+			if ($bf) { $blender = $bf.FullName; break }
+		}
 	}
 	if (-not $blender) { $bc = Get-Command blender.exe -ErrorAction SilentlyContinue; if ($bc) { $blender = $bc.Source } }
+	if (-not $blender -and (Test-Path -LiteralPath 'C:\Program Files\WindowsApps' -ErrorAction SilentlyContinue)) {
+		Bilgi "Blender Microsoft Store'dan kurulduysa runner hesabi calistiramaz: blender.org MSI (tum kullanicilar) kurun ya da vars.BLENDER_EXE verin"
+	}
 	Bilgi "Blender: $(if ($blender) { $blender } else { 'yok (.blend urunleri atlanir)' })"
+	if ($blender) { & $blender --version 2>&1 | Select-Object -First 1 | ForEach-Object { Bilgi "Blender surumu: $_" } }
 	$donusum = Join-Path $Proje 'Intermediate\FabModel'
 	function EnBuyuk([string]$kok, [string[]]$uzantilar) {
 		return Get-ChildItem -LiteralPath $kok -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $uzantilar -contains $_.Extension.ToLower() } | Sort-Object Length -Descending | Select-Object -First 1

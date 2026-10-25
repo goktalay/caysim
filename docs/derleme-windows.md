@@ -96,6 +96,8 @@ Runner hizmet hesabı da bu klasöre yazabilmeli. Ağdaki başka makinelerle pay
 | `STEAM_USERNAME` | Secret | yalnız yükleme yetkili hesap |
 | `STEAM_CONFIG_VDF` | Secret | base64 `config.vdf` (docs/steam-yayin.md §6) |
 | `CESIUM_ION_TOKEN` | Secret | isteğe bağlı |
+| `BLENDER_EXE` | Variable | isteğe bağlı: `blender.exe` tam yolu (yalnız `.blend` inen Fab modelleri için; yoksa kayıt defteri + `C:\Program Files\Blender Foundation` aranır) |
+| `RUNNER_LABEL` | Variable | push derlemelerinin runner etiketi (ör. `unreal5080`) |
 
 ## 3. Yerel derleme (geliştirici)
 ```powershell
@@ -135,3 +137,5 @@ Development artefaktı gerekirse: Actions → build-windows → Run workflow →
 | Harita üretilemedi (CI) | PythonScriptPlugin + EditorScriptingUtilities açık mı; `Saved\Logs` |
 | Mission Planner veri görmüyor | Ayarlar → Mission Planner UDP çıkışı; MP'de UDP 14550; uçuş başladıktan sonra bağlanın |
 | Gerçek arazi yerine prosedürel | Cesium belirteci yok/yanlış (Ayarlar → Cesium ion belirteci) |
+| Pişirme saatlerce sessiz (günlük bir doku satırında duruyor) | Bellek tükenmesi: 9cada62'de US_Military `Showreel_Scene_BuiltData`'nın 541 lightmap dokusu aynı anda inşa edildi (tahmini ~95 GB, boş sanal bellek < 1 GB) ve pişirme 3 saat asılı kaldı. Önlem 1: `fab-hazirla.ps1` haritaların `*_BuiltData` (ışık haritası) paketlerini kopyalamaz — proje `r.AllowStaticLighting=False` (Lumen + UDS), çalışma anında okunmazlar. Önlem 2: paketleme adımları `Tools/ci/bekci.ps1` ile çalışır: 30 dk (`SMV_BEKCI_DK`) yeni satır yoksa bellek / süreç dökümü, süreç ağacı sonlandırılır ve doku derleme eşzamanlılığı 4'e sınırlanarak BİR KEZ yeniden denenir. Sayfa dosyasını sistem yönetimli (≥ 32 GB) tutun |
+| Blender kurulu ama "Blender: yok" | Runner NETWORK SERVICE: Microsoft Store / kullanıcı profili kurulumunu göremez. blender.org MSI'ı "tüm kullanıcılar" için `C:\Program Files\Blender Foundation` altına kurun ya da `BLENDER_EXE` değişkenini verin |
