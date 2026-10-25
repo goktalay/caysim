@@ -27,7 +27,7 @@ void FSmvLoadGate::Begin(const FString& InLabel, std::initializer_list<ESmvLoad>
 	Shown = 0.f;
 	for (int32 i = 0; i < (int32)ESmvLoad::Num; ++i) { Stages[i] = FSmvLoadStage(); Stages[i].bUsed = false; Stages[i].bDone = true; Stages[i].Progress = 1.f; }
 	for (ESmvLoad S : Used) { FSmvLoadStage& St = Stages[(int32)S]; St.bUsed = true; St.bDone = false; St.Progress = 0.f; }
-	UE_LOG(LogSimumav, Log, TEXT("SMVLOAD [%s] başladı"), *LabelStr);
+	SMV_KLOG(TEXT("SMVLOAD [%s] başladı"), *LabelStr);
 }
 
 double FSmvLoadGate::Elapsed() const { return bActive ? FPlatformTime::Seconds() - T0 : 0.0; }
@@ -36,7 +36,7 @@ void FSmvLoadGate::Fail(ESmvLoad S, const FString& Reason)
 {
 	if (bFailed) return;
 	bFailed = true; FailText = Reason; FailStage = S;
-	UE_LOG(LogSimumav, Error, TEXT("SMVLOAD [%s] %s BAŞARISIZ (%.0f sn): %s"), *LabelStr, StageLogName(S), Elapsed(), *Reason);
+	SMV_KLOG(TEXT("SMVLOAD [%s] %s BAŞARISIZ (%.0f sn): %s"), *LabelStr, StageLogName(S), Elapsed(), *Reason);
 }
 
 bool FSmvLoadGate::IsDone() const
@@ -57,12 +57,12 @@ void FSmvLoadGate::Update(ESmvLoad S, float Progress, bool bReady, const FString
 	if (St.StableFrames >= FMath::Max(1, StableNeed))
 	{
 		St.bDone = true; St.Progress = 1.f; St.DoneAt = T;
-		UE_LOG(LogSimumav, Log, TEXT("SMVLOAD [%s] %s tamam: %.2f sn%s%s"), *LabelStr, StageLogName(S), T, Detail.IsEmpty() ? TEXT("") : TEXT(" — "), *Detail);
+		SMV_KLOG(TEXT("SMVLOAD [%s] %s tamam: %.2f sn%s%s"), *LabelStr, StageLogName(S), T, Detail.IsEmpty() ? TEXT("") : TEXT(" — "), *Detail);
 	}
 	else if (T > TimeoutS)
 	{
 		St.bDone = true; St.bTimeout = true; St.DoneAt = T;
-		UE_LOG(LogSimumav, Warning, TEXT("SMVLOAD [%s] %s ZAMAN AŞIMI (%.0f sn; ilerleme %%%.0f)%s%s"), *LabelStr, StageLogName(S), TimeoutS, St.Progress * 100.f,
+		SMV_KLOG(TEXT("SMVLOAD [%s] %s ZAMAN AŞIMI (%.0f sn; ilerleme %%%.0f)%s%s"), *LabelStr, StageLogName(S), TimeoutS, St.Progress * 100.f,
 			Detail.IsEmpty() ? TEXT("") : TEXT(" — "), *Detail);
 		St.Progress = 1.f;
 	}
@@ -98,7 +98,7 @@ void FSmvLoadGate::LogSummary()
 		if (!Stages[i].bUsed) continue;
 		S += FString::Printf(TEXT(" %s=%.2f%s"), StageLogName((ESmvLoad)i), Stages[i].DoneAt, Stages[i].bTimeout ? TEXT("(zaman aşımı)") : TEXT(""));
 	}
-	UE_LOG(LogSimumav, Log, TEXT("SMVLOAD [%s] TAMAM toplam %.2f sn —%s"), *LabelStr, Elapsed(), *S);
+	SMV_KLOG(TEXT("SMVLOAD [%s] TAMAM toplam %.2f sn —%s"), *LabelStr, Elapsed(), *S);
 }
 
 const TCHAR* FSmvLoadGate::StageKey(ESmvLoad S)

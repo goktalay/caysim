@@ -236,7 +236,7 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		if (bBootGate && BootReadyAt < 0 && Now - LogoAt > 0.5 && (!Sc || Sc->IsSceneReady() || Now - LogoAt > 45.0))
 		{
 			BootReadyAt = Now;
-			UE_LOG(LogTemp, Display, TEXT("SMOKE boot hazır %.2f sn (%s)"), Now - LogoAt, !Sc ? TEXT("sahne yok") : Sc->IsSceneReady() ? TEXT("sahne hazır") : TEXT("zaman aşımı"));
+			SMV_KLOG(TEXT("SMOKE boot hazır %.2f sn (%s)"), Now - LogoAt, !Sc ? TEXT("sahne yok") : Sc->IsSceneReady() ? TEXT("sahne hazır") : TEXT("zaman aşımı"));
 		}
 		const double End = FMath::Max(LogoAt + 3.6, bBootGate ? (BootReadyAt > 0 ? BootReadyAt + 0.8 : Now + 10.0) : LogoAt + 3.6);
 		const double T = FMath::Min(Now - LogoAt, 3.0);
@@ -4777,13 +4777,27 @@ void SSmvShell::TickSmoke()
 	static FString SmokeLang;
 	static const bool bLang = FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeLang="), SmokeLang) && !SmokeLang.IsEmpty();
 	static int32 NFlights = -1;
-	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 5); }
+	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 10); }
+	// -SmvSmokeOnly=6,7: yalnız bu uçuşlar (1 tabanlı) · -SmvSmokeNoTour: ekran turu atlanır
+	static TArray<int32> OnlyFl;
+	static bool bOnlyInit = false;
+	if (!bOnlyInit)
+	{
+		bOnlyInit = true;
+		FString Only;
+		if (FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeOnly="), Only))
+		{
+			TArray<FString> Parts; Only.ParseIntoArray(Parts, TEXT(","), true);
+			for (const FString& X : Parts) OnlyFl.Add(FCString::Atoi(*X) - 1);
+		}
+	}
+	static const bool bSkipTour = FParse::Param(FCommandLine::Get(), TEXT("SmvSmokeNoTour"));
 	if (SmokeStep < 0)
 	{
 		// açılış: logo + menü sahnesi kapısı görüntüsü (00_boot), sahne hazır olunca tur başlar
 		SmokeStep = 0; SmokeAt = Now + 1.5; SmokeBoot = 0;
 		FSmvUiPrefs::Get().bTutorialDone = true; FSmvUiPrefs::Get().bFlightTipsDone = true;
-		if (bLang) { FSmvI18n::SetLanguage(SmokeLang); Refresh(); UE_LOG(LogTemp, Display, TEXT("SMOKE lang %s"), *SmokeLang); }
+		if (bLang) { FSmvI18n::SetLanguage(SmokeLang); Refresh(); SMV_KLOG(TEXT("SMOKE lang %s"), *SmokeLang); }
 		if (bOverlay) CloseOverlay();
 		return;
 	}
@@ -4793,14 +4807,14 @@ void SSmvShell::TickSmoke()
 	{
 		TourShotAt = 0;
 		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke")))) / (TourShotName + TEXT(".png")), true, false);
-		UE_LOG(LogTemp, Display, TEXT("SMOKE shot %s"), *TourShotName);
+		SMV_KLOG(TEXT("SMOKE shot %s"), *TourShotName);
 	}
 	if (Now < SmokeAt) return;
-	if (SmokeBoot == 0) { SmokeBoot = 1; SmokeBootT0 = Now; FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke")))) / TEXT("00_boot.png"), true, false); UE_LOG(LogTemp, Display, TEXT("SMOKE shot 00_boot")); SmokeAt = Now + 0.5; return; }
+	if (SmokeBoot == 0) { SmokeBoot = 1; SmokeBootT0 = Now; FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke")))) / TEXT("00_boot.png"), true, false); SMV_KLOG(TEXT("SMOKE shot 00_boot")); SmokeAt = Now + 0.5; return; }
 	if (SmokeBoot == 1)
 	{
 		if (!BootFinished() && Now - SmokeBootT0 < 60.0) { SmokeAt = Now + 0.5; return; }
-		UE_LOG(LogTemp, Display, TEXT("SMOKE boot bitti (%.1f sn bekleme)"), Now - SmokeBootT0);
+		SMV_KLOG(TEXT("SMOKE boot bitti (%.1f sn bekleme)"), Now - SmokeBootT0);
 		SmokeBoot = 2; SmokeAt = Now + 1.0; return;
 	}
 	// yol haritası turu: sade menü + Pilot menüsü, Hangar (+ Yeni sihirbazının 6 adımı), Parkur (merkez, Karşılaşma listesi + harita içi tur, Özel / Gerçek
@@ -4839,8 +4853,9 @@ void SSmvShell::TickSmoke()
 	};
 	const int32 NS = UE_ARRAY_COUNT(Steps);
 	const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke"))));
-	auto Shot = [&Dir](const FString& Name) { FScreenshotRequest::RequestScreenshot(Dir / (Name + TEXT(".png")), true, false); UE_LOG(LogTemp, Display, TEXT("SMOKE shot %s"), *Name); };
+	auto Shot = [&Dir](const FString& Name) { FScreenshotRequest::RequestScreenshot(Dir / (Name + TEXT(".png")), true, false); SMV_KLOG(TEXT("SMOKE shot %s"), *Name); };
 	// ekranlar: çift yarım adım = ekranı aç, tek = görüntü al
+	if (bSkipTour && SmokeStep / 2 < NS) SmokeStep = NS * 2;
 	const int32 I = SmokeStep / 2;
 	if (I < NS)
 	{
@@ -4929,7 +4944,8 @@ void SSmvShell::TickSmoke()
 	}
 	// uçuşlar (yerel SITL): Fab haritası + saat/hava; yer → kalkış (GPS/EKF hazır olunca kuyruktan) → ~10 m askı → (ilk uçuşta FPV/HUD, duraklatma, özet)
 	// Not: ekran görüntüsü sonraki karede çizilir — görüntü ile durum değiştiren eylem aynı adımda yapılmaz.
-	struct FFl { const TCHAR* Map; const TCHAR* Tod; const TCHAR* Wx; const TCHAR* Code; bool bFull; const TCHAR* Vehicle = nullptr; const TCHAR* Model = nullptr; const TCHAR* Mode = nullptr; };
+	struct FFl { const TCHAR* Map; const TCHAR* Tod; const TCHAR* Wx; const TCHAR* Code; bool bFull; const TCHAR* Vehicle = nullptr; const TCHAR* Model = nullptr; const TCHAR* Mode = nullptr;
+		const TCHAR* Launch = nullptr; float TakeoffAlt = 0.f; };
 	static const FFl Fls[] = {
 		{ TEXT("orman"), TEXT("dusk"), TEXT("rain"), TEXT("f1"), true },
 		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f2"), false },
@@ -4939,10 +4955,20 @@ void SSmvShell::TickSmoke()
 		{ TEXT("proc"), TEXT("golden"), TEXT("clear"), TEXT("f4"), false, TEXT("vtol") },
 		// gemi savunma (Fab Mogami fırkateyni korunacak nesne; yalnız görsel) + Fab Askerî Hexacopter gövdesi
 		{ TEXT("proc"), TEXT("day"), TEXT("clear"), TEXT("f5"), false, nullptr, TEXT("fab:hexa"), TEXT("ship_defense") },
+		// sabit kanat: kalkış yöntemleri + yüksek irtifa / hızlı uçuş (harita dışına çıkınca gerçek dünya: Google 3B / arazi)
+		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f6"), false, TEXT("plane"), nullptr, nullptr, TEXT("ramp"), 220.f },
+		{ TEXT("orman"), TEXT("day"), TEXT("clear"), TEXT("f7"), false, TEXT("plane"), nullptr, nullptr, TEXT("vehicle"), 180.f },
+		{ TEXT("kosk"), TEXT("day"), TEXT("clear"), TEXT("f8"), false, TEXT("plane"), nullptr, nullptr, TEXT("hand"), 160.f },
+		{ TEXT("pist"), TEXT("day"), TEXT("clear"), TEXT("f9"), false, TEXT("plane"), nullptr, nullptr, TEXT("wheels"), 200.f },
+		// VTOL dikey 150 m: şehir kenarının gerçek dünyadaki görünümü
+		{ TEXT("sehir"), TEXT("day"), TEXT("clear"), TEXT("f10"), false, TEXT("vtol"), nullptr, nullptr, nullptr, 150.f },
 	};
-	if (SmokeFl >= NFlights)
+	const int32 NFl = UE_ARRAY_COUNT(Fls);
+	// yalnız seçilen uçuşlar (-SmvSmokeOnly)
+	while (OnlyFl.Num() && SmokeSub == 0 && SmokeFl < NFl && !OnlyFl.Contains(SmokeFl)) ++SmokeFl;
+	if (SmokeFl >= (OnlyFl.Num() ? NFl : FMath::Min(NFlights, NFl)))
 	{
-		UE_LOG(LogTemp, Display, TEXT("SMOKE done"));
+		SMV_KLOG(TEXT("SMOKE done"));
 		FPlatformMisc::RequestExit(false);
 		SmokeAt = Now + 100.0;
 		return;
@@ -4977,7 +5003,7 @@ void SSmvShell::TickSmoke()
 			Flow->Draft.Track.World.TreeDensity = 0.45;
 		}
 		else if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Fx.Map)) Flow->Draft.Track = FSmvFabContent::MakeTrack(*M);
-		else UE_LOG(LogTemp, Display, TEXT("SMOKE map %s yok — varsayılan parkur"), Fx.Map);
+		else SMV_KLOG(TEXT("SMOKE map %s yok — varsayılan parkur"), Fx.Map);
 		if (Fx.Vehicle)
 		{
 			Flow->Draft.Drone.Type = Fx.Vehicle;
@@ -4986,13 +5012,15 @@ void SSmvShell::TickSmoke()
 		if (Fx.Model)
 			if (const FSmvCatalogModel* Cm = USmvDataService::FindModel(Fx.Model)) { Flow->Draft.Drone.Type = Cm->Type; Flow->Draft.Drone.ModelKey = Cm->Key; }
 		if (Fx.Mode) Flow->Draft.GameMode = Fx.Mode;
+		Flow->Draft.Launch = FSmvLaunch();
+		if (Fx.Launch) { Flow->Draft.Launch.Method = Fx.Launch; Flow->Draft.Launch.AngleDeg = 15; Flow->Draft.Launch.ReleaseKmh = 70; }
 		Flow->Draft.Track.TimeOfDay = Fx.Tod;
 		Flow->Draft.Track.Weather = Fx.Wx;
 		Flow->Draft.bHasMission = false;
-		UE_LOG(LogTemp, Display, TEXT("SMOKE flight %s map=%s tod=%s wx=%s"), Fx.Code, *Flow->Draft.Track.WorldMode, Fx.Tod, Fx.Wx);
+		SMV_KLOG(TEXT("SMOKE flight %s map=%s tod=%s wx=%s"), Fx.Code, *Flow->Draft.Track.WorldMode, Fx.Tod, Fx.Wx);
 		StartFromWizard();
 		SmokeDeadline = Now + 180.0; SmokeAt = Now + 0.2; ++SmokeSub;
-		LoadT0 = Now; LoadShots = 0;
+		LoadT0 = Now; LoadShots = 0; SmokeRetries = 0;
 		return;
 	}
 	case 1:
@@ -5001,24 +5029,57 @@ void SSmvShell::TickSmoke()
 		// bu arada iki yükleme karesi (_load ~3 sn, _load2 ilerleme %60 ya da 20 sn), Uçuş'ta giriş karesi (_entry) ve 5 sn sonrası (_ground)
 		if (Flow->GetScreen() == ESmvScreen::Loading && Now < SmokeDeadline)
 		{
+			// yükleme başarısız (harita / zemin / karolar): görüntü + bir kez yeniden dene; yine olmazsa uçuş atlanır
+			if (GameMode.IsValid() && GameMode->GetLoadGate().IsFailed())
+			{
+				SMV_KLOG(TEXT("SMOKE load FAILED %s (deneme %d): %s"), Fx.Code, SmokeRetries, *GameMode->GetLoadGate().FailReason());
+				Shot(Base + (SmokeRetries == 0 ? TEXT("_fail") : TEXT("_fail2")));
+				if (SmokeRetries++ == 0) { GameMode->RetryWorldLoad(); SmokeDeadline = Now + 150.0; SmokeAt = Now + 1.0; return; }
+				Flow->EndFlight(TEXT("abort")); SmokeAt = Now + 6.0; SmokeSub = 99; return;
+			}
 			const float P = GameMode.IsValid() ? GameMode->GetLoadGate().Overall() : 0.f;
 			if (LoadShots == 0 && Now - LoadT0 >= 3.0) { Shot(Base + TEXT("_load")); ++LoadShots; }
 			else if (LoadShots == 1 && (P >= 0.6f || Now - LoadT0 >= 20.0)) { Shot(Base + TEXT("_load2")); ++LoadShots; }
 			SmokeAt = Now + 0.25; return;
 		}
-		UE_LOG(LogTemp, Display, TEXT("SMOKE entry %s: %.1f sn yükleme (ekran %d, tele %d, pos_ready %d)"), Fx.Code, Now - LoadT0, (int32)Flow->GetScreen(), bTele ? 1 : 0, Ready);
+		SMV_KLOG(TEXT("SMOKE entry %s: %.1f sn yükleme (ekran %d, tele %d, pos_ready %d)"), Fx.Code, Now - LoadT0, (int32)Flow->GetScreen(), bTele ? 1 : 0, Ready);
 		SmokeAt = Now + 0.7; SmokeSub = 40; return;
 	}
 	case 40: Shot(Base + TEXT("_entry")); SmokeAt = Now + 5.0; SmokeSub = 41; return;
 	case 41: Shot(Base + TEXT("_ground")); SmokeAt = Now + 0.8; SmokeSub = 3; return;
 	case 2: Shot(Base + TEXT("_ground")); SmokeAt = Now + 0.8; ++SmokeSub; return;
 	case 3:
-		UE_LOG(LogTemp, Display, TEXT("SMOKE takeoff (pos_ready=%d)"), Ready);
-		if (GameMode.IsValid()) GameMode->UiAction(TEXT("Takeoff"), FString());
-		SmokeDeadline = Now + 75.0; SmokeAt = Now + 1.0; ++SmokeSub; return;
+		SMV_KLOG(TEXT("SMOKE takeoff (pos_ready=%d, yöntem %s, irtifa %.0f)"), Ready, Fx.Launch ? Fx.Launch : TEXT("-"), Fx.TakeoffAlt);
+		if (GameMode.IsValid())
+		{
+			if (Fx.TakeoffAlt > 0.f) GameMode->SmokeTakeoff(Fx.TakeoffAlt);
+			else GameMode->UiAction(TEXT("Takeoff"), FString());
+		}
+		SmokeDeadline = Now + 75.0; SmokeAt = Now + 1.0;
+		if (Fx.TakeoffAlt > 0.f) { SmokeSub = 50; SmokeT1 = Now; return; }
+		++SmokeSub; return;
+	// yüksek irtifa / kalkış yöntemi uçuşu: fırlatma öncesi (_launch0), bırakmadan sonra (_launch1), 110 m (_high), hedef irtifa (_high2), FPV (_hfpv)
+	case 50:
+		if (Now - SmokeT1 < ((Fx.Launch && FCString::Strcmp(Fx.Launch, TEXT("hand")) == 0) ? 1.6 : 1.0)) { SmokeAt = Now + 0.1; return; }
+		Shot(Base + TEXT("_launch0")); SmokeAt = Now + 0.5; SmokeSub = 51; SmokeDeadline = Now + 60.0; return;
+	case 51:
+		if (Alt < 4.f && Now < SmokeDeadline) { SmokeAt = Now + 0.1; return; }
+		SmokeAt = Now + 1.2; SmokeSub = 52; return;
+	case 52: Shot(Base + TEXT("_launch1")); SmokeAt = Now + 0.8; SmokeSub = 53; SmokeDeadline = Now + 120.0; return;
+	case 53:
+		if (Alt < 110.f && Now < SmokeDeadline) { SmokeAt = Now + 0.5; return; }
+		SMV_KLOG(TEXT("SMOKE high %s alt=%.0f"), Fx.Code, Alt);
+		Shot(Base + TEXT("_high")); SmokeAt = Now + 0.8; SmokeSub = 54; SmokeDeadline = Now + 90.0; return;
+	case 54:
+		if (Alt < Fx.TakeoffAlt - 12.f && Now < SmokeDeadline) { SmokeAt = Now + 0.5; return; }
+		SmokeAt = Now + 3.0; SmokeSub = 55; return;
+	case 55: SMV_KLOG(TEXT("SMOKE high2 %s alt=%.0f"), Fx.Code, Alt); Shot(Base + TEXT("_high2")); SmokeAt = Now + 0.8; SmokeSub = 56; return;
+	case 56: if (GameMode.IsValid()) GameMode->SmokeCam(1); SmokeAt = Now + 3.0; SmokeSub = 57; return;
+	case 57: Shot(Base + TEXT("_hfpv")); SmokeAt = Now + 0.8; SmokeSub = 58; return;
+	case 58: if (GameMode.IsValid()) GameMode->SmokeCam(0); SmokeAt = Now + 1.0; SmokeSub = 11; return;
 	case 4:
 		if (Alt < 8.5f && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
-		UE_LOG(LogTemp, Display, TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);
+		SMV_KLOG(TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);
 		SmokeAt = Now + 4.0; ++SmokeSub; return;
 	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.bFull ? 20 : Fx.Vehicle ? 13 : 11; return;
 	// fare doğrulaması: alt banttaki "Panel" düğmesine sentetik sol tık → panel açık/kapalı değişmeli (günlük: SMOKE mouse ... panel)
@@ -5026,13 +5087,13 @@ void SSmvShell::TickSmoke()
 	{
 		const bool b0 = GameMode.IsValid() && GameMode->SmokePanelOpen();
 		if (GameMode.IsValid()) GameMode->SmokeClick(0.104f, 0.978f, TEXT("panel"));
-		UE_LOG(LogTemp, Display, TEXT("SMOKE mouse panel once=%d"), b0 ? 1 : 0);
+		SMV_KLOG(TEXT("SMOKE mouse panel once=%d"), b0 ? 1 : 0);
 		SmokeAt = Now + 1.0; ++SmokeSub; return;
 	}
 	case 21:
 	{
 		const bool b1 = GameMode.IsValid() && GameMode->SmokePanelOpen();
-		UE_LOG(LogTemp, Display, TEXT("SMOKE mouse panel sonra=%d"), b1 ? 1 : 0);
+		SMV_KLOG(TEXT("SMOKE mouse panel sonra=%d"), b1 ? 1 : 0);
 		if (GameMode.IsValid()) GameMode->SmokeClick(0.104f, 0.978f, TEXT("panel-geri"));
 		SmokeAt = Now + 1.0; SmokeSub = 6; return;
 	}
@@ -5042,7 +5103,7 @@ void SSmvShell::TickSmoke()
 	case 9: Shot(TEXT("23_pause")); SmokeAt = Now + 0.8; ++SmokeSub; return;
 	case 10: if (GameMode.IsValid()) GameMode->TogglePause(); SmokeAt = Now + 1.0; ++SmokeSub; return;
 	case 11:
-		UE_LOG(LogTemp, Display, TEXT("SMOKE end %s alt=%.1f"), Fx.Code, Alt);
+		SMV_KLOG(TEXT("SMOKE end %s alt=%.1f"), Fx.Code, Alt);
 		Flow->EndFlight(TEXT("user")); SmokeAt = Now + 8.0; ++SmokeSub; return;
 	// uçuş sonu: önce deneyim ekranı (XP, manevralar, seviye), sonra özet
 	case 12: if (Fx.bFull) Shot(TEXT("24_progress")); SmokeAt = Now + 1.0; SmokeSub = Fx.bFull ? 30 : 99; return;

@@ -193,6 +193,8 @@ public:
 		bool SmokeTele(float& OutAltRel, bool& bOutArmed, int32& OutPosReady) const;
 		/** Duman testi: kamera kipi (0 takip, 1 FPV, 7 pilot omuz görünümü) */
 		void SmokeCam(int32 Mode);
+		/** Duman testi: verilen irtifaya kalkış (sabit kanat: kalkış yöntemiyle TAKEOFF) */
+		void SmokeTakeoff(float AltM);
 		/** Duman testi: görünümün (Fx, Fy) oranındaki noktaya sentetik sol tık (Slate); günlükte "SMOKE mouse" */
 		bool SmokeClick(float Fx, float Fy, const TCHAR* What);
 		bool SmokePanelOpen() const;

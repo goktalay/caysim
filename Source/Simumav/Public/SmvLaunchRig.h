@@ -49,7 +49,6 @@ private:
 	double CarS = 0, CarV = 0, LastD = 0;   // araç yol / hız (cm, cm/s)
 	FVector BlendFrom = FVector::ZeroVector;
 	float BlendPitchFrom = 0.f;
-	static constexpr double RailLenM = 6.0, RailBaseM = 1.05;
 	UStaticMeshComponent* Part(UStaticMesh* M, USceneComponent* Parent, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color);
 	void BuildRamp();
 	void BuildVehicle();

@@ -18,21 +18,33 @@ on:
       wait:
         description: "En uzun bekleme (sn)"
         type: string
-        default: "900"
+        default: "2400"
       lang:
         description: "Arayuz dili (bos = runner yerel ayari; tr, en, de ...)"
         type: string
         default: ""
       flights:
-        description: "Ucus sayisi (0-4; Fab haritalari + saat/hava, 4. prosedurel dunya)"
+        description: "Ucus sayisi (0-10; 1-5 coklu rotor/VTOL/hexa, 6-9 sabit kanat kalkis yontemleri + yuksek irtifa, 10 VTOL 150 m)"
         type: string
-        default: "4"
+        default: "10"
+      only:
+        description: "Yalniz bu ucuslar (1 tabanli, virgullu; bos = ilk N)"
+        type: string
+        default: ""
+      res:
+        description: "Cozunurluk GxY (ornek 3440x1440)"
+        type: string
+        default: "1600x900"
+      notour:
+        description: "Ekran turunu atla (yalniz ucuslar)"
+        type: boolean
+        default: false
 
 jobs:
   smoke:
     if: github.repository_owner == 'goktalay'
     runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
-    timeout-minutes: 40
+    timeout-minutes: 75
     defaults:
       run:
         shell: powershell
@@ -43,6 +55,9 @@ jobs:
           WAIT: ${{ inputs.wait }}
           SLANG: ${{ inputs.lang }}
           SFLIGHTS: ${{ inputs.flights }}
+          SONLY: ${{ inputs.only }}
+          SRES: ${{ inputs.res }}
+          SNOTOUR: ${{ inputs.notour }}
         run: |
           $ErrorActionPreference = 'Continue'
           $base = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
@@ -50,10 +65,20 @@ jobs:
           if (-not (Test-Path $base)) { Write-Host "Paket yok"; Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'Paketler') -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }; exit 1 }
           $exe = Get-ChildItem $base -Filter *.exe -File | Select-Object -First 1
           Write-Host ("Exe: " + $exe.FullName)
-          $shots = Join-Path $base 'Simumav\Saved\Screenshots'
+          # Shipping kayit klasoru kullanici profilindedir (LOCALAPPDATA\Simumav\Saved); Development paket klasorundedir
+          $saved = Join-Path $base 'Simumav\Saved'
+          if ($env:CFG -eq 'Shipping') { $saved = Join-Path $env:LOCALAPPDATA 'Simumav\Saved' }
+          Write-Host ("Saved: " + $saved)
+          $shots = Join-Path $saved 'Screenshots'
           if (Test-Path $shots) { Remove-Item $shots -Recurse -Force -ErrorAction SilentlyContinue }
+          $oldlogs = Join-Path $saved 'Logs'
+          if (Test-Path $oldlogs) { Remove-Item $oldlogs -Recurse -Force -ErrorAction SilentlyContinue }
           Write-Host ("Oturum: " + [Environment]::UserInteractive + " / " + $env:USERNAME + " / session " + (Get-Process -Id $PID).SessionId)
-          $argl = @('-SmvSmoke','-RenderOffScreen','-ResX=1600','-ResY=900','-log','-unattended')
+          $rx = '1600'; $ry = '900'
+          if ($env:SRES -match '^(\d+)x(\d+)$') { $rx = $Matches[1]; $ry = $Matches[2] }
+          $argl = @('-SmvSmoke','-RenderOffScreen',('-ResX=' + $rx),('-ResY=' + $ry),'-windowed','-log','-unattended')
+          if ($env:SONLY) { $argl += ('-SmvSmokeOnly=' + $env:SONLY) }
+          if ($env:SNOTOUR -eq 'true') { $argl += '-SmvSmokeNoTour' }
           if ($env:SLANG) { $argl += ('-SmvSmokeLang=' + $env:SLANG) }
           if ($env:SFLIGHTS) { $argl += ('-SmvSmokeFlights=' + $env:SFLIGHTS) }
           Write-Host ("Args: " + ($argl -join ' '))
@@ -64,11 +89,11 @@ jobs:
           $out = Join-Path $env:RUNNER_TEMP 'smoke'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           if (Test-Path $shots) { Copy-Item -Recurse -Force $shots (Join-Path $out 'Screenshots') }
-          $logs = Join-Path $base 'Simumav\Saved\Logs'
+          $logs = Join-Path $saved 'Logs'
           if (Test-Path $logs) { Copy-Item -Recurse -Force $logs (Join-Path $out 'Logs') }
           Get-ChildItem $out -Recurse -File | ForEach-Object { Write-Host ($_.FullName + "  " + $_.Length) }
           $log = Get-ChildItem (Join-Path $out 'Logs') -Filter *.log -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|SMVLOAD|Error|D3D|RHI|Fab haritas|GPS/EKF|Need Position|Arm:' | Select-Object -First 400 | ForEach-Object { Write-Host $_.Line } }
+          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|SMVLOAD|Error|D3D|RHI|Fab haritas|GPS/EKF|Need Position|Arm:|U.u. d.nyas|Google|Cesium|kenar e.leme|Kalk.. a.ama|Uyar.:' | Select-Object -First 600 | ForEach-Object { Write-Host $_.Line } }
       - name: Artefakt
         if: always()
         uses: actions/upload-artifact@v4

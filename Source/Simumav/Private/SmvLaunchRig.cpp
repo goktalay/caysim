@@ -14,6 +14,7 @@ namespace
 {
 	const FLinearColor GFrame(0.027f, 0.042f, 0.062f), GYellow(0.89f, 0.45f, 0.01f), GSteel(0.27f, 0.30f, 0.33f), GRed(0.58f, 0.03f, 0.025f);
 	const FLinearColor GRubber(0.012f, 0.012f, 0.014f), GBlue(0.014f, 0.075f, 0.26f), GChrome(0.6f, 0.62f, 0.65f), GAsphalt(0.035f, 0.036f, 0.04f);
+	constexpr double RailLenM = 6.0, RailBaseM = 1.05;   // ray boyu, ray arka ucu yüksekliği (m)
 	double Smooth01(double X) { X = FMath::Clamp(X, 0.0, 1.0); return X * X * (3.0 - 2.0 * X); }
 }
 
@@ -120,7 +121,7 @@ void ASmvLaunchRig::BuildVehicle()
 	if (Pick)
 	{
 		USkeletalMeshComponent* Sk = NewObject<USkeletalMeshComponent>(this);
-		Sk->SetSkeletalMesh(Pick);
+		Sk->SetSkeletalMeshAsset(Pick);
 		Sk->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Sk->SetupAttachment(Car);
 		Sk->RegisterComponent();

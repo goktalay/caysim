@@ -155,7 +155,7 @@ namespace
 					if (FPackageName::DoesPackageExist(C)) { M.Level = C; M.bAvailable = true; break; }
 				}
 			}
-			UE_LOG(LogSimumav, Log, TEXT("Uçuş haritası %s: %s (%s)"), *M.Key, M.bAvailable ? TEXT("var") : TEXT("pakette yok"),
+			SMV_KLOG(TEXT("Uçuş haritası %s: %s (%s)"), *M.Key, M.bAvailable ? TEXT("var") : TEXT("pakette yok"),
 				M.Level.IsEmpty() ? TEXT("kodla kurulan şehir") : *M.Level);
 			Out.Add(M);
 		}
@@ -173,7 +173,7 @@ namespace
 			if (!M) { M = &Out.AddDefaulted_GetRef(); M->Key = Key; M->Kind = ESmvMapKind::Level; }
 			M->Level = Level;
 			M->bAvailable = FPackageName::DoesPackageExist(Level);
-			UE_LOG(LogSimumav, Log, TEXT("Uçuş haritası (ini) %s → %s (%s)"), *Key, *Level, M->bAvailable ? TEXT("var") : TEXT("pakette yok"));
+			SMV_KLOG(TEXT("Uçuş haritası (ini) %s → %s (%s)"), *Key, *Level, M->bAvailable ? TEXT("var") : TEXT("pakette yok"));
 		}
 		return Out;
 	}
