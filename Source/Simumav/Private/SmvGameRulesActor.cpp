@@ -342,7 +342,9 @@ void ASmvGameRulesActor::BuildDefense(bool bShip)
 			const FRotator R = (FQuat(FVector::ZAxisVector, FMath::DegreesToRadians(Yaw)) * Qup).Rotator();
 			const FBox Bw = B.TransformBy(FTransform(R.Quaternion(), FVector::ZeroVector, FVector(Sc)));
 			const double Draft = SmvRulesCfg(TEXT("ShipDraftM"), 5.f) * 100.0;
-			const FVector Loc = F - FVector(Bw.GetCenter().X, Bw.GetCenter().Y, 0.0) + FVector(0, 0, -Bw.Min.Z - 30.0 - Draft);
+			// su hattı deniz düzlemine (G0 − 40 cm) oturur: F (SITL ev irtifası) arazi yüksekliğinden farklı olabildiği için gemi havada kalıyordu
+			FVector Loc = F - FVector(Bw.GetCenter().X, Bw.GetCenter().Y, 0.0);
+			Loc.Z = G0.Z - 40.0 - Bw.Min.Z - Draft;
 			UE_LOG(LogSimumav, Log, TEXT("Gemi ağı sınırı (yerel): %.0f x %.0f x %.0f; yan yatma düzeltmesi %.0f°"), Sz.X, Sz.Y, Sz.Z, UpRoll);
 			for (UStaticMesh* M : ShipMeshes)
 			{

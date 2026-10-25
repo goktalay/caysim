@@ -155,6 +155,20 @@ bool USmvLocalFlightLink::LaunchSitl(bool bClean)
 	{
 		Text += "# SIMUMAV dron parametreleri (hangar: kullanici + donanim)\n";
 		for (const auto& U : Session->UserParams) Text += U.first + " " + std::string(TCHAR_TO_UTF8(*FString::SanitizeFloat(U.second, 0))) + "\n";
+		// çeşidin SITL batarya modeli (SIM_BATT_*; DefaultsParmText) kayıtlı değerlerin önüne geçer: katalog varsayılanı SIM_BATT_VOLTAGE 16,8
+		// 12S hexada "boş paket" demekti (5 V, Potential Thrust Loss + Battery Failsafe)
+		std::string Batt;
+		size_t Pos = 0;
+		const std::string Base = SmvCore::DefaultsParmText(*Session);
+		while (Pos < Base.size())
+		{
+			size_t E = Base.find('\n', Pos);
+			if (E == std::string::npos) E = Base.size();
+			const std::string Line = Base.substr(Pos, E - Pos);
+			if (Line.rfind("SIM_BATT_", 0) == 0) Batt += Line + "\n";
+			Pos = E + 1;
+		}
+		if (!Batt.empty()) Text += "# SIMUMAV cesit bataryasi\n" + Batt;
 	}
 	FFileHelper::SaveStringToFile(FString(UTF8_TO_TCHAR(Text.c_str())), *Parm, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 	if (!SessionScript.TrimStartAndEnd().IsEmpty())
