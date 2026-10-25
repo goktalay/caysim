@@ -251,7 +251,9 @@ namespace
 		S.bOverride_BloomIntensity = true; S.BloomIntensity = 0.45f;
 		S.bOverride_VignetteIntensity = true; S.VignetteIntensity = 0.22f;
 		S.bOverride_SceneFringeIntensity = true; S.SceneFringeIntensity = 0.f;
-		S.bOverride_MotionBlurAmount = true; S.MotionBlurAmount = Q >= 4 ? 0.25f : 0.f;
+		// hafif hareket bulanıklığı (pervane / yer akışı; kamera dönüşünde rahatsız etmeyecek kadar)
+		S.bOverride_MotionBlurAmount = true; S.MotionBlurAmount = Q >= 2 ? 0.18f : 0.f;
+		S.bOverride_MotionBlurMax = true; S.MotionBlurMax = 2.0f;
 		S.bOverride_LensFlareIntensity = true; S.LensFlareIntensity = Q >= 2 ? 0.15f : 0.f;
 		S.bOverride_AmbientOcclusionIntensity = true; S.AmbientOcclusionIntensity = 0.5f;
 		// küresel aydınlatma + yansıma: Düşük → Lumen kapalı (ekran uzayı), diğerleri Lumen (kalite ön ayara göre)

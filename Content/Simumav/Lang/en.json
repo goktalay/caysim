@@ -1077,6 +1077,7 @@
  "launch.hand": "Hand launch",
  "launch.hand_note": "Hand launch is applied like a runway takeoff locally (planned: throw speed/angle).",
  "launch.handheld": "Handheld launcher",
+ "launch.hud.throw": "THROW!",
  "launch.pod4": "4-cell launcher",
  "launch.pod8": "8-cell launcher",
  "launch.ramp": "Pneumatic ramp",

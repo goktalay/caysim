@@ -262,7 +262,7 @@ void ACaySimDroneActor::ApplyPose(const FCaySimPose& Pose)
 	const float Pitch = bInvertPitch ? -Pose.Pitch : Pose.Pitch;
 	const FRotator Local = CaySimGeo::NedToUnrealRotator(Roll, Pitch, Pose.Yaw, bEnuXNorth);
 	// Cesium: yerel ENU çerçevesi dünya eğriliğiyle döner → önce ENU→Unreal, sonra gövde yönelimi
-	const FQuat WorldRot = EnuRot * Local.Quaternion();
+	FQuat WorldRot = EnuRot * Local.Quaternion();
 
 	// Konum çözümü: alt sınıf gerçek çarpışma sorgularıyla çözebilir (Simumav: gövde süpürmesi); yoksa yer kesişimi düzeltmesi
 	if (!ResolveRenderLocation(Pose, EnuRot, WorldRot, Loc))
@@ -285,6 +285,7 @@ void ACaySimDroneActor::ApplyPose(const FCaySimPose& Pose)
 		}
 	}
 
+	AdjustRenderPose(Loc, WorldRot);
 	Root->SetWorldLocationAndRotation(Loc, WorldRot);
 }
 

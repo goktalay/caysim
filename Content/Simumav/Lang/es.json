@@ -1077,6 +1077,7 @@
  "launch.hand": "Lanzamiento a mano",
  "launch.hand_note": "El lanzamiento a mano se aplica localmente como despegue de pista (previsto: velocidad/ángulo).",
  "launch.handheld": "Lanzador portátil",
+ "launch.hud.throw": "¡LANZA!",
  "launch.pod4": "Lanzador de 4 celdas",
  "launch.pod8": "Lanzador de 8 celdas",
  "launch.ramp": "Rampa neumática",

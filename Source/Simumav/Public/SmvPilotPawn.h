@@ -118,6 +118,7 @@ protected:
 	bool bSpdInit = false;
 	FVector SpdLast = FVector::ZeroVector;
 	float SpdSmooth = 0.f;
+	float SpeedDensity0 = 1.f, SpeedSize0 = 1.f;
 	void UpdateSpeedFx(float Dt);
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneCaptureComponent2D> PipCapture;
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> PipTarget;

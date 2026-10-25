@@ -1077,6 +1077,7 @@
  "launch.hand": "Handstart",
  "launch.hand_note": "Handstart wird lokal wie ein Pistenstart ausgeführt (geplant: Wurfgeschwindigkeit/-winkel).",
  "launch.handheld": "Handwerfer",
+ "launch.hud.throw": "WURF!",
  "launch.pod4": "4-fach-Werfer",
  "launch.pod8": "8-fach-Werfer",
  "launch.ramp": "Pneumatische Rampe",

@@ -66,8 +66,22 @@ public:
 	void SetPayloadAttached(bool bOn);
 	void SetSprayActive(bool bOn);
 	bool IsChuteDeployed() const { return bChuteOut; }
+	/** Fırlatma düzeneği görsel düzeltmesi (rampa kızağı / araç tavanı / pilotun eli): dünya ofseti (cm) + burun yukarı (°). Yalnız görüntü. */
+	void SetLaunchVisual(const FVector& OffsetCm, float PitchUpDeg) { LaunchOff = OffsetCm; LaunchPitch = PitchUpDeg; }
+	/** Görsel düzeltmeden önceki (fizikle çözülmüş) konum */
+	FVector GetRawRenderLoc() const { return bRawValid ? RawLoc : GetActorLocation(); }
 
 protected:
+	FVector LaunchOff = FVector::ZeroVector, RawLoc = FVector::ZeroVector;
+	float LaunchPitch = 0.f;
+	bool bRawValid = false;
+	virtual void AdjustRenderPose(FVector& InOutLoc, FQuat& InOutRot) override
+	{
+		RawLoc = InOutLoc; bRawValid = true;
+		if (LaunchOff.IsNearlyZero() && FMath::IsNearlyZero(LaunchPitch)) return;
+		InOutLoc += LaunchOff;
+		InOutRot = InOutRot * FRotator(LaunchPitch, 0.f, 0.f).Quaternion();
+	}
 	virtual void BuildPlaceholder() override;
 	virtual bool ResolveRenderLocation(const FCaySimPose& Pose, const FQuat& EnuRot, const FQuat& WorldRot, FVector& InOutLoc) override;
 	/** Fab quad gövdesi (SmvFabContent::LoadDroneMesh); pervane kemikleri ARM'lıyken döner. */

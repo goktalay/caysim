@@ -22,6 +22,7 @@ namespace SmvCore
 	{
 		std::string Method = "wheels";   // wheels | ramp | vehicle | hand | (interceptor: pod4|pod8|tube|handheld)
 		double AngleDeg = 15, ReleaseKmh = 70;
+		double HandSpeedMs = 7, HandPitchDeg = 12;   // elden atış (SITL: kısa mancınık itişi + ivme algılamalı kalkış)
 		double TakeoffAltM = -1;          // TKOFF_ALT (yoksa yazılmaz)
 		double AzimuthDeg = -1;
 	};

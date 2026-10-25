@@ -125,6 +125,8 @@ protected:
 	 *  taban sınıfın yer kesişimi düzeltmesi (zemin yüksekliği örneği) atlanır. EnuRot: yerel ENU → Unreal; WorldRot: gövde yönelimi. */
 	virtual bool ResolveRenderLocation(const FCaySimPose& /*Pose*/, const FQuat& /*EnuRot*/, const FQuat& /*WorldRot*/, FVector& /*InOutLoc*/) { return false; }
 	void SetOnGroundState(bool bOn) { bOnGround = bOn; }
+	/** Son görsel düzeltme (alt sınıf: fırlatma rampası / araç tavanı / el — yalnız görüntü, fizik ve telemetri değişmez). */
+	virtual void AdjustRenderPose(FVector& /*InOutLoc*/, FQuat& /*InOutRot*/) {}
 
 private:
 	FTelemetryBuffer Buffer;

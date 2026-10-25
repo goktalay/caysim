@@ -1,4 +1,5 @@
 #include "SmvGameMode.h"
+#include "SmvLaunchRig.h"
 #include "SmvGameRulesActor.h"
 #include "SimumavModule.h"
 #include "SmvGameInstance.h"
@@ -433,6 +434,29 @@ void ASmvGameMode::BuildScene()
 		if (PilotFigure) PilotFigure->Build(Req.Pilot.Avatar, true);
 		if (PilotFigure) if (ASmvPilotPawn* Pp = GetPilot()) Pp->SetPilotEye(P0, PilotFigure->HeadHeightCm());
 	}
+	// sabit kanat kalkış düzeneği: rampa / araç üstü / elden atış / pist şeridi (SITL kalkış yönünde; SmvLocalFlightLink HomeHeading ile aynı)
+	if (Req.Drone.Type == TEXT("plane"))
+	{
+		const FString Me = Req.Launch.Method.IsEmpty() ? FString(TEXT("wheels")) : Req.Launch.Method;
+		const double Hd = (Me == TEXT("ramp") && Req.Launch.AimAzDeg > 0) ? Req.Launch.AimAzDeg : Req.Track.World.RunwayHeading;
+		double La2, Lo2;
+		SmvCore::LatLon(Req.Track.Lat, Req.Track.Lon, FMath::Sin(FMath::DegreesToRadians(Hd)) * 10.0, FMath::Cos(FMath::DegreesToRadians(Hd)) * 10.0, La2, Lo2);
+		const FVector H0 = Geo(Req.Track.Lat, Req.Track.Lon, GroundMsl), H1 = Geo(La2, Lo2, GroundMsl);
+		const float HYaw = (float)(H1 - H0).Rotation().Yaw;
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		LaunchRig = W->SpawnActor<ASmvLaunchRig>(ASmvLaunchRig::StaticClass(), FTransform(H0), Sp);
+		if (LaunchRig)
+		{
+			LaunchRig->Build(Me, H0, HYaw, (float)Req.Launch.AngleDeg, Drone);
+			// elden atış: pilot uçağın hemen arkasında, kalkış yönüne bakar
+			if (Me == TEXT("hand") && PilotFigure)
+			{
+				PilotFigure->SetActorLocationAndRotation(LaunchRig->PilotSpot(), FRotator(0.f, HYaw, 0.f));
+				if (ASmvPilotPawn* Pp = GetPilot()) Pp->SetPilotEye(LaunchRig->PilotSpot(), PilotFigure->HeadHeightCm());
+			}
+		}
+	}
 
 	// ---- HUD ----
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
@@ -719,6 +743,7 @@ void ASmvGameMode::StopScene()
 	Debris.Reset(); DebrisVel.Reset();
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
 	ClearFabWorld();
+	if (LaunchRig) { LaunchRig->Destroy(); LaunchRig = nullptr; }
 	if (WorldSetup) { WorldSetup->Destroy(); WorldSetup = nullptr; }
 	if (Tones) Tones->SetAlarm(0, 0.f);
 	FreeRace();
@@ -794,6 +819,11 @@ void ASmvGameMode::HandleLaunchMsg(const TSharedPtr<FJsonObject>& M)
 	PushEvent(Txt, Ph == TEXT("launch") ? 5 : 6);
 	UE_LOG(LogSimumav, Log, TEXT("Kalkış aşaması: %s / %s"), *Me, *Ph);
 	OnLaunchPhase(Me, Ph);
+}
+
+void ASmvGameMode::OnLaunchPhase(const FString& Method, const FString& Phase)
+{
+	if (LaunchRig) LaunchRig->SetPhase(Phase);
 }
 
 void ASmvGameMode::HandleTele(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
@@ -1802,6 +1832,22 @@ void ASmvGameMode::UpdateHud()
 		}
 	}
 	if (FPlatformTime::Seconds() < ToastUntil) { S.Toast = ToastText; S.ToastSeverity = ToastSev; }
+	// fırlatma geri sayımı / durumu (web launchHud / handHud): elden atışta "3 · 2 · 1 · AT!", diğerlerinde yöntem satırı
+	if (!LaunchPhaseUi.IsEmpty())
+	{
+		const double Tl = FPlatformTime::Seconds() - LaunchPhaseAt;
+		const double Gs = Link() ? Link()->LastTele().Groundspeed * 3.6 : 0.0;
+		FString L;
+		if (LaunchMethodUi == TEXT("hand"))
+		{
+			const FString C = LaunchPhaseUi == TEXT("armed") ? FString(Tl < 1.0 ? TEXT("3") : Tl < 2.0 ? TEXT("2") : TEXT("1")) : FSmvI18n::T(TEXT("launch.hud.throw")).ToString();
+			L = FString::Printf(TEXT("%s   ·   LAUNCH HAND · %.0f m/s · %.0f°"), *C, Req.Launch.HandSpeedMs, Req.Launch.HandPitchDeg);
+		}
+		else if (LaunchMethodUi == TEXT("ramp")) L = FString::Printf(TEXT("LAUNCH RAMP %.0f° · %s"), Req.Launch.AngleDeg, *FSmvI18n::T(LaunchPhaseUi == TEXT("launch") ? TEXT("launch.ev.ramp.launch") : TEXT("launch.ev.ramp.armed")).ToString());
+		else if (LaunchMethodUi == TEXT("vehicle")) L = FString::Printf(TEXT("LAUNCH VEH · %.0f / %.0f km/h"), Gs, Req.Launch.ReleaseKmh);
+		else if (LaunchMethodUi == TEXT("wheels")) L = FString::Printf(TEXT("LAUNCH RWY · %.0f km/h"), Gs);
+		if (!L.IsEmpty()) { S.Toast = L; S.ToastSeverity = 5; }
+	}
 	S.bCrashed = bCrashed;
 	S.ProxLine = ProxLine; S.ProxLevel = ProxLevel;
 	if (bPauseMenu) S.Paused = FSmvI18n::T(TEXT("flight.paused_hint")).ToString();

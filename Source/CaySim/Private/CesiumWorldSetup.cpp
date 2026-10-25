@@ -263,7 +263,7 @@ void ACaySimWorldSetup::SetupCesiumIon()
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
 		Tiles->SetCreatePhysicsMeshes(true);
 		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
-		Tiles->SetShowCreditsOnScreen(true);
+		Tiles->ShowCreditsOnScreen = true;
 		// Bing uydu dokusu
 		UCesiumIonRasterOverlay* Overlay = NewObject<UCesiumIonRasterOverlay>(Tiles, TEXT("Imagery"));
 		Overlay->IonAssetID = CesiumImageryAssetId;
@@ -310,7 +310,7 @@ void ACaySimWorldSetup::SetupGoogle(const FString& Key)
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
 		Tiles->SetCreatePhysicsMeshes(true);
 		Tiles->SetMaximumScreenSpaceError(8.0);
-		Tiles->SetShowCreditsOnScreen(true); // Google atıf zorunluluğu
+		Tiles->ShowCreditsOnScreen = true; // Google atıf zorunluluğu
 	}
 	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
@@ -339,7 +339,7 @@ void ACaySimWorldSetup::SetupGoogleIon()
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
 		Tiles->SetCreatePhysicsMeshes(true);
 		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
-		Tiles->SetShowCreditsOnScreen(true);   // Google atıf zorunluluğu (logo + veri sağlayıcıları)
+		Tiles->ShowCreditsOnScreen = true;   // Google atıf zorunluluğu (logo + veri sağlayıcıları)
 	}
 	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;

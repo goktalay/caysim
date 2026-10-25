@@ -85,7 +85,7 @@ namespace SmvCore
 		BinaryAndModel(S.SitlType, Bin, Model);
 		const FVehicleSpec* V = SpecOf(S);
 		if (V) Model = V->Frame;
-		if (S.SitlType == "sabit_kanat") Model += PlaneModelSuffix(S.Airframe, S.Launch.Method == "ramp");
+		if (S.SitlType == "sabit_kanat") Model += PlaneModelSuffix(S.Airframe, S.Launch.Method == "ramp" || S.Launch.Method == "hand");
 		if (S.SitlType == "rover" && S.Drive == "skid") Model = "rover-skid";
 		if (V && !V->Json.empty()) Model += ":" + VehicleJsonName(*V);
 		return Model;
@@ -184,6 +184,13 @@ namespace SmvCore
 		{
 			const FParamList K = { { "TKOFF_THR_MINACC", 8.0 }, { "TKOFF_THR_DELAY", 2.0 }, { "TKOFF_THR_MINSPD", 0 }, { "TKOFF_ROTATE_SPD", 0 },
 				{ "TKOFF_LVL_PITCH", std::min(30.0, std::max(10.0, L.AngleDeg)) }, { "SERVO7_FUNCTION", 0 } };
+			P.insert(P.end(), K.begin(), K.end());
+		}
+		else if (L.Method == "hand")
+		{
+			// elden atış (web elden_atis_ayarla): ivme algılamalı kalkış — atış itişi SITL mancınığıyla kısa darbe (SmvLocalFlightLink)
+			const FParamList K = { { "TKOFF_THR_MINACC", 4.0 }, { "TKOFF_THR_DELAY", 1.0 }, { "TKOFF_THR_MINSPD", 0 }, { "TKOFF_ROTATE_SPD", 0 },
+				{ "TKOFF_LVL_PITCH", std::min(15.0, std::max(10.0, L.HandPitchDeg)) }, { "SERVO7_FUNCTION", 0 } };
 			P.insert(P.end(), K.begin(), K.end());
 		}
 		else if (L.Method == "vehicle")

@@ -433,8 +433,9 @@ void ASmvPilotPawn::Tick(float Dt)
 	Look = FVector2D::ZeroVector;
 }
 
-// Hız çizgileri: Fab "Speed effects" son işlem malzemesi kamera karışımına hızla artan ağırlıkla eklenir (18 m/sn'den başlar;
-// [/Script/Simumav.SmvScenery] SpeedLines=False kapatır, SpeedLinesMax en çok ağırlık). Paket yoksa hiçbir şey yapmaz.
+// Hız çizgileri: Fab "Speed effects" son işlem malzemesi — Ayarlar → Görüntü → Hız efekti: Kapalı / Hafif (varsayılan) / Belirgin.
+// Düşük hızda hiç yok; yoğunluk, çizgi boyu ve opaklık hızla kademeli artar (hafif: 35 m/s'de başlar, 85 m/s'de doruk; belirgin: 22 → 60 m/s),
+// soluk gri-mavi ton, ince çizgi (malzeme çizgileri ekran kenarından içe çizer). [/Script/Simumav.SmvScenery] SpeedLines=False tümden kapatır.
 void ASmvPilotPawn::UpdateSpeedFx(float Dt)
 {
 	ACaySimDroneActor* D = Target.Get();
@@ -449,11 +450,9 @@ void ASmvPilotPawn::UpdateSpeedFx(float Dt)
 			if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/SpeedEffects/Assets/Materials/M_SpeedEffects_SpeedLines.M_SpeedEffects_SpeedLines"), nullptr, LOAD_NoWarn | LOAD_Quiet))
 			{
 				SpeedMid = UMaterialInstanceDynamic::Create(M, this);
-				// paket varsayılanı ekranı kaplıyordu (duman testi): yoğunluk ve çizgi boyu yarıya, renk yarı saydam beyaz
 				float V = 0.f;
-				if (M->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(TEXT("LineDensity"))), V)) SpeedMid->SetScalarParameterValue(TEXT("LineDensity"), V * 0.5f);
-				if (M->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(TEXT("LineSize"))), V)) SpeedMid->SetScalarParameterValue(TEXT("LineSize"), V * 0.6f);
-				SpeedMid->SetVectorParameterValue(TEXT("LineColor"), FLinearColor(0.7f, 0.75f, 0.8f, 0.5f));
+				SpeedDensity0 = M->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(TEXT("LineDensity"))), V) ? V : 1.f;
+				SpeedSize0 = M->GetScalarParameterValue(FHashedMaterialParameterInfo(FName(TEXT("LineSize"))), V) ? V : 1.f;
 			}
 		}
 	}
@@ -462,15 +461,27 @@ void ASmvPilotPawn::UpdateSpeedFx(float Dt)
 	const float V = bSpdInit ? (float)((P - SpdLast).Size() / Dt / 100.0) : 0.f;
 	SpdLast = P;
 	bSpdInit = true;
-	SpdSmooth = FMath::FInterpTo(SpdSmooth, FMath::Min(V, 120.f), Dt, 2.f);
-	float MaxW = 0.5f;
-	if (GConfig) GConfig->GetFloat(TEXT("/Script/Simumav.SmvScenery"), TEXT("SpeedLinesMax"), MaxW, GGameIni);
-	const float W = FMath::Clamp((SpdSmooth - 18.f) / 40.f, 0.f, 1.f) * MaxW;
+	SpdSmooth = FMath::FInterpTo(SpdSmooth, FMath::Min(V, 150.f), Dt, 1.5f);
+	const int32 Lv = FSmvUiPrefs::Get().SpeedFx;
+	const bool bFpv = Mode == ESmvCamMode::Fpv;
+	const float V0 = Lv >= 2 ? 22.f : (bFpv ? 28.f : 35.f), V1 = Lv >= 2 ? 60.f : 85.f;
+	float K = Lv <= 0 ? 0.f : FMath::Clamp((SpdSmooth - V0) / (V1 - V0), 0.f, 1.f);
+	K = K * K * (3.f - 2.f * K);   // yumuşak başlangıç
+	const float Peak = Lv >= 2 ? 1.f : 0.45f;
+	const float A = K * Peak;
 	TArray<FWeightedBlendable>& Arr = Camera->PostProcessSettings.WeightedBlendables.Array;
 	FWeightedBlendable* Found = nullptr;
 	for (FWeightedBlendable& B : Arr) if (B.Object == SpeedMid) Found = &B;
-	if (!Found && W > 0.001f) { Arr.Add(FWeightedBlendable(W, SpeedMid)); return; }
-	if (Found) Found->Weight = W;
+	if (A < 0.02f)
+	{
+		if (Found) Found->Weight = 0.f;
+		return;
+	}
+	SpeedMid->SetScalarParameterValue(TEXT("LineDensity"), SpeedDensity0 * (0.12f + 0.38f * A));
+	SpeedMid->SetScalarParameterValue(TEXT("LineSize"), SpeedSize0 * (0.25f + 0.35f * A));
+	SpeedMid->SetVectorParameterValue(TEXT("LineColor"), FLinearColor(0.62f, 0.68f, 0.74f, 0.08f + 0.32f * A) * FLinearColor(0.5f + 0.5f * A, 0.5f + 0.5f * A, 0.5f + 0.5f * A, 1.f));
+	if (!Found) Arr.Add(FWeightedBlendable(1.f, SpeedMid));
+	else Found->Weight = 1.f;
 }
 
 // ---------------------------------------------------------------------------

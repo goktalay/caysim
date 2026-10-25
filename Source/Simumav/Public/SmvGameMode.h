@@ -154,6 +154,8 @@ private:
 	double FpvEndAt = 0;
 	/** Sahnede RC kumanda tutan 3B pilot (ev konumunun 8 m gerisinde, 3 m solunda) */
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> PilotFigure;
+	/** Sabit kanat kalkış / fırlatma düzeneği (rampa / araç / el / pist; yalnız görsel) */
+	UPROPERTY() TObjectPtr<class ASmvLaunchRig> LaunchRig;
 	/** Çarpma efekti: enkaz parçaları (elle balistik) */
 	UPROPERTY() TArray<TObjectPtr<AActor>> Debris;
 	TArray<FVector> DebrisVel;

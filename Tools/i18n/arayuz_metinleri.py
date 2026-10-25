@@ -625,4 +625,5 @@ U = {
  'launch.ev.hand.armed': ('Pilot uçağı omuzda tutuyor, motor hazır', 'Pilot holds the aircraft at shoulder height, engine ready', 'Pilot holds the aircraft at shoulder height, engine ready', 'Pilot holds the aircraft at shoulder height, engine ready', 'Pilot holds the aircraft at shoulder height, engine ready', 'Pilot holds the aircraft at shoulder height, engine ready', 'Pilot holds the aircraft at shoulder height, engine ready'),
  'launch.ev.hand.launch': ('ELDEN ATIŞ', 'HAND LAUNCH', 'HAND LAUNCH', 'HAND LAUNCH', 'HAND LAUNCH', 'HAND LAUNCH', 'HAND LAUNCH'),
  'launch.ev.hand.released': ('Uçak elden çıktı', 'Aircraft released from the hand', 'Aircraft released from the hand', 'Aircraft released from the hand', 'Aircraft released from the hand', 'Aircraft released from the hand', 'Aircraft released from the hand'),
+ 'launch.hud.throw': ('AT!', 'THROW!', 'WURF!', 'LANCEZ !', '¡LANZA!', 'БРОСОК!', 'ارمِ!'),
 }

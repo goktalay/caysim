@@ -329,6 +329,8 @@ void USmvLocalFlightLink::Start(const FSmvFlightRequest& Request)
 	Session->Launch.AngleDeg = Req.Launch.AngleDeg;
 	Session->Launch.ReleaseKmh = Req.Launch.ReleaseKmh;
 	Session->Launch.AzimuthDeg = Req.Launch.AimAzDeg;
+	Session->Launch.HandSpeedMs = FMath::Clamp(Req.Launch.HandSpeedMs, 6.0, 8.0);
+	Session->Launch.HandPitchDeg = FMath::Clamp(Req.Launch.HandPitchDeg, 10.0, 15.0);
 	for (const TPair<FString, double>& Kv : Req.Drone.Params) Session->UserParams.push_back({ std::string(TCHAR_TO_UTF8(*Kv.Key)), Kv.Value });
 	// Lua betiği (hangar → dron → Betik): SCR_ENABLE açılış dosyasında, betik WorkDir/scripts altında
 	SessionScript = Req.Drone.Script;
@@ -1091,6 +1093,15 @@ void USmvLocalFlightLink::StartTakeoff(float AltM)
 			S->LaunchEvent(TEXT("armed"));
 			S->LaunchT0 = FPlatformTime::Seconds();
 		});
+		if (Session->Launch.Method == "hand")
+		{
+			// elden atış: 3 sn geri sayım ("3 · 2 · 1 · AT!" — HUD), ardından kol savurma; SITL mancınığı kısa darbe:
+			// 15 m/s² × t ≈ atış hızı (6–8 m/s) + 4 m/s pervane itişi payı → servo 7 yüksek t sn, sonra bırak
+			const double Pulse = FMath::Clamp((Session->Launch.HandSpeedMs + 4.0) / 15.0, 0.5, 0.9);
+			After(3.3, [Weak]() { if (USmvLocalFlightLink* S = Weak.Get()) { S->LaunchEvent(TEXT("launch")); S->CommandLong(SmvMav::CMD_DO_SET_SERVO, 7.f, 1900.f); } });
+			After(3.3 + Pulse, [Weak]() { if (USmvLocalFlightLink* S = Weak.Get()) S->CommandLong(SmvMav::CMD_DO_SET_SERVO, 7.f, 1100.f); });
+			return;
+		}
 		After(0.6, [Weak]() { if (USmvLocalFlightLink* S = Weak.Get()) S->LaunchEvent(TEXT("launch")); });
 		if (Session->Launch.Method == "ramp")
 		{
@@ -1158,6 +1169,7 @@ void USmvLocalFlightLink::TickLaunch()
 	bool bReleased = false;
 	if (M == "ramp") bReleased = Tele.Groundspeed >= 8.f || Tele.AltRel >= 2.0;
 	else if (M == "vehicle") bReleased = Tele.Groundspeed >= 0.95 * Session->Launch.ReleaseKmh / 3.6 || Tele.AltRel >= 3.0;
+	else if (M == "hand") bReleased = LaunchPhase == TEXT("launch") && (Tele.Groundspeed >= 4.f || W - LaunchT0 > 4.2);
 	else bReleased = Tele.AltRel >= 1.0;
 	if (bReleased && LaunchPhase == TEXT("launch"))
 	{
