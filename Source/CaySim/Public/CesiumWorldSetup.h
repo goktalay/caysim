@@ -109,6 +109,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double GoogleFallbackS = 25.0;
 	/** Cesium karo seçim istatistikleri günlüğe (tanı; komut satırı -CesiumStats) */
 	bool bLogTileStats = false;
+	/** Google 3B karolarında fizik ağı (pahalı; kapalıyken çarpışma gizli World Terrain'den) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) bool bGooglePhysics = false;
 	/** 3D Tiles ekran-uzayı hata sınırı (küçük = daha ayrıntılı). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double TilesScreenSpaceError = 12.0;
 	/** Geoid ayrımı (MSL → WGS84 elipsoid) m; Türkiye için ≈ 30–40 m. Ev irtifası ile 3D Tiles yüzeyi arası farktan kalkışta otomatik düzeltilir. */
@@ -121,6 +123,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Tick(float DeltaSeconds) override;
 
 private:
@@ -150,6 +153,7 @@ private:
 	TWeakObjectPtr<ACesiumSunSky> SunSky;
 	TWeakObjectPtr<AActor> ClipActor;
 	TWeakObjectPtr<ACesiumCreditSystem> CreditSys;
+	TWeakObjectPtr<ACesium3DTileset> CollisionTiles;   // Google 3B'de gizli World Terrain (çarpışma / yükseklik)
 	ACesium3DTileset* ActiveTiles() const;
 	ACesium3DTileset* SpawnTiles(ACesiumGeoreference* Geo);
 #endif

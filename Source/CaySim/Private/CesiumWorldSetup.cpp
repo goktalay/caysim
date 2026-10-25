@@ -51,6 +51,23 @@ void ACaySimWorldSetup::BeginPlay()
 	Super::BeginPlay();
 }
 
+// Uçuş bitince kurduğu 3D Tiles / kırpma / güneş-gök aktörleri de kalkar (eskiden sonraki uçuşlarda karo kümeleri birikiyordu)
+void ACaySimWorldSetup::EndPlay(const EEndPlayReason::Type Reason)
+{
+#if CAYSIM_WITH_CESIUM
+	for (TWeakObjectPtr<ACesium3DTileset>* P : { &Terrain, &GoogleTiles, &CollisionTiles })
+	{
+		if (P->IsValid()) (*P)->Destroy();
+		P->Reset();
+	}
+	if (ClipActor.IsValid()) ClipActor->Destroy();
+	ClipActor.Reset();
+	if (SunSky.IsValid()) SunSky->Destroy();
+	SunSky.Reset();
+#endif
+	Super::EndPlay(Reason);
+}
+
 float ACaySimWorldSetup::TimeOfDayHours(const FString& Time)
 {
 	if (Time == TEXT("night")) return 23.f;
@@ -381,10 +398,26 @@ void ACaySimWorldSetup::SetupGoogleIon()
 		Tiles->SetIonAssetID(GoogleIonAssetId);
 		Tiles->SetIonAccessToken(CesiumIonToken);
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
-		Tiles->SetCreatePhysicsMeshes(true);
+		// fotogrametri karolarında fizik ağı pişirmesi işçi iş parçacıklarını kilitliyordu (190 karo "Loading-Worker"da takılı, %5–8):
+		// görüntü fiziksiz, çarpışma / yükseklik örneği gizli Cesium World Terrain'den (yalın arazi, hafif)
+		Tiles->SetCreatePhysicsMeshes(bGooglePhysics);
 		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
 		Tiles->ShowCreditsOnScreen = true;   // Google atıf zorunluluğu (logo + veri sağlayıcıları)
 		Tiles->LogSelectionStats = bLogTileStats;
+	}
+	if (!bGooglePhysics && !CollisionTiles.IsValid())
+	{
+		if (ACesium3DTileset* Ct = SpawnTiles(Geo))
+		{
+			CollisionTiles = Ct;
+			Ct->SetTilesetSource(ETilesetSource::FromCesiumIon);
+			Ct->SetIonAssetID(CesiumTerrainAssetId);
+			Ct->SetIonAccessToken(CesiumIonToken);
+			Ct->SetCreatePhysicsMeshes(true);
+			Ct->SetMaximumScreenSpaceError(16.0);
+			Ct->SetActorHiddenInGame(true);   // yalnız çarpışma / yükseklik
+			Ct->LogSelectionStats = bLogTileStats;
+		}
 	}
 	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
@@ -440,7 +473,7 @@ ACesium3DTileset* ACaySimWorldSetup::ActiveTiles() const
 AActor* ACaySimWorldSetup::GetTilesActor() const
 {
 #if CAYSIM_WITH_CESIUM
-	return ActiveTiles();
+	return CollisionTiles.IsValid() ? CollisionTiles.Get() : ActiveTiles();
 #else
 	return nullptr;
 #endif
@@ -450,7 +483,7 @@ bool ACaySimWorldSetup::TraceTiles(const FVector& Top, const FVector& Bottom, FH
 {
 #if CAYSIM_WITH_CESIUM
 	UWorld* W = GetWorld();
-	const ACesium3DTileset* T = ActiveTiles();
+	const ACesium3DTileset* T = CollisionTiles.IsValid() ? CollisionTiles.Get() : ActiveTiles();
 	if (!W || !T) return false;
 	TArray<FHitResult> Hits;
 	FCollisionQueryParams Q(SCENE_QUERY_STAT(CaySimTilesTrace), true);
@@ -466,7 +499,7 @@ bool ACaySimWorldSetup::TraceTiles(const FVector& Top, const FVector& Bottom, FH
 void ACaySimWorldSetup::SampleSurfaceZ(const TArray<FVector>& UnrealPoints, TFunction<void(const TArray<double>& UnrealZ, const TArray<bool>& bOk)> Done)
 {
 #if CAYSIM_WITH_CESIUM
-	ACesium3DTileset* T = ActiveTiles();
+	ACesium3DTileset* T = CollisionTiles.IsValid() ? CollisionTiles.Get() : ActiveTiles();   // yalın arazi (ağaç / çatı değil)
 	if (!T || UnrealPoints.Num() == 0) { Done(TArray<double>(), TArray<bool>()); return; }
 	TArray<FVector> Llh;
 	for (const FVector& P : UnrealPoints)
