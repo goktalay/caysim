@@ -21,6 +21,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Components/PrimitiveComponent.h"
 #include "CollisionQueryParams.h"
+#include "UObject/UObjectIterator.h"
 
 #if CAYSIM_WITH_CESIUM
 #include "CesiumGeoreference.h"
@@ -579,8 +580,22 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 			const bool bHit = TraceTiles(FVector(0, 0, 200000.0), FVector(0, 0, -200000.0), H);
 			const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 			const FVector Cam = PC && PC->PlayerCameraManager ? PC->PlayerCameraManager->GetCameraLocation() : FVector::ZeroVector;
-			UE_LOG(LogCaySim, Log, TEXT("3D Tiles tanı (%s): yükleme %%%.0f, bileşen %d (görünür %d, çarpışmalı %d), gizli %d, merkez ışını %s, kamera (%.0f, %.0f, %.0f)"),
-				*SourceName(), Td->GetLoadProgress(), Prims.Num(), Vis, Coll, Td->IsHidden() ? 1 : 0, bHit ? *FString::Printf(TEXT("Z %.0f cm"), H.ImpactPoint.Z) : TEXT("yok"), Cam.X, Cam.Y, Cam.Z);
+			// dünyadaki tüm Cesium glTF ilkel bileşenleri sahip aktöre göre (karo bileşeni tileset dışında bir sahipte mi / hiç yok mu)
+			TMap<FString, int32> ByOwner;
+			int32 Gl = 0, GlVis = 0, GlReg = 0;
+			for (TObjectIterator<UPrimitiveComponent> It; It; ++It)
+			{
+				UPrimitiveComponent* C = *It;
+				if (!C || C->GetWorld() != GetWorld() || !C->GetClass()->GetName().Contains(TEXT("CesiumGltf"))) continue;
+				++Gl; if (C->IsVisible()) ++GlVis; if (C->IsRegistered()) ++GlReg;
+				const AActor* O = C->GetOwner();
+				ByOwner.FindOrAdd(O ? O->GetName() : FString(TEXT("(sahipsiz) ")) + C->GetOuter()->GetName())++;
+			}
+			FString Own;
+			for (const TPair<FString, int32>& Kv : ByOwner) Own += FString::Printf(TEXT(" %s=%d"), *Kv.Key, Kv.Value);
+			UE_LOG(LogCaySim, Log, TEXT("3D Tiles tanı (%s): yükleme %%%.0f, bileşen %d (görünür %d, çarpışmalı %d), gizli %d, merkez ışını %s, kamera (%.0f, %.0f, %.0f); glTF ilkel %d (görünür %d, kayıtlı %d):%s"),
+				*SourceName(), Td->GetLoadProgress(), Prims.Num(), Vis, Coll, Td->IsHidden() ? 1 : 0, bHit ? *FString::Printf(TEXT("Z %.0f cm"), H.ImpactPoint.Z) : TEXT("yok"), Cam.X, Cam.Y, Cam.Z,
+				Gl, GlVis, GlReg, *Own);
 		}
 	}
 	if (!bReady && (ActiveSource == ECaySimWorldSource::CesiumIon || ActiveSource == ECaySimWorldSource::GooglePhotoreal))

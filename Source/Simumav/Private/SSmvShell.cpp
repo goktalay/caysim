@@ -4777,7 +4777,7 @@ void SSmvShell::TickSmoke()
 	static FString SmokeLang;
 	static const bool bLang = FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeLang="), SmokeLang) && !SmokeLang.IsEmpty();
 	static int32 NFlights = -1;
-	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 10); }
+	if (NFlights < 0) { NFlights = 3; FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeFlights="), NFlights); NFlights = FMath::Clamp(NFlights, 0, 20); }
 	// -SmvSmokeOnly=6,7: yalnız bu uçuşlar (1 tabanlı) · -SmvSmokeNoTour: ekran turu atlanır
 	static TArray<int32> OnlyFl;
 	static bool bOnlyInit = false;
@@ -4950,7 +4950,9 @@ void SSmvShell::TickSmoke()
 	// uçuşlar (yerel SITL): Fab haritası + saat/hava; yer → kalkış (GPS/EKF hazır olunca kuyruktan) → ~10 m askı → (ilk uçuşta FPV/HUD, duraklatma, özet)
 	// Not: ekran görüntüsü sonraki karede çizilir — görüntü ile durum değiştiren eylem aynı adımda yapılmaz.
 	struct FFl { const TCHAR* Map; const TCHAR* Tod; const TCHAR* Wx; const TCHAR* Code; bool bFull; const TCHAR* Vehicle = nullptr; const TCHAR* Model = nullptr; const TCHAR* Mode = nullptr;
-		const TCHAR* Launch = nullptr; float TakeoffAlt = 0.f; };
+		const TCHAR* Launch = nullptr; float TakeoffAlt = 0.f;
+		// bilerek çarpma: hedef türü (building | terrain); g3d haritası = Google 3B gerçek dünya parkuru (Ankara Kızılay)
+		const TCHAR* Ram = nullptr; };
 	static const FFl Fls[] = {
 		{ TEXT("orman"), TEXT("dusk"), TEXT("rain"), TEXT("f1"), true },
 		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f2"), false },
@@ -4967,6 +4969,11 @@ void SSmvShell::TickSmoke()
 		{ TEXT("pist"), TEXT("day"), TEXT("clear"), TEXT("f9"), false, TEXT("plane"), nullptr, nullptr, TEXT("wheels"), 200.f },
 		// VTOL dikey 150 m: şehir kenarının gerçek dünyadaki görünümü
 		{ TEXT("sehir"), TEXT("day"), TEXT("clear"), TEXT("f10"), false, TEXT("vtol"), nullptr, nullptr, nullptr, 150.f },
+		// ÇARPIŞMA kanıtı: çok rotor bilerek binaya / yamaca çarpar (kaçınma kapalı, ALT_HOLD ileri) → temas sınıfı, çarpışma, disarm, yüzeyde durma
+		{ TEXT("sehir"), TEXT("day"), TEXT("clear"), TEXT("f11"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("building") },
+		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f12"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("building") },
+		{ TEXT("g3d"), TEXT("day"), TEXT("clear"), TEXT("f13"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("building") },
+		{ TEXT("orman"), TEXT("day"), TEXT("clear"), TEXT("f14"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("terrain") },
 	};
 	const int32 NFl = UE_ARRAY_COUNT(Fls);
 	// yalnız seçilen uçuşlar (-SmvSmokeOnly)
@@ -5006,6 +5013,17 @@ void SSmvShell::TickSmoke()
 			Flow->Draft.Track.World.MountainHeight = 420.0;
 			Flow->Draft.Track.World.MountainCount = 6;
 			Flow->Draft.Track.World.TreeDensity = 0.45;
+		}
+		else if (FCString::Strcmp(Fx.Map, TEXT("g3d")) == 0)
+		{
+			// Google fotogerçekçi 3B gerçek dünya parkuru: Ankara Kızılay (çok katlı bina dokusu)
+			Flow->Draft.Track = FSmvTrack();
+			Flow->Draft.Track.Id = TEXT("smoke-g3d");
+			Flow->Draft.Track.Name = TEXT("Kızılay");
+			Flow->Draft.Track.ParkurKind = TEXT("real");
+			Flow->Draft.Track.WorldMode = TEXT("google3d");
+			Flow->Draft.Track.Lat = 39.92065; Flow->Draft.Track.Lon = 32.85410; Flow->Draft.Track.GroundMsl = 870;
+			Flow->Draft.Track.RadiusM = 600;
 		}
 		else if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Fx.Map)) Flow->Draft.Track = FSmvFabContent::MakeTrack(*M);
 		else SMV_KLOG(TEXT("SMOKE map %s yok — varsayılan parkur"), Fx.Map);
@@ -5086,7 +5104,50 @@ void SSmvShell::TickSmoke()
 		if (Alt < 8.5f && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
 		SMV_KLOG(TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);
 		SmokeAt = Now + 4.0; ++SmokeSub; return;
-	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.bFull ? 20 : Fx.Vehicle ? 13 : 11; return;
+	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.Ram ? 60 : Fx.bFull ? 20 : Fx.Vehicle ? 13 : 11; return;
+	// bilerek çarpma: hedef bul + burnu çevir (_ram0), koşu (kaçınma kapalı), çarpışma anı (_ram1), 3 sn (_ram2), 7 sn sonra yüzeyde (_ram3)
+	case 60:
+	{
+		FString D;
+		const bool bOk = GameMode.IsValid() && GameMode->SmokeRamBegin(Fx.Ram, D);
+		SMV_KLOG(TEXT("SMOKE ram %s (%s): %s"), Fx.Code, Fx.Ram, *D);
+		if (!bOk) { Shot(Base + TEXT("_ramnone")); SmokeAt = Now + 0.8; SmokeSub = 11; return; }
+		SmokeAt = Now + 5.0; SmokeSub = 61; return;
+	}
+	case 61: Shot(Base + TEXT("_ram0")); SmokeAt = Now + 0.8; SmokeSub = 62; return;
+	case 62: if (GameMode.IsValid()) GameMode->SmokeRamGo(); SmokeDeadline = Now + 45.0; SmokeT1 = Now; SmokeAt = Now + 0.05; SmokeSub = 63; return;
+	case 63:
+	{
+		bool bArm = false; float Dist = -1.f, Below = -1.f, Spd = 0.f; FString C;
+		const bool bCrash = GameMode.IsValid() && GameMode->SmokeRamStatus(bArm, Dist, C, &Below, &Spd);
+		static double LastLog = 0;
+		if (Now - LastLog > 2.0) { LastLog = Now; SMV_KLOG(TEXT("SMOKE ram koşu %s: hedefe %.1f m, hız %.1f m/s, ARM %d"), Fx.Code, Dist, Spd, bArm ? 1 : 0); }
+		if (bCrash)
+		{
+			SMV_KLOG(TEXT("SMOKE ram ÇARPIŞMA %s: %.1f sn sonra, hedefe %.1f m, ARM %d, son temas: %s"), Fx.Code, Now - SmokeT1, Dist, bArm ? 1 : 0, *C);
+			Shot(Base + TEXT("_ram1")); SmokeAt = Now + 3.0; SmokeSub = 64; return;
+		}
+		if (Now > SmokeDeadline)
+		{
+			SMV_KLOG(TEXT("SMOKE ram ÇARPIŞMA YOK %s: hedefe %.1f m, ARM %d, son temas: %s"), Fx.Code, Dist, bArm ? 1 : 0, C.IsEmpty() ? TEXT("-") : *C);
+			Shot(Base + TEXT("_ramfail")); if (GameMode.IsValid()) GameMode->SmokeRamStop(); SmokeAt = Now + 0.8; SmokeSub = 11; return;
+		}
+		SmokeAt = Now + 0.03; return;
+	}
+	case 64:
+	{
+		bool bArm = false; float Dist = -1.f, Below = -1.f, Spd = 0.f; FString C;
+		if (GameMode.IsValid()) GameMode->SmokeRamStatus(bArm, Dist, C, &Below, &Spd);
+		SMV_KLOG(TEXT("SMOKE ram +3 sn %s: ARM %d, altındaki yüzeye %.2f m, SITL hız %.1f m/s"), Fx.Code, bArm ? 1 : 0, Below, Spd);
+		Shot(Base + TEXT("_ram2")); SmokeAt = Now + 4.0; SmokeSub = 65; return;
+	}
+	case 65:
+	{
+		bool bArm = false; float Dist = -1.f, Below = -1.f, Spd = 0.f; FString C;
+		if (GameMode.IsValid()) GameMode->SmokeRamStatus(bArm, Dist, C, &Below, &Spd);
+		SMV_KLOG(TEXT("SMOKE ram son %s: ARM %d, altındaki yüzeye %.2f m, SITL hız %.1f m/s, hedef noktasına %.1f m"), Fx.Code, bArm ? 1 : 0, Below, Spd, Dist);
+		Shot(Base + TEXT("_ram3")); if (GameMode.IsValid()) GameMode->SmokeRamStop(); SmokeAt = Now + 0.8; SmokeSub = 11; return;
+	}
 	// fare doğrulaması: alt banttaki "Panel" düğmesine sentetik sol tık → panel açık/kapalı değişmeli (günlük: SMOKE mouse ... panel)
 	case 20:
 	{

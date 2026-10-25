@@ -1046,6 +1046,11 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	{
 		// yalnız istemci tarafı (görüntü kipi / uyarı özeti oyun katmanında tutulur)
 	}
+	else if (Name == TEXT("yaw"))
+	{
+		// MAV_CMD_CONDITION_YAW (115): p1 hedef yön (°, kuzeyden saat yönü), p2 dönüş hızı (°/sn), p3 yön (0 en kısa), p4 0 = mutlak (GUIDED'da)
+		CommandLong(115, (float)FMath::Fmod(SmvJson::Num(P, TEXT("deg")) + 360.0, 360.0), (float)SmvJson::Num(P, TEXT("rate"), 45.0), 0.f, 0.f);
+	}
 	else if (Name == TEXT("param_set"))
 	{
 		const FString Id = SmvJson::Str(P, TEXT("name")).ToUpper();

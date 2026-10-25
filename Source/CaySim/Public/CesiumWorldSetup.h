@@ -109,8 +109,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double GoogleFallbackS = 25.0;
 	/** Cesium karo seçim istatistikleri günlüğe (tanı; komut satırı -CesiumStats) */
 	bool bLogTileStats = false;
-	/** Google 3B karolarında fizik ağı (pahalı; kapalıyken çarpışma gizli World Terrain'den) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) bool bGooglePhysics = false;
+	/** Google 3B karolarında fizik ağı — binalar gerçekten çarpışır (kapalıyken çarpışma yalnız gizli World Terrain'den: binaların içinden geçilirdi) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) bool bGooglePhysics = true;
 	/** 3D Tiles ekran-uzayı hata sınırı (küçük = daha ayrıntılı). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double TilesScreenSpaceError = 12.0;
 	/** Geoid ayrımı (MSL → WGS84 elipsoid) m; Türkiye için ≈ 30–40 m. Ev irtifası ile 3D Tiles yüzeyi arası farktan kalkışta otomatik düzeltilir. */

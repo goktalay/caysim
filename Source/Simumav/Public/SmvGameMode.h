@@ -198,7 +198,18 @@ public:
 		/** Duman testi: görünümün (Fx, Fy) oranındaki noktaya sentetik sol tık (Slate); günlükte "SMOKE mouse" */
 		bool SmokeClick(float Fx, float Fy, const TCHAR* What);
 		bool SmokePanelOpen() const;
+		/** Duman testi — bilerek çarpma: çevrede (72 yön, 8–400 m) Prefer türündeki (building | terrain | boş = her şey) en yakın yüzeyi bulur,
+		 *  araç burnunu ona çevirir (GUIDED CONDITION_YAW). OutDesc: hedef aktör / tür / uzaklık. */
+		bool SmokeRamBegin(const FString& Prefer, FString& OutDesc);
+		/** Çarpma koşusu: kaçınma kapalı (AVOID_ENABLE 0), ALT_HOLD, RC ileri yunuslama (sabit kanatta doğrudan hedefe dalış GUIDED değil — yalnız çok rotor). */
+		void SmokeRamGo();
+		void SmokeRamStop();
+		/** Çarpma durumu: çarpışma oldu mu, ARM, hedefe uzaklık (m), son temas satırı */
+		bool SmokeRamStatus(bool& bOutArmed, float& OutDistM, FString& OutContact, float* OutBelowM = nullptr, float* OutSpeed = nullptr) const;
 	private:
+		bool bSmokeRam = false;
+		FVector SmokeRamTarget = FVector::ZeroVector;
+		FString SmokeRamLastContact;
 		FString HudLang;
 	void TickDebris(float Dt);
 	void UpdateFpv(const FCaySimTelemetry& T, double Now);

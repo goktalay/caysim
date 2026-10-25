@@ -90,6 +90,7 @@ private:
 	TArray<TWeakObjectPtr<AActor>> Ignore;
 	TArray<FSmvContactEvent> Events;
 	FVector Resolved = FVector::ZeroVector;
+	FVector LastDesired = FVector::ZeroVector;   // önceki karenin istenen (SITL) konumu — ışınlama yalnız SITL'in KENDİ sıçramasında
 	bool bHas = false;
 	double MinHalfCm = 20;
 	double RestPen0M = 0;                // yerde dururken olağan batma (gövde altı → aktör kökü)

@@ -246,6 +246,7 @@ void ASmvGameMode::BuildScene()
 	Req = Flow->Draft;
 	bScene = true;
 	bCrashed = false;
+	bSmokeRam = false;
 	bPauseMenu = false;
 	bHasLastPos = false;
 	Events.Reset();
@@ -408,7 +409,16 @@ void ASmvGameMode::BuildScene()
 		P->OnRc.AddLambda([Weak](const TArray<int32>& Rc)
 		{
 			ASmvGameMode* Self = Weak.Get();
-			if (Self && Self->Link() && !Self->bPauseMenu) Self->Link()->SendRc(Rc);
+			if (!Self || !Self->Link() || Self->bPauseMenu) return;
+			if (Self->bSmokeRam && Rc.Num() >= 4)
+			{
+				// duman testi çarpma koşusu: ileri yunuslama, gaz ortada (ALT_HOLD irtifa tutar); kip kanalı (ch5) pilotunki kalır
+				TArray<int32> R = Rc;
+				R[0] = 1500; R[1] = 1150; R[2] = 1500; R[3] = 1500;
+				Self->Link()->SendRc(R);
+				return;
+			}
+			Self->Link()->SendRc(Rc);
 		});
 		P->OnAction.AddUObject(this, &ASmvGameMode::HandleAction);
 		// tanıtım kamerası (100 m yukarıdan inen süzülüş): yükleme ekranı sahneyi takip kamerasının son konumunda ısıttığı için varsayılan
@@ -1440,6 +1450,7 @@ void ASmvGameMode::TickPhysics(float /*Dt*/)
 void ASmvGameMode::HandleContact(const FSmvContactEvent& E)
 {
 	UE_LOG(LogSimumav, Log, TEXT("Fizik teması: %s"), *E.Describe());
+	if (bSmokeRam) { SmokeRamLastContact = E.Describe(); SMV_KLOG(TEXT("SMOKE ram temas: %s"), *SmokeRamLastContact); }
 	USmvFlightLink* L = Link();
 	if (!L) return;
 	const double Now = FPlatformTime::Seconds();
@@ -1733,6 +1744,108 @@ void ASmvGameMode::SmokeTakeoff(float AltM)
 	TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
 	P->SetNumberField(TEXT("alt"), AltM);
 	Command(TEXT("takeoff"), P);
+}
+
+bool ASmvGameMode::SmokeRamBegin(const FString& Prefer, FString& OutDesc)
+{
+	UWorld* W = GetWorld();
+	USmvFlightLink* L = Link();
+	if (!W || !Drone || !L) { OutDesc = TEXT("dron / bağlantı yok"); return false; }
+	FSmvContactSolver* Sol = Drone->GetContactSolver();
+	const FVector P = Drone->GetActorLocation();
+	const FQuat Enu = WorldSetup ? WorldSetup->EnuToUnrealRotation(P) : FQuat::Identity;
+	const FVector Up = Enu.RotateVector(FVector::UpVector).GetSafeNormal();
+	FVector Fwd = Enu.RotateVector(FVector::ForwardVector);
+	Fwd = (Fwd - FVector::DotProduct(Fwd, Up) * Up).GetSafeNormal();
+	const FCollisionQueryParams Q = SmvPhysics::MakeQuery(TEXT("SmvRam"), Drone, Sol ? &Sol->IgnoreList() : nullptr);
+	const ECollisionChannel Ch = FSmvPhysicsSettings::Get().Channel;
+	double BestD = 1e18; FHitResult Best; FString BestKind;
+	int32 NHit = 0;
+	TMap<FString, int32> Kinds;
+	for (int32 i = 0; i < 72; ++i)
+	{
+		const FVector Dir = FQuat(Up, FMath::DegreesToRadians(i * 5.0)).RotateVector(Fwd);
+		FHitResult H;
+		if (!W->LineTraceSingleByChannel(H, P, P + Dir * 40000.0, Ch, Q)) continue;
+		++NHit;
+		const FString K = SmvPhysics::SurfaceKind(H, Up);
+		Kinds.FindOrAdd(K)++;
+		if (H.Distance < 1200.0) continue;   // koşu payı (≥ 12 m)
+		const double Nz = FVector::DotProduct(H.ImpactNormal, Up);
+		bool bOk = Prefer.IsEmpty();
+		if (Prefer == TEXT("building")) bOk = (K == TEXT("building") || K == TEXT("obstacle")) && Nz < 0.7;
+		else if (Prefer == TEXT("terrain")) bOk = K == TEXT("terrain") && Nz < 0.9;
+		if (bOk && H.Distance < BestD) { BestD = H.Distance; Best = H; BestKind = K; }
+	}
+	FString KindList;
+	for (const TPair<FString, int32>& Kv : Kinds) KindList += FString::Printf(TEXT("%s%s %d"), KindList.IsEmpty() ? TEXT("") : TEXT(", "), *Kv.Key, Kv.Value);
+	if (BestD > 1e17)
+	{
+		OutDesc = FString::Printf(TEXT("%s türünde hedef yok (72 yönde %d isabet: %s)"), Prefer.IsEmpty() ? TEXT("her") : *Prefer, NHit, *KindList);
+		return false;
+	}
+	SmokeRamTarget = Best.ImpactPoint;
+	SmokeRamLastContact.Reset();
+	// hedef yönü (coğrafi): dron tele konumundan isabet noktasının enlem/boylamına
+	double Lon = 0, Lat = 0, H = 0;
+	double Deg = 0;
+	if (WorldSetup)
+	{
+		WorldSetup->UnrealToGeo(Best.ImpactPoint, Lon, Lat, H);
+		const FCaySimTelemetry& T = L->LastTele();
+		const double P1 = FMath::DegreesToRadians(T.Lat), P2 = FMath::DegreesToRadians(Lat), Dl = FMath::DegreesToRadians(Lon - T.Lon);
+		Deg = FMath::RadiansToDegrees(FMath::Atan2(FMath::Sin(Dl) * FMath::Cos(P2), FMath::Cos(P1) * FMath::Sin(P2) - FMath::Sin(P1) * FMath::Cos(P2) * FMath::Cos(Dl)));
+	}
+	TSharedPtr<FJsonObject> Y = MakeShared<FJsonObject>();
+	Y->SetNumberField(TEXT("deg"), Deg);
+	Y->SetNumberField(TEXT("rate"), 60.0);
+	Command(TEXT("yaw"), Y);
+	OutDesc = FString::Printf(TEXT("hedef %s / %s (%s) %.1f m, yön %.0f°, normal·yukarı %.2f; 72 yönde %d isabet: %s"),
+		Best.GetActor() ? *Best.GetActor()->GetName() : TEXT("-"), Best.GetComponent() ? *Best.GetComponent()->GetName() : TEXT("-"), *BestKind,
+		BestD / 100.0, Deg < 0 ? Deg + 360.0 : Deg, FVector::DotProduct(Best.ImpactNormal, Up), NHit, *KindList);
+	return true;
+}
+
+void ASmvGameMode::SmokeRamGo()
+{
+	// kaçınma (AVOID_ENABLE 3: PRX1 ile duvardan 2 m önce durur) kapatılır — bilerek çarpma; ALT_HOLD + ileri yunuslama (RC geçersiz kılma)
+	TSharedPtr<FJsonObject> Pa = MakeShared<FJsonObject>();
+	Pa->SetStringField(TEXT("name"), TEXT("AVOID_ENABLE"));
+	Pa->SetNumberField(TEXT("value"), 0);
+	Command(TEXT("param_set"), Pa);
+	TSharedPtr<FJsonObject> M = MakeShared<FJsonObject>();
+	M->SetStringField(TEXT("mode"), TEXT("ALT_HOLD"));
+	Command(TEXT("mode"), M);
+	bSmokeRam = true;
+	if (IConsoleVariable* Cv = IConsoleManager::Get().FindConsoleVariable(TEXT("smv.Fizik.Ciz"))) Cv->Set(1, ECVF_SetByCode);   // gövde kutuları + temas normali (Development)
+}
+
+void ASmvGameMode::SmokeRamStop()
+{
+	bSmokeRam = false;
+	if (IConsoleVariable* Cv = IConsoleManager::Get().FindConsoleVariable(TEXT("smv.Fizik.Ciz"))) Cv->Set(-1, ECVF_SetByCode);
+}
+
+bool ASmvGameMode::SmokeRamStatus(bool& bOutArmed, float& OutDistM, FString& OutContact, float* OutBelowM, float* OutSpeed) const
+{
+	USmvFlightLink* L = Link();
+	bOutArmed = L && L->LastTele().bArmed;
+	if (OutSpeed) *OutSpeed = L ? (float)L->LastTele().Groundspeed : 0.f;
+	if (OutBelowM)
+	{
+		// gövde merkezinden aşağı: altındaki yüzeye uzaklık (yüzeyde duruyor mu)
+		*OutBelowM = -1.f;
+		if (Drone && GetWorld())
+		{
+			FCollisionQueryParams Q(TEXT("SmvRamBelow"), true, Drone);
+			FHitResult H;
+			const FVector P = Drone->GetActorLocation();
+			if (GetWorld()->LineTraceSingleByChannel(H, P, P - FVector(0, 0, 100000.0), FSmvPhysicsSettings::Get().Channel, Q)) *OutBelowM = (float)(H.Distance / 100.0);
+		}
+	}
+	OutDistM = Drone ? (float)(FVector::Dist(Drone->GetActorLocation(), SmokeRamTarget) / 100.0) : -1.f;
+	OutContact = SmokeRamLastContact;
+	return bCrashed;
 }
 
 void ASmvGameMode::SmokeCam(int32 Mode)

@@ -280,8 +280,12 @@ FVector FSmvContactSolver::Resolve(UWorld* W, const AActor* Self, const FVector&
 	const FSmvPhysicsSettings& S = FSmvPhysicsSettings::Get();
 	if (!W || Boxes.Num() == 0) return Desired;
 	const FCollisionQueryParams Q = SmvPhysics::MakeQuery(TEXT("SmvBody"), Self, &Ignore);
-	// ilk kare / sıfırlama / büyük sıçrama (SITL yeniden başladı): ışınla, yalnız çakışmadan çıkar, olay üretme
-	if (!bHas || FVector::DistSquared(Desired, Resolved) > FMath::Square(5000.0))
+	// ilk kare / sıfırlama / SITL'in kendi konumunun büyük sıçraması (yeniden başlatma, ışınlama): ışınla, yalnız çakışmadan çıkar, olay üretme.
+	// Sıçrama İSTENEN konumun önceki istenen konuma göre farkıdır — çözülmüş konuma uzaklık DEĞİL: duvara dayanmış aracın SITL konumu
+	// binanın içinden / arkasından uzaklaşmayı sürdürür; eskiden 50 m'yi geçince araç duvarın öbür yüzüne ışınlanıyordu (binanın içinden geçme).
+	const bool bJump = bHas && FVector::DistSquared(Desired, LastDesired) > FMath::Square(20000.0);   // 200 m tek karede (uçak + takılma dahil değil)
+	LastDesired = Desired;
+	if (!bHas || bJump)
 	{
 		FVector P = Desired;
 		Depenetrate(W, P, Rot, Q, nullptr);
