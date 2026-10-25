@@ -91,6 +91,12 @@ jobs:
           git lfs version
           Get-PSDrive -PSProvider FileSystem | Format-Table Name, Used, Free
           Write-Host "Zen (CI): $env:UE_ZEN_ARGS"
+          # IncrediBuild kaydi var ama BuildSystem.exe yok (yeni bilgisayar): UBT XGE'yi secip "Failed to start build" ile dusuyordu -> XGE kapali (UBA/yerel)
+          $ubtDir = Join-Path $env:APPDATA 'Unreal Engine\UnrealBuildTool'
+          New-Item -ItemType Directory -Force -Path $ubtDir | Out-Null
+          $xml = '<?xml version="1.0" encoding="utf-8" ?><Configuration xmlns="https://www.unrealengine.com/BuildConfiguration"><BuildConfiguration><bAllowXGE>false</bAllowXGE></BuildConfiguration></Configuration>'
+          Set-Content -Path (Join-Path $ubtDir 'BuildConfiguration.xml') -Value $xml -Encoding UTF8
+          Write-Host "UBT BuildConfiguration: $ubtDir (bAllowXGE=false)"
           # ayni port ayari proje yapilandirmasina da (yalniz calisma kopyasi): UnrealPak/IoStore sahneleme Zen'i komut satiri almaz
           Add-Content -Path Config/DefaultEngine.ini -Value "`r`n[Zen.AutoLaunch]`r`nDesiredPort=8559`r`n`r`n[Zen.ConnectExisting]`r`nPort=8559"
 
