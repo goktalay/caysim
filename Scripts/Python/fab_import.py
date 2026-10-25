@@ -437,6 +437,157 @@ def paket_incele(j):
     return sonuc
 
 
+VAT_KOD = """
+float idx = floor(VI.x + 0.5);
+float len = max(lerp(WL, IL, Clip), 1.0);
+float st = lerp(WS, IS, Clip);
+float fr = st + floor(fmod(max((T * Rate + Off) * SR, 0.0), len));
+float q = floor(idx / W);
+float row = fr * RPF + q;
+float col = idx - q * W;
+float2 uv = (float2(col, row) + 0.5) / float2(W, H);
+return Texture2DSampleLevel(Tex, TexSampler, uv, 0).rgb;
+"""
+
+RENK_KOD = """
+return lerp(C, C * 0.22 + 0.015, Alt);
+"""
+
+
+def vat_malzeme(hedef, ornek_doku):
+    """Kalabalık VAT ana malzemesi (/Game/Fab/Crowd/M_SmvCrowdVat): OverCrowd Pure WPO dokusu (RGB = dinlenme pozundan
+    bileşen uzayı öteleme) köşe dizinine (UV1) ve kareye göre okunur → World Position Offset. Örnek başına veri
+    (ISM PerInstanceCustomData): 0 zaman kayması (sn), 1 klip (0 yürüme / 1 bekleme), 2 oynatma hızı, 3-5 giysi rengi."""
+    yol = f"{hedef}/M_SmvCrowdVat"
+    if eal.does_asset_exist(yol):
+        eal.delete_asset(yol)
+    mel = unreal.MaterialEditingLibrary
+    m = at.create_asset("M_SmvCrowdVat", hedef, unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("used_with_instanced_static_meshes", True)
+    try:
+        m.set_editor_property("used_with_nanite", True)
+    except Exception:  # noqa: BLE001
+        pass
+
+    def ifade(cls, x, y, **ozellik):
+        e = mel.create_material_expression(m, cls, x, y)
+        for k, v in ozellik.items():
+            e.set_editor_property(k, v)
+        return e
+
+    def skaler(ad, deger, x, y):
+        return ifade(unreal.MaterialExpressionScalarParameter, x, y, parameter_name=ad, default_value=deger)
+
+    tex = ifade(unreal.MaterialExpressionTextureObjectParameter, -900, -400, parameter_name="PosTex", texture=ornek_doku)
+    try:
+        tex.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
+    except Exception as ex:  # noqa: BLE001
+        uyar(f"VAT malzeme sampler: {ex}")
+    vi = ifade(unreal.MaterialExpressionTextureCoordinate, -900, -300, coordinate_index=1)
+    t = ifade(unreal.MaterialExpressionTime, -900, -240)
+    girdiler = {"Tex": tex, "VI": vi, "T": t}
+    for i, ad in ((0, "Off"), (1, "Clip"), (2, "Rate")):
+        girdiler[ad] = ifade(unreal.MaterialExpressionPerInstanceCustomData, -900, -180 + 60 * i, data_index=i)
+        try:
+            girdiler[ad].set_editor_property("const_default_value", 0.0 if ad != "Rate" else 1.0)
+        except Exception:  # noqa: BLE001
+            pass
+    for k, (ad, d) in enumerate((("SR", 20.0), ("WS", 0.0), ("WL", 2.0), ("IS", 0.0), ("IL", 2.0), ("W", 2048.0), ("RPF", 1.0), ("H", 2.0))):
+        girdiler[ad] = skaler(ad, d, -900, 20 + 60 * k)
+    c = ifade(unreal.MaterialExpressionCustom, -400, -200, code=VAT_KOD, output_type=unreal.CustomMaterialOutputType.CMOT_FLOAT3, description="SmvVat")
+    ins = []
+    for ad in girdiler:
+        ci = unreal.CustomInput()
+        ci.set_editor_property("input_name", ad)
+        ins.append(ci)
+    c.set_editor_property("inputs", ins)
+    for ad, e in girdiler.items():
+        if not mel.connect_material_expressions(e, "", c, ad):
+            uyar(f"VAT malzeme bağlantısı yok: {ad}")
+    tr = ifade(unreal.MaterialExpressionTransform, -150, -200, transform_source_type=unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL,
+               transform_type=unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+    mel.connect_material_expressions(c, "", tr, "")
+    mel.connect_material_property(tr, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+    renk = ifade(unreal.MaterialExpressionPerInstanceCustomData3Vector, -400, 200, data_index=3)
+    alt = skaler("Alt", 0.0, -400, 280)
+    rc = ifade(unreal.MaterialExpressionCustom, -150, 200, code=RENK_KOD, output_type=unreal.CustomMaterialOutputType.CMOT_FLOAT3, description="SmvGiysi")
+    ins2 = []
+    for ad in ("C", "Alt"):
+        ci = unreal.CustomInput()
+        ci.set_editor_property("input_name", ad)
+        ins2.append(ci)
+    rc.set_editor_property("inputs", ins2)
+    mel.connect_material_expressions(renk, "", rc, "C")
+    mel.connect_material_expressions(alt, "", rc, "Alt")
+    mel.connect_material_property(rc, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    pur = skaler("Roughness", 0.85, -150, 340)
+    mel.connect_material_property(pur, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.recompile_material(m)
+    eal.save_asset(yol, only_if_is_dirty=False)
+    log(f"VAT malzeme: {yol}")
+    return m
+
+
+def vat_hazirla(sm, r, klipler, hedef, ad):
+    """Pişirme sonrası: köşe dizini UV1'e (tüm LOD'lar), kullanılmayan normal dokusu silinir, ağ yuvalarına VAT malzeme örnekleri."""
+    lib = unreal.OverCrowdPureVatLibrary
+    # köşe dizini 0..NumVertices-1 (~46 bin): yarım duyarlıklı (16 bit) UV 2048 üstünü tam tutamaz → tam duyarlıklı UV
+    try:
+        sms = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+        for lod in range(sms.get_lod_count(sm)):
+            bs = sms.get_lod_build_settings(sm, lod)
+            if not bs.get_editor_property("use_full_precision_u_vs"):
+                bs.set_editor_property("use_full_precision_u_vs", True)
+                sms.set_lod_build_settings(sm, lod, bs)
+        log(f"VAT tam duyarlıklı UV ({ad}): {sms.get_lod_count(sm)} LOD")
+    except Exception as ex:  # noqa: BLE001
+        uyar(f"VAT tam duyarlıklı UV: {ex}")
+    ok = lib.write_vertex_indices_for_all_lods(sm, 1)
+    log(f"VAT UV1 köşe dizini ({ad}): {ok}")
+    pos = r.get_editor_property("position_texture")
+    nrm = r.get_editor_property("normal_texture")
+    try:
+        log(f"VAT doku {pos.get_name()}: {pos.blueprint_get_size_x()}x{pos.blueprint_get_size_y()} sıkıştırma={pos.get_editor_property('compression_settings')} "
+            f"srgb={pos.get_editor_property('srgb')} süzgeç={pos.get_editor_property('filter')} mip={pos.get_editor_property('mip_gen_settings')}")
+    except Exception as ex:  # noqa: BLE001
+        uyar(f"VAT doku bilgisi: {ex}")
+    if nrm:
+        yol_n = nrm.get_path_name().split(".")[0]
+        eal.delete_asset(yol_n)
+        log(f"VAT normal dokusu kaldırıldı (malzeme dinlenme normalini kullanır): {yol_n}")
+    ana = unreal.load_asset(f"{hedef}/M_SmvCrowdVat")
+    if not ana:
+        ana = vat_malzeme(hedef, pos)
+    aralik = {}
+    for k in klipler:
+        nm = k.get_editor_property("anim").get_name()
+        tur = "I" if "Idle" in nm else "W"
+        aralik[tur] = (k.get_editor_property("start_frame"), k.get_editor_property("end_frame") - k.get_editor_property("start_frame") + 1)
+    w = aralik.get("W", (0, 2))
+    i = aralik.get("I", w)
+    mel = unreal.MaterialEditingLibrary
+    mics = []
+    for alt in (0, 1):
+        mic_ad = f"MI_{ad}_VAT_{'Alt' if alt else 'Ust'}"
+        mic_yol = f"{hedef}/{mic_ad}"
+        if eal.does_asset_exist(mic_yol):
+            eal.delete_asset(mic_yol)
+        mic = at.create_asset(mic_ad, hedef, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+        mel.set_material_instance_parent(mic, ana)
+        mel.set_material_instance_texture_parameter_value(mic, "PosTex", pos)
+        for pad, d in (("SR", r.get_editor_property("sample_rate")), ("W", r.get_editor_property("texture_width")), ("RPF", r.get_editor_property("rows_per_frame")),
+                       ("H", r.get_editor_property("rows_per_frame") * r.get_editor_property("num_frames") + 1), ("WS", w[0]), ("WL", w[1]), ("IS", i[0]), ("IL", i[1]), ("Alt", alt)):
+            mel.set_material_instance_scalar_parameter_value(mic, pad, float(d))
+        mel.update_material_instance(mic)
+        eal.save_asset(mic_yol, only_if_is_dirty=False)
+        mics.append(mic)
+    n = len(sm.get_editor_property("static_materials"))
+    for k in range(n):
+        sm.set_material(k, mics[0] if k == 0 else mics[1])
+    eal.save_asset(sm.get_path_name().split(".")[0], only_if_is_dirty=False)
+    log(f"VAT malzeme örnekleri {ad}: {n} yuva; yürüme {w}, bekleme {i}, W={r.get_editor_property('texture_width')} RPF={r.get_editor_property('rows_per_frame')}")
+
+
 def vat_pisir(j):
     """OverCrowd ile kalabalık VAT pişirme denemesi (Pure WPO VAT): iskeletli insan ağı + yürüme/bekleme animasyonu →
     statik ağ + konum/normal dokuları (/Game/Fab/Crowd). Sonuç ve API imzaları günlüğe ("VAT ...")."""
@@ -488,7 +639,10 @@ def vat_pisir(j):
                 uyar(f"VAT alanlar {st}: {ex}")
     if eal.does_directory_exist(hedef):
         eal.delete_directory(hedef)
-    hiz = float(j.get("hiz", 30.0))
+    hiz = float(j.get("hiz", 20.0))
+    # yerinde yürüme (kök hareketi yok; oyun konumu kendisi ilerletir) + bekleme (ilk birkaç sn, döngü geçişi yumuşatılır).
+    # Doku boyutu = köşe × kare: 20 Hz ve kısa bekleme ile ~2048×2600 (RGBA16F ~43 MB/ağ)
+    secim = j.get("klipler", [["Walk_InPlace", 0.0, 0.0], ["Walk_Fwd", 0.0, 0.0], ["Idle", 3.0, 0.4]])
     tamam = 0
     for yol in j.get("agler", []):
         try:
@@ -500,7 +654,10 @@ def vat_pisir(j):
             skel = sk.get_editor_property("skeleton")
             klipler = []
             kare = 0
-            for anahtar in ("Walk_Fwd", "Idle"):
+            yurume_var = False
+            for anahtar, en_cok, harman in secim:
+                if anahtar.startswith("Walk") and yurume_var:
+                    continue
                 aday = [a for a in anims if anahtar in str(a.asset_name)]
                 for a in aday:
                     an = unreal.load_asset(str(a.package_name))
@@ -509,10 +666,12 @@ def vat_pisir(j):
                             uzun = float(unreal.AnimationLibrary.get_sequence_length(an))
                         except Exception:  # noqa: BLE001
                             uzun = float(an.get_editor_property("sequence_length"))
+                        if en_cok and en_cok > 0:
+                            uzun = min(uzun, float(en_cok))
                         n = max(2, int(round(uzun * hiz)))
                         k = unreal.OverPureVatClip()
                         k.set_editor_property("anim", an)
-                        for alan, deger in (("start_frame", kare), ("end_frame", kare + n - 1), ("sample_rate", hiz), ("num_frames", n), ("loop", True), ("looping", True)):
+                        for alan, deger in (("start_frame", kare), ("end_frame", kare + n - 1), ("sample_rate", hiz), ("blend_loop_time", float(harman))):
                             try:
                                 k.set_editor_property(alan, deger)
                             except Exception:  # noqa: BLE001
@@ -520,6 +679,8 @@ def vat_pisir(j):
                         klipler.append(k)
                         log(f"VAT klip: {ad} <- {an.get_name()} ({uzun:.2f} sn, kare {kare}..{kare + n - 1} @ {hiz:.0f} Hz): {k}")
                         kare += n
+                        if anahtar.startswith("Walk"):
+                            yurume_var = True
                         break
             if not klipler:
                 uyar(f"VAT: {ad} için klip yok")
@@ -549,6 +710,10 @@ def vat_pisir(j):
             ok = bool(r.get_editor_property("success")) if r else False
             if ok:
                 tamam += 1
+                try:
+                    vat_hazirla(sm, r, klipler, hedef, ad)
+                except Exception as ex:  # noqa: BLE001
+                    uyar(f"VAT malzeme/UV: {ex}")
                 # oyunun VAT malzemesi bu değerleri okur (SmvCityLife: /Game/Fab/Crowd/<ağ>.json yerine ağ etiketi)
                 try:
                     bilgi = {a: str(r.get_editor_property(a)) for a in ("num_vertices", "num_frames", "rows_per_frame", "texture_width", "sample_rate", "max_offset", "bounds_min", "bounds_max")}

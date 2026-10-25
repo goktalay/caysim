@@ -334,7 +334,8 @@ try {
 	}
 	# OverCrowd VAT pisirme (kalabalik): UE5 Manny/Quinn + yurume/bekleme -> /Game/Fab/Crowd (surum damgasi basina bir kez; sonuc gunlukte "VAT").
 	# v3: klip kare araliklari (start/end) atanir; pisirme kaynagi ve klip alanlari gunluge (malzeme kodlamasi icin)
-	$vatDamga = Join-Path $content 'Fab\.vat-v3'
+	# v4: yerinde yurume + 3 sn bekleme @ 20 Hz, kose dizini UV1, VAT malzemesi (M_SmvCrowdVat) ve ag basina ornekler
+	$vatDamga = Join-Path $content 'Fab\.vat-v4'
 	if (((Get-Content -LiteralPath $uproject -Raw) -match '"OverCrowd"') -and (Test-Path -LiteralPath (Join-Path $content 'AT_Drone')) -and -not (Test-Path -LiteralPath $vatDamga)) {
 		$isler += [pscustomobject]@{ tur = 'vat'; hedef = '/Game/Fab/Crowd'; agler = @('/Game/AT_Drone/Demo/Character/Mannequins/Meshes/SKM_Manny_Simple', '/Game/AT_Drone/Demo/Character/Mannequins/Meshes/SKM_Quinn_Simple') }
 		$imzalar['/Game/Fab/Crowd'] = @($vatDamga, 'tamam')

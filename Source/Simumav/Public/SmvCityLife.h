@@ -3,7 +3,8 @@
 //     iki evreli ışık (X / Y caddeleri sırayla, arada tümü kırmızı), şehir kenarında karşı uca sarma; tekerlek kemikleri döner.
 //     Araç fiziği / ChaosVehicles ve paketin trafik Blueprint'leri kullanılmaz: yalnız ağ + malzeme klasörleri pişirilir.
 //   - Özel parkur › Şehir (prosedürel dünya): park etmiş araçlar ve yaya grupları.
-//   - Kalabalık: OverCrowd VAT kalabalığı (/Game/Fab/Crowd: OverCrowd ile pişirilmiş VAT ağları) varsa onunla; yoksa paketteki
+//   - Kalabalık: OverCrowd VAT kalabalığı (/Game/Fab/Crowd: OverCrowd Pure WPO VAT ağları + M_SmvCrowdVat; örnekli statik ağ,
+//     yürüme / bekleme ve giysi rengi örnek başına veride) varsa onunla; yoksa paketteki
 //     insan iskeletli ağları (UE5 Manny / Quinn, yürüme / bekleme animasyonu) — kaldırımlarda yürüyen, meydanda duran gruplar.
 // Paketler yoksa hiçbir şey kurulmaz (çağıran temel şekil dekoruna düşer). Hepsi yalnız görseldir: çarpışma, davranış, hedef yok.
 // Pişirilen klasörler SmvCityLife.cpp PISIR-KLASORLERI bloğunda (CI okur; dron gövdesi klasörleri de orada).
@@ -19,7 +20,7 @@ class UAnimSequence;
 class UPoseableMeshComponent;
 class USkeletalMeshComponent;
 class UMeshComponent;
-class UHierarchicalInstancedStaticMeshComponent;
+class UInstancedStaticMeshComponent;
 
 struct SIMUMAV_API FSmvCityLife
 {
@@ -61,7 +62,7 @@ protected:
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TArray<TObjectPtr<UMeshComponent>> CarComps;
 	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> PeopleComps;
-	UPROPERTY() TArray<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>> CrowdHisms;
+	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> CrowdHisms;   // OverCrowd VAT kalabalığı: ağ başına bir ISM
 
 private:
 	struct FLane
@@ -87,6 +88,7 @@ private:
 	struct FWalker
 	{
 		int32 Comp = -1, Path = 0;
+		int32 Ism = -1, Inst = -1;   // VAT kalabalığı: ISM dizini ve örnek (Comp yerine)
 		double S = 0, V = 140;
 		int32 Dir = 1;
 		double Side = 0;   // yol merkezinden yanal kayma (cm)
@@ -103,4 +105,7 @@ private:
 	FVector LanePoint(const FLane& L, double S, float& OutYaw) const;
 	bool Green(int32 Axis) const;
 	FVector PathPoint(int32 Path, double S, FVector& OutDir) const;
+	/** OverCrowd VAT kalabalığı (ISM + M_SmvCrowdVat; iskelet / animasyon güncellemesi yok). false → VAT ağı yok, iskeletli yedek kurulur. */
+	bool BuildVatCrowd(const TArray<FVector>& Spots, int32 Count, uint32& Rs);
+	TArray<TArray<FTransform>> VatWalkXf;   // ISM başına yürüyenlerin örnek dönüşümleri (0..n-1, her karede toplu güncellenir)
 };

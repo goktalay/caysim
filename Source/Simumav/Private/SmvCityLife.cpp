@@ -6,7 +6,9 @@
 #include "Animation/Skeleton.h"
 #include "Components/PoseableMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/Material.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -136,7 +138,15 @@ const TArray<UStaticMesh*>& FSmvCityLife::VatCrowdMeshes()
 	static bool bRead = false;
 	if (bRead) return Out;
 	bRead = true;
-	SmvAssetsIn<UStaticMesh>(GVatDir, Out, [](const FAssetData&) { return true; });
+	// yalnız VAT malzemesi bağlı pişirilmiş ağlar (SM_<ağ>_VAT; malzeme M_SmvCrowdVat örneği) — yarım kalmış pişirme kullanılmaz
+	SmvAssetsIn<UStaticMesh>(GVatDir, Out, [](const FAssetData& X) { return X.AssetName.ToString().EndsWith(TEXT("_VAT")); });
+	Out.RemoveAll([](UStaticMesh* M)
+	{
+		UMaterialInterface* Mi = M ? M->GetMaterial(0) : nullptr;
+		UMaterial* B = Mi ? Mi->GetBaseMaterial() : nullptr;
+		return !B || B->GetName() != TEXT("M_SmvCrowdVat");
+	});
+	if (FSmvCityLife::GetFloat(TEXT("VatCrowd"), 1.f) < 0.5f) Out.Reset();
 	UE_LOG(LogSimumav, Log, TEXT("OverCrowd VAT kalabalık ağları: %d (%s)"), Out.Num(), GVatDir);
 	return Out;
 }
@@ -288,10 +298,83 @@ FVector ASmvCityLife::PathPoint(int32 Path, double S, FVector& OutDir) const
 	return P[0];
 }
 
+namespace
+{
+	const FLinearColor GSmvTops[] = { FLinearColor(0.32f, 0.05f, 0.05f), FLinearColor(0.05f, 0.12f, 0.3f), FLinearColor(0.55f, 0.5f, 0.42f), FLinearColor(0.08f, 0.2f, 0.1f),
+		FLinearColor(0.6f, 0.6f, 0.62f), FLinearColor(0.35f, 0.22f, 0.08f), FLinearColor(0.04f, 0.04f, 0.05f), FLinearColor(0.45f, 0.3f, 0.36f) };
+}
+
+bool ASmvCityLife::BuildVatCrowd(const TArray<FVector>& Spots, int32 Count, uint32& Rs)
+{
+	const TArray<UStaticMesh*>& Vat = FSmvCityLife::VatCrowdMeshes();
+	if (Vat.Num() == 0) return false;
+	const FVector Me = GetActorLocation();
+	const float CullCm = FSmvCityLife::GetFloat(TEXT("PeopleCullM"), 450.f) * 100.f;
+	for (UStaticMesh* M : Vat)
+	{
+		UInstancedStaticMeshComponent* I = NewObject<UInstancedStaticMeshComponent>(this);
+		I->SetMobility(EComponentMobility::Movable);
+		I->SetStaticMesh(M);
+		I->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		I->SetCastShadow(true);
+		I->SetNumCustomDataFloats(6);   // 0 zaman kayması, 1 klip (0 yürüme / 1 bekleme), 2 oynatma hızı, 3-5 giysi rengi
+		I->SetCullDistances(0, (int32)CullCm);
+		I->LDMaxDrawDistance = CullCm;
+		I->SetCachedMaxDrawDistance(CullCm);
+		I->SetupAttachment(Root);
+		I->RegisterComponent();
+		CrowdHisms.Add(I);
+		VatWalkXf.AddDefaulted();
+	}
+	auto Add = [&](int32 Ism, const FTransform& X, float Clip, float Rate) -> int32
+	{
+		UInstancedStaticMeshComponent* I = CrowdHisms[Ism];
+		const int32 Idx = I->AddInstance(X, false);
+		const FLinearColor C = GSmvTops[(int32)(SmvRand(Rs) * 8) % 8];
+		const TArray<float> Data = { (float)(SmvRand(Rs) * 10.0), Clip, Rate, C.R, C.G, C.B };
+		I->SetCustomData(Idx, Data, false);
+		++VatPeople;
+		return Idx;
+	};
+	// %70 yürüyen (kaldırım döngüleri), %30 duran gruplar (meydan) — iskeletli yolla aynı dağılım
+	const int32 NWalk = WalkPaths.Num() ? FMath::RoundToInt(Count * (Spots.Num() ? 0.7 : 1.0)) : 0;
+	for (int32 i = 0; i < NWalk; ++i)
+	{
+		FWalker Wk;
+		Wk.Path = (int32)(SmvRand(Rs) * WalkPaths.Num()) % WalkPaths.Num();
+		Wk.S = SmvRand(Rs) * WalkLen[Wk.Path];
+		Wk.Dir = SmvRand(Rs) < 0.5 ? 1 : -1;
+		Wk.V = 120.0 + 40.0 * SmvRand(Rs);
+		Wk.Side = (SmvRand(Rs) - 0.5) * 160.0;
+		Wk.Ism = (int32)(SmvRand(Rs) * CrowdHisms.Num()) % CrowdHisms.Num();
+		FVector Dir;
+		const FVector P = PathPoint(Wk.Path, Wk.S, Dir);
+		const FTransform X(FRotator(0.0, (Dir * (double)Wk.Dir).Rotation().Yaw - 90.0, 0.0), P);
+		Wk.Inst = Add(Wk.Ism, X, 0.f, (float)(Wk.V / 140.0));
+		VatWalkXf[Wk.Ism].Add(X);
+		Walkers.Add(Wk);
+	}
+	for (int32 i = NWalk; i < Count && Spots.Num(); )
+	{
+		const FVector C0 = Spots[(int32)(SmvRand(Rs) * Spots.Num()) % Spots.Num()] - Me;
+		const int32 Grp = 2 + (int32)(SmvRand(Rs) * 4.0);
+		for (int32 k = 0; k < Grp && i < Count; ++k, ++i)
+		{
+			const double A = 2.0 * UE_DOUBLE_PI * k / Grp + SmvRand(Rs) * 0.4;
+			const FVector P = C0 + FVector(FMath::Cos(A), FMath::Sin(A), 0.0) * (70.0 + 30.0 * SmvRand(Rs));
+			const FVector To = (C0 - P).GetSafeNormal2D();
+			Add((int32)(SmvRand(Rs) * CrowdHisms.Num()) % CrowdHisms.Num(), FTransform(FRotator(0.0, To.Rotation().Yaw - 90.0, 0.0), P), 1.f, 0.9f + 0.2f * (float)SmvRand(Rs));
+		}
+	}
+	for (UInstancedStaticMeshComponent* I : CrowdHisms) I->MarkRenderStateDirty();
+	UE_LOG(LogSimumav, Log, TEXT("Şehir kalabalığı kuruldu (OverCrowd VAT): %d kişi (%d yürüyen, %d ağ, %d yol; yalnız görsel)"), VatPeople, Walkers.Num(), CrowdHisms.Num(), WalkPaths.Num());
+	return VatPeople > 0;
+}
+
 int32 ASmvCityLife::BuildCrowd(const TArray<TArray<FVector>>& Walk, const TArray<FVector>& Spots, int32 Count, int32 Seed)
 {
 	const TArray<USkeletalMesh*>& People = FSmvCityLife::PeopleModels();
-	if (People.Num() == 0 || Count <= 0) return 0;
+	if ((People.Num() == 0 && FSmvCityLife::VatCrowdMeshes().Num() == 0) || Count <= 0) return 0;
 	uint32 Rs = (uint32)Seed * 2246822519u + 5u;
 	const FVector Me = GetActorLocation();
 	for (const TArray<FVector>& W : Walk)
@@ -304,6 +387,8 @@ int32 ASmvCityLife::BuildCrowd(const TArray<TArray<FVector>>& Walk, const TArray
 		WalkPaths.Add(L);
 		WalkLen.Add(FMath::Max(1.0, Len));
 	}
+	if (BuildVatCrowd(Spots, Count, Rs)) return VatPeople;
+	if (People.Num() == 0) return 0;
 	const float CullCm = FSmvCityLife::GetFloat(TEXT("PeopleCullM"), 450.f) * 100.f;
 	auto Make = [&](USkeletalMesh* M, UAnimSequence* A, float Rate) -> USkeletalMeshComponent*
 	{
@@ -433,12 +518,19 @@ void ASmvCityLife::Tick(float Dt)
 	for (FWalker& Wk : Walkers)
 	{
 		USkeletalMeshComponent* C = PeopleComps.IsValidIndex(Wk.Comp) ? PeopleComps[Wk.Comp].Get() : nullptr;
-		if (!C) continue;
+		const bool bVat = VatWalkXf.IsValidIndex(Wk.Ism) && VatWalkXf[Wk.Ism].IsValidIndex(Wk.Inst);
+		if (!C && !bVat) continue;
 		Wk.S += Wk.V * Dt * Wk.Dir;
 		FVector Dir;
 		const FVector P = PathPoint(Wk.Path, Wk.S, Dir);
 		const FVector Fw = Dir * (double)Wk.Dir;
 		const FVector Side = FVector(-Fw.Y, Fw.X, 0.0) * Wk.Side;
-		C->SetRelativeLocationAndRotation(P + Side, FRotator(0.0, Fw.Rotation().Yaw - 90.0, 0.0));
+		const FRotator R(0.0, Fw.Rotation().Yaw - 90.0, 0.0);
+		if (C) C->SetRelativeLocationAndRotation(P + Side, R);
+		else VatWalkXf[Wk.Ism][Wk.Inst] = FTransform(R, P + Side);
 	}
+	// VAT kalabalığı: yürüyenler her ISM'de 0..n-1 (önce eklendiler) — tek toplu güncelleme
+	for (int32 k = 0; k < CrowdHisms.Num() && k < VatWalkXf.Num(); ++k)
+		if (CrowdHisms[k] && VatWalkXf[k].Num() > 0)
+			CrowdHisms[k]->BatchUpdateInstancesTransforms(0, VatWalkXf[k], false, true, false);
 }
