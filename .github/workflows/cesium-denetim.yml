@@ -1,0 +1,58 @@
+# Simumav - Cesium ion erisim denetimi (yalniz okur). secrets.CESIUM_ION_TOKEN ile verilen varlik kimliklerinin uc noktasini sorar;
+# yalniz HTTP durumu, varlik turu ve dis tur/host yazilir (belirtec ve varlik erisim anahtari YAZDIRILMAZ).
+name: cesium-denetim
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner etiketi (bos = vars.RUNNER_LABEL ya da unreal)"
+        type: string
+        default: ""
+      varliklar:
+        description: "ion varlik kimlikleri (virgulle)"
+        type: string
+        default: "1,2,3954,2275207,96188,3,4"
+
+jobs:
+  denetim:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: ion
+        env:
+          CESIUM_ION_TOKEN: ${{ secrets.CESIUM_ION_TOKEN }}
+          VARLIK: ${{ inputs.varliklar }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          if (-not $env:CESIUM_ION_TOKEN) { Write-Host "CESIUM_ION_TOKEN yok"; exit 0 }
+          Write-Host ("Belirtec uzunlugu: " + $env:CESIUM_ION_TOKEN.Length)
+          foreach ($id in ($env:VARLIK.Split(',') | Where-Object { $_ })) {
+            $u = "https://api.cesium.com/v1/assets/" + $id.Trim() + "/endpoint?access_token=" + $env:CESIUM_ION_TOKEN
+            try {
+              $r = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 30
+              $j = $r.Content | ConvertFrom-Json
+              $h = ''
+              if ($j.url) { $h = ([Uri]$j.url).Host }
+              if ($j.options -and $j.options.url) { $h = ([Uri]$j.options.url).Host }
+              $att = 0
+              if ($j.attributions) { $att = @($j.attributions).Count }
+              Write-Host ("varlik " + $id + ": HTTP " + [int]$r.StatusCode + " tur=" + $j.type + " dis=" + $j.externalType + " host=" + $h + " atif=" + $att)
+            } catch {
+              $code = ''
+              if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+              $msg = $_.ErrorDetails.Message
+              if ($msg) { $msg = $msg.Replace($env:CESIUM_ION_TOKEN, '***') }
+              Write-Host ("varlik " + $id + ": HATA " + $code + " " + $msg)
+            }
+          }
+          try {
+            $r = Invoke-WebRequest -Uri ("https://api.cesium.com/v1/assets?access_token=" + $env:CESIUM_ION_TOKEN) -UseBasicParsing -TimeoutSec 30
+            $j = $r.Content | ConvertFrom-Json
+            foreach ($a in $j.items) { Write-Host ("hesap varligi " + $a.id + " " + $a.type + " " + $a.name + " durum=" + $a.status) }
+          } catch { Write-Host ("varlik listesi alinamadi (belirtec kapsami): " + $_.Exception.Message) }
