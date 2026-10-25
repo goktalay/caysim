@@ -1795,6 +1795,9 @@ bool ASmvGameMode::SmokeRamBegin(const FString& Prefer, FString& OutDesc)
 		{
 			UStaticMeshComponent* C = *It;
 			if (!C || C->GetWorld() != W || !C->IsRegistered() || !C->GetStaticMesh() || C->GetOwner() == Drone) continue;
+			// zemin levhaları / temel şekiller / karolar / çim değil — bina adayları
+			const FString Mn = C->GetStaticMesh()->GetName(), Cn = C->GetClass()->GetName();
+			if (Mn == TEXT("Cube") || Mn == TEXT("Cylinder") || Mn == TEXT("Sphere") || Cn.Contains(TEXT("Cesium")) || Cn.Contains(TEXT("Grass"))) continue;
 			const FBoxSphereBounds B = C->Bounds;
 			if (B.SphereRadius < 400.0 || B.SphereRadius > 20000.0) continue;   // 4 m – 200 m (bina boyu)
 			const double D = FVector::Dist2D(B.Origin, P) - B.SphereRadius * 0.5;

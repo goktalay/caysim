@@ -27,7 +27,8 @@ public class CaySim : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"RenderCore",
-			"RHI"
+			"RHI",
+			"Projects"
 		});
 
 		// gzip çözme (kayıttan oynatma kareleri) için motorun zlib üçüncü taraf modülü
