@@ -108,7 +108,10 @@ void USmvGameInstance::ApplyGraphicsQuality(int32 Q) const
 	if (UGameUserSettings* S = GEngine ? GEngine->GetGameUserSettings() : nullptr)
 	{
 		S->SetOverallScalabilityLevel(FMath::Clamp(Q, 0, 4));
-		S->ApplySettings(false);
+		// çözünürlük / pencere kipi burada değiştirilmez (yalnız kalite): kayıtlı çözünürlük -ResX/-ResY komut satırını ve ultra geniş
+		// (3440×1440) pencereyi 1600×900'e çekiyordu — çözünürlük Ayarlar → Görüntü → Uygula ile
+		S->ApplyNonResolutionSettings();
+		S->SaveSettings();
 	}
 	// atmosfer kalitesi (hacimsel sis/bulut örnekleri, Lumen kalitesi, UDS bulut kipi) aynı ön ayara bağlı
 	FSmvAtmosphere::ApplyQuality(GetWorld(), FMath::Clamp(Q, 0, 4));
