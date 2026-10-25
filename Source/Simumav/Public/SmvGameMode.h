@@ -270,7 +270,7 @@ public:
 	SmvCore::FAlertPolicy* AlertPolicy = nullptr;
 	/** Kalkış / fırlatma: armed | launch | (boş) — yöntem ve aşama zamanı (HUD geri sayımı / durum) */
 	FString LaunchPhaseUi, LaunchMethodUi;
-	double LaunchPhaseAt = 0;
+	double LaunchPhaseAt = 0, LaunchReleasedAt = 0;
 	void HandleLaunchMsg(const TSharedPtr<FJsonObject>& M);
 	/** Fırlatma düzeneği (rampa / pikap / el atışı) aşama değişimi */
 	void OnLaunchPhase(const FString& Method, const FString& Phase);

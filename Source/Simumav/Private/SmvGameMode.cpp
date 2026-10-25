@@ -813,6 +813,8 @@ void ASmvGameMode::HandleLaunchMsg(const TSharedPtr<FJsonObject>& M)
 	const FString Me = SmvJson::Str(M, TEXT("method"), TEXT("wheels"));
 	LaunchMethodUi = Me;
 	LaunchPhaseUi = Ph == TEXT("released") ? FString() : Ph;
+	if (Ph == TEXT("released")) LaunchReleasedAt = FPlatformTime::Seconds();
+	if (Ph == TEXT("armed")) LaunchReleasedAt = 0;
 	LaunchPhaseAt = FPlatformTime::Seconds();
 	FString Txt = FSmvI18n::T(FString::Printf(TEXT("launch.ev.%s.%s"), *Me, *Ph)).ToString();
 	if (Txt.StartsWith(TEXT("launch.ev."))) Txt = FString::Printf(TEXT("Kalkış: %s"), *Ph);
@@ -1443,6 +1445,12 @@ void ASmvGameMode::HandleContact(const FSmvContactEvent& E)
 	const double Now = FPlatformTime::Seconds();
 	if (Now - SceneT0 < 2.0) return;   // sahne kurulumu / ilk tele yerleşimi
 	const FCaySimTelemetry& T = L->LastTele();
+	// fırlatma sırasında ve bırakmadan sonraki 4 sn (el / rampa / araç / pist koşusu): SITL düz zeminde hızlanır, harita zemini tümsekli
+	// olabilir — yüzey üstüne iniş / çarpma sayılmaz (konum yine fizikle çözülür)
+	if (!LaunchPhaseUi.IsEmpty() || (LaunchReleasedAt > 0 && Now - LaunchReleasedAt < 4.0))
+	{
+		if (E.bRestDisarm || SmvCore::ContactIsCrash(E.Class)) { UE_LOG(LogSimumav, Log, TEXT("Fırlatma sırasında temas yok sayıldı (%s)"), UTF8_TO_TCHAR(SmvCore::ContactName(E.Class))); return; }
+	}
 	if (E.bRestDisarm)
 	{
 		if (L->Backend() == ESmvFlightBackend::LocalSitl && !bCrashed) Command(TEXT("land_rest"));
@@ -2235,7 +2243,7 @@ void ASmvGameMode::PlaceFabLevels()
 	TArray<ULevel*> Levels;
 	TArray<FVector> PlayerStarts;
 	TArray<UStaticMeshComponent*> BigComps;
-	FBox BigBox(ForceInit);
+	FBox BigBox(ForceInit), LandBox(ForceInit);
 	bool bLandscape = false;
 	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
 	{
@@ -2291,7 +2299,7 @@ void ASmvGameMode::PlaceFabLevels()
 			if (Cn.Contains(TEXT("Landscape")))
 			{
 				const FBox LB = A->GetComponentsBoundingBox(true);
-				if (LB.IsValid && LB.GetSize().GetMax() < 2.0e6) Box += LB;
+				if (LB.IsValid && LB.GetSize().GetMax() < 2.0e6) { Box += LB; LandBox += LB; }
 			}
 		}
 	}
@@ -2406,7 +2414,10 @@ void ASmvGameMode::PlaceFabLevels()
 	// gerçek dünya çevresi (Cesium): harita kutusu karolardan kırpılır, kenar yükseklikleri eşlenir (karolar yüklenince TickLoadGate → AlignRealRim)
 	if (bRealSurround)
 	{
-		FabPlacedBox = (bFabSelfContained ? Box + BigBox : Box).ShiftBy(Off);
+		// kırpma / kenar eşleme kutusu: arazili haritada arazinin kendisi (dekor ağları arazi dışına taşabilir — taşan kısımda gerçek zemin
+		// kırpılıp gök görünüyordu), değilse ağ kutusu; kendi arka planlı haritada tüm arka plan
+		const FBox ClipB = bFabSelfContained ? Box + BigBox : (LandBox.IsValid && LandBox.GetSize().X > 20000.0 && LandBox.GetSize().Y > 20000.0 ? LandBox : Box);
+		FabPlacedBox = ClipB.ShiftBy(Off);
 		bRimPending = true;
 	}
 	// "havada ada" haritaları (kayıt tablosu Surround biyomu; gerçek dünya yoksa): çevreye Hyper malzemeli arazi diski + kaya/çalı + uzak dağlar

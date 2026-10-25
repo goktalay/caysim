@@ -1097,7 +1097,8 @@ void USmvLocalFlightLink::StartTakeoff(float AltM)
 		{
 			// elden atış: 3 sn geri sayım ("3 · 2 · 1 · AT!" — HUD), ardından kol savurma; SITL mancınığı kısa darbe:
 			// 15 m/s² × t ≈ atış hızı (6–8 m/s) + 4 m/s pervane itişi payı → servo 7 yüksek t sn, sonra bırak
-			const double Pulse = FMath::Clamp((Session->Launch.HandSpeedMs + 4.0) / 15.0, 0.5, 0.9);
+			// SITL'de uçak yerden (1,8 m omuz yüksekliği yok) atılır: tutunma hızı için darbe ≈ (atış + 6 m/s) / 15 m/s²
+			const double Pulse = FMath::Clamp((Session->Launch.HandSpeedMs + 6.0) / 15.0, 0.6, 1.0);
 			After(3.3, [Weak]() { if (USmvLocalFlightLink* S = Weak.Get()) { S->LaunchEvent(TEXT("launch")); S->CommandLong(SmvMav::CMD_DO_SET_SERVO, 7.f, 1900.f); } });
 			After(3.3 + Pulse, [Weak]() { if (USmvLocalFlightLink* S = Weak.Get()) S->CommandLong(SmvMav::CMD_DO_SET_SERVO, 7.f, 1100.f); });
 			return;
