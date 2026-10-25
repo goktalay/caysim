@@ -2048,7 +2048,7 @@ bool ASmvGameMode::AlignRealRim()
 			for (UPrimitiveComponent* C : Pc) if (C && C->IsRegistered() && C->Bounds.BoxExtent.GetMax() < 60000.0 && C->Bounds.GetBox().IsValid) B += C->Bounds.GetBox();
 		}
 	}
-	if (!B.IsValid || B.GetSize().X < 500.0 || B.GetSize().Y < 500.0) { SMV_KLOG(TEXT("Gerçek dünya kenar eşleme: harita kutusu yok / çok küçük")); return false; }
+	if (!B.IsValid || B.GetSize().X < 500.0 || B.GetSize().Y < 500.0) { SMV_KLOG(TEXT("Gerçek dünya kenar eşleme: harita kutusu yok / çok küçük")); bRimDone = true; RimAt = FPlatformTime::Seconds(); return false; }
 	AActor* Tiles = WorldSetup->GetTilesActor();
 	TSet<ULevel*> FabLv;
 	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels) if (Lv && Lv->GetLoadedLevel()) FabLv.Add(Lv->GetLoadedLevel());

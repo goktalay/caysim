@@ -39,6 +39,10 @@ on:
         description: "Gercek dunya kaynagi (bos = ayar; google3d, terrain, off)"
         type: string
         default: ""
+      ekarg:
+        description: "Ek komut satiri argumanlari (bosluklu; ornek -CesiumStats)"
+        type: string
+        default: ""
       notour:
         description: "Ekran turunu atla (yalniz ucuslar)"
         type: boolean
@@ -63,6 +67,7 @@ jobs:
           SRES: ${{ inputs.res }}
           SNOTOUR: ${{ inputs.notour }}
           SREAL: ${{ inputs.realworld }}
+          SEK: ${{ inputs.ekarg }}
         run: |
           $ErrorActionPreference = 'Continue'
           $base = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
@@ -85,6 +90,7 @@ jobs:
           if ($env:SONLY) { $argl += ('-SmvSmokeOnly=' + $env:SONLY) }
           if ($env:SNOTOUR -eq 'true') { $argl += '-SmvSmokeNoTour' }
           if ($env:SREAL) { $argl += ('-SmvRealWorld=' + $env:SREAL) }
+          if ($env:SEK) { $argl += ($env:SEK -split ' ' | Where-Object { $_ }) }
           if ($env:SLANG) { $argl += ('-SmvSmokeLang=' + $env:SLANG) }
           if ($env:SFLIGHTS) { $argl += ('-SmvSmokeFlights=' + $env:SFLIGHTS) }
           Write-Host ("Args: " + ($argl -join ' '))
