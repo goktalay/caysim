@@ -137,6 +137,16 @@ try {
 	if (Test-Path -LiteralPath $FabProje) {
 		$anaEklenti = @()
 		try { $anaEklenti = @((Get-Content -LiteralPath $uproject -Raw | ConvertFrom-Json).Plugins | ForEach-Object { $_.Name }) } catch { }
+		# hazirlama projesinin kendi eklentileri: Fab "Projeye Ekle" gereken eklentiyi orada acar. Projede yoksa o eklentinin
+		# ozel surumuyle kaydedilen haritalar ("uses an unknown custom version", or. CityRacingMainMap) yuklenemez / pisirilemez.
+		foreach ($up0 in (Get-ChildItem -LiteralPath $FabProje -Filter *.uproject -File -ErrorAction SilentlyContinue)) {
+			try {
+				$j0 = Get-Content -LiteralPath $up0.FullName -Raw | ConvertFrom-Json
+				$acik0 = @($j0.Plugins | Where-Object { $_.Enabled } | ForEach-Object { $_.Name })
+				Bilgi "hazirlama projesi eklentileri ($($up0.Name)): $($acik0 -join ', ')"
+				foreach ($pl in $acik0) { if (-not ($anaEklenti -contains $pl)) { Uyari "hazirlama projesi eklentisi Simumav.uproject'te yok: $pl" } }
+			} catch { Uyari "hazirlama projesi uproject okunamadi: $($up0.FullName)" }
+		}
 		foreach ($alt in (Get-ChildItem -LiteralPath $FabProje -Directory -ErrorAction SilentlyContinue)) {
 			$up = Get-ChildItem -LiteralPath $alt.FullName -Filter *.uproject -File -ErrorAction SilentlyContinue | Select-Object -First 1
 			if (-not $up) { continue }
@@ -260,12 +270,29 @@ try {
 			New-Item -ItemType Directory -Force -Path $donusum | Out-Null
 			$py = Join-Path $donusum 'blend2glb.py'
 			$pyMetin = @(
-				'import bpy, sys',
-				'out = sys.argv[sys.argv.index("--") + 1]',
+				'import bpy, sys, os',
+				'args = sys.argv[sys.argv.index("--") + 1:]',
+				'out = args[0]',
+				'kok = args[1] if len(args) > 1 else bpy.path.abspath("//")',
 				'try:',
-				'    bpy.ops.file.find_missing_files(directory=bpy.path.abspath("//"))',
+				'    bpy.ops.file.find_missing_files(directory=kok)',
 				'except Exception as e:',
 				'    print("blend2glb: find_missing_files", e)',
+				'# eksik / UDIM dokular: urun klasorunde dosya adiyla aranir; bulunamayan doku cikarilir (GLB disa aktarimi eksik dosyada duser)',
+				'dizin = {}',
+				'for r, ds, fs in os.walk(kok):',
+				'    for f in fs: dizin.setdefault(f.lower(), os.path.join(r, f))',
+				'for img in list(bpy.data.images):',
+				'    if img.packed_file or img.source not in ("FILE", "TILED", "SEQUENCE"): continue',
+				'    p = bpy.path.abspath(img.filepath).replace("<UDIM>", "1001")',
+				'    if img.source == "TILED" and os.path.exists(p):',
+				'        img.source = "FILE"; img.filepath = p',
+				'    if os.path.exists(p): continue',
+				'    bul = dizin.get(os.path.basename(p).lower())',
+				'    if bul:',
+				'        img.filepath = bul; img.source = "FILE"; print("blend2glb: doku bulundu", os.path.basename(bul))',
+				'    else:',
+				'        print("blend2glb: doku yok, cikarildi", os.path.basename(p)); bpy.data.images.remove(img)',
 				'n = len([o for o in bpy.data.objects if o.type == "MESH"])',
 				'print("blend2glb: mesh nesnesi", n)',
 				'try:',
@@ -283,13 +310,22 @@ try {
 				'        print("blend2glb: tek aga birlestirildi", len(ms))',
 				'except Exception as e:',
 				'    print("blend2glb: birlestirme yapilamadi", e)',
-				'bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_visible=True, export_apply=True, export_yup=True, export_animations=False)',
+				'def disa():',
+				'    bpy.ops.export_scene.gltf(filepath=out, export_format="GLB", use_visible=True, export_apply=True, export_yup=True, export_animations=False)',
+				'try:',
+				'    disa()',
+				'except Exception as e:',
+				'    print("blend2glb: dokulu disa aktarim basarisiz, dokusuz deneniyor:", str(e)[:300])',
+				'    for img in list(bpy.data.images): bpy.data.images.remove(img)',
+				'    disa()',
 				'print("blend2glb: tamam", out)'
 			)
 			Set-Content -LiteralPath $py -Value $pyMetin -Encoding ASCII
 			Bilgi "Blender donusumu: $($b.FullName) -> $cikti"
 			Remove-Item -LiteralPath $cikti -ErrorAction SilentlyContinue
-			& $blender --factory-startup -b $b.FullName --python $py -- $cikti 2>&1 | ForEach-Object { $l = "$_"; if ($l -match 'blend2glb|Error|Traceback') { Write-Host "    $l" } }
+			# eksik doku aramasi icin urun koku (blender\ alt klasorundeyse bir ust)
+			$kokB = if ($b.Directory.Name -match '(?i)^(blender|blend|source|sources|model|models)$') { $b.Directory.Parent.FullName } else { $b.Directory.FullName }
+			& $blender --factory-startup -b $b.FullName --python $py -- $cikti $kokB 2>&1 | ForEach-Object { $l = "$_"; if ($l -match 'blend2glb|Error|Traceback') { Write-Host "    $l" } }
 			if (Test-Path -LiteralPath $cikti) {
 				Set-Content -LiteralPath $imzaBDosya -Value $imzaB -Encoding UTF8
 				Bilgi "  GLB: $([math]::Round((Get-Item -LiteralPath $cikti).Length / 1KB)) KB"
@@ -390,7 +426,8 @@ try {
 	# OverCrowd VAT pisirme (kalabalik): UE5 Manny/Quinn + yurume/bekleme -> /Game/Fab/Crowd (surum damgasi basina bir kez; sonuc gunlukte "VAT").
 	# v3: klip kare araliklari (start/end) atanir; pisirme kaynagi ve klip alanlari gunluge (malzeme kodlamasi icin)
 	# v4: yerinde yurume + 3 sn bekleme @ 20 Hz, kose dizini UV1, VAT malzemesi (M_SmvCrowdVat) ve ag basina ornekler
-	$vatDamga = Join-Path $content 'Fab\.vat-v4'
+	# v5: kose dizini islevi Python adi (write_vertex_indices_for_all_lo_ds) - v4'te bulunamadi, malzeme baglanmamisti
+	$vatDamga = Join-Path $content 'Fab\.vat-v5'
 	if (((Get-Content -LiteralPath $uproject -Raw) -match '"OverCrowd"') -and (Test-Path -LiteralPath (Join-Path $content 'AT_Drone')) -and -not (Test-Path -LiteralPath $vatDamga)) {
 		$isler += [pscustomobject]@{ tur = 'vat'; hedef = '/Game/Fab/Crowd'; agler = @('/Game/AT_Drone/Demo/Character/Mannequins/Meshes/SKM_Manny_Simple', '/Game/AT_Drone/Demo/Character/Mannequins/Meshes/SKM_Quinn_Simple') }
 		$imzalar['/Game/Fab/Crowd'] = @($vatDamga, 'tamam')

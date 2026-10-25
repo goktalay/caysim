@@ -542,8 +542,23 @@ def vat_hazirla(sm, r, klipler, hedef, ad):
         log(f"VAT tam duyarlıklı UV ({ad}): {sms.get_lod_count(sm)} LOD")
     except Exception as ex:  # noqa: BLE001
         uyar(f"VAT tam duyarlıklı UV: {ex}")
-    ok = lib.write_vertex_indices_for_all_lods(sm, 1)
-    log(f"VAT UV1 köşe dizini ({ad}): {ok}")
+    # UE Python ad dönüşümü "LODs" → "lo_ds" (write_vertex_indices_for_all_lo_ds): adı normalize ederek bul
+    def fonk(cls, isim):
+        hedef_ad = isim.replace("_", "").lower()
+        for a in dir(cls):
+            if a.replace("_", "").lower() == hedef_ad:
+                return getattr(cls, a)
+        return None
+    log("VAT kütüphane işlevleri: " + ", ".join(a for a in dir(lib) if not a.startswith("_")))
+    yaz = fonk(lib, "WriteVertexIndicesForAllLODs")
+    if yaz:
+        ok = yaz(sm, 1)
+    else:
+        tek = fonk(lib, "CreateUVChannelForVertexIndices")
+        if not tek:
+            raise RuntimeError("OverCrowd köşe dizini işlevi yok")
+        ok = bool(tek(sm, 0, 1))   # alt LOD'lar indirgemeyle üretiliyorsa LOD0 UV'sinden türer
+    log(f"VAT UV1 köşe dizini ({ad}): {ok} ({'tüm LOD' if yaz else 'LOD0'})")
     pos = r.get_editor_property("position_texture")
     nrm = r.get_editor_property("normal_texture")
     try:
