@@ -605,6 +605,16 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 				const AActor* O = C->GetOwner();
 				ByOwner.FindOrAdd(O ? O->GetName() : FString(TEXT("(sahipsiz) ")) + C->GetOuter()->GetName())++;
 			}
+			// karo kökü bileşenleri (UCesiumGltfComponent — sahne bileşeni; ilkel değil): karo ana iş parçacığına ulaşıp ilkel üretemiyor mu?
+			int32 GlRoot = 0, GlRootChildless = 0;
+			for (TObjectIterator<USceneComponent> It; It; ++It)
+			{
+				USceneComponent* C = *It;
+				if (!C || C->GetWorld() != GetWorld() || C->GetOwner() != Td || C->GetClass()->GetName() != TEXT("CesiumGltfComponent")) continue;
+				++GlRoot;
+				if (C->GetNumChildrenComponents() == 0) ++GlRootChildless;
+			}
+			ByOwner.Add(FString::Printf(TEXT("[aktif karo kökü %d, ilkelsiz %d]"), GlRoot, GlRootChildless), 0);
 			FString Own;
 			for (const TPair<FString, int32>& Kv : ByOwner) Own += FString::Printf(TEXT(" %s=%d"), *Kv.Key, Kv.Value);
 			UE_LOG(LogCaySim, Log, TEXT("3D Tiles tanı (%s): yükleme %%%.0f, bileşen %d (görünür %d, çarpışmalı %d), gizli %d, merkez ışını %s, kamera (%.0f, %.0f, %.0f); glTF ilkel %d (görünür %d, kayıtlı %d):%s"),
@@ -620,10 +630,14 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 			LoadProgress = T->GetLoadProgress();
 			// Google 3B hiç karo getirmiyor / görünür karo bileşeni oluşmuyor (kota / ağ / lisans; paketli oyunda işçi kuyruğunda takılma) → World Terrain + Bing
 			bool bNoContent = LoadProgress <= 0.01f;
-			if (!bNoContent && ActiveSource == ECaySimWorldSource::GooglePhotoreal && SourceT0 > 0 && FPlatformTime::Seconds() - SourceT0 > GoogleFallbackS)
+			// Google: yükleme %100 olsa bile (yalnız JSON alt ağaçları) çizilecek karo bileşeni yoksa içerik yok sayılır — eskiden %99'da hazır
+			// deniyor, düşüş hiç olmuyor, kullanıcı boş gök görüyordu
+			bool bGoogleEmpty = false;
+			if (ActiveSource == ECaySimWorldSource::GooglePhotoreal)
 			{
 				TInlineComponentArray<UPrimitiveComponent*> Pc(T);
-				bNoContent = Pc.Num() == 0;
+				bGoogleEmpty = Pc.Num() == 0;
+				bNoContent = bNoContent || bGoogleEmpty;
 			}
 			if (ActiveSource == ECaySimWorldSource::GooglePhotoreal && bNoContent && SourceT0 > 0 && FPlatformTime::Seconds() - SourceT0 > GoogleFallbackS && !CesiumIonToken.IsEmpty())
 			{
@@ -637,7 +651,7 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 				SetupCesiumIon();
 				return;
 			}
-			if (LoadProgress >= 99.f)
+			if (LoadProgress >= 99.f && !bGoogleEmpty)
 			{
 				if (bAutoGroundOffset && !bGroundOffsetMeasured) MeasureGroundOffset();
 				Finish(true);
