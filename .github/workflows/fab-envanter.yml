@@ -168,6 +168,29 @@ jobs:
             W ("--- " + $k)
             Get-ChildItem -LiteralPath $k -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^(T_|TX_)' } | Select-Object -First 300 | ForEach-Object { W ("  " + $_.FullName.Substring($k.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
           }
+          W "=== MetaHuman kiyafet / pilot / DJI kumanda adaylari (ad eslesmesi, derinlik 3) ==="
+          $pat = '(?i)astronaut|flight.?suit|flightsuit|pilot|tactical|military|soldier|outfit|cloth|wardrobe|garment|metahuman|cgtailor|dji|remote.?control|controller|rc.?link'
+          $kok = @("$fp", "$fp\Content", "$ue\Engine\Plugins\Marketplace", "$ue\Engine\Plugins\Fab", "C:\claude") + @(Get-ChildItem $vc -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' } | ForEach-Object { $_.FullName })
+          $bulunan = @()
+          foreach ($k in $kok) {
+            if (-not (Test-Path -LiteralPath $k)) { continue }
+            Get-ChildItem -LiteralPath $k -Directory -Recurse -Depth 3 -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $pat -and $_.FullName -notmatch '\\(Intermediate|Saved|DerivedDataCache|Binaries)\\' } | ForEach-Object { $bulunan += $_.FullName }
+          }
+          $vcn = @(Get-ChildItem $vc -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $pat } | ForEach-Object { $_.FullName })
+          $bulunan = @($bulunan + $vcn | Select-Object -Unique)
+          foreach ($b in ($bulunan | Select-Object -First 80)) { W ("  D " + $b + "  [" + (Size $b) + "]") }
+          W "--- paket dosyalari (.mhpkg / .zip / .uplugin / .fbx; ad eslesmesi)"
+          foreach ($k in @("$fp", "C:\claude", "C:\Users", 'D:\') ) {
+            if (-not (Test-Path -LiteralPath $k)) { continue }
+            Get-ChildItem -LiteralPath $k -File -Recurse -Depth 5 -Include *.mhpkg,*.zip,*.uplugin,*.fbx,*.7z -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $pat -or $_.Extension -eq '.mhpkg' } | Select-Object -First 80 | ForEach-Object { W ("  F " + $_.FullName + "  " + [math]::Round($_.Length / 1MB) + " MB") }
+          }
+          W "--- eslesen klasorlerin icerigi (ilk 2 duzey klasor + ilk 150 dosya)"
+          foreach ($b in ($bulunan | Where-Object { $_ -notmatch '\\Content\\.+\\.+\\.+\\' } | Select-Object -First 25)) {
+            W ("##### " + $b)
+            Get-ChildItem -LiteralPath $b -Filter *.uplugin -File -Recurse -Depth 1 -ErrorAction SilentlyContinue | ForEach-Object { W ("  U " + $_.FullName); $t = Get-Content -LiteralPath $_.FullName -Raw; W $t.Substring(0, [Math]::Min(2500, $t.Length)) }
+            Get-ChildItem -LiteralPath $b -Directory -Recurse -Depth 1 -ErrorAction SilentlyContinue | ForEach-Object { W ("  d " + $_.FullName.Substring($b.Length)) }
+            Get-ChildItem -LiteralPath $b -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^(T_|TX_)' } | Select-Object -First 150 | ForEach-Object { W ("  f " + $_.FullName.Substring($b.Length) + "  " + [math]::Round($_.Length / 1KB) + " KB") }
+          }
           W "=== Blender ==="
           $bl = @(Get-ChildItem 'C:\Program Files\Blender Foundation' -Recurse -Filter blender.exe -File -Depth 2 -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
           $bl += @(Get-Command blender -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
