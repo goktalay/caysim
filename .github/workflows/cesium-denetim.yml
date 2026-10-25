@@ -30,6 +30,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Add-Type -AssemblyName System.Web
           if (-not $env:CESIUM_ION_TOKEN) { Write-Host "CESIUM_ION_TOKEN yok"; exit 0 }
           Write-Host ("Belirtec uzunlugu: " + $env:CESIUM_ION_TOKEN.Length)
           foreach ($id in ($env:VARLIK.Split(',') | Where-Object { $_ })) {
@@ -51,6 +52,43 @@ jobs:
               Write-Host ("varlik " + $id + ": HATA " + $code + " " + $msg)
             }
           }
+          # Google 3B: ion uc noktasindan kok tileset + ilk icerik karolari (yalniz durum / sure / boyut)
+          try {
+            $e = Invoke-WebRequest -Uri ("https://api.cesium.com/v1/assets/2275207/endpoint?access_token=" + $env:CESIUM_ION_TOKEN) -UseBasicParsing -TimeoutSec 30
+            $ej = $e.Content | ConvertFrom-Json
+            $root = $ej.options.url
+            if (-not $root) { $root = $ej.url }
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $r = Invoke-WebRequest -Uri $root -UseBasicParsing -TimeoutSec 60
+            Write-Host ("google kok: HTTP " + [int]$r.StatusCode + " " + $r.Content.Length + " B " + $sw.ElapsedMilliseconds + " ms")
+            $u = [Uri]$root
+            $key = [System.Web.HttpUtility]::ParseQueryString($u.Query)['key']
+            $j = $r.Content | ConvertFrom-Json
+            $queue = New-Object System.Collections.Queue
+            foreach ($c in $j.root.children) { $queue.Enqueue($c) }
+            $n = 0; $session = ''
+            while ($queue.Count -gt 0 -and $n -lt 12) {
+              $c = $queue.Dequeue()
+              if (-not $c.content) { foreach ($cc in $c.children) { $queue.Enqueue($cc) }; continue }
+              $cu = $c.content.uri
+              $full = [Uri]::new($u, $cu).AbsoluteUri
+              if ($full -notmatch 'key=') { if ($full -match '\?') { $full += '&key=' + $key } else { $full += '?key=' + $key } }
+              if ($session -and $full -notmatch 'session=') { $full += '&session=' + $session }
+              $sw = [Diagnostics.Stopwatch]::StartNew()
+              try {
+                $cr = Invoke-WebRequest -Uri $full -UseBasicParsing -TimeoutSec 60
+                $ct = $cr.Headers['Content-Type']
+                Write-Host ("google karo " + $n + ": HTTP " + [int]$cr.StatusCode + " " + $ct + " " + $cr.RawContentLength + " B " + $sw.ElapsedMilliseconds + " ms  " + ($cu -replace '\?.*',''))
+                if ($ct -match 'json') {
+                  $sub = $cr.Content | ConvertFrom-Json
+                  if ($cu -match 'session=([^&]+)') { $session = $Matches[1] }
+                  foreach ($cc in $sub.root.children) { $queue.Enqueue($cc) }
+                  if ($sub.root.content) { $queue.Enqueue($sub.root) }
+                }
+              } catch { Write-Host ("google karo " + $n + ": HATA " + $_.Exception.Message + " " + $sw.ElapsedMilliseconds + " ms") }
+              $n++
+            }
+          } catch { Write-Host ("google testi HATA: " + $_.Exception.Message) }
           try {
             $r = Invoke-WebRequest -Uri ("https://api.cesium.com/v1/assets?access_token=" + $env:CESIUM_ION_TOKEN) -UseBasicParsing -TimeoutSec 30
             $j = $r.Content | ConvertFrom-Json
