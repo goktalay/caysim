@@ -295,6 +295,7 @@ void ACaySimWorldSetup::SetupCesiumIon()
 		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
 		Tiles->ShowCreditsOnScreen = true;
 		Tiles->LogSelectionStats = bLogTileStats;
+		Tiles->MaximumSimultaneousTileLoads = 12;
 		// Bing uydu dokusu
 		UCesiumIonRasterOverlay* Overlay = NewObject<UCesiumIonRasterOverlay>(Tiles, TEXT("Imagery"));
 		Overlay->IonAssetID = CesiumImageryAssetId;
@@ -404,6 +405,7 @@ void ACaySimWorldSetup::SetupGoogleIon()
 		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
 		Tiles->ShowCreditsOnScreen = true;   // Google atıf zorunluluğu (logo + veri sağlayıcıları)
 		Tiles->LogSelectionStats = bLogTileStats;
+		Tiles->MaximumSimultaneousTileLoads = 12;
 	}
 	if (!bGooglePhysics && !CollisionTiles.IsValid())
 	{
@@ -417,6 +419,7 @@ void ACaySimWorldSetup::SetupGoogleIon()
 			Ct->SetMaximumScreenSpaceError(16.0);
 			Ct->SetActorHiddenInGame(true);   // yalnız çarpışma / yükseklik
 			Ct->LogSelectionStats = bLogTileStats;
+			Ct->MaximumSimultaneousTileLoads = 8;
 		}
 	}
 	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
