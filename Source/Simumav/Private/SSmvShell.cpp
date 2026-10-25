@@ -4797,6 +4797,11 @@ void SSmvShell::TickSmoke()
 		// açılış: logo + menü sahnesi kapısı görüntüsü (00_boot), sahne hazır olunca tur başlar
 		SmokeStep = 0; SmokeAt = Now + 1.5; SmokeBoot = 0;
 		FSmvUiPrefs::Get().bTutorialDone = true; FSmvUiPrefs::Get().bFlightTipsDone = true;
+		{
+			// -SmvRealWorld=google3d|terrain|off: gerçek dünya kaynağı (duman testi karşılaştırması)
+			FString Rw;
+			if (FParse::Value(FCommandLine::Get(), TEXT("SmvRealWorld="), Rw)) { FSmvUiPrefs::Get().RealWorld = Rw; SMV_KLOG(TEXT("SMOKE realworld %s"), *Rw); }
+		}
 		if (bLang) { FSmvI18n::SetLanguage(SmokeLang); Refresh(); SMV_KLOG(TEXT("SMOKE lang %s"), *SmokeLang); }
 		if (bOverlay) CloseOverlay();
 		return;

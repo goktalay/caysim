@@ -156,7 +156,7 @@ private:
 	void SetupGoogleIon();
 	void MeasureGroundOffset();
 	bool bFellBack = false;
-	double SourceT0 = 0;
+	double SourceT0 = 0, LastDiagAt = 0;
 	void Finish(bool bOk);
 	static float TimeOfDayHours(const FString& Time);
 };

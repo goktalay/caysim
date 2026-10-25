@@ -17,6 +17,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Components/PrimitiveComponent.h"
 #include "CollisionQueryParams.h"
 
 #if CAYSIM_WITH_CESIUM
@@ -491,6 +494,24 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 #if CAYSIM_WITH_CESIUM
+	// tanı: 3D Tiles durumu (her 6 sn): yükleme yüzdesi, sahnedeki karo bileşeni sayısı, görünürlük, merkez ışını
+	if (ACesium3DTileset* Td = ActiveTiles())
+	{
+		const double Now = FPlatformTime::Seconds();
+		if (Now - LastDiagAt > 6.0)
+		{
+			LastDiagAt = Now;
+			TInlineComponentArray<UPrimitiveComponent*> Prims(Td);
+			int32 Vis = 0, Coll = 0;
+			for (UPrimitiveComponent* P : Prims) { if (P && P->IsVisible()) ++Vis; if (P && P->IsCollisionEnabled()) ++Coll; }
+			FHitResult H;
+			const bool bHit = TraceTiles(FVector(0, 0, 200000.0), FVector(0, 0, -200000.0), H);
+			const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+			const FVector Cam = PC && PC->PlayerCameraManager ? PC->PlayerCameraManager->GetCameraLocation() : FVector::ZeroVector;
+			UE_LOG(LogCaySim, Log, TEXT("3D Tiles tanı (%s): yükleme %%%.0f, bileşen %d (görünür %d, çarpışmalı %d), gizli %d, merkez ışını %s, kamera (%.0f, %.0f, %.0f)"),
+				*SourceName(), Td->GetLoadProgress(), Prims.Num(), Vis, Coll, Td->IsHidden() ? 1 : 0, bHit ? *FString::Printf(TEXT("Z %.0f cm"), H.ImpactPoint.Z) : TEXT("yok"), Cam.X, Cam.Y, Cam.Z);
+		}
+	}
 	if (!bReady && (ActiveSource == ECaySimWorldSource::CesiumIon || ActiveSource == ECaySimWorldSource::GooglePhotoreal))
 	{
 		ACesium3DTileset* T = (ActiveSource == ECaySimWorldSource::GooglePhotoreal) ? GoogleTiles.Get() : Terrain.Get();

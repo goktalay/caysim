@@ -35,6 +35,10 @@ on:
         description: "Cozunurluk GxY (ornek 3440x1440)"
         type: string
         default: "1600x900"
+      realworld:
+        description: "Gercek dunya kaynagi (bos = ayar; google3d, terrain, off)"
+        type: string
+        default: ""
       notour:
         description: "Ekran turunu atla (yalniz ucuslar)"
         type: boolean
@@ -58,6 +62,7 @@ jobs:
           SONLY: ${{ inputs.only }}
           SRES: ${{ inputs.res }}
           SNOTOUR: ${{ inputs.notour }}
+          SREAL: ${{ inputs.realworld }}
         run: |
           $ErrorActionPreference = 'Continue'
           $base = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
@@ -79,6 +84,7 @@ jobs:
           $argl = @('-SmvSmoke','-RenderOffScreen',('-ResX=' + $rx),('-ResY=' + $ry),'-windowed','-log','-unattended')
           if ($env:SONLY) { $argl += ('-SmvSmokeOnly=' + $env:SONLY) }
           if ($env:SNOTOUR -eq 'true') { $argl += '-SmvSmokeNoTour' }
+          if ($env:SREAL) { $argl += ('-SmvRealWorld=' + $env:SREAL) }
           if ($env:SLANG) { $argl += ('-SmvSmokeLang=' + $env:SLANG) }
           if ($env:SFLIGHTS) { $argl += ('-SmvSmokeFlights=' + $env:SFLIGHTS) }
           Write-Host ("Args: " + ($argl -join ' '))
@@ -93,7 +99,7 @@ jobs:
           if (Test-Path $logs) { Copy-Item -Recurse -Force $logs (Join-Path $out 'Logs') }
           Get-ChildItem $out -Recurse -File | ForEach-Object { Write-Host ($_.FullName + "  " + $_.Length) }
           $log = Get-ChildItem (Join-Path $out 'Logs') -Filter *.log -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|SMVLOAD|Error|D3D|RHI|Fab haritas|GPS/EKF|Need Position|Arm:|U.u. d.nyas|Google|Cesium|kenar e.leme|Kalk.. a.ama|Uyar.:' | Select-Object -First 600 | ForEach-Object { Write-Host $_.Line } }
+          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|SMVLOAD|3D Tiles|Error|D3D|RHI|Fab haritas|GPS/EKF|Need Position|Arm:|U.u. d.nyas|Google|Cesium|kenar e.leme|Kalk.. a.ama|Uyar.:' | Select-Object -First 600 | ForEach-Object { Write-Host $_.Line } }
       - name: Artefakt
         if: always()
         uses: actions/upload-artifact@v4
