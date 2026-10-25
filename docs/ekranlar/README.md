@@ -1,283 +1,355 @@
 # Simumav (UE5) — ekran görüntüleri
 
-Şirket bilgisayarında otomatik duman testiyle (ekransız çizim, `-RenderOffScreen`, Türkçe) çekildi; build 4813cb4. Yol haritası ekranları (docs/yol-haritasi.md): sade ana menü, Hangar sihirbazı, Parkur, Mürettebat, Uçuş akışı, deneyim ekranı. Gök/bulut/yansımalar gerçek pencerede daha canlı olabilir.
+Şirket bilgisayarında otomatik duman testiyle (ekransız çizim, `-RenderOffScreen`, Türkçe) çekildi; build 0cdf6d5. Yol haritası ekranları (docs/yol-haritasi.md): sade ana menü, Hangar sihirbazı, Parkur, Mürettebat, Uçuş akışı, deneyim ekranı. Gök/bulut/yansımalar gerçek pencerede daha canlı olabilir.
 
-## 1. Ana menü (Hangar · Parkur · Mürettebat · Uçuş)
+## 1. Açılış — logo + menü sahnesi hazırlık ilerlemesi (atmosfer hazır olmadan menü açılmaz)
 
-![Ana menü (Hangar · Parkur · Mürettebat · Uçuş)](01_01_menu.jpg)
+![Açılış — logo + menü sahnesi hazırlık ilerlemesi (atmosfer hazır olmadan menü açılmaz)](01_00_boot.jpg)
 
-## 2. Pilot menüsü (sağ üst)
+## 2. Ana menü (Hangar · Parkur · Mürettebat · Uçuş)
 
-![Pilot menüsü (sağ üst)](02_01_pilotmenu.jpg)
+![Ana menü (Hangar · Parkur · Mürettebat · Uçuş)](02_01_menu.jpg)
 
-## 3. Hangar — kayıtlı dronlar, gerçek sahnede vitrin
+## 3. Pilot menüsü (sağ üst)
 
-![Hangar — kayıtlı dronlar, gerçek sahnede vitrin](03_02_hangar.jpg)
+![Pilot menüsü (sağ üst)](03_01_pilotmenu.jpg)
 
-## 4. Yeni dron 1 — tip
+## 4. Hangar — kayıtlı dronlar, gerçek sahnede vitrin
 
-![Yeni dron 1 — tip](04_03_hw0_type.jpg)
+![Hangar — kayıtlı dronlar, gerçek sahnede vitrin](04_02_hangar.jpg)
 
-## 5. Yeni dron 2 — model (3B)
+## 5. Yeni dron 1 — tip
 
-![Yeni dron 2 — model (3B)](05_03_hw1_model.jpg)
+![Yeni dron 1 — tip](05_03_hw0_type.jpg)
 
-## 6. Yeni dron 3 — parametreler ve Lua betiği
+## 6. Yeni dron 2 — model (3B)
 
-![Yeni dron 3 — parametreler ve Lua betiği](06_03_hw2_params.jpg)
+![Yeni dron 2 — model (3B)](06_03_hw1_model.jpg)
 
-## 7. Yeni dron 4 — kamera (gece görüşü önizlemesi)
+## 7. Yeni dron 3 — parametreler ve Lua betiği
 
-![Yeni dron 4 — kamera (gece görüşü önizlemesi)](07_03_hw3_camera.jpg)
+![Yeni dron 3 — parametreler ve Lua betiği](07_03_hw2_params.jpg)
 
-## 8. Yeni dron 5 — eklentiler
+## 8. Yeni dron 4 — kamera (gece görüşü önizlemesi)
 
-![Yeni dron 5 — eklentiler](08_03_hw4_addons.jpg)
+![Yeni dron 4 — kamera (gece görüşü önizlemesi)](08_03_hw3_camera.jpg)
 
-## 9. Yeni dron 6 — görünüm (renk, logo, çıkartma)
+## 9. Yeni dron 5 — eklentiler
 
-![Yeni dron 6 — görünüm (renk, logo, çıkartma)](09_03_hw5_look.jpg)
+![Yeni dron 5 — eklentiler](09_03_hw4_addons.jpg)
 
-## 10. Parkur — üç seçenek
+## 10. Yeni dron 6 — görünüm (renk, logo, çıkartma)
 
-![Parkur — üç seçenek](10_04_parkur.jpg)
+![Yeni dron 6 — görünüm (renk, logo, çıkartma)](10_03_hw5_look.jpg)
 
-## 11. Karşılaşma parkurları
+## 11. Parkur — üç seçenek
 
-![Karşılaşma parkurları](11_05_enc_list.jpg)
+![Parkur — üç seçenek](11_04_parkur.jpg)
 
-## 12. Karşılaşma parkuru — harita içi kamera turu
+## 12. Özel parkurlar
 
-![Karşılaşma parkuru — harita içi kamera turu](12_05_enc_tour.jpg)
+![Özel parkurlar](12_05_custom_list.jpg)
 
-## 13. Karşılaşma parkuru turu — 2. harita
+## 13. Karşılaşma parkurları
 
-![Karşılaşma parkuru turu — 2. harita](13_05_enc_tour2.jpg)
+![Karşılaşma parkurları](13_05_enc_list.jpg)
 
-## 14. Karşılaşma parkuru turu — 3. harita
+## 14. Karşılaşma parkuru — harita içi kamera turu
 
-![Karşılaşma parkuru turu — 3. harita](14_05_enc_tour3.jpg)
+![Karşılaşma parkuru — harita içi kamera turu](14_05_enc_tour.jpg)
 
-## 15. Karşılaşma parkuru turu — 4. harita
+## 15. Karşılaşma parkuru turu — 2. harita
 
-![Karşılaşma parkuru turu — 4. harita](15_05_enc_tour4.jpg)
+![Karşılaşma parkuru turu — 2. harita](15_05_enc_tour2.jpg)
 
-## 16. Özel parkurlar
+## 16. Harita turu — yükleme ekranı (Yıkık İnşaat, aşamalar)
 
-![Özel parkurlar](16_05_custom_list.jpg)
+![Harita turu — yükleme ekranı (Yıkık İnşaat, aşamalar)](16_05_enc_tour2_load.jpg)
 
-## 17. Yeni özel parkur 1 — biyom
+## 17. Karşılaşma parkuru turu — 3. harita
 
-![Yeni özel parkur 1 — biyom](17_06_pw0_biome.jpg)
+![Karşılaşma parkuru turu — 3. harita](17_05_enc_tour3.jpg)
 
-## 18. Yeni özel parkur 2 — dünya (canlı 3B önizleme)
+## 18. Karşılaşma parkuru turu — 4. harita
 
-![Yeni özel parkur 2 — dünya (canlı 3B önizleme)](18_06_pw1_world.jpg)
+![Karşılaşma parkuru turu — 4. harita](18_05_enc_tour4.jpg)
 
-## 19. Yeni özel parkur 3 — hava durumu
+## 19. Harita turu — yükleme katmanı (1. harita zaten yüklü)
 
-![Yeni özel parkur 3 — hava durumu](19_06_pw2_weather.jpg)
+![Harita turu — yükleme katmanı (1. harita zaten yüklü)](19_05_enc_tour_load.jpg)
 
-## 20. Yeni özel parkur 4 — ad ve deniz seviyesi
+## 20. Gerçek dünya parkurları
 
-![Yeni özel parkur 4 — ad ve deniz seviyesi](20_06_pw3_name.jpg)
+![Gerçek dünya parkurları](20_05_real_list.jpg)
 
-## 21. Gerçek dünya parkurları
+## 21. Yeni özel parkur 1 — biyom
 
-![Gerçek dünya parkurları](21_05_real_list.jpg)
+![Yeni özel parkur 1 — biyom](21_06_pw0_biome.jpg)
 
-## 22. Yeni gerçek dünya 1 — harita (adres ara, işaret, boyut)
+## 22. Yeni özel parkur 2 — dünya (canlı 3B önizleme)
 
-![Yeni gerçek dünya 1 — harita (adres ara, işaret, boyut)](22_07_rw0_map.jpg)
+![Yeni özel parkur 2 — dünya (canlı 3B önizleme)](22_06_pw1_world.jpg)
 
-## 23. Yeni gerçek dünya 2 — hava
+## 23. Yeni özel parkur 3 — hava durumu
 
-![Yeni gerçek dünya 2 — hava](23_07_rw1_weather.jpg)
+![Yeni özel parkur 3 — hava durumu](23_06_pw2_weather.jpg)
 
-## 24. Yeni gerçek dünya 3 — ad
+## 24. Yeni özel parkur 4 — ad ve deniz seviyesi
 
-![Yeni gerçek dünya 3 — ad](24_07_rw2_name.jpg)
+![Yeni özel parkur 4 — ad ve deniz seviyesi](24_06_pw3_name.jpg)
 
-## 25. Mürettebat — pilot değiştir, seviye, XP, madalyalar
+## 25. Yeni gerçek dünya 1 — harita (adres ara, işaret, boyut)
 
-![Mürettebat — pilot değiştir, seviye, XP, madalyalar](25_08_crew.jpg)
+![Yeni gerçek dünya 1 — harita (adres ara, işaret, boyut)](25_07_rw0_map.jpg)
 
-## 26. Yeni pilot 1 — cinsiyet
+## 26. Yeni gerçek dünya 2 — hava
 
-![Yeni pilot 1 — cinsiyet](26_09_cw0_gender.jpg)
+![Yeni gerçek dünya 2 — hava](26_07_rw1_weather.jpg)
 
-## 27. Yeni pilot 2 — vücut
+## 27. Yeni gerçek dünya 3 — ad
 
-![Yeni pilot 2 — vücut](27_09_cw1_body.jpg)
+![Yeni gerçek dünya 3 — ad](27_07_rw2_name.jpg)
 
-## 28. Yeni pilot 3 — yüz
+## 28. Mürettebat — pilot değiştir, seviye, XP, madalyalar
 
-![Yeni pilot 3 — yüz](28_09_cw2_face.jpg)
+![Mürettebat — pilot değiştir, seviye, XP, madalyalar](28_08_crew.jpg)
 
-## 29. Yeni pilot 4 — aksesuar
+## 29. Yeni pilot 1 — cinsiyet
 
-![Yeni pilot 4 — aksesuar](29_09_cw3_acc.jpg)
+![Yeni pilot 1 — cinsiyet](29_09_cw0_gender.jpg)
 
-## 30. Yeni pilot 5 — ad soyad
+## 30. Yeni pilot 2 — vücut
 
-![Yeni pilot 5 — ad soyad](30_09_cw4_name.jpg)
+![Yeni pilot 2 — vücut](30_09_cw1_body.jpg)
 
-## 31. Pilot menüsü › Özelleştir
+## 31. Yeni pilot 3 — yüz
 
-![Pilot menüsü › Özelleştir](31_10_customize.jpg)
+![Yeni pilot 3 — yüz](31_09_cw2_face.jpg)
 
-## 32. Uçuş 1 — dron
+## 32. Yeni pilot 4 — aksesuar
 
-![Uçuş 1 — dron](32_11_fly0_drone.jpg)
+![Yeni pilot 4 — aksesuar](32_09_cw3_acc.jpg)
 
-## 33. Uçuş 2 — parkur
+## 33. Yeni pilot 5 — ad soyad
 
-![Uçuş 2 — parkur](33_11_fly2_track.jpg)
+![Yeni pilot 5 — ad soyad](33_09_cw4_name.jpg)
 
-## 34. Uçuş 3 — oyun türü
+## 34. Pilot menüsü › Özelleştir
 
-![Uçuş 3 — oyun türü](34_11_fly3_mode.jpg)
+![Pilot menüsü › Özelleştir](34_10_customize.jpg)
 
-## 35. Uçuş 4 — tek / çok oyunculu
+## 35. Uçuş 1 — dron
 
-![Uçuş 4 — tek / çok oyunculu](35_11_fly4_players.jpg)
+![Uçuş 1 — dron](35_11_fly0_drone.jpg)
 
-## 36. Uçuş 5 — özet ve UÇ
+## 36. Uçuş 2 — parkur
 
-![Uçuş 5 — özet ve UÇ](36_11_fly5_go.jpg)
+![Uçuş 2 — parkur](36_11_fly2_track.jpg)
 
-## 37. Arkadaşlarım
+## 37. Uçuş 3 — oyun türü
 
-![Arkadaşlarım](37_12_friends.jpg)
+![Uçuş 3 — oyun türü](37_11_fly3_mode.jpg)
 
-## 38. Önceki uçuşlarım
+## 38. Uçuş 4 — tek / çok oyunculu
 
-![Önceki uçuşlarım](38_13_flights.jpg)
+![Uçuş 4 — tek / çok oyunculu](38_11_fly4_players.jpg)
 
-## 39. Başarımlar
+## 39. Uçuş 5 — özet ve UÇ
 
-![Başarımlar](39_13_achievements.jpg)
+![Uçuş 5 — özet ve UÇ](39_11_fly5_go.jpg)
 
-## 40. Ayarlar — genel
+## 40. Arkadaşlarım
 
-![Ayarlar — genel](40_14_set0.jpg)
+![Arkadaşlarım](40_12_friends.jpg)
 
-## 41. Ayarlar — görüntü
+## 41. Başarımlar
 
-![Ayarlar — görüntü](41_14_set1.jpg)
+![Başarımlar](41_13_achievements.jpg)
 
-## 42. Ayarlar — ses
+## 42. Önceki uçuşlarım
 
-![Ayarlar — ses](42_14_set2.jpg)
+![Önceki uçuşlarım](42_13_flights.jpg)
 
-## 43. Ayarlar — kumanda
+## 43. Ayarlar — genel
 
-![Ayarlar — kumanda](43_14_set3.jpg)
+![Ayarlar — genel](43_14_set0.jpg)
 
-## 44. Ayarlar — tuşlar
+## 44. Ayarlar — görüntü
 
-![Ayarlar — tuşlar](44_14_set4.jpg)
+![Ayarlar — görüntü](44_14_set1.jpg)
 
-## 45. Ayarlar — uyarılar
+## 45. Ayarlar — ses
 
-![Ayarlar — uyarılar](45_14_set5.jpg)
+![Ayarlar — ses](45_14_set2.jpg)
 
-## 46. Ayarlar — bağlantı
+## 46. Ayarlar — kumanda
 
-![Ayarlar — bağlantı](46_14_set6.jpg)
+![Ayarlar — kumanda](46_14_set3.jpg)
 
-## 47. Kayıttan oynatma
+## 47. Ayarlar — tuşlar
 
-![Kayıttan oynatma](47_15_replay.jpg)
+![Ayarlar — tuşlar](47_14_set4.jpg)
 
-## 48. TOP 10
+## 48. Ayarlar — uyarılar
 
-![TOP 10](48_16_top10.jpg)
+![Ayarlar — uyarılar](48_14_set5.jpg)
 
-## 49. Hesap
+## 49. Ayarlar — bağlantı
 
-![Hesap](49_17_account.jpg)
+![Ayarlar — bağlantı](49_14_set6.jpg)
 
-## 50. Destek
+## 50. Kayıttan oynatma
 
-![Destek](50_18_support.jpg)
+![Kayıttan oynatma](50_15_replay.jpg)
 
-## 51. FPV parkurları
+## 51. TOP 10
 
-![FPV parkurları](51_19_fpv.jpg)
+![TOP 10](51_16_top10.jpg)
 
-## 52. Karşılaşma salonu
+## 52. Hesap
 
-![Karşılaşma salonu](52_19_lobby.jpg)
+![Hesap](52_17_account.jpg)
 
-## 53. Görevler
+## 53. Destek
 
-![Görevler](53_19_missions.jpg)
+![Destek](53_18_support.jpg)
 
-## 54. Gelişmiş uçuş ayarları
+## 54. FPV parkurları
 
-![Gelişmiş uçuş ayarları](54_19_wizard.jpg)
+![FPV parkurları](54_19_fpv.jpg)
 
-## 55. Uçuş — Orman, alacakaranlık, yağmur (yerde)
+## 55. Karşılaşma salonu
 
-![Uçuş — Orman, alacakaranlık, yağmur (yerde)](55_20_f1_ground.jpg)
+![Karşılaşma salonu](55_19_lobby.jpg)
 
-## 56. Uçuş — Orman, askı
+## 56. Görevler
 
-![Uçuş — Orman, askı](56_20_f1_hover.jpg)
+![Görevler](56_19_missions.jpg)
 
-## 57. Uçuş — FPV kamerası
+## 57. Gelişmiş uçuş ayarları
 
-![Uçuş — FPV kamerası](57_20_f1_fpv.jpg)
+![Gelişmiş uçuş ayarları](57_19_wizard.jpg)
 
-## 58. Duraklatma
+## 58. Uçuşa giriş karesi — Orman (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
 
-![Duraklatma](58_23_pause.jpg)
+![Uçuşa giriş karesi — Orman (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](58_20_f1_entry.jpg)
 
-## 59. Uçuş sonrası deneyim (XP, seviye)
+## 59. Uçuş — FPV kamerası
 
-![Uçuş sonrası deneyim (XP, seviye)](59_24_progress.jpg)
+![Uçuş — FPV kamerası](59_20_f1_fpv.jpg)
 
-## 60. Uçuş özeti
+## 60. Uçuş — Orman, alacakaranlık, yağmur (yerde)
 
-![Uçuş özeti](60_24_summary.jpg)
+![Uçuş — Orman, alacakaranlık, yağmur (yerde)](60_20_f1_ground.jpg)
 
-## 61. Uçuş — Askeri üs (yerde)
+## 61. Uçuş — Orman, askı
 
-![Uçuş — Askeri üs (yerde)](61_25_f2_ground.jpg)
+![Uçuş — Orman, askı](61_20_f1_hover.jpg)
 
-## 62. Uçuş — Askeri üs, askı
+## 62. Yükleme ekranı — Orman (~3 sn)
 
-![Uçuş — Askeri üs, askı](62_25_f2_hover.jpg)
+![Yükleme ekranı — Orman (~3 sn)](62_20_f1_load.jpg)
 
-## 63. Uçuş — Şehir (yerde)
+## 63. Yükleme ekranı — Orman (ilerleme ≥ %60)
 
-![Uçuş — Şehir (yerde)](63_30_f3_ground.jpg)
+![Yükleme ekranı — Orman (ilerleme ≥ %60)](63_20_f1_load2.jpg)
 
-## 64. Uçuş — Şehir, askı (City Traffic Pro trafiği, yaya kalabalığı)
+## 64. Duraklatma
 
-![Uçuş — Şehir, askı (City Traffic Pro trafiği, yaya kalabalığı)](64_30_f3_hover.jpg)
+![Duraklatma](64_23_pause.jpg)
 
-## 65. Uçuş — Prosedürel dünya, altın saat (yerde)
+## 65. Uçuş sonrası deneyim (XP, seviye)
 
-![Uçuş — Prosedürel dünya, altın saat (yerde)](65_35_f4_ground.jpg)
+![Uçuş sonrası deneyim (XP, seviye)](65_24_progress.jpg)
 
-## 66. Uçuş — Prosedürel dünya, VTOL askı
+## 66. Uçuş özeti
 
-![Uçuş — Prosedürel dünya, VTOL askı](66_35_f4_hover.jpg)
+![Uçuş özeti](66_24_summary.jpg)
 
-## 67. Uçuş — pilot omuz görünümü
+## 67. Uçuşa giriş karesi — Askerî Üs (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
 
-![Uçuş — pilot omuz görünümü](67_35_f4_pilot.jpg)
+![Uçuşa giriş karesi — Askerî Üs (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](67_25_f2_entry.jpg)
 
-## 68. Uçuş — VTOL FPV (jet HUD)
+## 68. Uçuş — Askeri üs (yerde)
 
-![Uçuş — VTOL FPV (jet HUD)](68_35_f4_fpv.jpg)
+![Uçuş — Askeri üs (yerde)](68_25_f2_ground.jpg)
 
-## 69. Uçuş — Gemi savunma: Mogami fırkateyni, Askerî Hexacopter (yerde)
+## 69. Uçuş — Askeri üs, askı
 
-![Uçuş — Gemi savunma: Mogami fırkateyni, Askerî Hexacopter (yerde)](69_40_f5_ground.jpg)
+![Uçuş — Askeri üs, askı](69_25_f2_hover.jpg)
 
-## 70. Uçuş — Gemi savunma, Askerî Hexacopter askıda
+## 70. Yükleme ekranı — Askerî Üs (~3 sn)
 
-![Uçuş — Gemi savunma, Askerî Hexacopter askıda](70_40_f5_hover.jpg)
+![Yükleme ekranı — Askerî Üs (~3 sn)](70_25_f2_load.jpg)
+
+## 71. Yükleme ekranı — Askerî Üs (ilerleme ≥ %60)
+
+![Yükleme ekranı — Askerî Üs (ilerleme ≥ %60)](71_25_f2_load2.jpg)
+
+## 72. Uçuşa giriş karesi — Şehir (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+
+![Uçuşa giriş karesi — Şehir (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](72_30_f3_entry.jpg)
+
+## 73. Uçuş — Şehir (yerde)
+
+![Uçuş — Şehir (yerde)](73_30_f3_ground.jpg)
+
+## 74. Uçuş — Şehir, askı (City Traffic Pro trafiği, yaya kalabalığı)
+
+![Uçuş — Şehir, askı (City Traffic Pro trafiği, yaya kalabalığı)](74_30_f3_hover.jpg)
+
+## 75. Yükleme ekranı — Şehir (~3 sn)
+
+![Yükleme ekranı — Şehir (~3 sn)](75_30_f3_load.jpg)
+
+## 76. Yükleme ekranı — Şehir (ilerleme ≥ %60)
+
+![Yükleme ekranı — Şehir (ilerleme ≥ %60)](76_30_f3_load2.jpg)
+
+## 77. Uçuşa giriş karesi — Prosedürel dünya / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+
+![Uçuşa giriş karesi — Prosedürel dünya / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](77_35_f4_entry.jpg)
+
+## 78. Uçuş — VTOL FPV (jet HUD)
+
+![Uçuş — VTOL FPV (jet HUD)](78_35_f4_fpv.jpg)
+
+## 79. Uçuş — Prosedürel dünya, altın saat (yerde)
+
+![Uçuş — Prosedürel dünya, altın saat (yerde)](79_35_f4_ground.jpg)
+
+## 80. Uçuş — Prosedürel dünya, VTOL askı
+
+![Uçuş — Prosedürel dünya, VTOL askı](80_35_f4_hover.jpg)
+
+## 81. Yükleme ekranı — Prosedürel dünya / VTOL (~3 sn)
+
+![Yükleme ekranı — Prosedürel dünya / VTOL (~3 sn)](81_35_f4_load.jpg)
+
+## 82. Yükleme ekranı — Prosedürel dünya / VTOL (ilerleme ≥ %60)
+
+![Yükleme ekranı — Prosedürel dünya / VTOL (ilerleme ≥ %60)](82_35_f4_load2.jpg)
+
+## 83. Uçuş — pilot omuz görünümü
+
+![Uçuş — pilot omuz görünümü](83_35_f4_pilot.jpg)
+
+## 84. Uçuşa giriş karesi — Gemi savunma / Hexacopter (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+
+![Uçuşa giriş karesi — Gemi savunma / Hexacopter (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](84_40_f5_entry.jpg)
+
+## 85. Uçuş — Gemi savunma: Mogami fırkateyni, Askerî Hexacopter (yerde)
+
+![Uçuş — Gemi savunma: Mogami fırkateyni, Askerî Hexacopter (yerde)](85_40_f5_ground.jpg)
+
+## 86. Uçuş — Gemi savunma, Askerî Hexacopter askıda
+
+![Uçuş — Gemi savunma, Askerî Hexacopter askıda](86_40_f5_hover.jpg)
+
+## 87. Yükleme ekranı — Gemi savunma / Hexacopter (~3 sn)
+
+![Yükleme ekranı — Gemi savunma / Hexacopter (~3 sn)](87_40_f5_load.jpg)
+
+## 88. Yükleme ekranı — Gemi savunma / Hexacopter (ilerleme ≥ %60)
+
+![Yükleme ekranı — Gemi savunma / Hexacopter (ilerleme ≥ %60)](88_40_f5_load2.jpg)
