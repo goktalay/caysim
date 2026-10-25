@@ -13,11 +13,11 @@ on:
       kokler:
         description: "Gunluk klasorleri (; ile)"
         type: string
-        default: "C:\\claude\\loglar;C:\\claude\\Simumav-deneme"
+        default: "C:\\claude\\Simumav-dev;C:\\claude\\Simumav-deneme;C:\\Users\\*\\AppData\\Local\\Simumav\\Saved\\Logs"
       desen:
         description: "Suzgec (regex)"
         type: string
-        default: "U.u. haritas|Fab haritas|Fab alt seviye|SMVLOAD|LogStreaming|Sahne kuruldu|LogInit: Build|LogInit: Engine|ResX|Viewport|SMOKE|Cesium|LogWorldPartition|Error|Warning|PreArm|Rangefinder|BANK|LogPakFile|Mounted|Mount"
+        default: "U.u. haritas|Fab haritas|Fab alt seviye|SMVLOAD|LogStreaming|Sahne kuruldu|LogInit: Build|LogInit: Engine|ResX|Viewport|SMOKE|Cesium|LogWorldPartition|Error|Warning|PreArm|Rangefinder|BANK|LogPakFile|Mounted|Mount|Fizik|crash|CRASH|arpma|SweepBody|Cesium|SSL|HTTP"
       azami:
         description: "Dosya basina en cok satir"
         type: string
@@ -42,7 +42,11 @@ jobs:
           $out = Join-Path $env:RUNNER_TEMP 'gunluk-al.txt'
           function W($s) { Add-Content -Path $out -Value $s -Encoding UTF8 }
           $max = [int]$env:AZAMI
-          foreach ($r in ($env:KOKLER.Split(';') | Where-Object { $_ })) {
+          $roots = @()
+          foreach ($k in ($env:KOKLER.Split(';') | Where-Object { $_ })) {
+            if ($k.Contains('*')) { $g = @(Get-Item -Path $k -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }); if ($g.Count) { $roots += $g } else { $roots += $k } } else { $roots += $k }
+          }
+          foreach ($r in $roots) {
             W ""
             W ("################ " + $r)
             if (-not (Test-Path -LiteralPath $r)) { W "  (yok)"; continue }
