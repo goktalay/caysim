@@ -4756,6 +4756,14 @@ void SSmvShell::TickSmoke()
 		if (bOverlay) CloseOverlay();
 		return;
 	}
+	// harita turu yükleme katmanı karesi (tur adımı açıldıktan 1,5 sn sonra; adım beklemesinden bağımsız)
+	static double TourShotAt = 0; static FString TourShotName;
+	if (TourShotAt > 0 && Now >= TourShotAt)
+	{
+		TourShotAt = 0;
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke")))) / (TourShotName + TEXT(".png")), true, false);
+		UE_LOG(LogTemp, Display, TEXT("SMOKE shot %s"), *TourShotName);
+	}
 	if (Now < SmokeAt) return;
 	if (SmokeBoot == 0) { SmokeBoot = 1; SmokeBootT0 = Now; FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke")))) / TEXT("00_boot.png"), true, false); UE_LOG(LogTemp, Display, TEXT("SMOKE shot 00_boot")); SmokeAt = Now + 0.5; return; }
 	if (SmokeBoot == 1)
@@ -4881,6 +4889,7 @@ void SSmvShell::TickSmoke()
 			if (Flow->GetScreen() != S.Screen) Flow->SetScreen(S.Screen);
 			else Refresh();
 			if (FCString::Strcmp(S.Name, TEXT("01_pilotmenu")) == 0) OpenPilotMenu();
+			if (S.Screen == ESmvScreen::ParkurList && S.Log >= 1 && S.Log <= 2) { TourShotAt = Now + 1.5; TourShotName = FString(S.Name) + TEXT("_load"); }
 			SmokeAt = Now + S.Wait;
 		}
 		else { Shot(S.Name); SmokeAt = Now + 1.0; }

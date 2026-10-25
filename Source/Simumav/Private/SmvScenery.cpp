@@ -453,15 +453,18 @@ void ASmvScenery::BuildGroundDisk(const FVector& C, double FlatM, double OuterM,
 		Uv.Add(FVector2D((V[i].X - Off.X) / 1000.0, (V[i].Y - Off.Y) / 1000.0));
 	}
 	// köşe rengi: Hyper malzemesi yoksa (M_SmvTerrainWx: köşe rengi × Color) biyom rengi
-	Col.Init(Biome == TEXT("Desert") ? FLinearColor(0.55f, 0.45f, 0.3f) : Biome == TEXT("Snow") ? FLinearColor(0.8f, 0.82f, 0.86f) : FLinearColor(0.2f, 0.3f, 0.14f), V.Num());
+	Col.Init(Biome == TEXT("Desert") ? FLinearColor(0.66f, 0.53f, 0.36f) : Biome == TEXT("Snow") ? FLinearColor(0.8f, 0.82f, 0.86f) : FLinearColor(0.2f, 0.3f, 0.14f), V.Num());
 	Ground->CreateMeshSection_LinearColor(0, V, Tri, Nrm, Uv, Col, Tan, true);
 	Ground->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Ground->SetCastShadow(false);
-	UMaterialInterface* Tm = FSmvScenery::TerrainMaterial();
+	// çöl: Hyper malzemesinin kum katmanı geniş diskte beyaz-mor iri bloklar gibi görünüyordu (Askerî Üs çevresi, duman testi) →
+	// düz köşe rengi malzemesi (M_SmvTerrainWx: kum rengi × gürültü), ada kumuyla aynı ton
+	UMaterialInterface* Tm = Biome == TEXT("Desert") ? nullptr : FSmvScenery::TerrainMaterial();
 	if (!Tm) Tm = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Simumav/Materials/M_SmvTerrainWx.M_SmvTerrainWx"), nullptr, LOAD_NoWarn | LOAD_Quiet);
 	if (Tm)
 	{
 		GroundMid = UMaterialInstanceDynamic::Create(Tm, this);
+		GroundMid->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.f, 1.f, 1.f));
 		const bool bDesert = Biome == TEXT("Desert");
 		GroundMid->SetScalarParameterValue(TEXT("Sand"), bDesert ? 1.f : 0.f);
 		// katman renkleri malzemede (s6); çöl kumu adanın açık kumuna yakın

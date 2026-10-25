@@ -129,6 +129,8 @@ private:
 	uint64 GAtmosF0 = 0, GWarmF0 = 0;
 	int32 GStreamPeak = 0, GShaderPeak = 0, GWarmRecap = 0;
 	void TickGate();
+	/** Fab haritası içeriği orijinde değilse sahne merkezini (FabStartE/N) içeriğe kaydırır */
+	void RecenterFabMap();
 	bool bLive = false;
 	bool bPreviewOn = false;
 	double T0 = 0;

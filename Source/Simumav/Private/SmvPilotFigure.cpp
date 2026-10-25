@@ -14,6 +14,8 @@
 #include "GroomComponent.h"
 #include "GroomAsset.h"
 #include "GroomBindingAsset.h"
+#include "AssetRegistry/IAssetRegistry.h"
+#include "AssetRegistry/AssetData.h"
 
 namespace
 {
@@ -39,6 +41,65 @@ namespace
 		static const TCHAR* Sk[] = { TEXT("#ffdbac"), TEXT("#f7e0c3"), TEXT("#f1c9a5"), TEXT("#e8b58a"), TEXT("#e0ac69"), TEXT("#c68642"), TEXT("#8d5524"), TEXT("#6b4226") };
 		const int32 I = FMath::Clamp(FCString::Atoi(*S.Mid(1)) - 1, 0, 7);
 		return PfHex(Sk[I], FLinearColor(0.9f, 0.7f, 0.55f));
+	}
+}
+
+namespace
+{
+	/** Fab MetaHuman giysi paketi (/Game/Fab/Outfits/<paket>): iskeletli ağ parçaları (bir kez yüklenir, kök kümede tutulur) */
+	const TArray<USkeletalMesh*>& PfOutfitParts(const FString& Set)
+	{
+		static TMap<FString, TArray<USkeletalMesh*>> Cache;
+		if (const TArray<USkeletalMesh*>* F = Cache.Find(Set)) return *F;
+		TArray<USkeletalMesh*>& Out = Cache.Add(Set);
+		TArray<FAssetData> As;
+		IAssetRegistry::GetChecked().GetAssetsByPath(FName(*(FString(TEXT("/Game/Fab/Outfits/")) + Set)), As, true);
+		As.Sort([](const FAssetData& A, const FAssetData& B) { return A.PackageName.LexicalLess(B.PackageName); });
+		for (const FAssetData& A : As)
+		{
+			if (A.AssetClassPath != USkeletalMesh::StaticClass()->GetClassPathName()) continue;
+			if (USkeletalMesh* M = Cast<USkeletalMesh>(A.GetAsset())) { M->AddToRoot(); Out.Add(M); }
+		}
+		UE_LOG(LogSimumav, Log, TEXT("Pilot giysi paketi %s: %d parça"), *Set, Out.Num());
+		return Out;
+	}
+
+	/** Avatar → giysi parçaları: kıyafet türü (suit / jacket / casual) ve cinsiyete göre Fab paketleri; ini ile değiştirilebilir
+	 *  ([/Script/Simumav.SmvPilot] Outfit_suit_m=Paket1+Paket2 …). Başlık parçaları (kask / başlık / şapka) atlanır — kask avatardan. */
+	TArray<USkeletalMesh*> PfOutfitFor(const FSmvAvatar& A)
+	{
+		const bool bF = A.Body == TEXT("f");
+		const FString Kind = A.Outfit.IsEmpty() ? FString(TEXT("suit")) : A.Outfit;
+		FString Cfg;
+		if (GConfig) GConfig->GetString(TEXT("/Script/Simumav.SmvPilot"), *FString::Printf(TEXT("Outfit_%s_%s"), *Kind, bF ? TEXT("f") : TEXT("m")), Cfg, GGameIni);
+		TArray<TArray<FString>> Choices;   // sırayla denenen paket grupları (grubun ilk paketi varsa grup kullanılır)
+		if (!Cfg.IsEmpty()) { TArray<FString> G; Cfg.ParseIntoArray(G, TEXT("+")); Choices.Add(G); }
+		if (bF) Choices.Add({ TEXT("FemaleOutfitBomberMetahuman") });
+		else if (Kind == TEXT("jacket")) { Choices.Add({ TEXT("BomberJeansOutfitMetahuman") }); Choices.Add({ TEXT("BomberMetahuman"), TEXT("ShirtCombatPantsMetahuman") }); }
+		else if (Kind == TEXT("casual")) { Choices.Add({ TEXT("ShirtCombatPantsMetahuman"), TEXT("BomberJeansOutfitMetahuman:Boots") }); }
+		else { Choices.Add({ TEXT("AstronautsFlightSuitsMetahumanClothing") }); Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56"), TEXT("ProtectiveSuit01Metahuman:Gloves") }); }
+		Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56") });
+		TArray<USkeletalMesh*> Out;
+		for (const TArray<FString>& G : Choices)
+		{
+			for (int32 i = 0; i < G.Num(); ++i)
+			{
+				FString Set = G[i], Only;
+				G[i].Split(TEXT(":"), &Set, &Only);
+				if (Set.IsEmpty()) Set = G[i];
+				const TArray<USkeletalMesh*>& Ps = PfOutfitParts(Set);
+				if (i == 0 && Ps.Num() == 0) break;
+				for (USkeletalMesh* M : Ps)
+				{
+					const FString N = M->GetName().ToLower();
+					if (N.Contains(TEXT("helmet")) || N.Contains(TEXT("hood")) || N.Contains(TEXT("hat")) || N.Contains(TEXT("cap_"))) continue;
+					if (!Only.IsEmpty() && !N.Contains(Only.ToLower())) continue;
+					Out.Add(M);
+				}
+			}
+			if (Out.Num()) break;
+		}
+		return Out;
 	}
 }
 
@@ -325,9 +386,29 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 		if (D.Size() > 1.0) F = D.GetSafeNormal();
 	}
 	MhBody->SetRelativeRotation(FRotator(0.0, -FMath::RadiansToDegrees(FMath::Atan2(F.Y, F.X)), 0.0));
-	// tulum: gövde ağının tüm yuvaları kıyafet rengi (eller eldiven gibi koyu değil — tek parça uçuş tulumu)
+	// Fab MetaHuman giysi paketi varsa parçalar gövdeye lider pozla giydirilir (gövde kendi deri malzemesinde kalır: eller, boyun);
+	// yoksa gövde ağının tüm yuvaları kıyafet rengi (tek parça uçuş tulumu) + temel şekil katmanları
 	const FLinearColor Suit = PfHex(A.Suit, FLinearColor(0.12f, 0.2f, 0.3f));
-	if (UMaterialInterface* Sm = SmvSolidMat(BaseMat))
+	bool bOutfitCfg = true;
+	if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvPilot"), TEXT("FabOutfit"), bOutfitCfg, GGameIni);
+	const TArray<USkeletalMesh*> Garments = bOutfitCfg ? PfOutfitFor(A) : TArray<USkeletalMesh*>();
+	for (USkeletalMesh* Gm : Garments)
+	{
+		USkeletalMeshComponent* Gc = NewObject<USkeletalMeshComponent>(this);
+		Gc->SetupAttachment(MhBody);
+		Gc->SetSkinnedAssetAndUpdate(Gm);
+		Gc->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Gc->RegisterComponent();
+		Gc->SetLeaderPoseComponent(MhBody);
+		MhGrooms.Add(Gc);
+	}
+	if (Garments.Num())
+	{
+		FString Names;
+		for (USkeletalMesh* Gm : Garments) Names += (Names.IsEmpty() ? TEXT("") : TEXT(", ")) + Gm->GetName();
+		UE_LOG(LogSimumav, Log, TEXT("MetaHuman pilot giysisi (%s / %s): %s"), *A.Body, *A.Outfit, *Names);
+	}
+	if (UMaterialInterface* Sm = Garments.Num() ? nullptr : SmvSolidMat(BaseMat))
 	{
 		for (int32 i = 0; i < MhBody->GetNumMaterials(); ++i)
 		{
@@ -368,8 +449,9 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 		MhGrooms.Add(Gc);
 	}
 	PoseMhArms(bWithRc);
-	// uçuş kıyafeti katmanları (MCC'de uygun giysi yok: mayo/şort): göğüs takımı yeleği, kemer, kalça/uyluk örtüsü, botlar —
-	// gövde kemiklerinin (aktör uzayı) konumundan; gövde pozlanmadığı için sabit
+	// uçuş kıyafeti katmanları (Fab giysi paketi yoksa; MCC'de uygun giysi yok: mayo/şort): göğüs takımı yeleği, kemer, kalça/uyluk örtüsü,
+	// botlar — gövde kemiklerinin (aktör uzayı) konumundan; gövde pozlanmadığı için sabit
+	if (Garments.Num() == 0)
 	{
 		const FTransform Rel = MhBody->GetRelativeTransform();
 		auto B = [this, &Rel](const TCHAR* N, FVector& Out) { if (MhBody->GetBoneIndex(FName(N)) == INDEX_NONE) return false; Out = Rel.TransformPosition(MhBody->GetBoneLocationByName(FName(N), EBoneSpaces::ComponentSpace)); return true; };

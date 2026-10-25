@@ -272,6 +272,78 @@ def bir_is(j):
     return sonuc
 
 
+MCC_GOVDE = {False: "/Game/MetaCharacterCreator/Data/MetaHumans/Common/Body/SKM_Human_Male", True: "/Game/MetaCharacterCreator/Data/MetaHumans/Common/Body/SKM_Human_Female"}
+
+
+def kiyafet(j):
+    """MetaHuman giysi paketi: her .fbx parçası iskeletli ağ olarak hedef klasöre (MCC gövde iskeletiyle; olmazsa kendi iskeleti).
+    Oyun parçaları gövdeye lider pozla bağlar (kemik adları MetaHuman gövdesiyle aynı). Sonuç günlüğe ("KIYAFET")."""
+    hedef = j["hedef"]
+    kadin = bool(j.get("kadin"))
+    log(f"=== KIYAFET {hedef} ({len(j.get('kaynaklar', []))} parca{', kadin' if kadin else ''})")
+    if eal.does_directory_exist(hedef):
+        eal.delete_directory(hedef)
+    iskelet = None
+    for k in (kadin, not kadin):
+        yol = MCC_GOVDE[k]
+        if eal.does_asset_exist(yol):
+            g = eal.load_asset(yol)
+            try:
+                iskelet = g.get_editor_property("skeleton") if g else None
+            except Exception:  # noqa: BLE001
+                iskelet = None
+            if iskelet:
+                log(f"KIYAFET iskelet: {iskelet.get_path_name()} ({yol})")
+                break
+    if not iskelet:
+        uyar("KIYAFET: MCC govde iskeleti bulunamadi - parcalar kendi iskeletiyle (lider poz kemik adlariyla eslenir)")
+    sonuc = {"hedef": hedef, "ok": False, "iskelet": bool(iskelet), "varliklar": [], "kemikler": []}
+    tamam = 0
+    for kaynak in j.get("kaynaklar", []):
+        ad = "SK_" + "".join(ch for ch in os.path.splitext(os.path.basename(kaynak))[0] if ch.isalnum() or ch == "_")
+        alt = hedef
+        oncesi = set(p for p, _ in varliklar(hedef)) if eal.does_directory_exist(hedef) else set()
+        yeni = []
+        for isk, cvar in ((iskelet, None), (None, None), (iskelet, "Interchange.FeatureFlags.Import.FBX 0"), (None, "Interchange.FeatureFlags.Import.FBX 0")):
+            if cvar:
+                unreal.SystemLibrary.execute_console_command(None, cvar)
+            t = gorev(kaynak, alt, ad, True)
+            if isk:
+                try:
+                    t.get_editor_property("options").set_editor_property("skeleton", isk)
+                except Exception as ex:  # noqa: BLE001
+                    uyar(f"KIYAFET iskelet secenegi: {ex}")
+            at.import_asset_tasks([t])
+            v = varliklar(hedef)
+            yeni = [(p, c) for p, c in v if p not in oncesi]
+            sks = [p for p, c in yeni if c == "SkeletalMesh"]
+            if sks:
+                sk = unreal.load_asset(sks[0])
+                try:
+                    e = sk.get_bounds().box_extent
+                    bo = f"{2 * e.x:.0f} x {2 * e.y:.0f} x {2 * e.z:.0f} cm"
+                except Exception:  # noqa: BLE001
+                    bo = "?"
+                try:
+                    sk_isk = sk.get_editor_property("skeleton").get_path_name()
+                except Exception:  # noqa: BLE001
+                    sk_isk = "?"
+                log(f"KIYAFET parca: {sks[0]} (iskelet {sk_isk}; {bo}; deneme iskelet={'govde' if isk else 'kendi'} cvar={cvar or '-'})")
+                tamam += 1
+                break
+            uyar(f"KIYAFET parca iskeletli ag olmadi ({os.path.basename(kaynak)}; iskelet={'govde' if isk else 'kendi'}, cvar={cvar}); {len(yeni)} yeni varlik")
+            for p, c in yeni:
+                eal.delete_asset(p)
+        if cvar:
+            unreal.SystemLibrary.execute_console_command(None, "Interchange.FeatureFlags.Import.FBX 1")
+    sonuc["ok"] = tamam > 0
+    sonuc["varliklar"] = [p for p, _ in varliklar(hedef)] if eal.does_directory_exist(hedef) else []
+    log(f"KIYAFET {hedef}: {tamam}/{len(j.get('kaynaklar', []))} parca iskeletli ag")
+    if eal.does_directory_exist(hedef):
+        eal.save_directory(hedef, only_if_is_dirty=True, recursive=True)
+    return sonuc
+
+
 def uds_incele():
     """Ultra Dynamic Sky: oyunun adla bağladığı değişkenlerin varlığı ve hava ön ayarları (yalnız günlük)."""
     sonuc = {"hedef": "/Game/UltraDynamicSky", "ok": True}
@@ -775,7 +847,7 @@ def main():
     for j in isler:
         try:
             tur = j.get("tur")
-            sonuclar.append(uds_incele() if tur == "uds" else paket_incele(j) if tur == "incele" else vat_pisir(j) if tur == "vat" else ses_kopyala(j) if tur == "ses" else simgeler(j) if tur == "simge" else bir_is(j))
+            sonuclar.append(uds_incele() if tur == "uds" else paket_incele(j) if tur == "incele" else vat_pisir(j) if tur == "vat" else ses_kopyala(j) if tur == "ses" else simgeler(j) if tur == "simge" else kiyafet(j) if tur == "kiyafet" else bir_is(j))
         except Exception as e:  # noqa: BLE001
             unreal.log_error(f"[fab_import] hata: {j.get('kaynak')}: {e}")
             sonuclar.append({"hedef": j.get("hedef"), "ok": False})

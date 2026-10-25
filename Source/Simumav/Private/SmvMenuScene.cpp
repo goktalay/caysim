@@ -13,6 +13,7 @@
 #include "CesiumWorldSetup.h"
 #include "CaySimTypes.h"
 #include "Camera/CameraActor.h"
+#include "GameFramework/PlayerStart.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/PointLightComponent.h"
@@ -655,6 +656,44 @@ void ASmvMenuScene::TickSnaps()
 
 void ASmvMenuScene::PlayLanding() { LandAt = FPlatformTime::Seconds(); }
 
+void ASmvMenuScene::RecenterFabMap()
+{
+	// Fab haritasının içeriği dünya orijininde değilse (Rafineri: tur kamerası boş denize / göğe bakıyordu) menü dronu, kamera
+	// istasyonları ve tur yörüngesi içeriğin merkezine (varsa haritanın PlayerStart'ına) kaydırılır: FabStartE/N
+	if (!bFabMap || !MenuLevel || !MenuLevel->GetLoadedLevel() || !WorldSetup) return;
+	FBox Box(ForceInit);
+	TArray<FVector> Starts;
+	int32 N = 0;
+	for (AActor* A : MenuLevel->GetLoadedLevel()->Actors)
+	{
+		if (!IsValid(A)) continue;
+		if (A->IsA<APlayerStart>()) { Starts.Add(A->GetActorLocation()); continue; }
+		TInlineComponentArray<UStaticMeshComponent*> Cs(A);
+		for (UStaticMeshComponent* C : Cs)
+		{
+			if (!C || !C->IsRegistered() || !C->IsVisible() || !C->GetStaticMesh()) continue;
+			const FBoxSphereBounds& B = C->Bounds;
+			if (B.BoxExtent.GetMax() > 40000.0) continue;   // gök küresi / dev zemin düzlemi / su
+			Box += B.GetBox();
+			++N;
+		}
+	}
+	if (!Box.IsValid || N < 5) return;
+	const double La = Lat0 + FMath::RadiansToDegrees(FabStartN / 6378137.0);
+	const double Lo = Lon0 + FMath::RadiansToDegrees(FabStartE / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));
+	const FVector P0 = WorldSetup->GeoToUnreal(Lo, La, WorldSetup->MslToWorldHeight(La, Lo, GroundMsl));
+	const FBox Inner = Box.ExpandBy(-FMath::Min(5000.0, 0.25 * FMath::Min(Box.GetSize().X, Box.GetSize().Y)));
+	if (Inner.IsValid && Inner.IsInsideXY(P0)) return;
+	FVector C = Box.GetCenter();
+	for (const FVector& S : Starts) if (Box.IsInsideXY(S)) { C = S; break; }
+	const double DE = (C.X - P0.X) / 100.0, DN = -(C.Y - P0.Y) / 100.0;
+	FabStartE += DE; FabStartN += DN;
+	GroundCache.Reset();
+	bCamInit = false;
+	UE_LOG(LogSimumav, Log, TEXT("Menü Fab haritası %s: içerik orijinde değil (%d ağ, kutu %.0f x %.0f m) — sahne merkezi %.0f m doğu, %.0f m kuzey kaydırıldı%s"),
+		*MapKey, N, Box.GetSize().X / 100.0, Box.GetSize().Y / 100.0, DE, DN, Starts.Num() ? TEXT(" (PlayerStart)") : TEXT(""));
+}
+
 void ASmvMenuScene::TickScenery()
 {
 	if (bSceneryDone || !bLive || !WorldSetup) return;
@@ -663,6 +702,7 @@ void ASmvMenuScene::TickScenery()
 	if (!W) return;
 	if (bFabMap && (!MenuLevel || !MenuLevel->IsLevelVisible() || !MenuLevel->GetLoadedLevel())) return;
 	bSceneryDone = true;
+	RecenterFabMap();
 	ClearShowcaseSpot();
 	FActorSpawnParameters Sp;
 	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -735,9 +775,29 @@ void ASmvMenuScene::TickDroneSnaps()
 		{
 			if (TObjectPtr<UTextureRenderTarget2D>* Rt = Snaps.Find(DPending))
 			{
-				const FVector At = GSmvPreviewAt;
+				// kadraj: görünür ağların gerçek sınırı (Fab Blueprint gövdeleri aktör kökünden kaymış / farklı ölçekli olabiliyor —
+				// Mini Quad D küçük resmi gövdenin içinden yakın plan çıkıyordu); geçersizse aktör kökü + görsel yarıçap
+				FVector At = GSmvPreviewAt;
+				float Rcm = DSnapActor->GetVisualRadiusM() * 100.f;
+				{
+					FBox Bx(ForceInit);
+					TArray<AActor*> Acts;
+					DSnapActor->GetAttachedActors(Acts, true, true);
+					Acts.Add(DSnapActor.Get());
+					for (AActor* Ac : Acts)
+					{
+						if (!Ac) continue;
+						TInlineComponentArray<UMeshComponent*> Ms(Ac);
+						for (UMeshComponent* Mc : Ms) if (Mc && Mc->IsRegistered() && Mc->IsVisible() && !Mc->bHiddenInGame) Bx += Mc->Bounds.GetBox();
+					}
+					if (Bx.IsValid && Bx.GetExtent().GetMax() > 3.0 && Bx.GetExtent().GetMax() < 5000.0)
+					{
+						At = Bx.GetCenter();
+						Rcm = FMath::Max(Rcm * 0.5f, (float)Bx.GetExtent().Size2D());
+					}
+				}
 				// kadraja sığdır: yatay FOV 26° (yarım açı tanjantı 0,231) + %15 pay
-				const float D = FMath::Clamp(DSnapActor->GetVisualRadiusM() * 100.f / 0.231f * 1.15f, 120.f, 4000.f);
+				const float D = FMath::Clamp(Rcm / 0.231f * 1.15f, 120.f, 4000.f);
 				const FVector CamAt = At + FVector(-D * 0.86, -D * 0.5, D * 0.36);
 				DSnapActor->SetActorHiddenInGame(false);
 				SnapCap->TextureTarget = Rt->Get();
