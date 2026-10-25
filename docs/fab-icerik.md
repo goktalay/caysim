@@ -64,9 +64,14 @@ tablosundaki **gerçek konumuna** (`FSmvMapDef::Lat/Lon/GroundMsl`) demirlenir v
 | Yarış Pisti | İstanbul Tuzla, İstanbul Park 40.952, 29.405 (130 m) | |
 | Köşk | Sapanca Gölü kuzeyi 40.744, 30.300 (70 m) | |
 
-- Kaynak (Ayarlar → Görüntü → **Gerçek dünya**): `google3d` (varsayılan; Google Photorealistic 3D Tiles, ion varlığı 2275207 —
-  ion hesabı üzerinden, HEPGO anahtarı gerekmez), `terrain` (Cesium World Terrain 1 + Bing uydu 2), `off` (eski düz çevre diski).
-  Google 3B 25 sn'de karo getirmezse World Terrain + Bing'e düşülür. Belirteç: `secrets.CESIUM_ION_TOKEN` (CI pakete yazar).
+- Kaynak (Ayarlar → Görüntü → **Gerçek dünya**): `terrain` (varsayılan; Cesium World Terrain 1 + Bing uydu 2), `google3d`
+  (Google Photorealistic 3D Tiles, ion varlığı 2275207 — **deneysel**: ağ sağlam (glb 120–180 ms) ama paketli oyunda karolar Cesium işçi
+  kuyruğunda takılıyor, görünür karo bileşeni oluşmuyor; 25 sn'de bileşen yoksa arazi + uyduya düşer; fizik ağı kapalı, çarpışma gizli
+  World Terrain'den), `off` (eski düz çevre diski). Belirteç: `secrets.CESIUM_ION_TOKEN` (CI pakete yazar).
+- Arka planı kendi başına bir dünya olan harita (≥ 10 km; Brushify Forest'ın 28 × 36 km dağ halkası) bütün korunur; gerçek dünya onun
+  dışında başlar (kenar kaydırması yok). Diğerlerinde oyun alanı dışına taşan tekil büyük ağlar (sahte ufuk) gizlenir; örnekli bitki ağları
+  hiçbir zaman gizlenmez.
+- Ağ: `[HTTP.Curl] MaxHostConnections=8` (assets.ion.cesium.com'a çok sayıda eşzamanlı TLS el sıkışması "SSL connect error 35" veriyordu).
 - Harita alanı karolardan kırpılır (`UCesiumPolygonRasterOverlay`, çokgen = oyun alanı kutusu); kırpılan alanda karo çarpışması yok
   sayılır (`SmvPhysics::SetClipRegion`). Kenar boyunca 40 örnekte harita zemini (içte) ile karo yüzeyi (dışta) farkının ortancası kadar
   georeference düşeyde kaydırılır (±60 m sınırlı) (`ACaySimWorldSetup::ShiftVertical`; yer ofseti birlikte değişir → MSL konumlar sabit kalır).
