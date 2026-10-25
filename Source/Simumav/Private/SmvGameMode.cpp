@@ -66,6 +66,7 @@
 #include "Misc/ConfigCacheIni.h"
 #include "Engine/StaticMesh.h"
 #include "Blueprint/UserWidget.h"
+#include "UObject/UObjectIterator.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -1171,6 +1172,7 @@ void ASmvGameMode::Tick(float Dt)
 	TickPhysics(Dt);
 	TickDebris(Dt);
 	TickCityWindows();
+	TickCreditsPlacement();
 	UpdateRace(Dt);
 	UpdateTargets();
 	// ses
@@ -2888,6 +2890,26 @@ void ASmvGameMode::UpdateJetHud(const FCaySimTelemetry& T, ASmvPilotPawn* Pw)
 	Vis(TEXT("Lock_B"), ESlateVisibility::Collapsed);
 	JetHud->ProcessEvent(F, Buf.GetData());
 	for (TFieldIterator<FProperty> It(F); It && It->HasAnyPropertyFlags(CPF_Parm); ++It) It->DestroyValue_InContainer(Buf.GetData());
+}
+
+// Cesium / Google atıfları (CesiumCreditSystemBP ekran atıf parçacığı, sol alt): alt bandın ALTINDA kalıyordu — Google Map Tiles
+// koşulları logo + veri sağlayıcılarının görünür olmasını ister. Parçacık bant yüksekliği kadar yukarı kaydırılır, arka planı koyulaştırılır.
+void ASmvGameMode::TickCreditsPlacement()
+{
+	const double Now = FPlatformTime::Seconds();
+	if (Now - LastCreditsFix < 1.0) return;
+	LastCreditsFix = Now;
+	for (TObjectIterator<UUserWidget> It; It; ++It)
+	{
+		UUserWidget* Wd = *It;
+		if (!Wd || Wd->GetWorld() != GetWorld() || !Wd->GetClass()->GetName().Contains(TEXT("ScreenCredits"))) continue;
+		const FVector2D Want(8.f, -CreditsLiftPx);
+		if (!Wd->GetRenderTransform().Translation.Equals(Want, 0.5f))
+		{
+			Wd->SetRenderTranslation(Want);
+			SMV_KLOG(TEXT("Atıf parçacığı alt bandın üstüne alındı (%s, %.0f px)"), *Wd->GetClass()->GetName(), CreditsLiftPx);
+		}
+	}
 }
 
 void ASmvGameMode::TickCityWindows()

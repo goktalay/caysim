@@ -208,6 +208,9 @@ public:
 		bool SmokeRamStatus(bool& bOutArmed, float& OutDistM, FString& OutContact, float* OutBelowM = nullptr, float* OutSpeed = nullptr) const;
 	private:
 		bool bSmokeRam = false;
+		void TickCreditsPlacement();
+		double LastCreditsFix = 0;
+		float CreditsLiftPx = 56.f;   // alt bant yüksekliği + pay (Slate birimi)
 		FVector SmokeRamTarget = FVector::ZeroVector;
 		FString SmokeRamLastContact;
 		FString HudLang;
