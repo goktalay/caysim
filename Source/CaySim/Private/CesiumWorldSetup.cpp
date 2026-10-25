@@ -33,12 +33,52 @@
 #include "CesiumIonRasterOverlay.h"
 #include "CesiumPolygonRasterOverlay.h"
 #include "CesiumCartographicPolygon.h"
+THIRD_PARTY_INCLUDES_START
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/base_sink.h>
+THIRD_PARTY_INCLUDES_END
+#include <mutex>
+#include <atomic>
 #ifdef min
 #undef min
 #endif
 #ifdef max
 #undef max
 #endif
+#endif
+
+#if CAYSIM_WITH_CESIUM
+namespace
+{
+	// cesium-native iletileri (karo yükleme hataları, glTF okuma uyarıları) paketli oyunda günlükte hiç görünmüyordu: ek spdlog alıcısı
+	// LogCaySim'e "cesium-native" önekiyle yazar (uyarı ve üstü; -CesiumStats ile bilgi düzeyi de)
+	class FCaySimSpdSink final : public spdlog::sinks::base_sink<std::mutex>
+	{
+	protected:
+		virtual void sink_it_(const spdlog::details::log_msg& Msg) override
+		{
+			const std::string S(Msg.payload.data(), Msg.payload.size());
+			static std::atomic<int32> N{0};
+			if (N.fetch_add(1) > 4000) return;   // sel önleme
+			UE_LOG(LogCaySim, Log, TEXT("cesium-native[%d]: %s"), (int32)Msg.level, UTF8_TO_TCHAR(S.c_str()));
+		}
+		virtual void flush_() override {}
+	};
+
+	void InstallCesiumLogSink(bool bVerbose)
+	{
+		static bool bDone = false;
+		if (bDone) return;
+		bDone = true;
+		std::shared_ptr<spdlog::logger> L = spdlog::default_logger();
+		if (!L) return;
+		auto Sink = std::make_shared<FCaySimSpdSink>();
+		Sink->set_level(bVerbose ? spdlog::level::info : spdlog::level::warn);
+		L->sinks().push_back(Sink);
+		if (bVerbose) L->set_level(spdlog::level::info);
+		UE_LOG(LogCaySim, Log, TEXT("cesium-native günlük alıcısı eklendi (%d alıcı, düzey %d)"), (int32)L->sinks().size(), (int32)L->level());
+	}
+}
 #endif
 
 ACaySimWorldSetup::ACaySimWorldSetup()
@@ -88,6 +128,9 @@ void ACaySimWorldSetup::Build(const FCaySimSession& Session, UHepgoClient* Clien
 	CenterGroundMsl = Center.bHasAlt ? Center.Alt : 0.0;
 	ActiveSource = Source;
 	bLogTileStats = FParse::Param(FCommandLine::Get(), TEXT("CesiumStats"));
+#if CAYSIM_WITH_CESIUM
+	InstallCesiumLogSink(bLogTileStats);
+#endif
 #if CAYSIM_WITH_CESIUM
 	// Google 3B karoları işçi kuyruğunda takılıyordu (500+ "Loading-Worker", hiç "Loading-Main", 0 glTF bileşeni; 1588 glb HTTP 200 ile
 	// indirilmişken): Cesium for Unreal glTF dokularını D3D12'de işçi iş parçacığında RHIAsyncCreateTexture2D + CompletionEvent->Wait() ile
