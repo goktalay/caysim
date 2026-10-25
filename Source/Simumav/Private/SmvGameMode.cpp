@@ -2710,7 +2710,8 @@ void ASmvGameMode::SpawnFabCity()
 			const FVector Ctr(i * Cell, j * Cell, 0.0);
 			const int32 Ring = FMath::Max(FMath::Abs(i), FMath::Abs(j));
 			const int32 Yaw90 = ((i * 3 + j * 5) % 4 + 4) % 4;
-			if (Ring == 2 && Towers.Num() > 0)
+			// yükseklik dağılımı: dış halka kuleler; iç halkanın yarısında da kule (alçak konut + yüksek blok karışık sokak silueti)
+			if ((Ring == 2 || ((i + j) & 1) != 0) && Towers.Num() > 0)
 			{
 				bool bOk = false;
 				const FString& Pkg = Towers[(NTower * 3 + i + j + 8) % Towers.Num()];
@@ -2864,6 +2865,24 @@ void ASmvGameMode::SpawnCityStreetscape(double Cell, double Road)
 				ByMesh.FindOrAdd(Tm).Add(FTransform(FRotator(0.0, n * 47.0, 0.0), P, FVector(0.75)));
 				++n;
 			}
+		}
+		// sokak ağaçları: her adanın kaldırımında (bordürün 0,8 m içi), 14 m arayla; köşelerde 9 m boş (lamba, yaya geçidi)
+		{
+			const double Hs = (Cell - Road) * 0.5 - 80.0;   // bordür içi 0,8 m (yaya yolu 1,5 m içeride)
+			for (int32 i = -2; i <= 2; ++i)
+				for (int32 j = -2; j <= 2; ++j)
+				{
+					if (i == 0 && j == 0) continue;
+					const FVector C(i * Cell, j * Cell, 12.0);
+					for (double t = -Hs + 900.0; t <= Hs - 900.0; t += 1400.0)
+						for (int32 e = 0; e < 4; ++e)
+						{
+							const FVector P = C + (e == 0 ? FVector(t, -Hs, 0.0) : e == 1 ? FVector(t, Hs, 0.0) : e == 2 ? FVector(-Hs, t, 0.0) : FVector(Hs, t, 0.0));
+							UStaticMesh* Tm = Pick[(n * 7 + 3) % Pick.Num()];
+							ByMesh.FindOrAdd(Tm).Add(FTransform(FRotator(0.0, n * 61.0, 0.0), P, FVector(0.55 + 0.1 * (n % 3))));
+							++n;
+						}
+				}
 		}
 		for (TPair<UStaticMesh*, TArray<FTransform>>& It : ByMesh) Sc->AddMeshInstances(It.Key, It.Value, true, 3000.0);
 		// şehir dışı park: ağaç / çalı / kaya (şehir kenarından 1,2 km'ye)
