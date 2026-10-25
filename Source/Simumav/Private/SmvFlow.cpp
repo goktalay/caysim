@@ -1,4 +1,5 @@
 #include "SmvFlow.h"
+#include "SmvMapRegistry.h"
 #include "SmvFabContent.h"
 #include "SimumavModule.h"
 #include "SimumavClient.h"
@@ -189,6 +190,14 @@ void USmvFlow::StartFlight()
 	bEnding = false;
 	LastSummary = FSmvFlightSummary();
 	LastFpv = FFpvResult();
+	// Fab haritası: SITL ev konumu haritanın gerçek dünya demiri (kayıt tablosu) — kayıtlı eski parkur kopyaları da aynı yere uçar
+	if (FSmvFabContent::IsFabWorld(Draft.Track.WorldMode))
+	{
+		if (const FSmvMapDef* Md = FSmvMapRegistry::Find(Draft.Track.WorldMode.Mid(4)))
+		{
+			if (Md->Lat != 0.0) { Draft.Track.Lat = Md->Lat; Draft.Track.Lon = Md->Lon; Draft.Track.GroundMsl = Md->GroundMsl; }
+		}
+	}
 	if (Draft.Backend == ESmvFlightBackend::Cloud)
 	{
 		USmvCloudFlightLink* L = NewObject<USmvCloudFlightLink>(this);

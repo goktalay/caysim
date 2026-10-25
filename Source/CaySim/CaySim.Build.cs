@@ -36,9 +36,11 @@ public class CaySim : ModuleRules
 		// Cesium for Unreal eklentisi varsa georeference / 3D Tiles kodu derlenir.
 		// Eklenti Plugins/CesiumForUnreal altında ya da motorun Marketplace (Fab) eklentilerinde olabilir.
 		// EngineDirectory mutlak yoldur (Target.RelativeEnginePath çalışma dizinine göreli olduğundan güvenilmez).
-		bool bCesium = Directory.Exists(Path.Combine(PluginDirectory(Target), "CesiumForUnreal"))
-			|| Directory.Exists(Path.Combine(EngineDirectory, "Plugins", "Marketplace", "CesiumForUnreal"))
-			|| Directory.Exists(Path.Combine(EngineDirectory, "Plugins", "Fab", "CesiumForUnreal"));
+		// Launcher/Fab kurulumunda klasör adı karışıktır (ör. Marketplace/Cesiumfo5b7c98b8073cV11) → .uplugin dosyası aranır.
+		bool bCesium = HasPlugin(PluginDirectory(Target), "CesiumForUnreal")
+			|| HasPlugin(Path.Combine(EngineDirectory, "Plugins", "Marketplace"), "CesiumForUnreal")
+			|| HasPlugin(Path.Combine(EngineDirectory, "Plugins", "Fab"), "CesiumForUnreal");
+		System.Console.WriteLine("CaySim: Cesium for Unreal " + (bCesium ? "found (CAYSIM_WITH_CESIUM=1)" : "missing (CAYSIM_WITH_CESIUM=0)"));
 		if (bCesium)
 		{
 			PublicDependencyModuleNames.Add("CesiumRuntime");
@@ -60,6 +62,18 @@ public class CaySim : ModuleRules
 		{
 			PublicDefinitions.Add("CAYSIM_WITH_GLTFRUNTIME=0");
 		}
+	}
+
+	/** Kök altında (bir düzey alt klasör dahil) <Ad>.uplugin var mı */
+	private static bool HasPlugin(string Root, string Name)
+	{
+		if (!Directory.Exists(Root)) return false;
+		if (File.Exists(Path.Combine(Root, Name, Name + ".uplugin"))) return true;
+		foreach (string D in Directory.GetDirectories(Root))
+		{
+			if (File.Exists(Path.Combine(D, Name + ".uplugin"))) return true;
+		}
+		return false;
 	}
 
 	private static string PluginDirectory(ReadOnlyTargetRules Target)

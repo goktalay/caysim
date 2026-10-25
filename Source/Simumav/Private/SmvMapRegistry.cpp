@@ -3,7 +3,8 @@
 // ===========================================================================================================================
 // UÇUŞ HARİTALARI KAYIT TABLOSU
 // Biçim: { Key, ad dil anahtarı, açıklama dil anahtarı, önizleme (Content/ altı PNG), harita adayları (';'), tür,
-//          başlangıç kaydırması doğu m, kuzey m, kalkış yönü derece, sahne dekoru, Fab paketi[, çevre zemini biyomu] }
+//          başlangıç kaydırması doğu m, kuzey m, kalkış yönü derece, sahne dekoru, Fab paketi, çevre zemini biyomu (Cesium yoksa),
+//          gerçek dünya demiri enlem, boylam, zemin MSL m, yalnız gerçek dünya }
 // CI (Tools/fab/fab-hazirla.ps1) işaretli bloktaki satırların 5. alanından ilk mevcut haritayı MapsToCook'a ekler —
 // satır biçimini (tek satır, TEXT("...") alanları) bozmayın. Dil anahtarları Tools/i18n/metinler.py'de.
 // ===========================================================================================================================
@@ -12,13 +13,13 @@ namespace
 	const FSmvMapDef GSmvMaps[] =
 	{
 		// <HARITA-TABLOSU>
-		{ TEXT("orman"),   TEXT("fabmap.forest"),   TEXT("fabmap.forest.desc"),   TEXT("Simumav/MapPreviews/orman.png"),    TEXT("/Game/Brushify/Maps/Forest/Forest"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Brushify") },
-		{ TEXT("yikik"),   TEXT("fabmap.ruined"),   TEXT("fabmap.ruined.desc"),   TEXT("Simumav/MapPreviews/yikik.png"),    TEXT("/Game/Ruined_Construction/Levels/Master_Level/P_Ruined_Construction"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Ruined_Construction"), TEXT("Desert") },
-		{ TEXT("sehir"),   TEXT("fabmap.city"),     TEXT("fabmap.city.desc"),     TEXT("Simumav/MapPreviews/sehir.png"),    TEXT(""), ESmvMapKind::ProcCity, 0, 0, 0, false, TEXT("EuropeanBuildings_Asset;CitySampleBuildings") },
-		{ TEXT("rafineri"), TEXT("fabmap.refinery"), TEXT("fabmap.refinery.desc"), TEXT("Simumav/MapPreviews/rafineri.png"), TEXT("/Game/Main"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("refineries") },
-		{ TEXT("askeri"),  TEXT("fabmap.military"), TEXT("fabmap.military.desc"), TEXT("Simumav/MapPreviews/askeri.png"),   TEXT("/Game/US_Military/Levels/Showreel_Scene;/Game/US_Military/Levels/Overview"), ESmvMapKind::Level, 0, 0, 0, true, TEXT("US_Military"), TEXT("Desert") },
-		{ TEXT("pist"),    TEXT("fabmap.racing"),   TEXT("fabmap.racing.desc"),   TEXT("Simumav/MapPreviews/pist.png"),     TEXT("/Game/CityRacing/Maps/CityRacingMainMap"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("CityRacing") },
-		{ TEXT("kosk"),    TEXT("fabmap.pavilion"), TEXT("fabmap.pavilion.desc"), TEXT("Simumav/MapPreviews/kosk.png"),     TEXT("/Game/SeyeonjeongPavilion/Level/Demo"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("SeyeonjeongPavilion") },
+		{ TEXT("orman"),   TEXT("fabmap.forest"),   TEXT("fabmap.forest.desc"),   TEXT("Simumav/MapPreviews/orman.png"),    TEXT("/Game/Brushify/Maps/Forest/Forest"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Brushify"), nullptr, 41.1900, 28.9700, 102.0, false },   // İstanbul Belgrad Ormanı (meşe-kayın ormanı, ~100 m)
+		{ TEXT("yikik"),   TEXT("fabmap.ruined"),   TEXT("fabmap.ruined.desc"),   TEXT("Simumav/MapPreviews/yikik.png"),    TEXT("/Game/Ruined_Construction/Levels/Master_Level/P_Ruined_Construction"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Ruined_Construction"), TEXT("Desert"), 39.9650, 32.5800, 795.0, false },   // Ankara batı yakası, Etimesgut–Sincan sanayi kuşağı
+		{ TEXT("sehir"),   TEXT("fabmap.city"),     TEXT("fabmap.city.desc"),     TEXT("Simumav/MapPreviews/sehir.png"),    TEXT(""), ESmvMapKind::ProcCity, 0, 0, 0, false, TEXT("EuropeanBuildings_Asset;CitySampleBuildings"), nullptr, 39.8580, 32.6400, 1031.0, false },   // Ankara güneybatı şehir kenarı (Yapracık)
+		{ TEXT("rafineri"), TEXT("fabmap.refinery"), TEXT("fabmap.refinery.desc"), TEXT("Simumav/MapPreviews/rafineri.png"), TEXT("/Game/Main"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("refineries"), nullptr, 40.7650, 29.7750, 39.0, true },   // Kocaeli Körfez kıyısı, İzmit rafinerisi yanı (gerçek tesis 3B karolarda)
+		{ TEXT("askeri"),  TEXT("fabmap.military"), TEXT("fabmap.military.desc"), TEXT("Simumav/MapPreviews/askeri.png"),   TEXT("/Game/US_Military/Levels/Showreel_Scene;/Game/US_Military/Levels/Overview"), ESmvMapKind::Level, 0, 0, 0, true, TEXT("US_Military"), TEXT("Desert"), 37.7300, 33.5500, 995.0, false },   // Konya Karapınar bozkırı (düz step / yarı çöl)
+		{ TEXT("pist"),    TEXT("fabmap.racing"),   TEXT("fabmap.racing.desc"),   TEXT("Simumav/MapPreviews/pist.png"),     TEXT("/Game/CityRacing/Maps/CityRacingMainMap"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("CityRacing"), nullptr, 40.9517, 29.4050, 130.0, false },   // İstanbul Tuzla, İstanbul Park yarış pisti yöresi
+		{ TEXT("kosk"),    TEXT("fabmap.pavilion"), TEXT("fabmap.pavilion.desc"), TEXT("Simumav/MapPreviews/kosk.png"),     TEXT("/Game/SeyeonjeongPavilion/Level/Demo"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("SeyeonjeongPavilion"), nullptr, 40.7440, 30.3000, 70.0, false },   // Sakarya Sapanca Gölü kuzey kıyısı
 		// </HARITA-TABLOSU>
 	};
 

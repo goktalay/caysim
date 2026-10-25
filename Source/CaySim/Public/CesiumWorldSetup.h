@@ -66,6 +66,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dünya") double GetCenterGroundMsl() const { return CenterGroundMsl; }
 	/** Yükleme yüzdesi (3D Tiles). */
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dünya") float GetLoadProgress() const { return LoadProgress; }
+	/** Derlemede Cesium for Unreal var mı (CAYSIM_WITH_CESIUM) */
+	static bool CesiumCompiled();
+	/** Etkin 3D Tiles kaynağının kısa adı (günlük / arayüz): google3d | ion_terrain | flat */
+	FString SourceName() const;
+	/** Yer ofsetini sabitle (otomatik ölçüm kapalı): MSL → elipsoid farkı (m). Fab haritası gerçek dünyaya oturtulurken. */
+	void SetFixedGroundOffset(double OffsetM);
+	/** Georeference merkezini düşeyde kaydır (m; +: 3D Tiles aşağı iner). Yer ofseti de aynı miktarda değişir → MSL yükseklikler Unreal'da sabit kalır. */
+	void ShiftVertical(double DzM);
+	/** Yalnız 3D Tiles yüzeyine aşağı ışın (Fab seviyeleri / aktörler yok sayılır). */
+	bool TraceTiles(const FVector& Top, const FVector& Bottom, FHitResult& Out) const;
+	/** 3D Tiles içinde verilen çokgeni (Unreal dünya XY, saat yönü ya da tersi) kırp — Fab haritası bu alanı doldurur. */
+	bool ClipPolygon(const TArray<FVector>& UnrealPoints);
+	/** Kaynak, ilk karolar gelmediği için yedeğe düştü mü (Google 3B → World Terrain + Bing) */
+	bool DidFallback() const { return bFellBack; }
+	/** Etkin 3D Tiles aktörü (yoksa nullptr) */
+	AActor* GetTilesActor() const;
 
 	// ICaySimGeoTransform
 	virtual FVector GeoToUnreal(double Lon, double Lat, double HeightM) const override;
@@ -83,6 +99,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium") int64 CesiumTerrainAssetId = 1;
 	/** Bing Maps Aerial imagery varlık kimliği (ion). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium") int64 CesiumImageryAssetId = 2;
+	/** Google Photorealistic 3D Tiles ion varlık kimliği (ion hesabı üzerinden; HEPGO anahtarı gerekmez). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) int64 GoogleIonAssetId = 2275207;
+	/** Google 3B bu sürede hiç karo yüklemezse World Terrain + Bing'e düşülür (sn). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double GoogleFallbackS = 25.0;
+	/** 3D Tiles ekran-uzayı hata sınırı (küçük = daha ayrıntılı). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double TilesScreenSpaceError = 12.0;
 	/** Geoid ayrımı (MSL → WGS84 elipsoid) m; Türkiye için ≈ 30–40 m. Ev irtifası ile 3D Tiles yüzeyi arası farktan kalkışta otomatik düzeltilir. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya") double GeoidOffsetM = 35.0;
 	/** Kalkışa dek yer ofseti otomatik ölçülsün (merkez ışını ile 3D Tiles yüzeyi). */
@@ -120,13 +142,18 @@ private:
 	TWeakObjectPtr<ACesium3DTileset> Terrain;
 	TWeakObjectPtr<ACesium3DTileset> GoogleTiles;
 	TWeakObjectPtr<ACesiumSunSky> SunSky;
+	TWeakObjectPtr<AActor> ClipActor;
+	ACesium3DTileset* ActiveTiles() const;
 #endif
 
 	void SetupLighting();
 	void SetupFlat();
 	void SetupCesiumIon();
 	void SetupGoogle(const FString& Key);
+	void SetupGoogleIon();
 	void MeasureGroundOffset();
+	bool bFellBack = false;
+	double SourceT0 = 0;
 	void Finish(bool bOk);
 	static float TimeOfDayHours(const FString& Time);
 };

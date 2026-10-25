@@ -119,6 +119,11 @@ struct FSmvSensorScan
 namespace SmvPhysics
 {
 	FCollisionQueryParams MakeQuery(FName Tag, const AActor* Self, const TArray<TWeakObjectPtr<AActor>>* Ignore);
+	/** Gerçek dünya (Cesium) içine oturtulan Fab haritası: kırpılan alan (Unreal XY) ve 3D Tiles aktörü — bu alanda karolar çarpışmada yok sayılır.
+	 *  Tiles = nullptr → kapalı. */
+	void SetClipRegion(const AActor* Tiles, const FBox2D& Box);
+	/** P kırpılan alandaysa 3D Tiles aktörünü sorgudan çıkar. */
+	void IgnoreClippedTiles(FCollisionQueryParams& Q, const FVector& P);
 	/** Engel sensörleri (ışın izleri). bDraw: ışınları çiz (hata ayıklama). */
 	void Scan(UWorld* W, const FVector& Origin, const FQuat& BodyRot, const FQuat& EnuRot, const FCollisionQueryParams& Q, FSmvSensorScan& Out, bool bDraw);
 	/** Yüzey türü (bileşen etiketi, sınıf, ağ/aktör adı): terrain | building | tree | water | obstacle */

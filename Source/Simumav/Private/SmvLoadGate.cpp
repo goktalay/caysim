@@ -23,6 +23,7 @@ void FSmvLoadGate::Begin(const FString& InLabel, std::initializer_list<ESmvLoad>
 	T0 = FPlatformTime::Seconds();
 	bActive = true;
 	bSummaryDone = false;
+	bFailed = false; FailText.Reset(); FailStage = ESmvLoad::Num;
 	Shown = 0.f;
 	for (int32 i = 0; i < (int32)ESmvLoad::Num; ++i) { Stages[i] = FSmvLoadStage(); Stages[i].bUsed = false; Stages[i].bDone = true; Stages[i].Progress = 1.f; }
 	for (ESmvLoad S : Used) { FSmvLoadStage& St = Stages[(int32)S]; St.bUsed = true; St.bDone = false; St.Progress = 0.f; }
@@ -31,8 +32,16 @@ void FSmvLoadGate::Begin(const FString& InLabel, std::initializer_list<ESmvLoad>
 
 double FSmvLoadGate::Elapsed() const { return bActive ? FPlatformTime::Seconds() - T0 : 0.0; }
 
+void FSmvLoadGate::Fail(ESmvLoad S, const FString& Reason)
+{
+	if (bFailed) return;
+	bFailed = true; FailText = Reason; FailStage = S;
+	UE_LOG(LogSimumav, Error, TEXT("SMVLOAD [%s] %s BAŞARISIZ (%.0f sn): %s"), *LabelStr, StageLogName(S), Elapsed(), *Reason);
+}
+
 bool FSmvLoadGate::IsDone() const
 {
+	if (bFailed) return false;
 	for (const FSmvLoadStage& S : Stages) if (!S.bDone) return false;
 	return true;
 }
@@ -40,7 +49,7 @@ bool FSmvLoadGate::IsDone() const
 void FSmvLoadGate::Update(ESmvLoad S, float Progress, bool bReady, const FString& Detail, double TimeoutS, int32 StableNeed)
 {
 	FSmvLoadStage& St = Stages[(int32)S];
-	if (!bActive || !St.bUsed || St.bDone) return;
+	if (!bActive || bFailed || !St.bUsed || St.bDone) return;
 	St.Progress = FMath::Max(St.Progress, FMath::Clamp(Progress, 0.f, 1.f));
 	St.Detail = Detail;
 	St.StableFrames = bReady ? St.StableFrames + 1 : 0;

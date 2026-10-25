@@ -2953,8 +2953,28 @@ TSharedRef<SWidget> SSmvShell::Loading()
 	};
 	TSharedRef<SSmvButton> Cancel = SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).Text(Tx(TEXT("common.cancel"))).OnClick([F]() { if (F.IsValid()) F->EndFlight(TEXT("abort")); });
 	DefaultFocus = Cancel;
+	// yükleme başarısız (harita / zemin / karolar): uçuşa girilmez — neden + Yeniden dene / Menüye dön
+	auto FailVis = [GM]() { return GM.IsValid() && GM->GetLoadGate().IsFailed() ? EVisibility::Visible : EVisibility::Collapsed; };
+	TSharedRef<SWidget> FailBox = SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(Hex(0x1a0709, 0.92f)).Padding(FMargin(28, 22))
+		.Visibility_Lambda(FailVis)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(Tx(TEXT("load.fail.title")), 22, "Black", Danger())]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0, 8, 0, 16)
+			[
+				SNew(STextBlock).Font(SmvUi::Font(13, "Regular")).ColorAndOpacity(Fg()).AutoWrapText(true).WrapTextAt(560.f)
+				.Text_Lambda([GM]() { return GM.IsValid() ? FText::FromString(GM->GetLoadGate().FailReason()) : FText::GetEmpty(); })
+			]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 12, 0)[SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Replay).Text(Tx(TEXT("load.fail.retry"))).OnClick([GM]() { if (GM.IsValid()) GM->RetryWorldLoad(); })]
+				+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).Text(Tx(TEXT("load.fail.menu"))).OnClick([F]() { if (F.IsValid()) F->EndFlight(TEXT("abort")); })]
+			]
+		];
 	return SNew(SOverlay)
 		+ SOverlay::Slot()[C]
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)[FailBox]
 		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(0, 40, 56, 0)[Cancel];
 }
 
@@ -3900,7 +3920,15 @@ TSharedRef<SWidget> SSmvShell::SetDisplay()
 		G->SaveSettings();
 		Self->Toast(FSmvI18n::T(TEXT("set.display_applied")).ToString(), 6);
 	}, false, true, ESmvIcon::Check)];
+	// hız efekti (ekran kenarı hız çizgileri) — varsayılan hafif
+	static FString GSpeedFxStr;
+	GSpeedFxStr = FString::FromInt(FSmvUiPrefs::Get().SpeedFx);
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.speedfx")), Chips(&GSpeedFxStr, { TEXT("0"), TEXT("1"), TEXT("2") }, { Tx(TEXT("set.speedfx_0")), Tx(TEXT("set.speedfx_1")), Tx(TEXT("set.speedfx_2")) }, {},
+		[]() { FSmvUiPrefs::Get().SpeedFx = FMath::Clamp(FCString::Atoi(*GSpeedFxStr), 0, 2); FSmvUiPrefs::Get().Save(); }))];
 	V->AddSlot().AutoHeight().Padding(0, 14, 0, 8)[Section(Tx(TEXT("settings.cesium")), Accent3())];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.realworld")), Chips(&FSmvUiPrefs::Get().RealWorld, { TEXT("google3d"), TEXT("terrain"), TEXT("off") },
+		{ Tx(TEXT("set.realworld_google")), Tx(TEXT("set.realworld_terrain")), Tx(TEXT("set.realworld_off")) }, {}, []() { FSmvUiPrefs::Get().Save(); }))];
+	V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[SmvUi::Text(Tx(TEXT("set.realworld_hint")), 10, "Regular", Mute())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.cesium")), TextEdit(&S.CesiumToken, true, Tx(TEXT("settings.cesium_hint")), 360.f))];
 	return V;
 }
@@ -4118,6 +4146,9 @@ TSharedRef<SWidget> SSmvShell::SetAlerts()
 	auto Deg = [](double V) { return FString::Printf(TEXT("%.0f°"), V); };
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("gpws.title")), Danger())];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("gpws.level")), Chips(&FSmvUiPrefs::Get().AlertLevel, { TEXT("off"), TEXT("critical"), TEXT("all") },
+		{ Tx(TEXT("gpws.level_off")), Tx(TEXT("gpws.level_critical")), Tx(TEXT("gpws.level_all")) }, {}, []() { FSmvUiPrefs::Get().Save(); }))];
+	V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[SmvUi::Text(Tx(TEXT("gpws.level_hint")), 10, "Regular", Mute())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("gpws.mode")), Chips(&S.GpwsMode, { TEXT("off"), TEXT("visual"), TEXT("full") }, { Tx(TEXT("gpws.mode_off")), Tx(TEXT("gpws.mode_visual")), Tx(TEXT("gpws.mode_full")) }, {}))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("gpws.sens")), Chips(&S.GpwsSens, { TEXT("low"), TEXT("normal"), TEXT("high") }, { Tx(TEXT("gpws.sens_low")), Tx(TEXT("gpws.sens_normal")), Tx(TEXT("gpws.sens_high")) }, {}))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("gpws.lang")), Chips(&S.GpwsLang, { TEXT("aviation"), TEXT("ui") }, { Tx(TEXT("gpws.lang_aviation")), Tx(TEXT("gpws.lang_ui")) }, {}))];

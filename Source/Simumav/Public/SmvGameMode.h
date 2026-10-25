@@ -34,7 +34,7 @@ class SSmvShell;
 class SWidget;
 struct FSmvContactEvent;
 class ULevel;
-namespace SmvCore { class FGpws; class FRingTracker; class FDogfight; class FBotPilot; struct FRing; }
+namespace SmvCore { class FGpws; class FAlertPolicy; class FRingTracker; class FDogfight; class FBotPilot; struct FRing; }
 
 UCLASS()
 class SIMUMAV_API ASmvGameMode : public AGameModeBase
@@ -177,6 +177,8 @@ public:
 	void CycleEoType();
 	/** Uçuşa giriş yükleme kapısı (yükleme ekranı aşamaları ve ilerlemesi) */
 	const FSmvLoadGate& GetLoadGate() const { return Gate; }
+	/** Yükleme başarısız (harita / zemin): haritayı yeniden yükle, kapıyı baştan başlat */
+	void RetryWorldLoad();
 	/** Yükleniyor → Uçuş geçiş anı (yükleme ekranının kararma çıkışı için) */
 	double GetFlightEnterAt() const { return FlightEnterAt; }
 	/** Uçuşu bitir (arayüz düğmesi; onay sonrası) */
@@ -211,6 +213,13 @@ public:
 	FString ToastText; int32 ToastSev = 6; double ToastUntil = 0;
 	double EndAt = 0; FString EndReasonPending;
 
+	// ---- gerçek dünya (Cesium) içine oturtulan Fab haritası ----
+	bool bRealSurround = false, bRimPending = false, bRimDone = false, bTilesSkipped = false;
+	double RimAt = 0;
+	FBox FabPlacedBox = FBox(ForceInit);
+	FString FabLevelPath;
+	bool LoadFabLevel(const FString& Level);
+	bool AlignRealRim();
 	// ---- yükleme kapısı (SmvLoadGate): tüm aşamalar bitmeden Uçuş ekranına geçilmez ----
 	FSmvLoadGate Gate;
 	void TickLoadGate();
@@ -246,7 +255,20 @@ public:
 	FString ProxLine;
 	int32 ProxLevel = 0;
 	void AugmentSummary(FSmvFlightSummary& S);
-	void PushEvent(const FString& Text, int32 Sev);
+	/** Olay: bStrip = uçuş olay şeridine de (false → yalnız günlük paneli) */
+	void PushEvent(const FString& Text, int32 Sev, bool bStrip = true);
+	void HandleApText(const FString& Text, int32 Sev);
+	void ReportArmFail(const FString& Why);
+	FString LastPreArm, LastArmFail;
+	double LastPreArmAt = 0, LastArmFailAt = 0;
+	/** Uyarı gösterim politikası (evre, gecikme, tekrar bastırma, kademe) */
+	SmvCore::FAlertPolicy* AlertPolicy = nullptr;
+	/** Kalkış / fırlatma: armed | launch | (boş) — yöntem ve aşama zamanı (HUD geri sayımı / durum) */
+	FString LaunchPhaseUi, LaunchMethodUi;
+	double LaunchPhaseAt = 0;
+	void HandleLaunchMsg(const TSharedPtr<FJsonObject>& M);
+	/** Fırlatma düzeneği (rampa / pikap / el atışı) aşama değişimi */
+	void OnLaunchPhase(const FString& Method, const FString& Phase);
 	void FreeRace();
 	USmvFlightLink* Link() const;
 	FVector Geo(double Lat, double Lon, double AltMsl) const;

@@ -1,4 +1,5 @@
 #include "SmvFabContent.h"
+#include "SmvMapRegistry.h"
 #include "SimumavModule.h"
 #include "SmvI18n.h"
 #include "SmvAtmosphere.h"
@@ -213,8 +214,10 @@ FSmvTrack FSmvFabContent::MakeTrack(const FSmvFabMap& Map)
 	T.Id = FString(TEXT("fab:")) + Map.Key;
 	// sanal: sunucuya/yerel dosyaya yazılmaz (yalnız yerel SITL ile uçulur)
 	T.Name = Map.Name.ToString();
-	T.Lat = 39.9334; T.Lon = 32.8597;   // SITL ev konumu; harita merkezi bu noktaya oturtulur (ASmvGameMode::HandleFabLevelShown)
-	T.GroundMsl = 0;
+	// SITL ev konumu = haritanın gerçek dünya demiri (kayıt tablosu; Cesium çevresi bu bölgeden gelir); harita kalkış noktası buraya oturtulur
+	const FSmvMapDef* D = FSmvMapRegistry::Find(Map.Key);
+	if (D && D->Lat != 0.0) { T.Lat = D->Lat; T.Lon = D->Lon; T.GroundMsl = D->GroundMsl; }
+	else { T.Lat = 39.9334; T.Lon = 32.8597; T.GroundMsl = 0; }
 	T.RadiusM = 500;
 	T.WorldMode = FString(TEXT("fab:")) + Map.Key;
 	T.WindMs = 2; T.WindDir = 270;

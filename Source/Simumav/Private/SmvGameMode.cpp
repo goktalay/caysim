@@ -31,11 +31,13 @@
 #include "HudWidget.h"
 #include "TelemetryBuffer.h"
 #include "SmvGpws.h"
+#include "SmvAlertPolicy.h"
 #include "SmvRace.h"
 #include "SmvBot.h"
 #include "SmvTargets.h"
 #include "SmvSitlConfig.h"
 #include "SmvFabContent.h"
+#include "SmvMapRegistry.h"
 #include "SmvPhysics.h"
 #include "SmvScenery.h"
 #include "SmvLoadGate.h"
@@ -251,6 +253,8 @@ void ASmvGameMode::BuildScene()
 	// yükleme kapısı: Uçuş ekranı ancak tüm aşamalar bitince (TickLoadGate)
 	Gate.Begin(TEXT("ucus"), { ESmvLoad::World, ESmvLoad::Scenery, ESmvLoad::Atmos, ESmvLoad::Sitl, ESmvLoad::Shaders, ESmvLoad::Streaming, ESmvLoad::Warmup });
 	AtmosT0 = WarmT0 = StreamT0 = 0; AtmosF0 = WarmF0 = 0; WarmRecap = 0; StreamPeak = ShaderPeak = 0;
+	RimAt = 0; bTilesSkipped = false; FabPlacedBox = FBox(ForceInit); FabLevelPath.Reset();
+	SmvPhysics::SetClipRegion(nullptr, FBox2D(ForceInit));
 	FlightEnterAt = -100.0;
 	bIntroPending = false;
 	// yükleme boyunca göz uyumu hızlı: giriş karesinde pozlama oturmuş olsun (yalnız hız alanları ezilir; UDS pozlama eğrisi korunur)
@@ -293,45 +297,54 @@ void ASmvGameMode::BuildScene()
 	if (!Set.CesiumToken.IsEmpty()) WorldSetup->CesiumIonToken = Set.CesiumToken;
 	ECaySimWorldSource Src = ECaySimWorldSource::Flat;
 	const bool bReal = Req.Track.WorldMode == TEXT("real") || Req.Track.WorldMode == TEXT("google3d");
-	if (bReal && !WorldSetup->CesiumIonToken.IsEmpty()) Src = ECaySimWorldSource::CesiumIon;   // Google 3B: ion üzerinden planlandı
-	WorldSetup->Build(S, nullptr, Src);
-	if (WorldSetup->GetSource() == ECaySimWorldSource::Flat)
+	const bool bCesiumOk = ACaySimWorldSetup::CesiumCompiled() && !WorldSetup->CesiumIonToken.IsEmpty();
+	if (bReal && bCesiumOk) Src = Req.Track.WorldMode == TEXT("google3d") ? ECaySimWorldSource::GooglePhotoreal : ECaySimWorldSource::CesiumIon;
+	// Fab haritası gerçek bir bölgenin içine yerleştirilir (kayıt tablosu demiri): çevre Google Photorealistic 3D Tiles (ya da World Terrain +
+	// Bing uydu), harita alanı karolardan kırpılır, kenar yükseklikleri eşlenir (TickLoadGate → AlignRealRim). Ayarlar → Görüntü → Gerçek dünya.
+	const FSmvMapDef* FabDef = FSmvFabContent::IsFabWorld(Req.Track.WorldMode) ? FSmvMapRegistry::Find(Req.Track.WorldMode.Mid(4)) : nullptr;
+	const FString RealPref = FSmvUiPrefs::Get().RealWorld;
+	bRealSurround = false; bRimPending = false; bRimDone = false;
+	if (FabDef && FabDef->Lat != 0.0 && bCesiumOk && RealPref != TEXT("off"))
 	{
-		if (bReal) PushEvent(FSmvI18n::T(TEXT("flight.no_cesium")).ToString(), 4);
-		// Fab haritası (satın alınmış içerik; pakette varsa; kayıt tablosu SmvMapRegistry.cpp) — yoksa prosedürel dünya
-		bool bFab = false;
-		ClearFabWorld();
-		if (FSmvFabContent::IsFabWorld(Req.Track.WorldMode))
+		Src = RealPref == TEXT("terrain") ? ECaySimWorldSource::CesiumIon : ECaySimWorldSource::GooglePhotoreal;
+		bRealSurround = true;
+		// harita zemini (kalkış) = Unreal Z 0 = ev MSL; yalnız gerçek dünya haritasında merkez yüzeyi ölçülür
+		if (!FabDef->bRealOnly) WorldSetup->SetFixedGroundOffset(WorldSetup->GeoidOffsetM);
+	}
+	WorldSetup->Build(S, nullptr, Src);
+	const bool bFlat = WorldSetup->GetSource() == ECaySimWorldSource::Flat;
+	UE_LOG(LogSimumav, Log, TEXT("Uçuş dünyası: %s (parkur %s, gerçek çevre %s, Cesium %s, belirteç %s) — %.5f, %.5f, zemin %.0f m MSL"), *WorldSetup->SourceName(), *Req.Track.WorldMode,
+		bRealSurround ? TEXT("evet") : TEXT("hayır"), ACaySimWorldSetup::CesiumCompiled() ? TEXT("derlemede") : TEXT("yok"), WorldSetup->CesiumIonToken.IsEmpty() ? TEXT("yok") : TEXT("var"), Req.Track.Lat, Req.Track.Lon, GroundMsl);
+	if (bFlat && bReal) PushEvent(FSmvI18n::T(TEXT("flight.no_cesium")).ToString(), 4);
+	// Fab haritası (satın alınmış içerik; pakette varsa; kayıt tablosu SmvMapRegistry.cpp) — yoksa (düz dünyada) prosedürel dünya
+	bool bFab = false;
+	ClearFabWorld();
+	if (FSmvFabContent::IsFabWorld(Req.Track.WorldMode))
+	{
+		if (FabDef && FabDef->bRealOnly && !bFlat)
 		{
-			if (const FSmvFabMap* FM = FSmvFabContent::FindMap(Req.Track.WorldMode))
+			// haritanın kendi sahnesi yok: gerçek bölge (3D Tiles) olduğu gibi
+			FabMapKey = FabDef->Key;
+			bFab = true;
+		}
+		else if (const FSmvFabMap* FM = FSmvFabContent::FindMap(Req.Track.WorldMode))
+		{
+			FabMapKey = FM->Key;
+			if (FM->Kind == ESmvMapKind::ProcCity)
 			{
-				FabMapKey = FM->Key;
-				if (FM->Kind == ESmvMapKind::ProcCity)
-				{
-					SpawnFabCity();
-					bFab = true;
-				}
-				else
-				{
-					bool bOk = false;
-					ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, FM->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
-					if (bOk && Lv)
-					{
-						Lv->OnLevelShown.AddDynamic(this, &ASmvGameMode::HandleFabLevelShown);
-						FabLevels.Add(Lv);
-						bFab = true;
-						UE_LOG(LogSimumav, Log, TEXT("Fab haritası yükleniyor: %s (%s)"), *FM->Level, *FM->Key);
-					}
-				}
+				SpawnFabCity();
+				bFab = true;
+				if (!bFlat) bRimPending = true;   // şehir bloğu: kırpma + kenar eşleme (kutu: şehir dekoru)
 			}
-			if (!bFab) PushEvent(FSmvI18n::T(TEXT("flight.fab_missing")).ToString(), 4);
+			else bFab = LoadFabLevel(FM->Level);
 		}
-		if (!bFab)
-		{
-			Terrain = W->SpawnActor<ASmvProcTerrain>();
-			if (Terrain) Terrain->Build(Req.Track, GroundMsl, WorldSetup);
-			SpawnFabDecor();
-		}
+		if (!bFab) PushEvent(FSmvI18n::T(TEXT("flight.fab_missing")).ToString(), 4);
+	}
+	if (!bFab && bFlat)
+	{
+		Terrain = W->SpawnActor<ASmvProcTerrain>();
+		if (Terrain) Terrain->Build(Req.Track, GroundMsl, WorldSetup);
+		SpawnFabDecor();
 	}
 	// atmosfer (düz dünya ve Cesium gerçek dünya; SmvAtmosphere): Ultra Dynamic Sky + Weather varsa yerleşik güneş/gök/sis/bulut yerine;
 	// saat (gerçek güneş konumu), hava, rüzgâr parkurdan; post-process hacmi (Lumen, pozlama, renk) her durumda
@@ -451,6 +464,8 @@ void ASmvGameMode::BuildScene()
 		Req.Power.MaxSpeedMs > 3 ? Req.Power.MaxSpeedMs : (Req.Drone.Power.MaxSpeedMs > 3 ? Req.Drone.Power.MaxSpeedMs : SmvCore::NaN), SmvCore::NaN);
 	PendingGpws.Reset();
 	ActiveAlerts.Reset();
+	delete AlertPolicy; AlertPolicy = new SmvCore::FAlertPolicy();
+	LaunchPhaseUi.Reset();
 
 	// ---- hedefler ----
 	for (int32 i = 0; i < Req.Targets.Num() && i < 8; ++i)
@@ -707,23 +722,78 @@ void ASmvGameMode::StopScene()
 	if (WorldSetup) { WorldSetup->Destroy(); WorldSetup = nullptr; }
 	if (Tones) Tones->SetAlarm(0, 0.f);
 	FreeRace();
-	delete Gpws; Gpws = nullptr;
+	delete Gpws; Gpws = nullptr; delete AlertPolicy; AlertPolicy = nullptr;
 }
 
 // ---------------------------------------------------------------------------
 // bağlantı olayları
 // ---------------------------------------------------------------------------
 
-void ASmvGameMode::PushEvent(const FString& Text, int32 Sev)
+void ASmvGameMode::PushEvent(const FString& Text, int32 Sev, bool bStrip)
 {
 	if (Text.IsEmpty()) return;
-	Events.Add(TPair<FString, int32>(Text, Sev));
-	if (Events.Num() > 40) Events.RemoveAt(0);
+	if (bStrip)
+	{
+		Events.Add(TPair<FString, int32>(Text, Sev));
+		if (Events.Num() > 40) Events.RemoveAt(0);
+	}
 	FSmvUiLog E;
 	E.Text = Text; E.Sev = Sev; E.Wall = FPlatformTime::Seconds();
 	E.Clock = FDateTime::Now().ToString(TEXT("%H:%M:%S"));
 	UiLog.Add(MoveTemp(E));
 	if (UiLog.Num() > 60) UiLog.RemoveAt(0);
+}
+
+// ArduPilot / SITL metin iletileri: PreArm denetimleri ve EKF/AHRS/GPS hizalama bilgileri uyarı şeridine çıkmaz (yalnız günlük paneli);
+// ARM gerçekten reddedilince tek özet ("ARM reddedildi: <neden>", 15 sn içinde tekrar yok)
+void ASmvGameMode::HandleApText(const FString& Text, int32 Sev)
+{
+	if (Text.IsEmpty()) return;
+	const double Now = FPlatformTime::Seconds();
+	if (Text.StartsWith(TEXT("PreArm:")))
+	{
+		LastPreArm = Text.Mid(7).TrimStartAndEnd();
+		LastPreArmAt = Now;
+		PushEvent(Text, 6, false);
+		return;
+	}
+	if (Text.StartsWith(TEXT("Arm:")) || Text.Contains(TEXT("Arming failed")) || Text.Contains(TEXT("arming checks failed")))
+	{
+		ReportArmFail(Text.StartsWith(TEXT("Arm:")) ? Text.Mid(4).TrimStartAndEnd() : (LastPreArm.IsEmpty() ? Text : LastPreArm));
+		return;
+	}
+	static const TCHAR* Info[] = { TEXT("EKF2"), TEXT("EKF3"), TEXT("AHRS:"), TEXT("GPS 1:"), TEXT("GPS 2:"), TEXT("u-blox"), TEXT("Field Elevation"), TEXT("Barometer"),
+		TEXT("IMU0:"), TEXT("IMU1:"), TEXT("RCOut:"), TEXT("Frame:"), TEXT("ArduPlane V"), TEXT("ArduCopter V"), TEXT("ArduRover V"), TEXT("ChibiOS"), TEXT("Param space"),
+		TEXT("Initialising"), TEXT("Ready to FLY"), TEXT("Calibrating"), TEXT("GPS: u-blox"), TEXT("EKF primary"), TEXT("Throttle disarmed") };
+	for (const TCHAR* K : Info)
+	{
+		if (Text.Contains(K)) { PushEvent(Text, 6, false); return; }
+	}
+	PushEvent(Text, Sev);
+}
+
+void ASmvGameMode::ReportArmFail(const FString& Why)
+{
+	const double Now = FPlatformTime::Seconds();
+	if (Now - LastArmFailAt < 15.0 && Why == LastArmFail) return;
+	LastArmFailAt = Now; LastArmFail = Why;
+	PushEvent(FSmvI18n::Format(TEXT("gpws.prearm_fail"), { { TEXT("msg"), Why } }).ToString(), 3);
+}
+
+// Kalkış / fırlatma aşaması (yerel SITL dizisi: armed → launch → released): olay metni (web ile aynı), HUD durumu, 3B düzenek
+void ASmvGameMode::HandleLaunchMsg(const TSharedPtr<FJsonObject>& M)
+{
+	const FString Ph = SmvJson::Str(M, TEXT("phase"));
+	const FString Me = SmvJson::Str(M, TEXT("method"), TEXT("wheels"));
+	LaunchMethodUi = Me;
+	LaunchPhaseUi = Ph == TEXT("released") ? FString() : Ph;
+	LaunchPhaseAt = FPlatformTime::Seconds();
+	FString Txt = FSmvI18n::T(FString::Printf(TEXT("launch.ev.%s.%s"), *Me, *Ph)).ToString();
+	if (Txt.StartsWith(TEXT("launch.ev."))) Txt = FString::Printf(TEXT("Kalkış: %s"), *Ph);
+	if (Ph == TEXT("released") && Link()) Txt += FString::Printf(TEXT(" · %.0f km/h"), Link()->LastTele().Groundspeed * 3.6);
+	PushEvent(Txt, Ph == TEXT("launch") ? 5 : 6);
+	UE_LOG(LogSimumav, Log, TEXT("Kalkış aşaması: %s / %s"), *Me, *Ph);
+	OnLaunchPhase(Me, Ph);
 }
 
 void ASmvGameMode::HandleTele(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
@@ -755,7 +825,7 @@ void ASmvGameMode::HandleTele(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 void ASmvGameMode::HandleMessage(const TSharedPtr<FJsonObject>& M)
 {
 	const FString T = SmvJson::Str(M, TEXT("t"));
-	if (T == TEXT("event")) { PushEvent(SmvJson::Str(M, TEXT("text")), (int32)SmvJson::Num(M, TEXT("severity"), 6)); return; }
+	if (T == TEXT("event")) { HandleApText(SmvJson::Str(M, TEXT("text")), (int32)SmvJson::Num(M, TEXT("severity"), 6)); return; }
 	if (T == TEXT("state") && SmvJson::Str(M, TEXT("state")) == TEXT("HAZIR") && !bRaceStarted && Flow->Race.Kind != TEXT("none"))
 	{
 		RaceStartWall = FPlatformTime::Seconds() + SmvCore::COUNTDOWN_S;   // yerel yarış geri sayımı
@@ -782,7 +852,13 @@ void ASmvGameMode::HandleMessage(const TSharedPtr<FJsonObject>& M)
 		return;
 	}
 	if (T == TEXT("engage")) { if (Tones) Tones->Sfx(15); PushEvent(FString::Printf(TEXT("ANGAJMAN %s T%d"), *SmvJson::Str(M, TEXT("kind")), (int32)SmvJson::Num(M, TEXT("i"))), 5); return; }
-	if (T == TEXT("launch")) { PushEvent(FString::Printf(TEXT("Kalkış: %s"), *SmvJson::Str(M, TEXT("phase"))), 6); return; }
+	if (T == TEXT("launch")) { HandleLaunchMsg(M); return; }
+	if (T == TEXT("res") && !SmvJson::Bool(M, TEXT("ok")) && (SmvJson::Str(M, TEXT("name")) == TEXT("arm") || SmvJson::Str(M, TEXT("name")) == TEXT("takeoff"))
+		&& !LastPreArm.IsEmpty() && FPlatformTime::Seconds() - LastPreArmAt < 10.0)
+	{
+		ReportArmFail(LastPreArm);
+		return;
+	}
 	if (T == TEXT("res") && !SmvJson::Bool(M, TEXT("ok"))) { PushEvent(FString::Printf(TEXT("%s: %s"), *SmvJson::Str(M, TEXT("name")), *SmvJson::Str(M, TEXT("error"))), 4); return; }
 	if (T == TEXT("end")) { if (Flow.IsValid()) Flow->EndFlight(SmvJson::Str(M, TEXT("reason"), TEXT("end"))); }
 }
@@ -1087,7 +1163,7 @@ void ASmvGameMode::Tick(float Dt)
 
 void ASmvGameMode::TickLoadGate()
 {
-	if (!Gate.IsActive()) return;
+	if (!Gate.IsActive() || Gate.IsFailed()) return;
 	UWorld* W = GetWorld();
 	const double Now = FPlatformTime::Seconds();
 	auto Fmt = [](const TCHAR* Key, const TMap<FString, FString>& A) { return FSmvI18n::Format(Key, A).ToString(); };
@@ -1118,8 +1194,60 @@ void ASmvGameMode::TickLoadGate()
 			D = Fmt(TEXT("load.d.levels"), { { TEXT("a"), FString::FromInt(Vis) }, { TEXT("b"), FString::FromInt(Lvs.Num()) } });
 		}
 		else D = FSmvI18n::T(WorldSetup && WorldSetup->GetSource() != ECaySimWorldSource::Flat ? TEXT("load.d.real") : TEXT("load.d.procedural")).ToString();
+		const bool bLevelsOk = bReady;
+		// gerçek dünya (Cesium 3D Tiles): karolar yüklenmeli; Fab haritası varsa yerleşince kırpma + kenar eşleme, ardından karolar yeniden otursun
+		const bool bTiles = WorldSetup && WorldSetup->GetSource() != ECaySimWorldSource::Flat;
+		if (bTiles)
+		{
+			const float Tp = FMath::Clamp(WorldSetup->GetLoadProgress() / 100.f, 0.f, 1.f);
+			const bool bTilesReady = WorldSetup->IsReady();
+			const double El = Gate.Elapsed();
+			if (bTilesReady && bRimPending && !bRimDone && bLevelsOk)
+			{
+				AlignRealRim();
+				bRimDone = true;
+				RimAt = Now;
+			}
+			// karolar gelmiyor ama haritanın kendi zemini var: gerçek çevresiz sürdür (günlükte uyarı)
+			if (!bTilesReady && bLevelsOk && FabLevels.Num() && El > 75.0 && !bRimDone)
+			{
+				UE_LOG(LogSimumav, Warning, TEXT("SMVLOAD [ucus] 3D Tiles %.0f sn'de yüklenmedi (%%%.0f) — gerçek dünya çevresi olmadan sürdürülüyor"), El, Tp * 100.f);
+				bRimDone = true; RimAt = Now - 10.0; bTilesSkipped = true;
+			}
+			const bool bTilesOk = bTilesSkipped || (bTilesReady && (!bRimPending || (bRimDone && Now - RimAt > 1.2)));
+			P = FMath::Min(P, 0.35f + 0.6f * Tp);
+			if (!bTilesOk) D = Fmt(TEXT("load.d.tiles"), { { TEXT("n"), FString::FromInt(FMath::RoundToInt(Tp * 100.f)) }, { TEXT("src"), WorldSetup->SourceName() == TEXT("google3d") ? FString(TEXT("Google 3D")) : FString(TEXT("Cesium")) } });
+			bReady = bReady && bTilesOk;
+		}
 		bReady = bReady && FSmvLoadGate::WorldPartitionDone(W) && !(W && W->IsVisibilityRequestPending());
-		Gate.Update(ESmvLoad::World, P, bReady, D, 90.0, 3);
+		// son denetim: kalkış noktasının altında gerçekten zemin var mı (harita akışta kaldıysa / boşsa uçuşa girilmez)
+		bool bGround = true;
+		if (bReady && W)
+		{
+			FHitResult Gh;
+			FCollisionQueryParams Gq(SCENE_QUERY_STAT(SmvGateGround), true, Drone);
+			if (PilotFigure) Gq.AddIgnoredActor(PilotFigure);
+			if (Sock) Gq.AddIgnoredActor(Sock);
+			bGround = W->LineTraceSingleByChannel(Gh, FVector(0, 0, 60000.0), FVector(0, 0, -60000.0), ECC_Visibility, Gq)
+				|| W->LineTraceSingleByObjectType(Gh, FVector(0, 0, 60000.0), FVector(0, 0, -60000.0), FCollisionObjectQueryParams(FCollisionObjectQueryParams::AllObjects), Gq);
+			if (!bGround) D = FSmvI18n::T(TEXT("load.d.no_ground")).ToString();
+		}
+		if (Gate.Elapsed() > 90.0 && !(bReady && bGround))
+		{
+			// zaman aşımında uçuşa GİRİLMEZ: neden + Yeniden dene / Menü (yükleme ekranı)
+			FString Why;
+			if (!bLevelsOk && FabLevels.Num())
+			{
+				int32 Vis = 0; for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels) if (Lv && Lv->IsLevelVisible()) ++Vis;
+				Why = FSmvI18n::Format(TEXT("load.fail.levels"), { { TEXT("a"), FString::FromInt(Vis) }, { TEXT("b"), FString::FromInt(FabLevels.Num()) }, { TEXT("map"), FabMapKey } }).ToString();
+			}
+			else if (bTiles && !WorldSetup->IsReady()) Why = FSmvI18n::T(TEXT("load.fail.tiles")).ToString();
+			else if (!bGround) Why = FSmvI18n::T(TEXT("load.fail.ground")).ToString();
+			else Why = FSmvI18n::T(TEXT("load.fail.stream")).ToString();
+			Gate.Fail(ESmvLoad::World, Why);
+			return;
+		}
+		Gate.Update(ESmvLoad::World, P, bReady && bGround, D, 1.0e9, 3);
 	}
 	const bool bWorld = Gate.Done(ESmvLoad::World);
 	// 2) dekor / kalabalık / trafik / araç gövdesi (Fab dekoru harita yerleşince kurulur; GLB gövdesi geri çağrıyla; kalan paket yüklemeleri)
@@ -1331,7 +1459,7 @@ void ASmvGameMode::PreparePhysicsLevel(ULevel* Level)
 
 void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 {
-	if (!Gpws || !Drone) return;
+	if (!Gpws || !Drone || !AlertPolicy) return;
 	SmvCore::FGpwsInput I;
 	I.T = T.Tbm > 0 ? T.Tbm / 1000.0 : FPlatformTime::Seconds() - SceneT0;
 	I.bArmed = T.bArmed;
@@ -1340,6 +1468,7 @@ void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 	const FVector P = Drone->GetActorLocation();
 	FHitResult Hit;
 	FCollisionQueryParams Q(TEXT("SmvAgl"), true, Drone);
+	SmvPhysics::IgnoreClippedTiles(Q, P);
 	double Agl = T.AltRel;
 	if (GetWorld()->LineTraceSingleByChannel(Hit, P, P - FVector(0, 0, 300000.0), ECC_Visibility, Q)) Agl = (P.Z - Hit.ImpactPoint.Z) / 100.0;
 	I.Agl = Agl;
@@ -1367,12 +1496,18 @@ void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 	if (T.bHasHome) I.DistHome = CaySimGeo::HaversineM(T.Lat, T.Lon, T.HomeLat, T.HomeLon);
 	I.LinkAgeMs = Link() ? Link()->LinkAgeMs() : SmvCore::NaN;
 	I.bCrashed = bCrashed;
+	I.Phase = TCHAR_TO_UTF8(*LaunchPhaseUi);
 	const SmvCore::FGpwsStepResult R = Gpws->Step(I);
+	// gösterim politikası (SmvAlertPolicy): evre farkındalığı, otomatik kip sınırları, gecikme, tekrar bastırma, kademe (Ayarlar → Uyarılar)
+	const FSmvSettings& S = USmvGameInstance::GetSmv(this)->GetData()->Settings();
+	const bool bLaunching = LaunchPhaseUi == TEXT("armed") || LaunchPhaseUi == TEXT("launch");
+	const double BankCfg = SmvCore::IsPlaneType(SmvCore::SitlTypeFromSmv(std::string(TCHAR_TO_UTF8(*Req.Drone.Type)))) ? S.BankPlane : S.BankCopter;
+	const std::vector<SmvCore::FAlertShow> Shown = AlertPolicy->Filter(I, R, Gpws->VClass(), TCHAR_TO_UTF8(*FSmvUiPrefs::Get().AlertLevel), BankCfg, bLaunching);
 	ActiveAlerts.Reset();
-	const bool bAviation = USmvGameInstance::GetSmv(this)->GetData()->Settings().GpwsLang != TEXT("ui");
+	const bool bAviation = S.GpwsLang != TEXT("ui");
 	bool bAnyUnacked = false;
 	int32 Alarm = 0;
-	for (const SmvCore::FGpwsActive& A : R.Active)
+	for (const SmvCore::FAlertShow& A : Shown)
 	{
 		const SmvCore::FGpwsCodeDef* D = SmvCore::GpwsCode(A.Code);
 		if (!D) continue;   // bilinmeyen kod (çekirdek tablosuyla uyumsuzluk) — çökme yerine atla
@@ -1381,12 +1516,13 @@ void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 		if (!A.bAcked) { bAnyUnacked = true; if (!Alarm) Alarm = bWarn ? 1 : 2; }
 	}
 	bAlertUnacked = bAnyUnacked;
-	const FSmvSettings& S = USmvGameInstance::GetSmv(this)->GetData()->Settings();
 	if (Tones) Tones->SetAlarm(S.GpwsMode == TEXT("full") && S.bAlertTones ? Alarm : 0, (S.bSound ? (float)S.Volume : 0.f) * FSmvUiPrefs::Get().VolAlerts);
-	for (const std::string& F : R.Fresh)
+	for (const SmvCore::FAlertShow& A : Shown)
 	{
-		const SmvCore::FGpwsCodeDef* D = SmvCore::GpwsCode(F);
+		if (!A.bFresh) continue;
+		const SmvCore::FGpwsCodeDef* D = SmvCore::GpwsCode(A.Code);
 		if (!D) continue;
+		UE_LOG(LogSimumav, Log, TEXT("Uyarı: %s (%s, evre %s, kip %s, yatış %.0f°, AGL %.0f m)"), UTF8_TO_TCHAR(D->Code), UTF8_TO_TCHAR(D->Level), UTF8_TO_TCHAR(AlertPolicy->Phase().c_str()), *T.Mode, I.Roll, I.Agl);
 		PushEvent(FString::Printf(TEXT("%s · %s"), std::string(D->Level) == "warning" ? TEXT("WARNING") : TEXT("CAUTION"), UTF8_TO_TCHAR(D->Av)), std::string(D->Level) == "warning" ? 3 : 4);
 		// sesli uyarı (tam kip): havacılık kalıbı İngilizce, arayüz dilinde küçük harfle (motor harf harf okumasın)
 		if (S.GpwsMode == TEXT("full") && S.bSound && FSmvUiPrefs::Get().bGpwsSpeech)
@@ -1397,6 +1533,9 @@ void ASmvGameMode::UpdateGpws(const FCaySimTelemetry& T, const FSmvTeleExtra& X)
 	}
 	for (const SmvCore::FGpwsEpisode& E : R.Ended)
 	{
+		bool bWasShown = false;
+		for (const SmvCore::FGpwsEpisode& X : AlertPolicy->ShownEpisodes()) if (X.Code == E.Code && X.T0 == E.T0) { bWasShown = true; break; }
+		if (!bWasShown) continue;   // ekrana çıkmamış (bastırılmış) bölüm sunucuya / özete yazılmaz
 		TSharedPtr<FJsonObject> J = MakeShared<FJsonObject>();
 		J->SetStringField(TEXT("code"), UTF8_TO_TCHAR(E.Code.c_str()));
 		J->SetStringField(TEXT("level"), UTF8_TO_TCHAR(E.Level.c_str()));
@@ -1771,10 +1910,16 @@ void ASmvGameMode::UpdateHud()
 
 void ASmvGameMode::AugmentSummary(FSmvFlightSummary& S)
 {
-	if (Gpws)
+	if (Gpws && AlertPolicy)
 	{
-		Gpws->Close(SmvCore::NaN);
-		const SmvCore::FGpwsSummary G = SmvCore::SummarizeAlerts(Gpws->Episodes(), Gpws->Cfg().Mode);
+		{
+			SmvCore::FGpwsStepResult Cr;
+			Cr.Ended = Gpws->Close(SmvCore::NaN);
+			SmvCore::FGpwsInput Ci; Ci.T = Link() ? Link()->LastTele().Tbm / 1000.0 : 0;
+			AlertPolicy->Filter(Ci, Cr, Gpws->VClass(), "off", 45.0, false);   // açık kalan gösterilmiş bölümler özete
+		}
+		// puan / özet: yalnız gösterilmiş (eyleme dönük) uyarı bölümleri
+		const SmvCore::FGpwsSummary G = SmvCore::SummarizeAlerts(AlertPolicy->ShownEpisodes(), Gpws->Cfg().Mode);
 		if (S.AlertScore < 0 && G.Score >= 0) { S.AlertScore = G.Score; S.AlertGrade = UTF8_TO_TCHAR(G.Grade.c_str()); S.Warnings = G.Warnings; S.Cautions = G.Cautions; }
 	}
 	if (MyTracker && Rings)
@@ -1829,6 +1974,134 @@ void ASmvGameMode::AugmentSummary(FSmvFlightSummary& S)
 		const FSmvMatch& M = Flow->GetMatch()->Current();
 		if (GI && M.Winner != 0 && M.Winner == GI->GetClient()->GetUser().Id) S.Badges.AddUnique(M.Kind == TEXT("dogfight") ? TEXT("dogfight_win") : TEXT("race_win"));
 	}
+}
+
+// Gerçek dünya içine oturtulan Fab haritası: harita kutusunu 3D Tiles'tan kırp, kenar boyunca harita zemini (içte) ile karo yüzeyi (dışta)
+// arasındaki düşey farkın ortancası kadar georeference'ı kaydır — haritanın kenarı gerçek araziye bağlanır. Karolar yüklendikten sonra bir kez.
+bool ASmvGameMode::AlignRealRim()
+{
+	UWorld* W = GetWorld();
+	if (!W || !WorldSetup) return false;
+	FBox B = FabPlacedBox;
+	TArray<const AActor*> Own;   // harita geometrisi (iç ışınlar yalnız bunlara)
+	if (!B.IsValid)
+	{
+		// kodla kurulan şehir: dekor aktörlerinin sınırı
+		for (const TObjectPtr<AActor>& A : FabDecor)
+		{
+			if (!A) continue;
+			const FBox Ab = A->GetComponentsBoundingBox(true);
+			if (Ab.IsValid && Ab.GetSize().GetMax() < 2.0e6) { B += Ab; Own.Add(A); }
+		}
+	}
+	if (!B.IsValid || B.GetSize().X < 500.0 || B.GetSize().Y < 500.0) { UE_LOG(LogSimumav, Warning, TEXT("Gerçek dünya kenar eşleme: harita kutusu yok / çok küçük")); return false; }
+	AActor* Tiles = WorldSetup->GetTilesActor();
+	TSet<ULevel*> FabLv;
+	for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels) if (Lv && Lv->GetLoadedLevel()) FabLv.Add(Lv->GetLoadedLevel());
+	auto OwnHit = [&](const FVector& Top, const FVector& Bot, double& OutZ) -> bool
+	{
+		TArray<FHitResult> Hits;
+		FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvRimFab), true);
+		if (Tiles) Q.AddIgnoredActor(Tiles);
+		if (Drone) Q.AddIgnoredActor(Drone);
+		if (PilotFigure) Q.AddIgnoredActor(PilotFigure);
+		W->LineTraceMultiByObjectType(Hits, Top, Bot, FCollisionObjectQueryParams(FCollisionObjectQueryParams::AllStaticObjects), Q);
+		for (const FHitResult& H : Hits)
+		{
+			const AActor* A = H.GetActor();
+			if (!A) continue;
+			if (FabLv.Num() ? FabLv.Contains(A->GetLevel()) : Own.Contains(A) || A->GetLevel() == W->PersistentLevel) { OutZ = H.ImpactPoint.Z; return true; }
+		}
+		return false;
+	};
+	// kırpma: kutu (biraz içeri; harita zemininin kenarı ile karo arasında boşluk kalmasın)
+	const FVector C = B.GetCenter(), Hs = B.GetExtent();
+	const double In = 0.985;
+	TArray<FVector> Poly = { FVector(C.X - Hs.X * In, C.Y - Hs.Y * In, 0.0), FVector(C.X + Hs.X * In, C.Y - Hs.Y * In, 0.0), FVector(C.X + Hs.X * In, C.Y + Hs.Y * In, 0.0), FVector(C.X - Hs.X * In, C.Y + Hs.Y * In, 0.0) };
+	const bool bClip = WorldSetup->ClipPolygon(Poly);
+	SmvPhysics::SetClipRegion(Tiles, FBox2D(FVector2D(C.X - Hs.X * In, C.Y - Hs.Y * In), FVector2D(C.X + Hs.X * In, C.Y + Hs.Y * In)));
+	// kenar örnekleri: içte %4 (en az 8 m), dışta %5 (en az 12 m)
+	TArray<double> Dz;
+	const int32 N = 40;
+	const double ZTop = B.Max.Z + 300000.0, ZBot = B.Min.Z - 300000.0;
+	for (int32 i = 0; i < N; ++i)
+	{
+		// çevre boyunca parametre (dikdörtgen)
+		const double T = (double)i / N * 4.0;
+		const int32 Side = FMath::Min(3, (int32)T);
+		const double F = T - Side;
+		FVector2D P, Nrm;
+		switch (Side)
+		{
+		case 0: P = FVector2D(C.X - Hs.X + 2.0 * Hs.X * F, C.Y - Hs.Y); Nrm = FVector2D(0, -1); break;
+		case 1: P = FVector2D(C.X + Hs.X, C.Y - Hs.Y + 2.0 * Hs.Y * F); Nrm = FVector2D(1, 0); break;
+		case 2: P = FVector2D(C.X + Hs.X - 2.0 * Hs.X * F, C.Y + Hs.Y); Nrm = FVector2D(0, 1); break;
+		default: P = FVector2D(C.X - Hs.X, C.Y + Hs.Y - 2.0 * Hs.Y * F); Nrm = FVector2D(-1, 0); break;
+		}
+		const double Span = FMath::Abs(Nrm.X) > 0 ? Hs.X : Hs.Y;
+		const FVector2D Pi = P - Nrm * FMath::Max(800.0, Span * 0.08);
+		const FVector2D Po = P + Nrm * FMath::Max(1200.0, Span * 0.10);
+		double Zi = 0, Zo = 0;
+		FHitResult Ht;
+		if (!OwnHit(FVector(Pi.X, Pi.Y, ZTop), FVector(Pi.X, Pi.Y, ZBot), Zi)) continue;
+		if (!WorldSetup->TraceTiles(FVector(Po.X, Po.Y, ZTop), FVector(Po.X, Po.Y, ZBot), Ht)) continue;
+		Zo = Ht.ImpactPoint.Z;
+		Dz.Add((Zo - Zi) / 100.0);
+	}
+	if (Dz.Num() < 6)
+	{
+		UE_LOG(LogSimumav, Warning, TEXT("Gerçek dünya kenar eşleme: yeterli örnek yok (%d/%d) — kırpma %s"), Dz.Num(), N, bClip ? TEXT("tamam") : TEXT("yok"));
+		return bClip;
+	}
+	Dz.Sort();
+	const double Med = Dz[Dz.Num() / 2];
+	WorldSetup->ShiftVertical(Med);
+	UE_LOG(LogSimumav, Log, TEXT("Gerçek dünya kenar eşleme (%s, %s): kutu %.0f×%.0f m, %d örnek, fark ortanca %.1f m (aralık %.1f…%.1f) → karolar kaydırıldı; kırpma %s"),
+		*FabMapKey, *WorldSetup->SourceName(), B.GetSize().X / 100.0, B.GetSize().Y / 100.0, Dz.Num(), Med, Dz[0], Dz.Last(), bClip ? TEXT("tamam") : TEXT("yok"));
+	return true;
+}
+
+// Fab haritası seviyesini seviye örneği olarak yükle (görünür olunca HandleFabLevelShown → PlaceFabLevels)
+bool ASmvGameMode::LoadFabLevel(const FString& Level)
+{
+	UWorld* W = GetWorld();
+	if (!W || Level.IsEmpty()) return false;
+	bool bOk = false;
+	ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
+	if (bOk && Lv)
+	{
+		Lv->OnLevelShown.AddDynamic(this, &ASmvGameMode::HandleFabLevelShown);
+		FabLevels.Add(Lv);
+		FabLevelPath = Level;
+		UE_LOG(LogSimumav, Log, TEXT("Fab haritası yükleniyor: %s (%s)"), *Level, *FabMapKey);
+		return true;
+	}
+	UE_LOG(LogSimumav, Error, TEXT("Fab haritası yüklenemedi (LoadLevelInstance): %s (%s)"), *Level, *FabMapKey);
+	return false;
+}
+
+// Yükleme ekranı "Yeniden dene": harita seviyelerini boşalt, yeniden yükle ve kapıyı baştan başlat (SITL / dron / arayüz yerinde kalır)
+void ASmvGameMode::RetryWorldLoad()
+{
+	UWorld* W = GetWorld();
+	if (!W || !bScene) return;
+	UE_LOG(LogSimumav, Warning, TEXT("SMVLOAD [ucus] yeniden deneniyor: harita %s (%s)"), *FabMapKey, *FabLevelPath);
+	for (TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
+	{
+		if (!Lv) continue;
+		Lv->OnLevelShown.RemoveAll(this);
+		Lv->SetShouldBeVisible(false);
+		Lv->SetShouldBeLoaded(false);
+		Lv->SetIsRequestingUnloadAndRemoval(true);
+	}
+	FabLevels.Reset();
+	bFabSubsRequested = false;
+	bFabPlaced = false;
+	bRimPending = bRimDone = false; bTilesSkipped = false; RimAt = 0; FabPlacedBox = FBox(ForceInit);
+	SmvPhysics::SetClipRegion(nullptr, FBox2D(ForceInit));
+	if (!FabLevelPath.IsEmpty()) LoadFabLevel(FabLevelPath);
+	Gate.Begin(TEXT("ucus"), { ESmvLoad::World, ESmvLoad::Scenery, ESmvLoad::Atmos, ESmvLoad::Sitl, ESmvLoad::Shaders, ESmvLoad::Streaming, ESmvLoad::Warmup });
+	AtmosT0 = WarmT0 = StreamT0 = 0; AtmosF0 = WarmF0 = 0; WarmRecap = 0; StreamPeak = ShaderPeak = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1943,6 +2216,7 @@ void ASmvGameMode::PlaceFabLevels()
 		return;
 	}
 	FCollisionQueryParams Q = SmvPhysics::MakeQuery(TEXT("SmvFabGround"), Drone, nullptr);
+	if (WorldSetup && WorldSetup->GetTilesActor()) Q.AddIgnoredActor(WorldSetup->GetTilesActor());   // kalkış araması yalnız harita geometrisinde
 	const double ZTop = Box.Max.Z + 100.0, ZBot = Box.Min.Z - 100.0;
 	const ECollisionChannel Ch = FSmvPhysicsSettings::Get().Channel;
 	auto Down = [&](double X, double Y, FHitResult& H) { return W->LineTraceSingleByChannel(H, FVector(X, Y, ZTop), FVector(X, Y, ZBot), Ch, Q); };
@@ -2023,8 +2297,14 @@ void ASmvGameMode::PlaceFabLevels()
 	UE_LOG(LogSimumav, Log, TEXT("Fab haritası yerleştirildi (%s): %d seviye, kutu %s, kalkış (%.0f, %.0f, %.0f) — %s; %d gök/ışık aktörü kaldırıldı; fizik kalkış araması %d aday eledi (son: %s)"),
 		*FabMapKey, Levels.Num(), *Box.GetSize().ToString(), Start.X, Start.Y, Zg, *How, Drop.Num(), Rejected, LastWhy.IsEmpty() ? TEXT("-") : *LastWhy);
 	if (Def && Def->bDecor) SpawnFabDecor(FVector::ZeroVector, true);
-	// "havada ada" haritaları (kayıt tablosu Surround biyomu): çevreye Hyper malzemeli arazi diski + kaya/çalı + uzak dağlar
-	if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
+	// gerçek dünya çevresi (Cesium): harita kutusu karolardan kırpılır, kenar yükseklikleri eşlenir (karolar yüklenince TickLoadGate → AlignRealRim)
+	if (bRealSurround)
+	{
+		FabPlacedBox = Box.ShiftBy(Off);
+		bRimPending = true;
+	}
+	// "havada ada" haritaları (kayıt tablosu Surround biyomu; gerçek dünya yoksa): çevreye Hyper malzemeli arazi diski + kaya/çalı + uzak dağlar
+	else if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
 	{
 		FActorSpawnParameters Sp;
 		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -2481,6 +2761,7 @@ void ASmvGameMode::ClearFabWorld()
 	bFabPlaced = false;
 	bCityWindowsDone = false;
 	FabMapKey.Reset();
+	SmvPhysics::SetClipRegion(nullptr, FBox2D(ForceInit));
 }
 
 // ---------------------------------------------------------------------------

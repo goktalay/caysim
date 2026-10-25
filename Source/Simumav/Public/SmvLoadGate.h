@@ -30,6 +30,11 @@ public:
 	void Clear() { bActive = false; }
 	bool IsActive() const { return bActive; }
 	bool IsDone() const;
+	/** Kapı başarısız: bu aşama tamamlanamadı (ör. harita / zemin yüklenemedi) — uçuşa GİRİLMEZ; yükleme ekranı neden + Yeniden dene / Menü gösterir */
+	void Fail(ESmvLoad S, const FString& Reason);
+	bool IsFailed() const { return bFailed; }
+	const FString& FailReason() const { return FailText; }
+	ESmvLoad FailedStage() const { return FailStage; }
 	/** Aşamayı güncelle: ilerleme 0..1, hazır mı (StableNeed kare üst üste hazır kalınca tamam), ayrıntı metni.
 	 *  TimeoutS: kapı başlangıcından bu süre geçince zaman aşımıyla tamam (günlükte uyarı). */
 	void Update(ESmvLoad S, float Progress, bool bReady, const FString& Detail, double TimeoutS, int32 StableNeed = 1);
@@ -66,5 +71,8 @@ private:
 	double T0 = 0;
 	bool bActive = false;
 	bool bSummaryDone = false;
+	bool bFailed = false;
+	FString FailText;
+	ESmvLoad FailStage = ESmvLoad::Num;
 	mutable float Shown = 0.f;
 };

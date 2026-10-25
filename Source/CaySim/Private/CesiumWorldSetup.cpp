@@ -22,6 +22,9 @@
 #include "Cesium3DTileset.h"
 #include "CesiumSunSky.h"
 #include "CesiumIonRasterOverlay.h"
+#include "CesiumPolygonRasterOverlay.h"
+#include "CesiumCartographicPolygon.h"
+#include "Components/SplineComponent.h"
 #endif
 
 ACaySimWorldSetup::ACaySimWorldSetup()
@@ -67,6 +70,8 @@ void ACaySimWorldSetup::Build(const FCaySimSession& Session, UHepgoClient* Clien
 	switch (ActiveSource)
 	{
 	case ECaySimWorldSource::GooglePhotoreal:
+		// ion hesabı üzerinden (varlık 2275207) — belirteç varsa HEPGO anahtarı gerekmez
+		if (!CesiumIonToken.IsEmpty()) { SetupGoogleIon(); break; }
 		if (Client)
 		{
 			TWeakObjectPtr<ACaySimWorldSetup> WeakThis(this);
@@ -107,9 +112,10 @@ void ACaySimWorldSetup::SetupLighting()
 {
 	UWorld* W = GetWorld();
 	if (!W) return;
+	const bool bRealSky = ActiveSource == ECaySimWorldSource::CesiumIon || ActiveSource == ECaySimWorldSource::GooglePhotoreal;
 #if CAYSIM_WITH_CESIUM
-	// CesiumSunSky: georeference'a göre gerçek güneş konumu; saat/tarih ayarlanır
-	if (!SunSky.IsValid())
+	// CesiumSunSky (yalnız gerçek dünyada): georeference'a göre gerçek güneş konumu; saat/tarih ayarlanır
+	if (bRealSky && !SunSky.IsValid())
 	{
 		TArray<AActor*> Found;
 		UGameplayStatics::GetAllActorsOfClass(W, ACesiumSunSky::StaticClass(), Found);
@@ -121,9 +127,11 @@ void ACaySimWorldSetup::SetupLighting()
 		TArray<AActor*> Found;
 		UGameplayStatics::GetAllActorsOfClass(W, ADirectionalLight::StaticClass(), Found);
 		Sun = Found.Num() ? Cast<ADirectionalLight>(Found[0]) : nullptr;
-#if !CAYSIM_WITH_CESIUM
-		if (!Sun) Sun = W->SpawnActor<ADirectionalLight>();
+		bool bNeedSun = true;
+#if CAYSIM_WITH_CESIUM
+		bNeedSun = !SunSky.IsValid();   // CesiumSunSky kendi yönlü ışığını taşır
 #endif
+		if (!Sun && bNeedSun) Sun = W->SpawnActor<ADirectionalLight>();
 	}
 	if (!Sky)
 	{
@@ -172,14 +180,16 @@ void ACaySimWorldSetup::ApplyWorldSettings(const FCaySimWorld& InWorld)
 {
 	World = InWorld;
 	const float Hours = TimeOfDayHours(World.Time);
+	bool bSunSky = false;
 #if CAYSIM_WITH_CESIUM
 	if (SunSky.IsValid())
 	{
 		SunSky->SolarTime = Hours;
 		SunSky->UpdateSun();
+		bSunSky = true;
 	}
-#else
-	if (Sun)
+#endif
+	if (Sun && !bSunSky)
 	{
 		// Basit güneş: saat → yükseklik açısı
 		const float Elev = FMath::Clamp(FMath::Sin((Hours - 6.f) / 12.f * UE_PI) * 70.f, -10.f, 70.f);
@@ -190,7 +200,6 @@ void ACaySimWorldSetup::ApplyWorldSettings(const FCaySimWorld& InWorld)
 			L->SetLightColor(World.Time == TEXT("dusk") ? FLinearColor(1.f, 0.7f, 0.45f) : FLinearColor::White);
 		}
 	}
-#endif
 	if (Fog && Fog->GetComponent())
 	{
 		UExponentialHeightFogComponent* F = Fog->GetComponent();
@@ -253,7 +262,8 @@ void ACaySimWorldSetup::SetupCesiumIon()
 		Tiles->SetIonAccessToken(CesiumIonToken);
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
 		Tiles->SetCreatePhysicsMeshes(true);
-		Tiles->SetMaximumScreenSpaceError(12.0);
+		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
+		Tiles->SetShowCreditsOnScreen(true);
 		// Bing uydu dokusu
 		UCesiumIonRasterOverlay* Overlay = NewObject<UCesiumIonRasterOverlay>(Tiles, TEXT("Imagery"));
 		Overlay->IonAssetID = CesiumImageryAssetId;
@@ -265,6 +275,8 @@ void ACaySimWorldSetup::SetupCesiumIon()
 	}
 	if (GoogleTiles.IsValid()) GoogleTiles->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
+	SourceT0 = FPlatformTime::Seconds();
+	UE_LOG(LogCaySim, Log, TEXT("Cesium World Terrain + Bing uydu (ion %lld + %lld) kuruluyor: %.5f, %.5f"), CesiumTerrainAssetId, CesiumImageryAssetId, Center.Lat, Center.Lon);
 	// Hazır sayma: ilk kareler yüklendikçe Tick'te LoadProgress izlenir; 100'e yaklaşınca Finish
 #else
 	Finish(false);
@@ -298,12 +310,142 @@ void ACaySimWorldSetup::SetupGoogle(const FString& Key)
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
 		Tiles->SetCreatePhysicsMeshes(true);
 		Tiles->SetMaximumScreenSpaceError(8.0);
-		Tiles->ShowCreditsOnScreen = true; // Google atıf zorunluluğu
+		Tiles->SetShowCreditsOnScreen(true); // Google atıf zorunluluğu
 	}
 	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
 #else
 	Finish(false);
+#endif
+}
+
+void ACaySimWorldSetup::SetupGoogleIon()
+{
+#if CAYSIM_WITH_CESIUM
+	UWorld* W = GetWorld();
+	if (!W) return;
+	if (!Georeference.IsValid()) Georeference = ACesiumGeoreference::GetDefaultGeoreference(W);
+	ACesiumGeoreference* Geo = Georeference.Get();
+	if (!Geo) { Finish(false); return; }
+	Geo->SetOriginLongitudeLatitudeHeight(FVector(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM));
+	if (!GoogleTiles.IsValid())
+	{
+		ACesium3DTileset* Tiles = W->SpawnActor<ACesium3DTileset>();
+		if (!Tiles) { Finish(false); return; }
+		GoogleTiles = Tiles;
+		Tiles->SetTilesetSource(ETilesetSource::FromCesiumIon);
+		Tiles->SetIonAssetID(GoogleIonAssetId);
+		Tiles->SetIonAccessToken(CesiumIonToken);
+		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
+		Tiles->SetCreatePhysicsMeshes(true);
+		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
+		Tiles->SetShowCreditsOnScreen(true);   // Google atıf zorunluluğu (logo + veri sağlayıcıları)
+	}
+	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
+	LoadProgress = 0.f;
+	SourceT0 = FPlatformTime::Seconds();
+	UE_LOG(LogCaySim, Log, TEXT("Google Photorealistic 3D Tiles (ion %lld) kuruluyor: %.5f, %.5f, merkez %.1f m MSL"), GoogleIonAssetId, Center.Lat, Center.Lon, CenterGroundMsl);
+#else
+	Finish(false);
+#endif
+}
+
+bool ACaySimWorldSetup::CesiumCompiled()
+{
+	return CAYSIM_WITH_CESIUM != 0;
+}
+
+FString ACaySimWorldSetup::SourceName() const
+{
+	switch (ActiveSource)
+	{
+	case ECaySimWorldSource::GooglePhotoreal: return TEXT("google3d");
+	case ECaySimWorldSource::CesiumIon: return TEXT("ion_terrain");
+	default: return TEXT("flat");
+	}
+}
+
+void ACaySimWorldSetup::SetFixedGroundOffset(double OffsetM)
+{
+	bAutoGroundOffset = false;
+	MeasuredGroundOffsetM = OffsetM;
+	bGroundOffsetMeasured = true;
+}
+
+void ACaySimWorldSetup::ShiftVertical(double DzM)
+{
+#if CAYSIM_WITH_CESIUM
+	ACesiumGeoreference* Geo = Georeference.Get();
+	if (!Geo || FMath::Abs(DzM) < 1e-3) return;
+	const FVector O = Geo->GetOriginLongitudeLatitudeHeight();
+	Geo->SetOriginLongitudeLatitudeHeight(FVector(O.X, O.Y, O.Z + DzM));
+	MeasuredGroundOffsetM = (bGroundOffsetMeasured ? MeasuredGroundOffsetM : GeoidOffsetM) + DzM;
+	bGroundOffsetMeasured = true;
+	UE_LOG(LogCaySim, Log, TEXT("Georeference düşey kaydırma %.2f m → merkez elipsoid yüksekliği %.2f m, yer ofseti %.2f m"), DzM, O.Z + DzM, MeasuredGroundOffsetM);
+#endif
+}
+
+#if CAYSIM_WITH_CESIUM
+ACesium3DTileset* ACaySimWorldSetup::ActiveTiles() const
+{
+	return ActiveSource == ECaySimWorldSource::GooglePhotoreal ? GoogleTiles.Get() : ActiveSource == ECaySimWorldSource::CesiumIon ? Terrain.Get() : nullptr;
+}
+#endif
+
+AActor* ACaySimWorldSetup::GetTilesActor() const
+{
+#if CAYSIM_WITH_CESIUM
+	return ActiveTiles();
+#else
+	return nullptr;
+#endif
+}
+
+bool ACaySimWorldSetup::TraceTiles(const FVector& Top, const FVector& Bottom, FHitResult& Out) const
+{
+#if CAYSIM_WITH_CESIUM
+	UWorld* W = GetWorld();
+	const ACesium3DTileset* T = ActiveTiles();
+	if (!W || !T) return false;
+	TArray<FHitResult> Hits;
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(CaySimTilesTrace), true);
+	W->LineTraceMultiByObjectType(Hits, Top, Bottom, FCollisionObjectQueryParams(ECC_WorldStatic), Q);
+	for (const FHitResult& H : Hits)
+	{
+		if (H.GetActor() == T) { Out = H; return true; }
+	}
+#endif
+	return false;
+}
+
+bool ACaySimWorldSetup::ClipPolygon(const TArray<FVector>& UnrealPoints)
+{
+#if CAYSIM_WITH_CESIUM
+	UWorld* W = GetWorld();
+	ACesium3DTileset* T = ActiveTiles();
+	if (!W || !T || UnrealPoints.Num() < 3) return false;
+	if (ClipActor.IsValid()) { ClipActor->Destroy(); ClipActor.Reset(); }
+	ACesiumCartographicPolygon* Poly = W->SpawnActor<ACesiumCartographicPolygon>();
+	if (!Poly || !Poly->Polygon) return false;
+	ClipActor = Poly;
+	USplineComponent* Sp = Poly->Polygon;
+	Sp->ClearSplinePoints(false);
+	for (const FVector& P : UnrealPoints) Sp->AddSplinePoint(P, ESplineCoordinateSpace::World, false);
+	for (int32 i = 0; i < Sp->GetNumberOfSplinePoints(); ++i) Sp->SetSplinePointType(i, ESplinePointType::Linear, false);
+	Sp->SetClosedLoop(true, false);
+	Sp->UpdateSpline();
+	UCesiumPolygonRasterOverlay* Ov = NewObject<UCesiumPolygonRasterOverlay>(T, TEXT("SmvClip"));
+	Ov->MaterialLayerKey = TEXT("Clipping");
+	Ov->Polygons.Add(TSoftObjectPtr<ACesiumCartographicPolygon>(Poly));
+	Ov->InvertSelection = false;     // çokgenin İÇİ kırpılır
+	Ov->ExcludeSelectedTiles = true; // tamamen içte kalan karolar hiç yüklenmez
+	Ov->RegisterComponent();
+	T->AddInstanceComponent(Ov);
+	Ov->Refresh();
+	UE_LOG(LogCaySim, Log, TEXT("3D Tiles kırpma çokgeni: %d nokta (%s)"), UnrealPoints.Num(), *SourceName());
+	return true;
+#else
+	return false;
 #endif
 }
 
@@ -317,6 +459,18 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 		if (T)
 		{
 			LoadProgress = T->GetLoadProgress();
+			// Google 3B hiç karo getirmiyor (kota / ağ / lisans) → World Terrain + Bing
+			if (ActiveSource == ECaySimWorldSource::GooglePhotoreal && LoadProgress <= 0.01f && SourceT0 > 0 && FPlatformTime::Seconds() - SourceT0 > GoogleFallbackS && !CesiumIonToken.IsEmpty())
+			{
+				UE_LOG(LogCaySim, Warning, TEXT("Google 3D Tiles %.0f sn'de yüklenmedi — Cesium World Terrain + Bing uyduya düşülüyor"), GoogleFallbackS);
+				T->SetActorHiddenInGame(true);
+				T->Destroy();
+				GoogleTiles.Reset();
+				bFellBack = true;
+				ActiveSource = ECaySimWorldSource::CesiumIon;
+				SetupCesiumIon();
+				return;
+			}
 			if (LoadProgress >= 99.f)
 			{
 				if (bAutoGroundOffset && !bGroundOffsetMeasured) MeasureGroundOffset();
@@ -332,17 +486,25 @@ void ACaySimWorldSetup::MeasureGroundOffset()
 	// Merkezin üstünden aşağı ışın: 3D Tiles yüzeyi (fizik mesh) nerede? Ev irtifası (MSL) ile farkı = yer ofseti.
 	UWorld* W = GetWorld();
 	if (!W) return;
-	const FVector Top = GeoToUnreal(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM + 500.0);
-	const FVector Bottom = GeoToUnreal(Center.Lon, Center.Lat, CenterGroundMsl + GeoidOffsetM - 500.0);
-	FHitResult Hit;
-	FCollisionQueryParams Q(SCENE_QUERY_STAT(CaySimGround), true);
-	if (W->LineTraceSingleByChannel(Hit, Top, Bottom, ECC_WorldStatic, Q))
+	// merkezdeki 3D Tiles yüzeyi Unreal Z = 0'a (ev irtifası) gelsin: georeference düşeyde kaydırılır, yer ofseti birlikte değişir —
+	// kurulumda Geo(ev MSL) ile yerleştirilmiş aktörler (pilot, rüzgâr tulumu) yerinde kalır
+	// fotogerçekçi karolarda merkez ağaç / çatı olabilir: ±15 m'lik 3×3 örnekten en alçak yüzey (zemin)
+	double Best = TNumericLimits<double>::Max();
+	for (int32 i = -1; i <= 1; ++i) for (int32 j = -1; j <= 1; ++j)
 	{
-		double Lon, Lat, H;
-		UnrealToGeo(Hit.ImpactPoint, Lon, Lat, H);
-		MeasuredGroundOffsetM = H - CenterGroundMsl; // elipsoid yüzey yüksekliği − MSL
+		FHitResult H;
+		if (TraceTiles(FVector(i * 1500.0, j * 1500.0, 150000.0), FVector(i * 1500.0, j * 1500.0, -150000.0), H)) Best = FMath::Min(Best, (double)H.ImpactPoint.Z);
+	}
+	if (Best < TNumericLimits<double>::Max())
+	{
+		const double Dz = Best / 100.0;
+		ShiftVertical(Dz);
+		UE_LOG(LogCaySim, Log, TEXT("Yer ofseti ölçüldü: merkez yüzeyi %.1f m kaydırıldı (geoid varsayımı %.1f)"), Dz, GeoidOffsetM);
+	}
+	else
+	{
 		bGroundOffsetMeasured = true;
-		UE_LOG(LogCaySim, Log, TEXT("Yer ofseti ölçüldü: %.1f m (geoid varsayımı %.1f)"), MeasuredGroundOffsetM, GeoidOffsetM);
+		UE_LOG(LogCaySim, Warning, TEXT("Yer ofseti ölçülemedi: merkezde 3D Tiles yüzeyi yok (geoid varsayımı %.1f m)"), GeoidOffsetM);
 	}
 }
 

@@ -35,6 +35,10 @@ void FSmvUiPrefs::Load()
 	GConfig->GetBool(GSmvPrefsSection, TEXT("GpwsSpeech"), bGpwsSpeech, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("HolidayCountry"), HolidayCountry, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("RecordVideo"), bRecordVideo, Ini);
+	GConfig->GetString(GSmvPrefsSection, TEXT("RealWorld"), RealWorld, Ini);
+	GConfig->GetInt(GSmvPrefsSection, TEXT("SpeedFx"), SpeedFx, Ini);
+	SpeedFx = FMath::Clamp(SpeedFx, 0, 2);
+	GConfig->GetString(GSmvPrefsSection, TEXT("AlertLevel"), AlertLevel, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("ThermalPalette"), ThermalPalette, Ini);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PanelR"), PanelR, Ini);
@@ -83,6 +87,9 @@ void FSmvUiPrefs::Save()
 	GConfig->SetBool(GSmvPrefsSection, TEXT("GpwsSpeech"), bGpwsSpeech, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("HolidayCountry"), *HolidayCountry, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("RecordVideo"), bRecordVideo, Ini);
+	GConfig->SetString(GSmvPrefsSection, TEXT("RealWorld"), *RealWorld, Ini);
+	GConfig->SetInt(GSmvPrefsSection, TEXT("SpeedFx"), SpeedFx, Ini);
+	GConfig->SetString(GSmvPrefsSection, TEXT("AlertLevel"), *AlertLevel, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("ThermalPalette"), *ThermalPalette, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PanelR"), PanelR, Ini);

@@ -122,7 +122,26 @@ FCollisionQueryParams SmvPhysics::MakeQuery(FName Tag, const AActor* Self, const
 	Q.bReturnFaceIndex = S.bTraceComplex;
 	Q.bFindInitialOverlaps = true;
 	if (Ignore) for (const TWeakObjectPtr<AActor>& A : *Ignore) if (A.IsValid()) Q.AddIgnoredActor(A.Get());
+	if (Self) IgnoreClippedTiles(Q, Self->GetActorLocation());
 	return Q;
+}
+
+namespace
+{
+	TWeakObjectPtr<const AActor> GClipTiles;
+	FBox2D GClipBox(ForceInit);
+}
+
+void SmvPhysics::SetClipRegion(const AActor* Tiles, const FBox2D& Box)
+{
+	GClipTiles = Tiles;
+	GClipBox = Box;
+}
+
+void SmvPhysics::IgnoreClippedTiles(FCollisionQueryParams& Q, const FVector& P)
+{
+	// Fab haritası alanı 3D Tiles'tan görsel olarak kırpılır; kenarı kesen karoların fizik ağı orada hâlâ var → içerideyken yok sayılır
+	if (GClipTiles.IsValid() && GClipBox.bIsValid && GClipBox.IsInside(FVector2D(P.X, P.Y))) Q.AddIgnoredActor(GClipTiles.Get());
 }
 
 FString SmvPhysics::MaterialName(const FHitResult& H)

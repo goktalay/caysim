@@ -31,6 +31,12 @@ struct SIMUMAV_API FSmvUiPrefs
 	bool bGpwsSpeech = true;
 	/** Uçuş video kaydı (MJPEG AVI; uçuş başında başlar) */
 	bool bRecordVideo = false;
+	/** Fab haritalarının çevresindeki gerçek dünya (Cesium): google3d (Google Photorealistic 3D Tiles) | terrain (World Terrain + Bing uydu) | off */
+	FString RealWorld = TEXT("google3d");
+	/** Hız efekti (ekran kenarı hız çizgileri): 0 kapalı | 1 hafif (varsayılan) | 2 belirgin */
+	int32 SpeedFx = 1;
+	/** Uyarı kademesi: off | critical (yalnız eyleme dönük kritik uyarılar; varsayılan) | all */
+	FString AlertLevel = TEXT("critical");
 	/** Termal paleti: white (beyaz-sıcak) | black (siyah-sıcak) | iron (ironbow) */
 	FString ThermalPalette = TEXT("white");
 	/** PiP penceresi: genişlik (px, 16:9) ve sağ/alt kenara uzaklık */

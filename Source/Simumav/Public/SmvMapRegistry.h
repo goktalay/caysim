@@ -40,6 +40,13 @@ struct SIMUMAV_API FSmvMapDef
 	/** Çevre zemini biyomu (Desert | Rocky | Grasslands | Snow): harita "havada ada" ise çevresine Hyper malzemeli arazi diski, kaya/çalı ve
 	 *  uzak dağlar kurulur (ASmvScenery::BuildSurround). nullptr → yok. */
 	const TCHAR* Surround = nullptr;
+	/** Gerçek dünya demiri (Cesium: Google Photorealistic 3D Tiles / World Terrain): harita bu konumdaki gerçek bölgenin içine oturtulur,
+	 *  SITL ev konumu da burasıdır. Enlem, boylam (derece), yaklaşık zemin MSL (m; SRTM). Lat = 0 → demir yok (eski sabit konum). */
+	double Lat = 0.0;
+	double Lon = 0.0;
+	double GroundMsl = 0.0;
+	/** Haritanın kendi sahnesi yok / kullanılmaz: gerçek dünyada yalnız 3D Tiles (Cesium yoksa harita seviyesi yüklenir) */
+	bool bRealOnly = false;
 };
 
 struct SIMUMAV_API FSmvMapRegistry
