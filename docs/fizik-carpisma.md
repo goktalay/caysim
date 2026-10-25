@@ -125,6 +125,31 @@ anında `UseComplexAsSimple`. **City Sample** — LevelInstance binaları; seviy
 — alt seviyeleriyle birlikte. Cesium 3D Tiles: `SetCreatePhysicsMeshes(true)` (CesiumWorldSetup), karolar akışla gelir; beliren karo
 gövdeyle çakışırsa olay üretmeden dışarı itilir.
 
+## Kullanıcı bulgusu "binanın içinden geçtim" (2026-10-26) — kök nedenler ve düzeltmeler
+
+Kullanıcının kendi günlükleri (`C:\claude\Simumav-dev\Simumav\Saved\Logs`, `gunluk-al` iş akışı) ve bilerek çarpma duman uçuşları:
+
+1. **Işınlama hatası** (`FSmvContactSolver::Resolve`): "büyük sıçrama" denetimi istenen (SITL) konumu **çözülmüş** konumla
+   karşılaştırıyordu. Duvara dayanan aracın SITL konumu binanın içinden / arkasından uzaklaşmayı sürdürür; fark 50 m'yi geçince çözücü
+   aracı istenen konuma ışınlıyordu — araç duvarın öbür yüzüne, Orman'da arazinin **altına** geçiyordu (kullanıcı günlüğünde
+   `ceiling_hit … Landscape … normal=(…, -1.00)`: gövde arazinin altından tavana değiyor). Artık ışınlama yalnız SITL konumunun
+   **kendi** sıçramasında (tek karede ≥ 200 m: yeniden başlatma / ışınlama).
+2. **Şehir binaları sorguya kapalı**: kodla kurulan blok şehirde (Şehir parkuru) 10 m irtifada 72 yönde yatay ışın **hiçbir şeye
+   değmiyordu**. `AStaticMeshActor` bileşeni ağın varsayılan çarpışma profilini kullanır (`bUseDefaultCollision`), Fab paketlerinin
+   bina ağlarında bu çoğu kez `NoCollision`. `SmvPhysics::PrepareActorsCollision`: profil `BlockAll`, sorgu açık, `Visibility` Block;
+   **pişmiş çarpışma verisi olmayan** (basit şekil yok, üçgen ağ yok) ≥ 2 m ağlara sınır kutusu çarpışması (`EnsureMeshCollision`;
+   seviyelerde de). "Yalnız karmaşık" sayımı artık pişmiş üçgen ağ gerçekten varsa.
+3. **Google 3B karolarında fizik ağı kapalıydı** (önceki tur): Google binaları çarpışmıyordu. `bGooglePhysics=True` (varsayılan).
+4. **Kaçınma**: çok rotorda `AVOID_ENABLE=3` LOITER / ALT_HOLD / GUIDED'da duvardan 2 m önce durdurur — "çarpamıyorum" algısı
+   buradan gelebilir; ACRO / STABILIZE'de kaçınma yoktur. Duman testindeki çarpma koşusu kaçınmayı kapatır.
+
+Duman testi (`-SmvSmokeOnly=11,12,13,14`): f11 şehir binası, f12 Fab binası (Askerî Üs), f13 Google 3B (Kızılay), f14 yamaç
+(Orman). Akış: 10 m askı → 72 yönde yatay ışınla en yakın hedef (bina: dik yüzey; yamaç: arazi) → `CONDITION_YAW` ile burun hedefe →
+`AVOID_ENABLE 0`, ALT_HOLD, RC ileri yunuslama → temas / çarpışma / disarm → +3 sn ve +7 sn "altındaki yüzeye … m".
+Görüntüler `_ram0` (koşu öncesi), `_ram1` (çarpışma anı; Development'ta gövde kutuları kırmızı), `_ram2`, `_ram3` (yüzeyde duruş).
+Günlük: `SMOKE ram …`, `SMOKE ram temas: …`, `SMOKE ram ÇARPIŞMA …`, `SMOKE ram son …`; hedef bulunamazsa `SMOKE ram tanı:` satırları
+en yakın ağların çarpışma durumunu (sorgu, Visibility yanıtı, profil, basit / üçgen, fizik durumu, doğrudan ışın) yazar.
+
 ## Ayarlar ve hata ayıklama
 
 `Config/DefaultGame.ini` → `[/Script/Simumav.SmvPhysics]`: `Enabled`, `ShapeScale` (1 görünen gövde), `SkinCm`, `TraceComplex`,
