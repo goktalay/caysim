@@ -94,7 +94,8 @@ void ACaySimWorldSetup::Build(const FCaySimSession& Session, UHepgoClient* Clien
 	// oluşturur (CesiumTextureResource.cpp createAsyncTextureAndWait) — UE 5.8 D3D12'de bu bekleme dönmüyor, karo hiç ana iş parçacığına
 	// geçmiyor. Arazi + Bing'de karo başına doku yok (bindirme ayrı, az sayıda) — o yüzden yalnız Google'da görülüyordu. Eşzamanlı doku
 	// oluşturma kapatılınca Cesium dokuyu oyun / çizim iş parçacığında kurar (D3D dışındaki bütün RHI'larda zaten böyle). -CesiumAsyncTex: eski yol.
-	if (GRHISupportsAsyncTextureCreation && !FParse::Param(FCommandLine::Get(), TEXT("CesiumAsyncTex")))
+	// NOT: kapatınca işçi kuyruğu boşalıyor ama D3D12 RHIThread'de FD3D12Texture::UpdateTexture erişim ihlali (smoke 40240005950) — yalnız deney: -CesiumSyncTex
+	if (GRHISupportsAsyncTextureCreation && FParse::Param(FCommandLine::Get(), TEXT("CesiumSyncTex")))
 	{
 		GRHISupportsAsyncTextureCreation = false;
 		UE_LOG(LogCaySim, Log, TEXT("3D Tiles: eşzamansız RHI doku oluşturma kapatıldı (Cesium glTF dokuları çizim iş parçacığında)"));

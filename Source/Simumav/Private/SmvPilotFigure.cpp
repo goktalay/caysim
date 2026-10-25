@@ -460,6 +460,9 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 		UGroomComponent* Gc = NewObject<UGroomComponent>(this);
 		Gc->SetupAttachment(MhFace);
 		Gc->SetGroomAsset(Ga, Cast<UGroomBindingAsset>(G.Value));
+		// PSO ön derlemesi kayıttan ÖNCE (yoksa CreateSceneProxy'de "!IsComponentPSOPrecachingEnabled() || bPSOPrecacheCalled" ensure'ü — her
+		// menü açılışında çökme raporu klasörü üretiyordu)
+		Gc->PrecachePSOs();
 		Gc->RegisterComponent();
 		for (int32 i = 0; i < Gc->GetNumMaterials(); ++i)
 		{

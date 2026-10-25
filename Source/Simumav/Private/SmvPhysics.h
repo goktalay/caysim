@@ -19,6 +19,7 @@
 class UWorld;
 class AActor;
 class ULevel;
+class UStaticMesh;
 
 struct FSmvPhysicsSettings
 {
@@ -132,6 +133,11 @@ namespace SmvPhysics
 	FString MaterialName(const FHitResult& H);
 	/** Fab/şehir seviyesi: görünür statik ağ bileşenlerinin (ISM/HISM/Foliage dahil) sorgu çarpışmasını açar; ağ istatistiği döner. */
 	FString PrepareLevelCollision(ULevel* Level);
+	/** Pişmiş çarpışma verisi hiç olmayan ağa (≥ 2 m) sınır kutusundan basit kutu çarpışması ekler; eklendiyse true. */
+	bool EnsureMeshCollision(UStaticMesh* M);
+	/** Kalıcı seviyede kodla doğan aktörler (şehir binaları vb.): ağın varsayılan profilini (NoCollision) BlockAll'a çek, sorgu çarpışması aç,
+	 *  Visibility Block, çarpışmasız ağlara kutu. Değişen bileşen sayısı. */
+	int32 PrepareActorsCollision(const TArray<AActor*>& Actors, int32* OutBoxed = nullptr);
 	/** Kalkış noktası (fizik): (X, Y) için aşağı ışın → zemin; normal düzlüğü; yukarı küre süpürmesi → üstü açık (tavan / dal);
 	 *  araç boyutunda kapsül çakışması → boşluk; çevre düzlüğü. bRequireLandscape: zemin Landscape olmalı. */
 	bool EvaluateSpot(UWorld* W, double X, double Y, double ZTop, double ZBot, float RadiusCm, float HeightCm, bool bRequireLandscape,

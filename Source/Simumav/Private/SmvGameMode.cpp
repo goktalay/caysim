@@ -65,6 +65,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Engine/StaticMesh.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "Blueprint/UserWidget.h"
 #include "UObject/UObjectIterator.h"
 #include "Engine/GameViewportClient.h"
@@ -302,7 +303,8 @@ void ASmvGameMode::BuildScene()
 	ECaySimWorldSource Src = ECaySimWorldSource::Flat;
 	const bool bReal = Req.Track.WorldMode == TEXT("real") || Req.Track.WorldMode == TEXT("google3d");
 	const bool bCesiumOk = ACaySimWorldSetup::CesiumCompiled() && !WorldSetup->CesiumIonToken.IsEmpty();
-	if (bReal && bCesiumOk) Src = Req.Track.WorldMode == TEXT("google3d") ? ECaySimWorldSource::GooglePhotoreal : ECaySimWorldSource::CesiumIon;
+	// gerçek dünya parkuru: google3d kipi ya da "real" + Ayarlar → Görüntü → Gerçek dünya = google3d → Google fotogerçekçi 3B (yoksa arazi + uydu)
+	if (bReal && bCesiumOk) Src = (Req.Track.WorldMode == TEXT("google3d") || FSmvUiPrefs::Get().RealWorld == TEXT("google3d")) ? ECaySimWorldSource::GooglePhotoreal : ECaySimWorldSource::CesiumIon;
 	// Fab haritası gerçek bir bölgenin içine yerleştirilir (kayıt tablosu demiri): çevre Google Photorealistic 3D Tiles (ya da World Terrain +
 	// Bing uydu), harita alanı karolardan kırpılır, kenar yükseklikleri eşlenir (TickLoadGate → AlignRealRim). Ayarlar → Görüntü → Gerçek dünya.
 	const FSmvMapDef* FabDef = FSmvFabContent::IsFabWorld(Req.Track.WorldMode) ? FSmvMapRegistry::Find(Req.Track.WorldMode.Mid(4)) : nullptr;
@@ -313,8 +315,11 @@ void ASmvGameMode::BuildScene()
 		Src = RealPref == TEXT("terrain") ? ECaySimWorldSource::CesiumIon : ECaySimWorldSource::GooglePhotoreal;
 		bRealSurround = true;
 		// harita zemini (kalkış) = Unreal Z 0 = ev MSL; yalnız gerçek dünya haritasında merkez yüzeyi ölçülür
-		if (!FabDef->bRealOnly) WorldSetup->SetFixedGroundOffset(WorldSetup->GeoidOffsetM);
+		// Şehir + Google 3B: kodla kurulan blok şehir yerine gerçek şehir dokusu (Ankara Kızılay; yalnız Google karoları, Fab bloğu kurulmaz)
+		bGoogleCity = FabDef->Kind == ESmvMapKind::ProcCity && Src == ECaySimWorldSource::GooglePhotoreal;
+		if (!FabDef->bRealOnly && !bGoogleCity) WorldSetup->SetFixedGroundOffset(WorldSetup->GeoidOffsetM);
 	}
+	else bGoogleCity = false;
 	WorldSetup->Build(S, nullptr, Src);
 	const bool bFlat = WorldSetup->GetSource() == ECaySimWorldSource::Flat;
 	SMV_KLOG(TEXT("Uçuş dünyası: %s (parkur %s, gerçek çevre %s, Cesium %s, belirteç %s) — %.5f, %.5f, zemin %.0f m MSL"), *WorldSetup->SourceName(), *Req.Track.WorldMode,
@@ -325,7 +330,7 @@ void ASmvGameMode::BuildScene()
 	ClearFabWorld();
 	if (FSmvFabContent::IsFabWorld(Req.Track.WorldMode))
 	{
-		if (FabDef && FabDef->bRealOnly && !bFlat)
+		if (FabDef && (FabDef->bRealOnly || bGoogleCity) && !bFlat)
 		{
 			// haritanın kendi sahnesi yok: gerçek bölge (3D Tiles) olduğu gibi
 			FabMapKey = FabDef->Key;
@@ -1781,6 +1786,39 @@ bool ASmvGameMode::SmokeRamBegin(const FString& Prefer, FString& OutDesc)
 	}
 	FString KindList;
 	for (const TPair<FString, int32>& Kv : Kinds) KindList += FString::Printf(TEXT("%s%s %d"), KindList.IsEmpty() ? TEXT("") : TEXT(", "), *Kv.Key, Kv.Value);
+	// tanı: en yakın ağ bileşenlerinin çarpışma durumu (sorgu açık mı, Visibility yanıtı, basit / üçgen çarpışma, fizik durumu) ve
+	// doğrudan merkezine ışın (karmaşık / basit / WorldStatic nesne türü)
+	{
+		struct FNear { double D; UStaticMeshComponent* C; };
+		TArray<FNear> Near;
+		for (TObjectIterator<UStaticMeshComponent> It; It; ++It)
+		{
+			UStaticMeshComponent* C = *It;
+			if (!C || C->GetWorld() != W || !C->IsRegistered() || !C->GetStaticMesh() || C->GetOwner() == Drone) continue;
+			const FBoxSphereBounds B = C->Bounds;
+			if (B.SphereRadius < 400.0 || B.SphereRadius > 20000.0) continue;   // 4 m – 200 m (bina boyu)
+			const double D = FVector::Dist2D(B.Origin, P) - B.SphereRadius * 0.5;
+			if (D < 30000.0) Near.Add({ D, C });
+		}
+		Near.Sort([](const FNear& A, const FNear& B) { return A.D < B.D; });
+		for (int32 i = 0; i < Near.Num() && i < 6; ++i)
+		{
+			UStaticMeshComponent* C = Near[i].C;
+			const UBodySetup* BS = C->GetBodySetup();
+			const FVector Ctr = C->Bounds.Origin;
+			FHitResult Hc, Hs, Ho;
+			FCollisionQueryParams Qs = Q; Qs.bTraceComplex = false;
+			const bool bC = W->LineTraceSingleByChannel(Hc, P, Ctr, Ch, Q);
+			const bool bS = W->LineTraceSingleByChannel(Hs, P, Ctr, Ch, Qs);
+			const bool bO = W->LineTraceSingleByObjectType(Ho, P, Ctr, FCollisionObjectQueryParams(ECC_WorldStatic), Q);
+			SMV_KLOG(TEXT("SMOKE ram tanı: %s / %s (%s) %.0f m — çarpışma %d, Visibility %d, profil %s, fizik durumu %d, basit %d, üçgen %d, iz bayrağı %d, ölçek %.2f; ışın karmaşık %s, basit %s, WorldStatic %s"),
+				C->GetOwner() ? *C->GetOwner()->GetName() : TEXT("-"), *C->GetStaticMesh()->GetName(), *C->GetClass()->GetName(), Near[i].D / 100.0,
+				(int32)C->GetCollisionEnabled(), (int32)C->GetCollisionResponseToChannel(Ch), *C->GetCollisionProfileName().ToString(), C->IsPhysicsStateCreated() ? 1 : 0,
+				BS ? BS->AggGeom.GetElementCount() : -1, BS ? BS->TriMeshGeometries.Num() : -1, BS ? (int32)BS->CollisionTraceFlag.GetValue() : -1, C->GetComponentScale().X,
+				bC ? *(Hc.GetActor() ? Hc.GetActor()->GetName() : FString(TEXT("?"))) : TEXT("yok"), bS ? *(Hs.GetActor() ? Hs.GetActor()->GetName() : FString(TEXT("?"))) : TEXT("yok"),
+				bO ? *(Ho.GetActor() ? Ho.GetActor()->GetName() : FString(TEXT("?"))) : TEXT("yok"));
+		}
+	}
 	if (BestD > 1e17)
 	{
 		OutDesc = FString::Printf(TEXT("%s türünde hedef yok (72 yönde %d isabet: %s)"), Prefer.IsEmpty() ? TEXT("her") : *Prefer, NHit, *KindList);
@@ -2688,6 +2726,14 @@ void ASmvGameMode::SpawnFabCity()
 		}
 	}
 	UE_LOG(LogSimumav, Log, TEXT("Şehir bloğu kuruldu: %d bina ağı, %d City Sample bina seviyesi"), NMesh, NTower);
+	{
+		// kodla doğan bina aktörleri: Fab ağının varsayılan çarpışma profili (NoCollision) dron sorgularını geçiriyordu → binanın içinden geçme
+		TArray<AActor*> Acts;
+		for (const TObjectPtr<AActor>& A : FabDecor) if (Cast<AStaticMeshActor>(A.Get())) Acts.Add(A.Get());
+		int32 Boxed = 0;
+		const int32 N = SmvPhysics::PrepareActorsCollision(Acts, &Boxed);
+		SMV_KLOG(TEXT("Şehir bloğu çarpışması: %d aktör, %d bileşen düzeltildi, %d ağa kutu çarpışması"), Acts.Num(), N, Boxed);
+	}
 	// şehir hayatı (yalnız görsel): City Traffic Pro araçlarıyla şerit trafiği + kaldırımlarda yürüyen, meydanda duran yayalar
 	FActorSpawnParameters Lp;
 	Lp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;

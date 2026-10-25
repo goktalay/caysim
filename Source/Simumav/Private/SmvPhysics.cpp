@@ -11,6 +11,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "Engine/CollisionProfile.h"
 #include "PhysicsEngine/PhysicsSettings.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Materials/MaterialInterface.h"
@@ -473,6 +474,52 @@ void SmvPhysics::Scan(UWorld* W, const FVector& Origin, const FQuat& BodyRot, co
 // Fab seviyeleri: çarpışma hazırlığı
 // ---------------------------------------------------------------------------
 
+// Ağın hiç pişmiş çarpışma verisi yoksa (basit şekil yok, üçgen ağ yok: Fab paketinden "NoCollision" gelen bina ağları) sınır kutusundan
+// basit kutu çarpışması eklenir — binanın içinden geçilmesin. Yalnız ≥ 2 m ağlar (süs / çim değil).
+bool SmvPhysics::EnsureMeshCollision(UStaticMesh* M)
+{
+	if (!M) return false;
+	UBodySetup* BS = M->GetBodySetup();
+	if (!BS) { M->CreateBodySetup(); BS = M->GetBodySetup(); }
+	if (!BS) return false;
+	if (BS->AggGeom.GetElementCount() > 0 || BS->TriMeshGeometries.Num() > 0) return false;
+	const FBoxSphereBounds B = M->GetBounds();
+	if (B.BoxExtent.GetMax() < 100.0) return false;
+	FKBoxElem Box(B.BoxExtent.X * 2.0, B.BoxExtent.Y * 2.0, B.BoxExtent.Z * 2.0);
+	Box.Center = B.Origin;
+	BS->AggGeom.BoxElems.Add(Box);
+	BS->CollisionTraceFlag = CTF_UseSimpleAsComplex;
+	BS->InvalidatePhysicsData();
+	BS->CreatePhysicsMeshes();
+	return true;
+}
+
+int32 SmvPhysics::PrepareActorsCollision(const TArray<AActor*>& Actors, int32* OutBoxed)
+{
+	const FSmvPhysicsSettings& S = FSmvPhysicsSettings::Get();
+	int32 Opened = 0, Boxed = 0;
+	TSet<UStaticMesh*> Done;
+	for (AActor* A : Actors)
+	{
+		if (!IsValid(A)) continue;
+		TInlineComponentArray<UStaticMeshComponent*> Comps(A);
+		for (UStaticMeshComponent* SC : Comps)
+		{
+			UStaticMesh* M = SC ? SC->GetStaticMesh() : nullptr;
+			if (!M || !SC->IsVisible() || IsGrassLike(SC, M)) continue;
+			bool bChanged = false;
+			if (!Done.Contains(M)) { Done.Add(M); if (EnsureMeshCollision(M)) ++Boxed; }
+			// AStaticMeshActor bileşeni ağın varsayılan profilini kullanır (Fab ağlarında çoğu kez NoCollision) — BlockAll'a çekilir
+			if (SC->bUseDefaultCollision) { SC->bUseDefaultCollision = false; SC->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName); bChanged = true; }
+			if (!CollisionEnabledHasQuery(SC->GetCollisionEnabled())) { SC->SetCollisionEnabled(ECollisionEnabled::QueryOnly); bChanged = true; }
+			if (SC->GetCollisionResponseToChannel(S.Channel) != ECR_Block) { SC->SetCollisionResponseToChannel(S.Channel, ECR_Block); bChanged = true; }
+			if (bChanged || Boxed) { SC->RecreatePhysicsState(); ++Opened; }
+		}
+	}
+	if (OutBoxed) *OutBoxed = Boxed;
+	return Opened;
+}
+
 FString SmvPhysics::PrepareLevelCollision(ULevel* Level)
 {
 	if (!Level) return FString();
@@ -480,7 +527,7 @@ FString SmvPhysics::PrepareLevelCollision(ULevel* Level)
 	const UPhysicsSettings* PhysSet = UPhysicsSettings::Get();
 	const ECollisionTraceFlag Def = PhysSet ? (ECollisionTraceFlag)PhysSet->DefaultShapeComplexity.GetValue() : CTF_UseSimpleAndComplex;
 	int32 Comps = 0, Inst = 0, Land = 0, Opened = 0, Grass = 0, Hidden = 0;
-	TSet<const UStaticMesh*> Meshes, Simple, ComplexOnly, NoColl;
+	TSet<const UStaticMesh*> Meshes, Simple, ComplexOnly, NoColl, Boxed;
 	TArray<FString> NoCollNames;
 	for (AActor* A : Level->Actors)
 	{
@@ -509,19 +556,22 @@ FString SmvPhysics::PrepareLevelCollision(ULevel* Level)
 				ECollisionTraceFlag F = BS ? (ECollisionTraceFlag)BS->CollisionTraceFlag.GetValue() : CTF_UseSimpleAsComplex;
 				if (F == CTF_UseDefault) F = Def;
 				if (bSimple) Simple.Add(M);
-				else if (BS && F != CTF_UseSimpleAsComplex) ComplexOnly.Add(M);
+				else if (BS && F != CTF_UseSimpleAsComplex && BS->TriMeshGeometries.Num() > 0) ComplexOnly.Add(M);   // pişmiş üçgen ağ gerçekten var
 				else { NoColl.Add(M); if (NoCollNames.Num() < 12) NoCollNames.Add(M->GetName()); }
 			}
 			if (!C->IsVisible() || A->IsHidden()) { ++Hidden; continue; }
 			if (IsGrassLike(SC, M)) { ++Grass; continue; }
 			bool bChanged = false;
+			// pişmiş çarpışma verisi hiç yoksa (basit şekil yok + üçgen ağ yok) sınır kutusu eklenir
+			if (!Boxed.Contains(M) && EnsureMeshCollision(M)) Boxed.Add(M);
+			if (Boxed.Contains(M)) bChanged = true;
 			if (!CollisionEnabledHasQuery(C->GetCollisionEnabled())) { C->SetCollisionEnabled(ECollisionEnabled::QueryOnly); bChanged = true; }
 			if (C->GetCollisionResponseToChannel(S.Channel) != ECR_Block) { C->SetCollisionResponseToChannel(S.Channel, ECR_Block); bChanged = true; }
-			if (bChanged) ++Opened;
+			if (bChanged) { C->RecreatePhysicsState(); ++Opened; }
 		}
 	}
-	return FString::Printf(TEXT("%s: %d ağ bileşeni (%d örnekli), %d Landscape; çarpışması açılan %d, çim/küçük %d, görünmez %d; benzersiz ağ %d — basit çarpışmalı %d, yalnız karmaşık %d, çarpışmasız ağ sayısı %d%s%s"),
-		*Level->GetOuter()->GetName(), Comps, Inst, Land, Opened, Grass, Hidden, Meshes.Num(), Simple.Num(), ComplexOnly.Num(), NoColl.Num(),
+	return FString::Printf(TEXT("%s: %d ağ bileşeni (%d örnekli), %d Landscape; çarpışması açılan %d, çim/küçük %d, görünmez %d; benzersiz ağ %d — basit çarpışmalı %d, yalnız karmaşık %d, çarpışmasız ağ sayısı %d (kutu eklenen %d)%s%s"),
+		*Level->GetOuter()->GetName(), Comps, Inst, Land, Opened, Grass, Hidden, Meshes.Num(), Simple.Num(), ComplexOnly.Num(), NoColl.Num(), Boxed.Num(),
 		NoCollNames.Num() ? TEXT(" (ör. ") : TEXT(""), NoCollNames.Num() ? *(FString::Join(NoCollNames, TEXT(", ")) + TEXT(")")) : TEXT(""));
 }
 

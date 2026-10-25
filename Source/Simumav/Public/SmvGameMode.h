@@ -208,6 +208,7 @@ public:
 		bool SmokeRamStatus(bool& bOutArmed, float& OutDistM, FString& OutContact, float* OutBelowM = nullptr, float* OutSpeed = nullptr) const;
 	private:
 		bool bSmokeRam = false;
+		bool bGoogleCity = false;   // Şehir parkuru Google 3B gerçek şehir olarak (Fab blok şehri yok)
 		void TickCreditsPlacement();
 		double LastCreditsFix = 0;
 		float CreditsLiftPx = 56.f;   // alt bant yüksekliği + pay (Slate birimi)
