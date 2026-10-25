@@ -106,6 +106,10 @@
 			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/glTFRuntime"
 		},
 		{
+			"Name": "Text3D",
+			"Enabled": true
+		},
+		{
 			"Name": "HairStrands",
 			"Enabled": true
 		},

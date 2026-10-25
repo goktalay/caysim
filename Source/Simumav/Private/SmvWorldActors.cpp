@@ -935,7 +935,7 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 		C->SetMaterial(0, M);
 	};
 	// önizleme zemini: ağaçlarla aynı (yakalamada doğru çizilen) düz PBR malzemesi, çimen yeşili
-	if (bPlainMaterial) Tinted(Ground, FLinearColor(0.16f, 0.27f, 0.1f));
+	if (bPlainMaterial) Tinted(Ground, FLinearColor(0.07f, 0.13f, 0.045f));
 	Tinted(TreeTrunks, FLinearColor(0.25f, 0.15f, 0.07f));
 	Tinted(TreeCrowns, FLinearColor(0.05f, 0.22f, 0.06f));
 	Tinted(Buildings, FLinearColor(0.6f, 0.58f, 0.55f));

@@ -890,7 +890,7 @@ void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
 		PrevSun->SetCastShadows(false);
 		PrevSun->SetAtmosphereSunLight(false);
 	}
-	PrevSun->SetIntensity(SmvCfg(TEXT("PreviewSunLux"), 7.f));
+	PrevSun->SetIntensity(SmvCfg(TEXT("PreviewSunLux"), 2.5f));
 	PrevSun->SetLightColor(Track.TimeOfDay == TEXT("golden") || Track.TimeOfDay == TEXT("dusk") ? FLinearColor(1.f, 0.82f, 0.62f) : FLinearColor(1.f, 0.97f, 0.92f));
 	PrevSun->SetWorldRotation(FRotator(Track.TimeOfDay == TEXT("day") ? -48.f : -24.f, 140.f, 0.f));
 	PrevSun->SetVisibility(true);
