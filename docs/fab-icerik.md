@@ -49,6 +49,33 @@ basit çarpışması olmayan ağlara `UseComplexAsSimple` yazılır (`Scripts/Py
 sayisi"), oyunda her seviye eklenince kapalı bileşen çarpışmaları (ISM/HISM/Foliage) açılır. Kalkış noktası adayları fizikle
 denetlenir (zemin, üstü açık, araç boyutunda boşluk). SITL yine düz zemin bilir: ev konumundan alçak arazide dron havada "inmiş" görünür.
 
+## Gerçek dünya çevresi (Cesium, 2026-10-25)
+
+Fab haritaları birkaç yüz m – 2 km'lik sergi sahneleridir; uçak/VTOL birkaç saniyede dışına çıkar. Bu yüzden her harita, kayıt
+tablosundaki **gerçek konumuna** (`FSmvMapDef::Lat/Lon/GroundMsl`) demirlenir ve çevresi Cesium for Unreal ile gerçek dünyadır:
+
+| Harita | Konum | Not |
+|---|---|---|
+| Orman | İstanbul Belgrad Ormanı 41.190, 28.970 (~100 m) | Brushify Forest arka plan dağları gerçek dünyada gizlenir |
+| Askerî Üs | Konya Karapınar bozkırı 37.730, 33.550 (995 m) | düz step (SRTM ±3 m) |
+| Şehir | Ankara Yapracık 39.858, 32.640 (1031 m) | kodla kurulan şehir bloğu |
+| Yıkık İnşaat | Ankara Etimesgut–Sincan 39.965, 32.580 (795 m) | şehir kenarı sanayi |
+| Rafineri | Kocaeli Körfez 40.765, 29.775 (39 m) | yalnız gerçek dünya (paketin sahnesi boş; İzmit rafinerisi 3B karolarda) |
+| Yarış Pisti | İstanbul Tuzla, İstanbul Park 40.952, 29.405 (130 m) | |
+| Köşk | Sapanca Gölü kuzeyi 40.744, 30.300 (70 m) | |
+
+- Kaynak (Ayarlar → Görüntü → **Gerçek dünya**): `google3d` (varsayılan; Google Photorealistic 3D Tiles, ion varlığı 2275207 —
+  ion hesabı üzerinden, HEPGO anahtarı gerekmez), `terrain` (Cesium World Terrain 1 + Bing uydu 2), `off` (eski düz çevre diski).
+  Google 3B 25 sn'de karo getirmezse World Terrain + Bing'e düşülür. Belirteç: `secrets.CESIUM_ION_TOKEN` (CI pakete yazar).
+- Harita alanı karolardan kırpılır (`UCesiumPolygonRasterOverlay`, çokgen = oyun alanı kutusu); kırpılan alanda karo çarpışması yok
+  sayılır (`SmvPhysics::SetClipRegion`). Kenar boyunca 40 örnekte harita zemini (içte) ile karo yüzeyi (dışta) farkının ortancası kadar
+  georeference düşeyde kaydırılır (`ACaySimWorldSetup::ShiftVertical`; yer ofseti birlikte değişir → MSL konumlar sabit kalır).
+- Yükleme kapısı karolar yüklenip kenar eşlenmeden uçuşa geçmez; 75 sn'de karo gelmezse harita kendi zeminiyle sürer; harita / zemin
+  90 sn'de yoksa **uçuşa girilmez** ("Harita yüklenemedi" + Yeniden dene / Menüye dön).
+- Atıf: `CesiumCreditSystemBP` ekran atıfları (Google logosu + veri sağlayıcıları) — Google koşulları gereği görünür kalmalı.
+- `Build.cs`: Launcher/Fab kurulumunda eklenti klasörü karışık adlıdır (`Marketplace/Cesiumfo…`); `.uplugin` aranır
+  (öncesinde `CAYSIM_WITH_CESIUM` hep 0'dı, Cesium kodu hiç derlenmiyordu).
+
 ## Gök, hava, ses
 
 **Ultra Dynamic Sky** (`Content\UltraDynamicSky`) varsa her uçuş sahnesinde (prosedürel, Fab haritaları, şehir ve Cesium gerçek
