@@ -460,6 +460,35 @@ def vat_pisir(j):
     if not lib or not ed:
         uyar("VAT: OverCrowd Python API yok (eklenti etkin değil?)")
         return sonuc
+    # OverCrowd kaynak kodu (pişirme kodlaması / malzeme işlevi için) — bir kez günlüğe
+    try:
+        kok = unreal.Paths.convert_relative_path_to_full(unreal.Paths.engine_plugins_dir())
+        for dk, _, dosyalar in os.walk(kok):
+            if "OverCrow" not in dk:
+                continue
+            for d in dosyalar:
+                if d in ("OverCrowdPureVatBake.h", "OverCrowdPureVatBake.cpp") or (d.endswith((".h", ".cpp", ".usf", ".ush")) and "purevat" in d.lower()):
+                    tam = os.path.join(dk, d)
+                    with open(tam, encoding="utf-8", errors="replace") as f:
+                        satirlar = f.read().splitlines()
+                    log(f"VATSRC === {tam} ({len(satirlar)} satır)")
+                    for i, sat in enumerate(satirlar[:2500]):
+                        if sat.strip():
+                            log(f"VATSRC {d}:{i + 1}: {sat.rstrip()[:400]}")
+    except Exception as ex:  # noqa: BLE001
+        uyar(f"VAT kaynak okunamadı: {ex}")
+    for st in ("OverPureVatClip", "OverPureVatBakeResult", "OverPureVatData"):
+        c = getattr(unreal, st, None)
+        if c:
+            try:
+                o = c()
+                alan = [a for a in dir(o) if not a.startswith("_") and a not in ("cast", "copy", "export_text", "import_text", "assign", "to_tuple", "get_editor_property", "set_editor_property", "set_editor_properties", "static_struct")]
+                log(f"VAT alanlar {st}: {', '.join(alan)}")
+            except Exception as ex:  # noqa: BLE001
+                uyar(f"VAT alanlar {st}: {ex}")
+    if eal.does_directory_exist(hedef):
+        eal.delete_directory(hedef)
+    hiz = float(j.get("hiz", 30.0))
     tamam = 0
     for yol in j.get("agler", []):
         try:
@@ -470,24 +499,31 @@ def vat_pisir(j):
             ad = sk.get_name()
             skel = sk.get_editor_property("skeleton")
             klipler = []
+            kare = 0
             for anahtar in ("Walk_Fwd", "Idle"):
                 aday = [a for a in anims if anahtar in str(a.asset_name)]
                 for a in aday:
                     an = unreal.load_asset(str(a.package_name))
                     if an and an.get_editor_property("skeleton") == skel:
+                        try:
+                            uzun = float(unreal.AnimationLibrary.get_sequence_length(an))
+                        except Exception:  # noqa: BLE001
+                            uzun = float(an.get_editor_property("sequence_length"))
+                        n = max(2, int(round(uzun * hiz)))
                         k = unreal.OverPureVatClip()
                         k.set_editor_property("anim", an)
-                        try:
-                            k.set_editor_property("sample_rate", 20.0)
-                        except Exception:  # noqa: BLE001
-                            pass
+                        for alan, deger in (("start_frame", kare), ("end_frame", kare + n - 1), ("sample_rate", hiz), ("num_frames", n), ("loop", True), ("looping", True)):
+                            try:
+                                k.set_editor_property(alan, deger)
+                            except Exception:  # noqa: BLE001
+                                pass
                         klipler.append(k)
-                        log(f"VAT klip: {ad} <- {an.get_name()}")
+                        log(f"VAT klip: {ad} <- {an.get_name()} ({uzun:.2f} sn, kare {kare}..{kare + n - 1} @ {hiz:.0f} Hz): {k}")
+                        kare += n
                         break
             if not klipler:
                 uyar(f"VAT: {ad} için klip yok")
                 continue
-            # MeshToStatic çizim nesnesi ister (NullRHI'de reddediliyordu): önce VAT ana ağı (PURE_WPO), sonra LOD kopyası, en son dönüştürme
             sm = None
             for deneme in ("master", "lod", "convert"):
                 try:
@@ -513,6 +549,14 @@ def vat_pisir(j):
             ok = bool(r.get_editor_property("success")) if r else False
             if ok:
                 tamam += 1
+                # oyunun VAT malzemesi bu değerleri okur (SmvCityLife: /Game/Fab/Crowd/<ağ>.json yerine ağ etiketi)
+                try:
+                    bilgi = {a: str(r.get_editor_property(a)) for a in ("num_vertices", "num_frames", "rows_per_frame", "texture_width", "sample_rate", "max_offset", "bounds_min", "bounds_max")}
+                    bilgi["klipler"] = [[str(k.get_editor_property("anim").get_name()), int(k.get_editor_property("start_frame")) if hasattr(k, "start_frame") else -1,
+                                         int(k.get_editor_property("end_frame")) if hasattr(k, "end_frame") else -1] for k in klipler]
+                    log(f"VAT bilgi {ad}: {json.dumps(bilgi, ensure_ascii=False)}")
+                except Exception as ex:  # noqa: BLE001
+                    uyar(f"VAT bilgi: {ex}")
             eal.save_directory(hedef, only_if_is_dirty=True, recursive=True)
         except Exception as ex:  # noqa: BLE001
             uyar(f"VAT hata {yol}: {ex}")
@@ -549,4 +593,15 @@ try:
     main()
 finally:
     if os.environ.get("SIMUMAV_EDITOR_ACIK") != "1":
+        # Çizimli (-RenderOffScreen) editör kapanışta asılı kalabiliyor (ilk RTX 5080 derlemesi: 3 sa 40 dk). Sonuç dosyası yazıldı,
+        # varlıklar kaydedildi: kapanma 180 sn içinde olmazsa süreç zorla sonlandırılır.
+        import threading
+
+        def _zorla():
+            unreal.log_warning("[fab_import] editör kapanmadı - zorla çıkılıyor")
+            os._exit(0)
+
+        _t = threading.Timer(180.0, _zorla)
+        _t.daemon = True
+        _t.start()
         unreal.SystemLibrary.quit_editor()

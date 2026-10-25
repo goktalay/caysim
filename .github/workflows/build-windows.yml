@@ -117,6 +117,8 @@ jobs:
       - name: Fab içerikleri (hazırlama projesi + VaultCache; lisanslı dosyalar depoda değil)
         # D:\SimumavFab\Content paketleri ve VaultCache UE paketleri Content altina kopyalanir, FabLibrary FBX urunleri
         # /Game/Fab altina ice aktarilir, DefaultGame.ini'ye pisirme/harita satirlari eklenir. Hicbiri yoksa uyari verir, derleme surer.
+        # editor kapanista asili kalirsa (cizimli VAT oturumu) tum isi 12 saat bekletmesin
+        timeout-minutes: 240
         run: powershell -NoProfile -ExecutionPolicy Bypass -File Tools/fab/fab-hazirla.ps1 -Proje "$PWD" -UeRoot "$env:UE_ROOT"
 
       - name: Varlıkları koddan üret (Editor Python, headless)
