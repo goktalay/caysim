@@ -1,0 +1,72 @@
+# Simumav - kullanici gunluklerini al (yalniz okur; hicbir dosyayi degistirmez). Verilen klasorlerdeki Simumav*.log dosyalarindan
+# ilgili satirlari (harita / yukleme kapisi / akis / hata / uyari) suzer, ayrica kopyalarin klasor ozetini (exe, pak boyutu, tarih) yazar.
+# Sonuc gunluk-al.txt artefakti.
+name: gunluk-al
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner etiketi (bos = vars.RUNNER_LABEL ya da unreal)"
+        type: string
+        default: ""
+      kokler:
+        description: "Gunluk klasorleri (; ile)"
+        type: string
+        default: "C:\\claude\\loglar;C:\\claude\\Simumav-deneme"
+      desen:
+        description: "Suzgec (regex)"
+        type: string
+        default: "U.u. haritas|Fab haritas|Fab alt seviye|SMVLOAD|LogStreaming|Sahne kuruldu|LogInit: Build|LogInit: Engine|ResX|Viewport|SMOKE|Cesium|LogWorldPartition|Error|Warning|PreArm|Rangefinder|BANK|LogPakFile|Mounted|Mount"
+      azami:
+        description: "Dosya basina en cok satir"
+        type: string
+        default: "4000"
+
+jobs:
+  al:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Gunlukler
+        env:
+          KOKLER: ${{ inputs.kokler }}
+          DESEN: ${{ inputs.desen }}
+          AZAMI: ${{ inputs.azami }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $out = Join-Path $env:RUNNER_TEMP 'gunluk-al.txt'
+          function W($s) { Add-Content -Path $out -Value $s -Encoding UTF8 }
+          $max = [int]$env:AZAMI
+          foreach ($r in ($env:KOKLER.Split(';') | Where-Object { $_ })) {
+            W ""
+            W ("################ " + $r)
+            if (-not (Test-Path -LiteralPath $r)) { W "  (yok)"; continue }
+            W "=== Exe / pak / ini"
+            Get-ChildItem -LiteralPath $r -Recurse -File -Include *.exe,*.pak,*.utoc,*.ucas,*.ini -ErrorAction SilentlyContinue | Select-Object -First 80 | ForEach-Object {
+              W ("  " + $_.FullName.Substring($r.Length) + "  " + [math]::Round($_.Length / 1MB, 1) + " MB  " + $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))
+            }
+            $logs = @(Get-ChildItem -LiteralPath $r -Recurse -File -Filter *.log -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 12)
+            W ("=== Gunlukler: " + $logs.Count)
+            foreach ($l in $logs) {
+              W ""
+              W ("------ " + $l.FullName + "  " + [math]::Round($l.Length / 1KB) + " KB  " + $l.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))
+              $n = 0
+              Get-Content -LiteralPath $l.FullName -Encoding UTF8 -ErrorAction SilentlyContinue | ForEach-Object {
+                if ($n -lt $max -and ($_ -match $env:DESEN)) { W $_; $n++ }
+              }
+              W ("  (" + $n + " satir)")
+            }
+          }
+      - name: Artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gunluk-al
+          path: ${{ runner.temp }}/gunluk-al.txt
+          if-no-files-found: ignore
+          retention-days: 7
