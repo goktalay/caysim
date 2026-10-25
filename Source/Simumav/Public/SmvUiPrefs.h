@@ -31,8 +31,9 @@ struct SIMUMAV_API FSmvUiPrefs
 	bool bGpwsSpeech = true;
 	/** Uçuş video kaydı (MJPEG AVI; uçuş başında başlar) */
 	bool bRecordVideo = false;
-	/** Fab haritalarının çevresindeki gerçek dünya (Cesium): google3d (Google Photorealistic 3D Tiles) | terrain (World Terrain + Bing uydu) | off */
-	FString RealWorld = TEXT("google3d");
+	/** Fab haritalarının çevresindeki gerçek dünya (Cesium): terrain (World Terrain + Bing uydu; varsayılan) | google3d (Google Photorealistic
+	 *  3D Tiles — paketli oyunda karolar işçi iş parçacığında takılıyor, deneysel; 25 sn'de görünür karo yoksa arazi + uyduya düşer) | off */
+	FString RealWorld = TEXT("terrain");
 	/** Hız efekti (ekran kenarı hız çizgileri): 0 kapalı | 1 hafif (varsayılan) | 2 belirgin */
 	int32 SpeedFx = 1;
 	/** Uyarı kademesi: off | critical (yalnız eyleme dönük kritik uyarılar; varsayılan) | all */

@@ -589,14 +589,21 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 		if (T)
 		{
 			LoadProgress = T->GetLoadProgress();
-			// Google 3B hiç karo getirmiyor (kota / ağ / lisans) → World Terrain + Bing
-			if (ActiveSource == ECaySimWorldSource::GooglePhotoreal && LoadProgress <= 0.01f && SourceT0 > 0 && FPlatformTime::Seconds() - SourceT0 > GoogleFallbackS && !CesiumIonToken.IsEmpty())
+			// Google 3B hiç karo getirmiyor / görünür karo bileşeni oluşmuyor (kota / ağ / lisans; paketli oyunda işçi kuyruğunda takılma) → World Terrain + Bing
+			bool bNoContent = LoadProgress <= 0.01f;
+			if (!bNoContent && ActiveSource == ECaySimWorldSource::GooglePhotoreal && SourceT0 > 0 && FPlatformTime::Seconds() - SourceT0 > GoogleFallbackS)
+			{
+				TInlineComponentArray<UPrimitiveComponent*> Pc(T);
+				bNoContent = Pc.Num() == 0;
+			}
+			if (ActiveSource == ECaySimWorldSource::GooglePhotoreal && bNoContent && SourceT0 > 0 && FPlatformTime::Seconds() - SourceT0 > GoogleFallbackS && !CesiumIonToken.IsEmpty())
 			{
 				UE_LOG(LogCaySim, Warning, TEXT("Google 3D Tiles %.0f sn'de yüklenmedi — Cesium World Terrain + Bing uyduya düşülüyor"), GoogleFallbackS);
 				T->SetActorHiddenInGame(true);
 				T->Destroy();
 				GoogleTiles.Reset();
 				bFellBack = true;
+				if (CollisionTiles.IsValid()) { CollisionTiles->Destroy(); CollisionTiles.Reset(); }
 				ActiveSource = ECaySimWorldSource::CesiumIon;
 				SetupCesiumIon();
 				return;
