@@ -490,6 +490,16 @@ try {
 		foreach ($c in ($adaylar -split ';')) { $c = $c.Trim(); if ($c -and (HaritaVar $c)) { $secilen = $c; break } }
 		if (-not $secilen) { Uyari "harita $anahtar : pakette yok ($adaylar) - menude 'yok' gorunur"; continue }
 		Bilgi "harita $anahtar : $secilen"
+		# tanilama: haritanin ad tablosundaki betik modulleri (/Script/<modul>) - "unknown custom version" ile yuklenemeyen
+		# haritada eksik eklentiyi gosterir (UE cekirdek modulleri listelenmez)
+		try {
+			$uy = (DiskYolu $secilen) + '.umap'
+			$fs = [System.IO.File]::OpenRead($uy); $buf = New-Object byte[] ([Math]::Min($fs.Length, 8MB)); [void]$fs.Read($buf, 0, $buf.Length); $fs.Close()
+			$metin = [System.Text.Encoding]::GetEncoding(28591).GetString($buf)
+			$cekirdek = '^(CoreUObject|Engine|Landscape|Foliage|Chaos|ChaosSolverEngine|PhysicsCore|NavigationSystem|AIModule|UMG|Slate|SlateCore|MovieScene|MovieSceneTracks|LevelSequence|Niagara|NiagaraCore|GeometryCollectionEngine|FieldSystemEngine|AudioMixer|CinematicCamera|MediaAssets|Paper2D|InputCore|EnhancedInput|DeveloperSettings|PhysicsUtilities|UnrealEd|StaticMeshDescription|MeshDescription|InterchangeCore|InterchangeEngine|ClothingSystemRuntimeCommon|ClothingSystemRuntimeInterface|AnimGraphRuntime|AnimationCore|Renderer|RenderCore|ImageCore|ImageWrapper|DataLayerEditor|WorldPartitionEditor|HLODLayer|LevelInstanceEditor|Constraints|PropertyAccess|BlueprintGraph|Kismet|KismetCompiler)$'
+			$mod = @([regex]::Matches($metin, '/Script/([A-Za-z0-9_]+)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique | Where-Object { $_ -notmatch $cekirdek })
+			if ($mod.Count) { Bilgi "  harita betik modulleri ($anahtar): $($mod -join ', ')" }
+		} catch { }
 		[void]$pisirilecek.Add($secilen)
 		# alt seviyeler (Sub_Levels / SubLevels klasorleri: haritanin klasoru ve bir ustu) - calisma aninda kalici seviyeyle yuklenir
 		$hDir = Split-Path ((DiskYolu $secilen) + '.umap')

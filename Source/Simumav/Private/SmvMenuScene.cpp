@@ -886,7 +886,8 @@ void ASmvMenuScene::SetWorldPreview(const FSmvTrack& Track)
 		PrevSun->SetupAttachment(Root);
 		PrevSun->RegisterComponent();
 		PrevSun->SetLightingChannels(false, true, false);
-		PrevSun->SetCastShadows(true);
+		// gölge kapalı: ~67 km ötedeki yakalamada (gölge kaskadları ana kameraya göre) önizleme zemini tümüyle gölgede / siyah kalıyordu
+		PrevSun->SetCastShadows(false);
 		PrevSun->SetAtmosphereSunLight(false);
 	}
 	PrevSun->SetIntensity(SmvCfg(TEXT("PreviewSunLux"), 7.f));

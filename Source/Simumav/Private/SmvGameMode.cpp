@@ -2010,7 +2010,10 @@ void ASmvGameMode::SpawnFabCity()
 		TArray<double> Coords;
 		for (int32 k = -2; k <= 3; ++k) Coords.Add((k - 0.5) * Cell);
 		const int32 NCars = Req.Track.World.Vehicles > 0 ? Req.Track.World.Vehicles : (int32)FSmvCityLife::GetFloat(TEXT("CityCars"), 72.f);
-		const int32 NPeople = Req.Track.World.People > 0 ? Req.Track.World.People : (int32)FSmvCityLife::GetFloat(TEXT("CityPeople"), 120.f);
+		// OverCrowd VAT kalabalığı ucuz (örnekli statik ağ, iskelet yok) → varsayılan çok daha kalabalık; iskeletli yedekte 120
+		const bool bVatCrowd = FSmvCityLife::VatCrowdMeshes().Num() > 0;
+		const int32 NPeople = Req.Track.World.People > 0 ? Req.Track.World.People
+			: (int32)FSmvCityLife::GetFloat(bVatCrowd ? TEXT("CityPeopleVat") : TEXT("CityPeople"), bVatCrowd ? 360.f : 120.f);
 		Life->BuildGridTraffic(Coords, Road, 2.5 * Cell + Road * 0.5, NCars, Req.Track.World.Seed ? Req.Track.World.Seed : 7);
 		// kaldırım halkaları (her adanın bordürünün 1,5 m içi; ada üstü Z 12 cm), meydanda grup noktaları (kalkış noktasından ≥ 15 m)
 		TArray<TArray<FVector>> Walk;
@@ -2023,9 +2026,10 @@ void ASmvGameMode::SpawnFabCity()
 				const FVector C(i * Cell, j * Cell, 12.0);
 				Walk.Add({ C + FVector(-Hs, -Hs, 0), C + FVector(Hs, -Hs, 0), C + FVector(Hs, Hs, 0), C + FVector(-Hs, Hs, 0) });
 			}
-		for (int32 k = 0; k < 8; ++k)
+		const int32 NSpot = bVatCrowd ? 16 : 8;
+		for (int32 k = 0; k < NSpot; ++k)
 		{
-			const double A = 2.0 * UE_DOUBLE_PI * (k + 0.5) / 8.0;
+			const double A = 2.0 * UE_DOUBLE_PI * (k + 0.5) / NSpot;
 			Spots.Add(FVector(FMath::Cos(A), FMath::Sin(A), 0.0) * (1500.0 + 1000.0 * (k % 2)) + FVector(0, 0, 2.0));
 		}
 		Life->BuildCrowd(Walk, Spots, NPeople, 11);

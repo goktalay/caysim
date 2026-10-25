@@ -889,6 +889,14 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 	// teğetler: dünya hizalı doku (Hyper malzemesi XY izdüşümü) için +X yönü yüzeye izdüşürülür (normal haritaları doğru aydınlansın)
 	Tan.Reserve(V.Num());
 	for (const FVector& Nv : Nrm) Tan.Add(FProcMeshTangent((FVector::ForwardVector - Nv * FVector::DotProduct(Nv, FVector::ForwardVector)).GetSafeNormal(), false));
+	if (bPlainMaterial)
+	{
+		// menü önizlemesi (~67 km ötede, sahne yakalaması): zemin aşağıdan / ters sarımla görünmez kalıyordu (kartta yalnız ağaç
+		// noktaları ve uzak dağlar, zemin siyah boşluk) → iki yüzlü üçgenler; normaller yukarı kalır
+		const int32 N0 = Tri.Num();
+		Tri.Reserve(N0 * 2);
+		for (int32 i = 0; i < N0; i += 3) Tri.Append({ Tri[i], Tri[i + 2], Tri[i + 1] });
+	}
 	Ground->CreateMeshSection_LinearColor(0, V, Tri, Nrm, UV, Col, Tan, true);
 	// malzeme: Hyper Auto Landscape dokulu otomatik arazi (eğim → kaya, yükseklik → kar) → hava duyarlı köşe rengi → temel
 	// sahne yakalamalı önizlemede (menü dünya önizlemesi) Hyper malzemesi siyah çiziliyordu → köşe renkli hava malzemesi
@@ -926,6 +934,8 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 		SmvSetSolidColor(M, Color);
 		C->SetMaterial(0, M);
 	};
+	// önizleme zemini: ağaçlarla aynı (yakalamada doğru çizilen) düz PBR malzemesi, çimen yeşili
+	if (bPlainMaterial) Tinted(Ground, FLinearColor(0.16f, 0.27f, 0.1f));
 	Tinted(TreeTrunks, FLinearColor(0.25f, 0.15f, 0.07f));
 	Tinted(TreeCrowns, FLinearColor(0.05f, 0.22f, 0.06f));
 	Tinted(Buildings, FLinearColor(0.6f, 0.58f, 0.55f));
