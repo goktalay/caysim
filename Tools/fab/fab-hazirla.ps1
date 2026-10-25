@@ -369,6 +369,8 @@ try {
 			else { $hedefAd = $temiz; $ad = "SK_$temiz" }
 			$hedefDisk = Join-Path $content "Fab\$hedefAd"
 			$imza = "$($dosya.FullName)|$($dosya.Length)|$($dosya.LastWriteTimeUtc.Ticks)"
+			# statik OBJ/glTF dekor: v2 = parcalar tek agda birlestirilir (Interchange combine_static_meshes) -> bir kez yeniden ice aktarilir
+			if ($statik -and $dosya.Extension -ne '.fbx') { $imza += '|birlesik2' }
 			$imzaDosya = Join-Path $hedefDisk '.kaynak-imza'
 			$var = (Test-Path -LiteralPath $imzaDosya) -and ((Get-Content -LiteralPath $imzaDosya -Raw).Trim() -eq $imza) -and (Get-ChildItem -LiteralPath $hedefDisk -Filter *.uasset -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)
 			$hedefYol = '/Game/Fab/' + ($hedefAd -replace '\\', '/')

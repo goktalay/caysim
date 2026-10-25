@@ -70,7 +70,10 @@ namespace SmvCore
 		FVehParams CopterBase(double Hover, double Cells, double CapMah, double Expo)
 		{
 			return { { "MOT_THST_HOVER", Hover }, { "MOT_THST_EXPO", Expo }, { "MOT_BAT_VOLT_MAX", 4.2 * Cells }, { "MOT_BAT_VOLT_MIN", 3.3 * Cells },
-				{ "BATT_CAPACITY", CapMah }, { "BATT_MONITOR", 4 } };
+				{ "BATT_CAPACITY", CapMah }, { "BATT_MONITOR", 4 },
+				// SITL batarya modeli: SIM_BATT_VOLTAGE (varsayılan 12,6 V) JSON maxVoltage'a göre başlangıç doluluğunu belirler — 12S gövdede 12,6 V
+				// "boş batarya" demekti (hexa: 5 V'a çöküş, "Potential Thrust Loss" + "Battery Failsafe"); dolu paket gerilimi ve kapasite eşlenir
+				{ "SIM_BATT_VOLTAGE", 4.2 * Cells }, { "SIM_BATT_CAP_AH", CapMah / 1000.0 } };
 		}
 
 		FVehParams Join(FVehParams A, const FVehParams& B) { A.insert(A.end(), B.begin(), B.end()); return A; }

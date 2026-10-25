@@ -149,6 +149,23 @@ def gorev(kaynak, hedef, ad, iskelet):
             except Exception:  # noqa: BLE001
                 pass
         t.set_editor_property("options", o)
+    elif not iskelet:
+        # OBJ / glTF statik dekor (Interchange): parçalar tek ağda birleştirilir — ayrı ağlarda düğüm dönüşümleri kayboluyor, oyun
+        # tüm parçaları aynı noktaya kurunca gemi üst yapısı / direkler yerinden kopuk görünüyordu (Mogami, ölçek ~222)
+        try:
+            pipe = unreal.InterchangeGenericAssetsPipeline()
+            mp = pipe.get_editor_property("mesh_pipeline")
+            mp.set_editor_property("combine_static_meshes", True)
+            try:
+                mp.set_editor_property("import_skeletal_meshes", False)
+            except Exception:  # noqa: BLE001
+                pass
+            st = unreal.InterchangePipelineStackOverride()
+            st.add_pipeline(pipe)
+            t.set_editor_property("options", st)
+            log("Interchange: statik aglar birlestirilerek ice aktariliyor (combine_static_meshes)")
+        except Exception as ex:  # noqa: BLE001
+            uyar(f"Interchange birlestirme secenegi kurulamadi: {ex}")
     return t
 
 

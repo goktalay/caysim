@@ -9,6 +9,8 @@
 #include "SmvMatchClient.h"
 #include "SmvGameMode.h"
 #include "SmvLoadGate.h"
+#include "Fonts/FontMeasure.h"
+#include "Rendering/SlateRenderer.h"
 #include "SmvPilotPawn.h"
 #include "SmvGameInstance.h"
 #include "SmvSteam.h"
