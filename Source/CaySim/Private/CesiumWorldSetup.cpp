@@ -705,7 +705,8 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 				SetupCesiumIon();
 				return;
 			}
-			if (LoadProgress >= 99.f && !bGoogleEmpty)
+			// Google: %95 (ultra geniş ekranda son karolar uzun kuyrukla gelir; kalanı uçuşta incelir)
+			if (LoadProgress >= (ActiveSource == ECaySimWorldSource::GooglePhotoreal ? 95.f : 99.f) && !bGoogleEmpty)
 			{
 				// yer ofseti: merkezde karo yüzeyi henüz yoksa (ilk %100 kaba karolarla gelir) 30 sn'ye dek yeniden denenir — eskiden
 				// hemen geoid varsayımına (35 m) düşülüyor, Kızılay'da araç ve kamera Google yüzeyinin ~30 m altında kalıyordu

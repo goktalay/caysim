@@ -1282,7 +1282,9 @@ void ASmvGameMode::TickLoadGate()
 				|| W->LineTraceSingleByObjectType(Gh, FVector(0, 0, 60000.0), FVector(0, 0, -60000.0), FCollisionObjectQueryParams(FCollisionObjectQueryParams::AllObjects), Gq);
 			if (!bGround) D = FSmvI18n::T(TEXT("load.d.no_ground")).ToString();
 		}
-		if (Gate.Elapsed() > 90.0 && !(bReady && bGround))
+		// Google fotogerçekçi 3B: 3440×1440'ta karo sayısı ~2 kat — süre 150 sn (eskiden 90 sn'de 'karolar yüklenemedi')
+		const double WorldLimitS = (bTiles && WorldSetup->SourceName() == TEXT("google3d")) ? 150.0 : 90.0;
+		if (Gate.Elapsed() > WorldLimitS && !(bReady && bGround))
 		{
 			// zaman aşımında uçuşa GİRİLMEZ: neden + Yeniden dene / Menü (yükleme ekranı)
 			FString Why;
