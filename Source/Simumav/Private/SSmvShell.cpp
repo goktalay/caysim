@@ -4804,6 +4804,12 @@ void SSmvShell::TickSmoke()
 			// -SmvRealWorld=google3d|terrain|off: gerçek dünya kaynağı (duman testi karşılaştırması)
 			FString Rw;
 			if (FParse::Value(FCommandLine::Get(), TEXT("SmvRealWorld="), Rw)) { FSmvUiPrefs::Get().RealWorld = Rw; SMV_KLOG(TEXT("SMOKE realworld %s"), *Rw); }
+			// -SmvSmokeRegionFresh: kayıtlı bölge haritaları silinir (indirme + Google denetimi baştan ölçülür)
+			if (FParse::Param(FCommandLine::Get(), TEXT("SmvSmokeRegionFresh")))
+			{
+				for (const FSmvRegionInfo& R : TArray<FSmvRegionInfo>(FSmvRegions::Get().List())) FSmvRegions::Get().Delete(R.Id);
+				SMV_KLOG(TEXT("SMOKE region fresh: bölgeler silindi"));
+			}
 		}
 		if (bLang) { FSmvI18n::SetLanguage(SmokeLang); Refresh(); SMV_KLOG(TEXT("SMOKE lang %s"), *SmokeLang); }
 		if (bOverlay) CloseOverlay();

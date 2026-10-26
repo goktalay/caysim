@@ -3,6 +3,7 @@
 #include "SimumavModule.h"
 #include "SimumavTypes.h"
 #include "CaySimGeo.h"
+#include "CesiumWorldSetup.h"
 #include "SmvRegionCore.h"
 #include "SmvScenery.h"
 #include "SmvUiKit.h"
@@ -123,11 +124,13 @@ bool ASmvRegionWorld::Build(const FSmvRegionInfo& Region, const FSmvTrack& Track
 	Ground = GroundMsl;
 	const double Lat0 = Region.Lat, Lon0 = Region.Lon;
 	// paket merkezi ≠ parkur noktası olabilir (daha büyük bir paket parkuru örter): ENU paket merkezine göre, Unreal orijini parkur noktası
-	ToUe = [Geo, Lat0, Lon0](double E, double N, double Hmsl)
+	ACaySimWorldSetup* Setup = Cast<ACaySimWorldSetup>(GeoActor);
+	ToUe = [Geo, Setup, Lat0, Lon0](double E, double N, double Hmsl)
 	{
 		double La, Lo;
 		SmvRegion::EnuToLatLon(Lat0, Lon0, E, N, La, Lo);
-		return Geo->GeoToUnreal(Lo, La, Hmsl);
+		// Cesium karolarında yükseklik elipsoit: MSL → dünya yüksekliği (geoid / ölçülen yer ofseti; düz dünyada aynen)
+		return Geo->GeoToUnreal(Lo, La, Setup ? Setup->MslToWorldHeight(La, Lo, Hmsl) : Hmsl);
 	};
 	Origin = ToUe(0, 0, Region.CenterMsl);
 	SetActorLocation(Origin);
@@ -149,11 +152,13 @@ bool ASmvRegionWorld::BuildCollisionOnly(const FSmvRegionInfo& Region, const FSm
 	ICaySimGeoTransform* Geo = Cast<ICaySimGeoTransform>(GeoActor);
 	if (!Geo || !Dem.Load(Region)) return false;
 	const double Lat0 = Region.Lat, Lon0 = Region.Lon;
-	ToUe = [Geo, Lat0, Lon0](double E, double N, double Hmsl)
+	ACaySimWorldSetup* Setup = Cast<ACaySimWorldSetup>(GeoActor);
+	ToUe = [Geo, Setup, Lat0, Lon0](double E, double N, double Hmsl)
 	{
 		double La, Lo;
 		SmvRegion::EnuToLatLon(Lat0, Lon0, E, N, La, Lo);
-		return Geo->GeoToUnreal(Lo, La, Hmsl);
+		// Cesium karolarında yükseklik elipsoit: MSL → dünya yüksekliği (geoid / ölçülen yer ofseti; düz dünyada aynen)
+		return Geo->GeoToUnreal(Lo, La, Setup ? Setup->MslToWorldHeight(La, Lo, Hmsl) : Hmsl);
 	};
 	Origin = ToUe(0, 0, Region.CenterMsl);
 	CenterMsl = Region.CenterMsl;
