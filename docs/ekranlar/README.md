@@ -1,6 +1,6 @@
 # Simumav (UE5) — ekran görüntüleri
 
-Şirket bilgisayarında otomatik duman testiyle (ekransız çizim, `-RenderOffScreen`, Türkçe) çekildi; build 70f50d4. Yol haritası ekranları (docs/yol-haritasi.md): sade ana menü, Hangar sihirbazı, Parkur, Mürettebat, Uçuş akışı, deneyim ekranı. Fab haritaları gerçek konumlarına demirli; harita dışı Cesium World Terrain + Bing uydu (docs/fab-icerik.md). Gök/bulut/yansımalar gerçek pencerede daha canlı olabilir.
+Şirket bilgisayarında otomatik duman testiyle (ekransız çizim, `-RenderOffScreen`, Türkçe) çekildi; build 48928fd. Yol haritası ekranları (docs/yol-haritasi.md): sade ana menü, Hangar sihirbazı, Parkur, Mürettebat, Uçuş akışı, deneyim ekranı. Fab haritaları gerçek konumlarına demirli; harita dışı Google fotogerçekçi 3B (yoksa Cesium World Terrain + Bing uydu; docs/fab-icerik.md). Çarpma testleri: docs/fizik-carpisma.md. Gök/bulut/yansımalar gerçek pencerede daha canlı olabilir.
 
 ## 1. Açılış — logo + menü sahnesi hazırlık ilerlemesi (atmosfer hazır olmadan menü açılmaz)
 
@@ -266,270 +266,226 @@
 
 ![Uçuş özeti](66_24_summary.jpg)
 
-## 67. Uçuşa giriş karesi — Askerî Üs (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+## 67. Uçuşa giriş karesi — Şehir (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
 
-![Uçuşa giriş karesi — Askerî Üs (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](67_25_f2_entry.jpg)
+![Uçuşa giriş karesi — Şehir (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](67_30_f3_entry.jpg)
 
-## 68. Uçuş — Askeri üs (yerde)
+## 68. Uçuş — Şehir (yerde)
 
-![Uçuş — Askeri üs (yerde)](68_25_f2_ground.jpg)
+![Uçuş — Şehir (yerde)](68_30_f3_ground.jpg)
 
-## 69. Uçuş — Askeri üs, askı
+## 69. Uçuş — Şehir, askı (City Traffic Pro trafiği, yaya kalabalığı)
 
-![Uçuş — Askeri üs, askı](69_25_f2_hover.jpg)
+![Uçuş — Şehir, askı (City Traffic Pro trafiği, yaya kalabalığı)](69_30_f3_hover.jpg)
 
-## 70. Yükleme ekranı — Askerî Üs (~3 sn)
+## 70. Yükleme ekranı — Şehir (~3 sn)
 
-![Yükleme ekranı — Askerî Üs (~3 sn)](70_25_f2_load.jpg)
+![Yükleme ekranı — Şehir (~3 sn)](70_30_f3_load.jpg)
 
-## 71. Yükleme ekranı — Askerî Üs (ilerleme ≥ %60)
+## 71. Yükleme ekranı — Şehir (ilerleme ≥ %60)
 
-![Yükleme ekranı — Askerî Üs (ilerleme ≥ %60)](71_25_f2_load2.jpg)
+![Yükleme ekranı — Şehir (ilerleme ≥ %60)](71_30_f3_load2.jpg)
 
-## 72. Uçuşa giriş karesi — Şehir (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+## 72. Uçuşa giriş karesi — Askerî Üs / rampa (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
 
-![Uçuşa giriş karesi — Şehir (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](72_30_f3_entry.jpg)
+![Uçuşa giriş karesi — Askerî Üs / rampa (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](72_45_f6_entry.jpg)
 
-## 73. Uçuş — Şehir (yerde)
+## 73. Uçuş — Askerî Üs (Konya Karapınar) — sabit kanat (yerde)
 
-![Uçuş — Şehir (yerde)](73_30_f3_ground.jpg)
+![Uçuş — Askerî Üs (Konya Karapınar) — sabit kanat (yerde)](73_45_f6_ground.jpg)
 
-## 74. Uçuş — Şehir, askı (City Traffic Pro trafiği, yaya kalabalığı)
+## 74. Askerî Üs (Konya Karapınar) — sabit kanat — yüksek irtifada FPV / jet HUD
 
-![Uçuş — Şehir, askı (City Traffic Pro trafiği, yaya kalabalığı)](74_30_f3_hover.jpg)
+![Askerî Üs (Konya Karapınar) — sabit kanat — yüksek irtifada FPV / jet HUD](74_45_f6_hfpv.jpg)
 
-## 75. Yükleme ekranı — Şehir (~3 sn)
+## 75. Askerî Üs (Konya Karapınar) — sabit kanat — ~110 m: harita dışı gerçek dünya (Google fotogerçekçi 3B)
 
-![Yükleme ekranı — Şehir (~3 sn)](75_30_f3_load.jpg)
+![Askerî Üs (Konya Karapınar) — sabit kanat — ~110 m: harita dışı gerçek dünya (Google fotogerçekçi 3B)](75_45_f6_high.jpg)
 
-## 76. Yükleme ekranı — Şehir (ilerleme ≥ %60)
+## 76. Askerî Üs (Konya Karapınar) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
 
-![Yükleme ekranı — Şehir (ilerleme ≥ %60)](76_30_f3_load2.jpg)
+![Askerî Üs (Konya Karapınar) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](76_45_f6_high2.jpg)
 
-## 77. Uçuşa giriş karesi — Prosedürel dünya / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+## 77. Kalkış yöntemi — pnömatik rampa (fırlatma öncesi; HUD durumu)
 
-![Uçuşa giriş karesi — Prosedürel dünya / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](77_35_f4_entry.jpg)
+![Kalkış yöntemi — pnömatik rampa (fırlatma öncesi; HUD durumu)](77_45_f6_launch0.jpg)
 
-## 78. Uçuş — VTOL FPV (jet HUD)
+## 78. Kalkış yöntemi — pnömatik rampa (bırakmadan ~1 sn sonra)
 
-![Uçuş — VTOL FPV (jet HUD)](78_35_f4_fpv.jpg)
+![Kalkış yöntemi — pnömatik rampa (bırakmadan ~1 sn sonra)](78_45_f6_launch1.jpg)
 
-## 79. Uçuş — Prosedürel dünya, altın saat (yerde)
+## 79. Yükleme ekranı — Askerî Üs / rampa (~3 sn)
 
-![Uçuş — Prosedürel dünya, altın saat (yerde)](79_35_f4_ground.jpg)
+![Yükleme ekranı — Askerî Üs / rampa (~3 sn)](79_45_f6_load.jpg)
 
-## 80. Uçuş — Prosedürel dünya, VTOL askı
+## 80. Yükleme ekranı — Askerî Üs / rampa (ilerleme ≥ %60)
 
-![Uçuş — Prosedürel dünya, VTOL askı](80_35_f4_hover.jpg)
+![Yükleme ekranı — Askerî Üs / rampa (ilerleme ≥ %60)](80_45_f6_load2.jpg)
 
-## 81. Yükleme ekranı — Prosedürel dünya / VTOL (~3 sn)
+## 81. Askerî Üs — 216 m, 3440×1440 ultra geniş (Google fotogerçekçi 3B; kenarda delik yok)
 
-![Yükleme ekranı — Prosedürel dünya / VTOL (~3 sn)](81_35_f4_load.jpg)
+![Askerî Üs — 216 m, 3440×1440 ultra geniş (Google fotogerçekçi 3B; kenarda delik yok)](81_46_f6_uw_high2.jpg)
 
-## 82. Yükleme ekranı — Prosedürel dünya / VTOL (ilerleme ≥ %60)
+## 82. Uçuşa giriş karesi — Şehir / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
 
-![Yükleme ekranı — Prosedürel dünya / VTOL (ilerleme ≥ %60)](82_35_f4_load2.jpg)
+![Uçuşa giriş karesi — Şehir / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](82_65_f10_entry.jpg)
 
-## 83. Uçuş — pilot omuz görünümü
+## 83. Uçuş — Şehir (İstanbul Taksim, Google fotogerçekçi 3B) — VTOL (yerde)
 
-![Uçuş — pilot omuz görünümü](83_35_f4_pilot.jpg)
+![Uçuş — Şehir (İstanbul Taksim, Google fotogerçekçi 3B) — VTOL (yerde)](83_65_f10_ground.jpg)
 
-## 84. Uçuşa giriş karesi — Gemi savunma / Hexacopter (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+## 84. Şehir (İstanbul Taksim, Google fotogerçekçi 3B) — VTOL — yüksek irtifada FPV / jet HUD
 
-![Uçuşa giriş karesi — Gemi savunma / Hexacopter (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](84_40_f5_entry.jpg)
+![Şehir (İstanbul Taksim, Google fotogerçekçi 3B) — VTOL — yüksek irtifada FPV / jet HUD](84_65_f10_hfpv.jpg)
 
-## 85. Uçuş — Gemi savunma: Mogami fırkateyni, Askerî Hexacopter (yerde)
+## 85. Şehir (İstanbul Taksim, Google fotogerçekçi 3B) — VTOL — ~110 m: harita dışı gerçek dünya (Google fotogerçekçi 3B)
 
-![Uçuş — Gemi savunma: Mogami fırkateyni, Askerî Hexacopter (yerde)](85_40_f5_ground.jpg)
+![Şehir (İstanbul Taksim, Google fotogerçekçi 3B) — VTOL — ~110 m: harita dışı gerçek dünya (Google fotogerçekçi 3B)](85_65_f10_high.jpg)
 
-## 86. Uçuş — Gemi savunma, Askerî Hexacopter askıda
+## 86. Şehir (İstanbul Taksim, Google fotogerçekçi 3B) — VTOL — hedef irtifa (150–220 m): gerçek ufuk
 
-![Uçuş — Gemi savunma, Askerî Hexacopter askıda](86_40_f5_hover.jpg)
+![Şehir (İstanbul Taksim, Google fotogerçekçi 3B) — VTOL — hedef irtifa (150–220 m): gerçek ufuk](86_65_f10_high2.jpg)
 
-## 87. Yükleme ekranı — Gemi savunma / Hexacopter (~3 sn)
+## 87. Kalkış yöntemi — dikey kalkış (fırlatma öncesi; HUD durumu)
 
-![Yükleme ekranı — Gemi savunma / Hexacopter (~3 sn)](87_40_f5_load.jpg)
+![Kalkış yöntemi — dikey kalkış (fırlatma öncesi; HUD durumu)](87_65_f10_launch0.jpg)
 
-## 88. Yükleme ekranı — Gemi savunma / Hexacopter (ilerleme ≥ %60)
+## 88. Kalkış yöntemi — dikey kalkış (bırakmadan ~1 sn sonra)
 
-![Yükleme ekranı — Gemi savunma / Hexacopter (ilerleme ≥ %60)](88_40_f5_load2.jpg)
+![Kalkış yöntemi — dikey kalkış (bırakmadan ~1 sn sonra)](88_65_f10_launch1.jpg)
 
-## 89. Uçuşa giriş karesi — Askerî Üs / rampa (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+## 89. Yükleme ekranı — Şehir / VTOL (~3 sn)
 
-![Uçuşa giriş karesi — Askerî Üs / rampa (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](89_45_f6_entry.jpg)
+![Yükleme ekranı — Şehir / VTOL (~3 sn)](89_65_f10_load.jpg)
 
-## 90. Uçuş — Askerî Üs (Konya Karapınar) — sabit kanat (yerde)
+## 90. Yükleme ekranı — Şehir / VTOL (ilerleme ≥ %60)
 
-![Uçuş — Askerî Üs (Konya Karapınar) — sabit kanat (yerde)](90_45_f6_ground.jpg)
+![Yükleme ekranı — Şehir / VTOL (ilerleme ≥ %60)](90_65_f10_load2.jpg)
 
-## 91. Askerî Üs (Konya Karapınar) — sabit kanat — yüksek irtifada FPV / jet HUD
+## 91. Şehir (Taksim) — 150 m, 3440×1440 ultra geniş (Google İstanbul)
 
-![Askerî Üs (Konya Karapınar) — sabit kanat — yüksek irtifada FPV / jet HUD](91_45_f6_hfpv.jpg)
+![Şehir (Taksim) — 150 m, 3440×1440 ultra geniş (Google İstanbul)](91_66_f10_uw_high2.jpg)
 
-## 92. Askerî Üs (Konya Karapınar) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+## 92. Uçuşa giriş — Şehir (Google 3B, Taksim)
 
-![Askerî Üs (Konya Karapınar) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](92_45_f6_high.jpg)
+![Uçuşa giriş — Şehir (Google 3B, Taksim)](92_70_f11_entry.jpg)
 
-## 93. Askerî Üs (Konya Karapınar) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
+## 93. 70_f11_ground
 
-![Askerî Üs (Konya Karapınar) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](93_45_f6_high2.jpg)
+![70_f11_ground](93_70_f11_ground.jpg)
 
-## 94. Kalkış yöntemi — pnömatik rampa (fırlatma öncesi; HUD durumu)
+## 94. Çarpma testi — Şehir (Google 3B, Taksim): 10 m askı
 
-![Kalkış yöntemi — pnömatik rampa (fırlatma öncesi; HUD durumu)](94_45_f6_launch0.jpg)
+![Çarpma testi — Şehir (Google 3B, Taksim): 10 m askı](94_70_f11_hover.jpg)
 
-## 95. Kalkış yöntemi — pnömatik rampa (bırakmadan ~1 sn sonra)
+## 95. 70_f11_load
 
-![Kalkış yöntemi — pnömatik rampa (bırakmadan ~1 sn sonra)](95_45_f6_launch1.jpg)
+![70_f11_load](95_70_f11_load.jpg)
 
-## 96. Yükleme ekranı — Askerî Üs / rampa (~3 sn)
+## 96. 70_f11_load2
 
-![Yükleme ekranı — Askerî Üs / rampa (~3 sn)](96_45_f6_load.jpg)
+![70_f11_load2](96_70_f11_load2.jpg)
 
-## 97. Yükleme ekranı — Askerî Üs / rampa (ilerleme ≥ %60)
+## 97. Çarpma testi — Şehir (Google 3B, Taksim): burun hedefe, koşu öncesi
 
-![Yükleme ekranı — Askerî Üs / rampa (ilerleme ≥ %60)](97_45_f6_load2.jpg)
+![Çarpma testi — Şehir (Google 3B, Taksim): burun hedefe, koşu öncesi](97_70_f11_ram0.jpg)
 
-## 98. Uçuşa giriş karesi — Orman / araç üstü (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+## 98. Çarpma testi — Şehir (Google 3B, Taksim): ÇARPIŞMA anı (gövde kutuları kırmızı, disarm)
 
-![Uçuşa giriş karesi — Orman / araç üstü (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](98_50_f7_entry.jpg)
+![Çarpma testi — Şehir (Google 3B, Taksim): ÇARPIŞMA anı (gövde kutuları kırmızı, disarm)](98_70_f11_ram1.jpg)
 
-## 99. Uçuş — Orman (Karabük Yenice) — sabit kanat (yerde)
+## 99. Çarpma testi — Şehir (Google 3B, Taksim): +3 sn (araç yüzey boyunca düştü)
 
-![Uçuş — Orman (Karabük Yenice) — sabit kanat (yerde)](99_50_f7_ground.jpg)
+![Çarpma testi — Şehir (Google 3B, Taksim): +3 sn (araç yüzey boyunca düştü)](99_70_f11_ram2.jpg)
 
-## 100. Orman (Karabük Yenice) — sabit kanat — yüksek irtifada FPV / jet HUD
+## 100. Çarpma testi — Şehir (Google 3B, Taksim): +7 sn, gövde yüzeyde duruyor
 
-![Orman (Karabük Yenice) — sabit kanat — yüksek irtifada FPV / jet HUD](100_50_f7_hfpv.jpg)
+![Çarpma testi — Şehir (Google 3B, Taksim): +7 sn, gövde yüzeyde duruyor](100_70_f11_ram3.jpg)
 
-## 101. Orman (Karabük Yenice) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+## 101. Uçuşa giriş — Askerî Üs — Fab binaları
 
-![Orman (Karabük Yenice) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](101_50_f7_high.jpg)
+![Uçuşa giriş — Askerî Üs — Fab binaları](101_75_f12_entry.jpg)
 
-## 102. Orman (Karabük Yenice) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
+## 102. 75_f12_ground
 
-![Orman (Karabük Yenice) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](102_50_f7_high2.jpg)
+![75_f12_ground](102_75_f12_ground.jpg)
 
-## 103. Kalkış yöntemi — araç üstü fırlatma (fırlatma öncesi; HUD durumu)
+## 103. Çarpma testi — Askerî Üs — Fab binaları: 10 m askı
 
-![Kalkış yöntemi — araç üstü fırlatma (fırlatma öncesi; HUD durumu)](103_50_f7_launch0.jpg)
+![Çarpma testi — Askerî Üs — Fab binaları: 10 m askı](103_75_f12_hover.jpg)
 
-## 104. Kalkış yöntemi — araç üstü fırlatma (bırakmadan ~1 sn sonra)
+## 104. 75_f12_load
 
-![Kalkış yöntemi — araç üstü fırlatma (bırakmadan ~1 sn sonra)](104_50_f7_launch1.jpg)
+![75_f12_load](104_75_f12_load.jpg)
 
-## 105. Yükleme ekranı — Orman / araç üstü (~3 sn)
+## 105. 75_f12_load2
 
-![Yükleme ekranı — Orman / araç üstü (~3 sn)](105_50_f7_load.jpg)
+![75_f12_load2](105_75_f12_load2.jpg)
 
-## 106. Yükleme ekranı — Orman / araç üstü (ilerleme ≥ %60)
+## 106. Çarpma testi — Askerî Üs — Fab binaları: burun hedefe, koşu öncesi
 
-![Yükleme ekranı — Orman / araç üstü (ilerleme ≥ %60)](106_50_f7_load2.jpg)
+![Çarpma testi — Askerî Üs — Fab binaları: burun hedefe, koşu öncesi](106_75_f12_ram0.jpg)
 
-## 107. Uçuşa giriş karesi — Askerî Üs / elden atış (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+## 107. Çarpma testi — Askerî Üs — Fab binaları: ÇARPIŞMA anı (gövde kutuları kırmızı, disarm)
 
-![Uçuşa giriş karesi — Askerî Üs / elden atış (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](107_55_f8_entry.jpg)
+![Çarpma testi — Askerî Üs — Fab binaları: ÇARPIŞMA anı (gövde kutuları kırmızı, disarm)](107_75_f12_ram1.jpg)
 
-## 108. Uçuş — Askerî Üs, altın saat — sabit kanat (yerde)
+## 108. Çarpma testi — Askerî Üs — Fab binaları: +3 sn (araç yüzey boyunca düştü)
 
-![Uçuş — Askerî Üs, altın saat — sabit kanat (yerde)](108_55_f8_ground.jpg)
+![Çarpma testi — Askerî Üs — Fab binaları: +3 sn (araç yüzey boyunca düştü)](108_75_f12_ram2.jpg)
 
-## 109. Askerî Üs, altın saat — sabit kanat — yüksek irtifada FPV / jet HUD
+## 109. Çarpma testi — Askerî Üs — Fab binaları: +7 sn, gövde yüzeyde duruyor
 
-![Askerî Üs, altın saat — sabit kanat — yüksek irtifada FPV / jet HUD](109_55_f8_hfpv.jpg)
+![Çarpma testi — Askerî Üs — Fab binaları: +7 sn, gövde yüzeyde duruyor](109_75_f12_ram3.jpg)
 
-## 110. Askerî Üs, altın saat — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+## 110. Uçuşa giriş — Google fotogerçekçi 3B (Taksim)
 
-![Askerî Üs, altın saat — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](110_55_f8_high.jpg)
+![Uçuşa giriş — Google fotogerçekçi 3B (Taksim)](110_80_f13_entry.jpg)
 
-## 111. Askerî Üs, altın saat — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
+## 111. 80_f13_ground
 
-![Askerî Üs, altın saat — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](111_55_f8_high2.jpg)
+![80_f13_ground](111_80_f13_ground.jpg)
 
-## 112. Kalkış yöntemi — elden atış (fırlatma öncesi; HUD durumu)
+## 112. Çarpma testi — Google fotogerçekçi 3B (Taksim): 10 m askı
 
-![Kalkış yöntemi — elden atış (fırlatma öncesi; HUD durumu)](112_55_f8_launch0.jpg)
+![Çarpma testi — Google fotogerçekçi 3B (Taksim): 10 m askı](112_80_f13_hover.jpg)
 
-## 113. Kalkış yöntemi — elden atış (bırakmadan ~1 sn sonra)
+## 113. 80_f13_load
 
-![Kalkış yöntemi — elden atış (bırakmadan ~1 sn sonra)](113_55_f8_launch1.jpg)
+![80_f13_load](113_80_f13_load.jpg)
 
-## 114. Yükleme ekranı — Askerî Üs / elden atış (~3 sn)
+## 114. 80_f13_load2
 
-![Yükleme ekranı — Askerî Üs / elden atış (~3 sn)](114_55_f8_load.jpg)
+![80_f13_load2](114_80_f13_load2.jpg)
 
-## 115. Yükleme ekranı — Askerî Üs / elden atış (ilerleme ≥ %60)
+## 115. Çarpma testi — Google fotogerçekçi 3B (Taksim): burun hedefe, koşu öncesi
 
-![Yükleme ekranı — Askerî Üs / elden atış (ilerleme ≥ %60)](115_55_f8_load2.jpg)
+![Çarpma testi — Google fotogerçekçi 3B (Taksim): burun hedefe, koşu öncesi](115_80_f13_ram0.jpg)
 
-## 116. Uçuşa giriş karesi — Yarış Pisti / pist (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
+## 116. Çarpma testi — Google fotogerçekçi 3B (Taksim): ÇARPIŞMA anı (gövde kutuları kırmızı, disarm)
 
-![Uçuşa giriş karesi — Yarış Pisti / pist (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](116_60_f9_entry.jpg)
+![Çarpma testi — Google fotogerçekçi 3B (Taksim): ÇARPIŞMA anı (gövde kutuları kırmızı, disarm)](116_80_f13_ram1.jpg)
 
-## 117. Uçuş — Yarış Pisti (İstanbul Park) — sabit kanat (yerde)
+## 117. Çarpma testi — Google fotogerçekçi 3B (Taksim): +3 sn (araç yüzey boyunca düştü)
 
-![Uçuş — Yarış Pisti (İstanbul Park) — sabit kanat (yerde)](117_60_f9_ground.jpg)
+![Çarpma testi — Google fotogerçekçi 3B (Taksim): +3 sn (araç yüzey boyunca düştü)](117_80_f13_ram2.jpg)
 
-## 118. Yarış Pisti (İstanbul Park) — sabit kanat — yüksek irtifada FPV / jet HUD
+## 118. Çarpma testi — Google fotogerçekçi 3B (Taksim): +7 sn, gövde yüzeyde duruyor
 
-![Yarış Pisti (İstanbul Park) — sabit kanat — yüksek irtifada FPV / jet HUD](118_60_f9_hfpv.jpg)
+![Çarpma testi — Google fotogerçekçi 3B (Taksim): +7 sn, gövde yüzeyde duruyor](118_80_f13_ram3.jpg)
 
-## 119. Yarış Pisti (İstanbul Park) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
+## 119. Çarpma testi — Orman — dağ yamacı: burun hedefe, koşu öncesi
 
-![Yarış Pisti (İstanbul Park) — sabit kanat — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](119_60_f9_high.jpg)
+![Çarpma testi — Orman — dağ yamacı: burun hedefe, koşu öncesi](119_85_f14_ram0.jpg)
 
-## 120. Yarış Pisti (İstanbul Park) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk
+## 120. Çarpma testi — Orman — dağ yamacı: ÇARPIŞMA anı (gövde kutuları kırmızı, disarm)
 
-![Yarış Pisti (İstanbul Park) — sabit kanat — hedef irtifa (150–220 m): gerçek ufuk](120_60_f9_high2.jpg)
+![Çarpma testi — Orman — dağ yamacı: ÇARPIŞMA anı (gövde kutuları kırmızı, disarm)](120_85_f14_ram1.jpg)
 
-## 121. Kalkış yöntemi — tekerlekli pist kalkışı (fırlatma öncesi; HUD durumu)
+## 121. Çarpma testi — Orman — dağ yamacı: +3 sn (araç yüzey boyunca düştü)
 
-![Kalkış yöntemi — tekerlekli pist kalkışı (fırlatma öncesi; HUD durumu)](121_60_f9_launch0.jpg)
+![Çarpma testi — Orman — dağ yamacı: +3 sn (araç yüzey boyunca düştü)](121_85_f14_ram2.jpg)
 
-## 122. Kalkış yöntemi — tekerlekli pist kalkışı (bırakmadan ~1 sn sonra)
+## 122. Çarpma testi — Orman — dağ yamacı: +7 sn, gövde yüzeyde duruyor
 
-![Kalkış yöntemi — tekerlekli pist kalkışı (bırakmadan ~1 sn sonra)](122_60_f9_launch1.jpg)
-
-## 123. Yükleme ekranı — Yarış Pisti / pist (~3 sn)
-
-![Yükleme ekranı — Yarış Pisti / pist (~3 sn)](123_60_f9_load.jpg)
-
-## 124. Yükleme ekranı — Yarış Pisti / pist (ilerleme ≥ %60)
-
-![Yükleme ekranı — Yarış Pisti / pist (ilerleme ≥ %60)](124_60_f9_load2.jpg)
-
-## 125. Uçuşa giriş karesi — Şehir / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)
-
-![Uçuşa giriş karesi — Şehir / VTOL (tüm aşamalar bitti; 5 sn sonraki kareyle aynı ışık)](125_65_f10_entry.jpg)
-
-## 126. Uçuş — Şehir (Ankara Yapracık) — VTOL (yerde)
-
-![Uçuş — Şehir (Ankara Yapracık) — VTOL (yerde)](126_65_f10_ground.jpg)
-
-## 127. Şehir (Ankara Yapracık) — VTOL — yüksek irtifada FPV / jet HUD
-
-![Şehir (Ankara Yapracık) — VTOL — yüksek irtifada FPV / jet HUD](127_65_f10_hfpv.jpg)
-
-## 128. Şehir (Ankara Yapracık) — VTOL — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)
-
-![Şehir (Ankara Yapracık) — VTOL — ~110 m: harita dışı gerçek dünya (Cesium World Terrain + Bing uydu)](128_65_f10_high.jpg)
-
-## 129. Şehir (Ankara Yapracık) — VTOL — hedef irtifa (150–220 m): gerçek ufuk
-
-![Şehir (Ankara Yapracık) — VTOL — hedef irtifa (150–220 m): gerçek ufuk](129_65_f10_high2.jpg)
-
-## 130. Kalkış yöntemi — dikey kalkış (fırlatma öncesi; HUD durumu)
-
-![Kalkış yöntemi — dikey kalkış (fırlatma öncesi; HUD durumu)](130_65_f10_launch0.jpg)
-
-## 131. Kalkış yöntemi — dikey kalkış (bırakmadan ~1 sn sonra)
-
-![Kalkış yöntemi — dikey kalkış (bırakmadan ~1 sn sonra)](131_65_f10_launch1.jpg)
-
-## 132. Yükleme ekranı — Şehir / VTOL (~3 sn)
-
-![Yükleme ekranı — Şehir / VTOL (~3 sn)](132_65_f10_load.jpg)
-
-## 133. Yükleme ekranı — Şehir / VTOL (ilerleme ≥ %60)
-
-![Yükleme ekranı — Şehir / VTOL (ilerleme ≥ %60)](133_65_f10_load2.jpg)
+![Çarpma testi — Orman — dağ yamacı: +7 sn, gövde yüzeyde duruyor](122_85_f14_ram3.jpg)
