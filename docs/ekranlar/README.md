@@ -2,6 +2,26 @@
 
 Şirket bilgisayarında otomatik duman testiyle (ekransız çizim, `-RenderOffScreen`, Türkçe) çekildi; build 48928fd. Yol haritası ekranları (docs/yol-haritasi.md): sade ana menü, Hangar sihirbazı, Parkur, Mürettebat, Uçuş akışı, deneyim ekranı. Fab haritaları gerçek konumlarına demirli; harita dışı Google fotogerçekçi 3B (yoksa Cesium World Terrain + Bing uydu; docs/fab-icerik.md). Çarpma testleri: docs/fizik-carpisma.md. Gök/bulut/yansımalar gerçek pencerede daha canlı olabilir.
 
+## 2026-10-26 — bölge haritası turu
+
+### Bölge haritası — Manhattan çevrimdışı paketi (Terrarium arazi + OSM binaları, yollar, ağaçlar; M_SmvFacade)
+![Bölge haritası — Manhattan çevrimdışı paketi (Terrarium arazi + OSM binaları, yollar, ağaçlar; M_SmvFacade)](B1_bolge_manhattan.jpg)
+
+### Bölge haritası — paket binasına bilerek çarpma (ÇARPIŞMA → disarm)
+![Bölge haritası — paket binasına bilerek çarpma (ÇARPIŞMA → disarm)](B2_bolge_carpma.jpg)
+
+### Uçuş › Parkur — Bölge haritası kartı (HAZIR, boyut, bina / yol sayısı, Google kapsaması, Güncelle)
+![Uçuş › Parkur — Bölge haritası kartı (HAZIR, boyut, bina / yol sayısı, Google kapsaması, Güncelle)](B3_bolge_karti.jpg)
+
+### Taksim — Google 3B akışı + paketten görünmez bina çarpışması
+![Taksim — Google 3B akışı + paketten görünmez bina çarpışması](B4_taksim_google.jpg)
+
+### Fırlatma göstergesi HUD'da (pist kalkışı satırı)
+![Fırlatma göstergesi HUD'da (pist kalkışı satırı)](B5_firlatma_hud.jpg)
+
+### Yükleme ekranı (Türkçe, daha açık arka plan)
+![Yükleme ekranı (Türkçe, daha açık arka plan)](B6_yukleme_tr.jpg)
+
 ## 1. Açılış — logo + menü sahnesi hazırlık ilerlemesi (atmosfer hazır olmadan menü açılmaz)
 
 ![Açılış — logo + menü sahnesi hazırlık ilerlemesi (atmosfer hazır olmadan menü açılmaz)](01_00_boot.jpg)
