@@ -696,7 +696,18 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 			}
 			if (LoadProgress >= 99.f && !bGoogleEmpty)
 			{
-				if (bAutoGroundOffset && !bGroundOffsetMeasured) MeasureGroundOffset();
+				// yer ofseti: merkezde karo yüzeyi henüz yoksa (ilk %100 kaba karolarla gelir) 30 sn'ye dek yeniden denenir — eskiden
+				// hemen geoid varsayımına (35 m) düşülüyor, Kızılay'da araç ve kamera Google yüzeyinin ~30 m altında kalıyordu
+				if (bAutoGroundOffset && !bGroundOffsetMeasured)
+				{
+					MeasureGroundOffset();
+					if (!bGroundOffsetMeasured)
+					{
+						if (FPlatformTime::Seconds() - SourceT0 < 30.0) return;
+						bGroundOffsetMeasured = true;
+						UE_LOG(LogCaySim, Warning, TEXT("Yer ofseti 30 sn'de ölçülemedi — geoid varsayımı %.1f m"), GeoidOffsetM);
+					}
+				}
 				Finish(true);
 			}
 		}
@@ -726,8 +737,8 @@ void ACaySimWorldSetup::MeasureGroundOffset()
 	}
 	else
 	{
-		bGroundOffsetMeasured = true;
-		UE_LOG(LogCaySim, Warning, TEXT("Yer ofseti ölçülemedi: merkezde 3D Tiles yüzeyi yok (geoid varsayımı %.1f m)"), GeoidOffsetM);
+		// çağıran yeniden dener (Tick: 30 sn'ye dek); bayrak burada kalkmaz
+		UE_LOG(LogCaySim, Verbose, TEXT("Yer ofseti henüz ölçülemedi: merkezde 3D Tiles yüzeyi yok"));
 	}
 }
 

@@ -1821,7 +1821,7 @@
  "set.q_view": "Дальность прорисовки",
  "set.quality": "Качество графики",
  "set.realworld": "Реальный мир (окрестности карты)",
- "set.realworld_google": "Google 3D (экспериментально)",
+ "set.realworld_google": "Google фотореалистичное 3D",
  "set.realworld_hint": "Карты Fab размещаются в реальном регионе; самолёты/VTOL летают без границ. Нужен интернет.",
  "set.realworld_off": "Выкл.",
  "set.realworld_terrain": "Реальный рельеф + спутник",

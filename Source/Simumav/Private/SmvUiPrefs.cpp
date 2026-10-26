@@ -36,6 +36,11 @@ void FSmvUiPrefs::Load()
 	GConfig->GetString(GSmvPrefsSection, TEXT("HolidayCountry"), HolidayCountry, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("RecordVideo"), bRecordVideo, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("RealWorld"), RealWorld, Ini);
+	// sürüm 2: Google fotogerçekçi 3B artık çalışıyor (paketli oyunda glTF dönüştürücüleri kayıtsızdı) → varsayılan google3d;
+	// eski varsayılanla kaydedilmiş "terrain" bir kez google3d'ye çekilir (kullanıcı sonra yine seçebilir)
+	int32 RwVer = 0;
+	GConfig->GetInt(GSmvPrefsSection, TEXT("RealWorldVer"), RwVer, Ini);
+	if (RwVer < 2 && RealWorld == TEXT("terrain")) RealWorld = TEXT("google3d");
 	GConfig->GetInt(GSmvPrefsSection, TEXT("SpeedFx"), SpeedFx, Ini);
 	SpeedFx = FMath::Clamp(SpeedFx, 0, 2);
 	GConfig->GetString(GSmvPrefsSection, TEXT("AlertLevel"), AlertLevel, Ini);
@@ -88,6 +93,7 @@ void FSmvUiPrefs::Save()
 	GConfig->SetString(GSmvPrefsSection, TEXT("HolidayCountry"), *HolidayCountry, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("RecordVideo"), bRecordVideo, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("RealWorld"), *RealWorld, Ini);
+	GConfig->SetInt(GSmvPrefsSection, TEXT("RealWorldVer"), 2, Ini);
 	GConfig->SetInt(GSmvPrefsSection, TEXT("SpeedFx"), SpeedFx, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("AlertLevel"), *AlertLevel, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("ThermalPalette"), *ThermalPalette, Ini);

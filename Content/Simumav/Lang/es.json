@@ -1821,7 +1821,7 @@
  "set.q_view": "Distancia de visión",
  "set.quality": "Calidad gráfica",
  "set.realworld": "Mundo real (entorno del mapa)",
- "set.realworld_google": "Google 3D (experimental)",
+ "set.realworld_google": "Google 3D fotorrealista",
  "set.realworld_hint": "Los mapas Fab se sitúan en una región real; aviones/VTOL vuelan sin límites. Requiere internet.",
  "set.realworld_off": "Desactivado",
  "set.realworld_terrain": "Terreno real + satélite",

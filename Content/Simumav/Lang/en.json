@@ -1821,7 +1821,7 @@
  "set.q_view": "View distance",
  "set.quality": "Graphics quality",
  "set.realworld": "Real world (map surroundings)",
- "set.realworld_google": "Google 3D (experimental)",
+ "set.realworld_google": "Google photorealistic 3D",
  "set.realworld_hint": "Fab maps sit inside a real region; planes/VTOLs fly without limits. Requires internet.",
  "set.realworld_off": "Off",
  "set.realworld_terrain": "Real terrain + satellite",
