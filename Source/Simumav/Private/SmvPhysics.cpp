@@ -612,7 +612,7 @@ bool SmvPhysics::EvaluateSpot(UWorld* W, double X, double Y, double ZTop, double
 	auto Fail = [OutWhy](const FString& Why) { if (OutWhy) *OutWhy = Why; return false; };
 	if (!W) return Fail(TEXT("dünya yok"));
 	FHitResult H;
-	if (!SmvPhysics::LineBoth(W, H, FVector(X, Y, ZTop), FVector(X, Y, ZBot), S.Channel, Q)) return Fail(TEXT("zemin yok"));
+	if (!W->LineTraceSingleByChannel(H, FVector(X, Y, ZTop), FVector(X, Y, ZBot), S.Channel, Q)) return Fail(TEXT("zemin yok"));   // kalkış araması tek kip (ikili sorgu ağaç taçlarının basit şekline takılıp uygun noktaları eliyordu)
 	if (H.ImpactNormal.Z < 0.95) return Fail(FString::Printf(TEXT("eğim %.0f°"), FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(H.ImpactNormal.Z, -1.0, 1.0)))));
 	const bool bLand = H.GetComponent() && H.GetComponent()->GetClass()->GetName().Contains(TEXT("Landscape"));
 	if (bRequireLandscape && !bLand) return Fail(FString::Printf(TEXT("arazi değil (%s)"), H.GetActor() ? *H.GetActor()->GetName() : TEXT("-")));
@@ -631,7 +631,7 @@ bool SmvPhysics::EvaluateSpot(UWorld* W, double X, double Y, double ZTop, double
 	for (const FVector2D& O : { FVector2D(2.0 * R, 0), FVector2D(-2.0 * R, 0), FVector2D(0, 2.0 * R), FVector2D(0, -2.0 * R) })
 	{
 		FHitResult H2;
-		if (!SmvPhysics::LineBoth(W, H2, FVector(X + O.X, Y + O.Y, G.Z + 500.0), FVector(X + O.X, Y + O.Y, G.Z - 1000.0), S.Channel, Q)) return Fail(TEXT("kenar"));
+		if (!W->LineTraceSingleByChannel(H2, FVector(X + O.X, Y + O.Y, G.Z + 500.0), FVector(X + O.X, Y + O.Y, G.Z - 1000.0), S.Channel, Q)) return Fail(TEXT("kenar"));
 		if (FMath::Abs(H2.ImpactPoint.Z - G.Z) > Tol) return Fail(TEXT("engebeli"));
 	}
 	OutZ = G.Z;

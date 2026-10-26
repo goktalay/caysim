@@ -5016,13 +5016,13 @@ void SSmvShell::TickSmoke()
 		}
 		else if (FCString::Strcmp(Fx.Map, TEXT("g3d")) == 0)
 		{
-			// Google fotogerçekçi 3B gerçek dünya parkuru: Ankara Kızılay (çok katlı bina dokusu)
+			// Google fotogerçekçi 3B gerçek dünya parkuru: İstanbul Taksim (çok katlı bina dokusu; Ankara Kızılay'da karolar düz)
 			Flow->Draft.Track = FSmvTrack();
 			Flow->Draft.Track.Id = TEXT("smoke-g3d");
-			Flow->Draft.Track.Name = TEXT("Kızılay");
+			Flow->Draft.Track.Name = TEXT("Taksim");
 			Flow->Draft.Track.ParkurKind = TEXT("real");
 			Flow->Draft.Track.WorldMode = TEXT("google3d");
-			Flow->Draft.Track.Lat = 39.92065; Flow->Draft.Track.Lon = 32.85410; Flow->Draft.Track.GroundMsl = 870;
+			Flow->Draft.Track.Lat = 41.0369; Flow->Draft.Track.Lon = 28.9850; Flow->Draft.Track.GroundMsl = 80;
 			Flow->Draft.Track.RadiusM = 600;
 		}
 		else if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Fx.Map)) Flow->Draft.Track = FSmvFabContent::MakeTrack(*M);
