@@ -1773,7 +1773,7 @@ bool ASmvGameMode::SmokeRamBegin(const FString& Prefer, FString& OutDesc)
 	{
 		const FVector Dir = FQuat(Up, FMath::DegreesToRadians(i * 5.0)).RotateVector(Fwd);
 		FHitResult H;
-		if (!W->LineTraceSingleByChannel(H, P, P + Dir * 40000.0, Ch, Q)) continue;
+		if (!SmvPhysics::LineBoth(W, H, P, P + Dir * 40000.0, Ch, Q)) continue;
 		++NHit;
 		const FString K = SmvPhysics::SurfaceKind(H, Up);
 		Kinds.FindOrAdd(K)++;
@@ -1883,7 +1883,7 @@ bool ASmvGameMode::SmokeRamStatus(bool& bOutArmed, float& OutDistM, FString& Out
 			FCollisionQueryParams Q(TEXT("SmvRamBelow"), true, Drone);
 			FHitResult H;
 			const FVector P = Drone->GetActorLocation();
-			if (GetWorld()->LineTraceSingleByChannel(H, P, P - FVector(0, 0, 100000.0), FSmvPhysicsSettings::Get().Channel, Q)) *OutBelowM = (float)(H.Distance / 100.0);
+			if (SmvPhysics::LineBoth(GetWorld(), H, P, P - FVector(0, 0, 100000.0), FSmvPhysicsSettings::Get().Channel, Q)) *OutBelowM = (float)(H.Distance / 100.0);
 		}
 	}
 	OutDistM = Drone ? (float)(FVector::Dist(Drone->GetActorLocation(), SmokeRamTarget) / 100.0) : -1.f;

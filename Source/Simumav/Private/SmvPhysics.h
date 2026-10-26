@@ -12,6 +12,7 @@
 
 #include "CoreMinimal.h"
 #include "CollisionQueryParams.h"
+#include "CollisionShape.h"
 #include "Engine/EngineTypes.h"
 #include "Engine/HitResult.h"
 #include "SmvCollision.h"
@@ -121,6 +122,10 @@ struct FSmvSensorScan
 namespace SmvPhysics
 {
 	FCollisionQueryParams MakeQuery(FName Tag, const AActor* Self, const TArray<TWeakObjectPtr<AActor>>* Ignore);
+	/** Karmaşık + basit çarpışmayla ayrı ayrı ışın; en yakın isabet (bazı Fab ağları yalnız birinde isabet verir). */
+	bool LineBoth(UWorld* W, FHitResult& Out, const FVector& A, const FVector& B, ECollisionChannel Ch, const FCollisionQueryParams& Q);
+	/** Karmaşık + basit çarpışmayla süpürme; iki sonucun birleşimi. */
+	void SweepBoth(UWorld* W, TArray<FHitResult>& Out, const FVector& A, const FVector& B, const FQuat& Rot, ECollisionChannel Ch, const FCollisionShape& Shape, const FCollisionQueryParams& Q);
 	/** Gerçek dünya (Cesium) içine oturtulan Fab haritası: kırpılan alan (Unreal XY) ve 3D Tiles aktörü — bu alanda karolar çarpışmada yok sayılır.
 	 *  Tiles = nullptr → kapalı. */
 	void SetClipRegion(const AActor* Tiles, const FBox2D& Box);

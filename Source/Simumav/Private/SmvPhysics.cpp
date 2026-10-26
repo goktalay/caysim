@@ -127,6 +127,32 @@ FCollisionQueryParams SmvPhysics::MakeQuery(FName Tag, const AActor* Self, const
 	return Q;
 }
 
+// İkili sorgu: karmaşık (üçgen) ve basit çarpışma ayrı ayrı sorulur, en yakın isabet alınır. City Sample kule ağları
+// (UseComplexAsSimple, pişmiş üçgen ağ var) KARMAŞIK sorguda hiç isabet vermiyordu (duman f11 tanısı: "ışın karmaşık yok, basit …") —
+// dron yalnız karmaşık sorguyla şehir kulelerinin içinden geçiyordu. Basit sorgu UseComplexAsSimple ağlarda üçgen ağı, ötekilerde
+// kutu / dışbükey şekilleri kullanır; karmaşık sorgu basit şekli kaba olan (kemer, pencere boşluğu) ağlarda ayrıntı verir.
+bool SmvPhysics::LineBoth(UWorld* W, FHitResult& Out, const FVector& A, const FVector& B, ECollisionChannel Ch, const FCollisionQueryParams& Q)
+{
+	FCollisionQueryParams Q2 = Q;
+	Q2.bTraceComplex = !Q.bTraceComplex;
+	FHitResult H1, H2;
+	const bool b1 = W->LineTraceSingleByChannel(H1, A, B, Ch, Q);
+	const bool b2 = W->LineTraceSingleByChannel(H2, A, B, Ch, Q2);
+	if (b1 && (!b2 || H1.Distance <= H2.Distance)) { Out = H1; return true; }
+	if (b2) { Out = H2; return true; }
+	return false;
+}
+
+void SmvPhysics::SweepBoth(UWorld* W, TArray<FHitResult>& Out, const FVector& A, const FVector& B, const FQuat& Rot, ECollisionChannel Ch, const FCollisionShape& Shape, const FCollisionQueryParams& Q)
+{
+	FCollisionQueryParams Q2 = Q;
+	Q2.bTraceComplex = !Q.bTraceComplex;
+	TArray<FHitResult> H2;
+	W->SweepMultiByChannel(Out, A, B, Rot, Ch, Shape, Q);
+	W->SweepMultiByChannel(H2, A, B, Rot, Ch, Shape, Q2);
+	Out.Append(H2);
+}
+
 namespace
 {
 	TWeakObjectPtr<const AActor> GClipTiles;
@@ -231,7 +257,7 @@ bool FSmvContactSolver::SweepBody(UWorld* W, const FVector& From, const FVector&
 	{
 		const FVector Off = Rot.RotateVector(B.Center);
 		Hits.Reset();
-		W->SweepMultiByChannel(Hits, From + Off, To + Off, Rot, S.Channel, FCollisionShape::MakeBox(B.Half), Q);
+		SmvPhysics::SweepBoth(W, Hits, From + Off, To + Off, Rot, S.Channel, FCollisionShape::MakeBox(B.Half), Q);
 		for (const FHitResult& H : Hits)
 		{
 			if (!H.bBlockingHit) continue;
@@ -260,7 +286,7 @@ bool FSmvContactSolver::Depenetrate(UWorld* W, FVector& Pos, const FQuat& Rot, c
 			const FVector C = Pos + Rot.RotateVector(B.Center);
 			Hits.Reset();
 			// çok kısa süpürme: başlangıç çakışmasında motor MTD'yi (çıkış yönü + derinlik) hesaplar (karmaşık çarpışma dahil)
-			W->SweepMultiByChannel(Hits, C, C + FVector(0.0, 0.0, 0.1), Rot, S.Channel, FCollisionShape::MakeBox(B.Half), Q);
+			SmvPhysics::SweepBoth(W, Hits, C, C + FVector(0.0, 0.0, 0.1), Rot, S.Channel, FCollisionShape::MakeBox(B.Half), Q);
 			for (const FHitResult& H : Hits)
 			{
 				if (!H.bBlockingHit || !H.bStartPenetrating) continue;
@@ -439,7 +465,7 @@ void SmvPhysics::Scan(UWorld* W, const FVector& Origin, const FQuat& BodyRot, co
 	{
 		FHitResult H;
 		const FVector End = Origin + Dir * (MaxM * 100.0);
-		const bool bHit = W->LineTraceSingleByChannel(H, Origin, End, S.Channel, Q);
+		const bool bHit = SmvPhysics::LineBoth(W, H, Origin, End, S.Channel, Q);
 #if ENABLE_DRAW_DEBUG
 		if (bDraw) DrawDebugLine(W, Origin, bHit ? H.ImpactPoint : End, bHit ? FColor(255, 120, 0) : FColor(60, 160, 255), false, 1.f / S.SensorHz + 0.02f, 0, 0.8f);
 #endif
@@ -586,7 +612,7 @@ bool SmvPhysics::EvaluateSpot(UWorld* W, double X, double Y, double ZTop, double
 	auto Fail = [OutWhy](const FString& Why) { if (OutWhy) *OutWhy = Why; return false; };
 	if (!W) return Fail(TEXT("dünya yok"));
 	FHitResult H;
-	if (!W->LineTraceSingleByChannel(H, FVector(X, Y, ZTop), FVector(X, Y, ZBot), S.Channel, Q)) return Fail(TEXT("zemin yok"));
+	if (!SmvPhysics::LineBoth(W, H, FVector(X, Y, ZTop), FVector(X, Y, ZBot), S.Channel, Q)) return Fail(TEXT("zemin yok"));
 	if (H.ImpactNormal.Z < 0.95) return Fail(FString::Printf(TEXT("eğim %.0f°"), FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(H.ImpactNormal.Z, -1.0, 1.0)))));
 	const bool bLand = H.GetComponent() && H.GetComponent()->GetClass()->GetName().Contains(TEXT("Landscape"));
 	if (bRequireLandscape && !bLand) return Fail(FString::Printf(TEXT("arazi değil (%s)"), H.GetActor() ? *H.GetActor()->GetName() : TEXT("-")));
@@ -605,7 +631,7 @@ bool SmvPhysics::EvaluateSpot(UWorld* W, double X, double Y, double ZTop, double
 	for (const FVector2D& O : { FVector2D(2.0 * R, 0), FVector2D(-2.0 * R, 0), FVector2D(0, 2.0 * R), FVector2D(0, -2.0 * R) })
 	{
 		FHitResult H2;
-		if (!W->LineTraceSingleByChannel(H2, FVector(X + O.X, Y + O.Y, G.Z + 500.0), FVector(X + O.X, Y + O.Y, G.Z - 1000.0), S.Channel, Q)) return Fail(TEXT("kenar"));
+		if (!SmvPhysics::LineBoth(W, H2, FVector(X + O.X, Y + O.Y, G.Z + 500.0), FVector(X + O.X, Y + O.Y, G.Z - 1000.0), S.Channel, Q)) return Fail(TEXT("kenar"));
 		if (FMath::Abs(H2.ImpactPoint.Z - G.Z) > Tol) return Fail(TEXT("engebeli"));
 	}
 	OutZ = G.Z;
