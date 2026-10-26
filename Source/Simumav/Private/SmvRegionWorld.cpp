@@ -38,8 +38,9 @@ namespace
 		void Tri(int32 A, int32 B, int32 Cc, const FVector& Want)
 		{
 			const FVector Fn = FVector::CrossProduct(V[B] - V[A], V[Cc] - V[A]);
-			// ProceduralMesh: Cross(v1-v0, v2-v0) Want yönündeyse ön yüz o yöne bakar (BuildGroundDisk sözleşmesi: Cross.Z > 0 → yukarıdan görünür)
-			if (FVector::DotProduct(Fn, Want) >= 0) T.Append({ A, B, Cc }); else T.Append({ A, Cc, B });
+			// ProceduralMesh (UE sol el, saat yönü ön yüz): Cross(v1-v0, v2-v0) Want'ın TERSİNE bakmalı — duman 40403680994'te ters
+			// sarımla zemin / yollar yukarıdan görünmüyor, binalar içten dışa çiziliyordu
+			if (FVector::DotProduct(Fn, Want) <= 0) T.Append({ A, B, Cc }); else T.Append({ A, Cc, B });
 		}
 		bool IsEmpty() const { return V.Num() == 0; }
 	};

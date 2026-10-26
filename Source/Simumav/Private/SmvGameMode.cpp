@@ -2387,8 +2387,8 @@ void ASmvGameMode::BuildRimApron(const TArray<FVector>& InP, const TArray<FVecto
 		const int32 Gap = (Idx[k2] - Idx[k] + N) % N;
 		if (Gap < 1 || Gap > 2) continue;
 		const int32 a = Vi[k], b = Vi[k] + 1, c = Vi[k2], d = Vi[k2] + 1;
-		// yukarı bakan yüz (BuildGroundDisk sözleşmesi: Cross(v1-v0, v2-v0).Z > 0)
-		auto Tri = [&V, &T](int32 x, int32 y, int32 z) { if (FVector::CrossProduct(V[y] - V[x], V[z] - V[x]).Z >= 0) T.Append({ x, y, z }); else T.Append({ x, z, y }); };
+		// yukarı bakan yüz: UE ProceduralMesh'te Cross(v1-v0, v2-v0).Z < 0 (bölge dünyasında doğrulandı; ters sarımda etek görünmüyordu)
+		auto Tri = [&V, &T](int32 x, int32 y, int32 z) { if (FVector::CrossProduct(V[y] - V[x], V[z] - V[x]).Z <= 0) T.Append({ x, y, z }); else T.Append({ x, z, y }); };
 		Tri(a, b, c); Tri(b, d, c);
 	}
 	if (T.Num() == 0) return;
