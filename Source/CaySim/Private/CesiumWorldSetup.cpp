@@ -437,6 +437,10 @@ ACesium3DTileset* ACaySimWorldSetup::SpawnTiles(ACesiumGeoreference* Geo)
 	if (CreditSys.IsValid()) T->SetCreditSystem(TSoftObjectPtr<ACesiumCreditSystem>(CreditSys.Get()));
 	if (Geo) T->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
 	T->FinishSpawning(FTransform::Identity);
+	// görüş dışı karolar da kaba LOD'da (SSE 64) yüklü kalır: 3440×1440'ta ve hızlı dönüşte kenarlarda mavi delik / boşluk kalıyordu
+	T->EnableFrustumCulling = false;
+	T->EnforceCulledScreenSpaceError = true;
+	T->CulledScreenSpaceError = 64.0;
 	return T;
 }
 #endif
