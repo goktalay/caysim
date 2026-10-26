@@ -427,7 +427,10 @@ private:
 	FSmvRegionDem Dem;
 	TArray<double> SA, SB;   // örnek düşey doğru parçaları (ECEF, 3'er)
 	TArray<double> Best;     // örnek başına en ince içerikli karo boyu (m)
-	struct FGq { FString Url; TArray<int32> S; };
+	TArray<double> BestGe;   // örnek başına en küçük içerik geometricError (m) — 3B / 2,5B ayrımı için ölçüm
+	TArray<int32> BestDepth; // örnek başına en derin içerik düzeyi
+	struct FGq { FString Url; TArray<int32> S; int32 Depth = 0; };
+	int32 GDepthBase = 0;
 	TArray<FGq> GQueue;
 	int32 GInFlight = 0, GReq = 0, GErr = 0;
 	double GT0 = 0;
@@ -455,7 +458,7 @@ private:
 			SmvRegion::GeodeticToEcef(Lo, La, H - 150.0, A);
 			SmvRegion::GeodeticToEcef(Lo, La, H + 250.0, B);
 			SA.Append(A, 3); SB.Append(B, 3);
-			Best.Add(1e12);
+			Best.Add(1e12); BestGe.Add(1e12); BestDepth.Add(0);
 		}
 		GT0 = FPlatformTime::Seconds();
 		TWeakPtr<FSmvRegionJob> Wk = AsShared();
@@ -496,14 +499,15 @@ private:
 			TWeakPtr<FSmvRegionJob> Wk = AsShared();
 			const FString Url = Q.Url;
 			const TArray<int32> Smp = Q.S;
-			HttpCall(Url, TEXT("GET"), FString(), GHdr, 25.f, [Wk, Url, Smp](int32 Code, const TArray<uint8>& Data)
+			const int32 Dq = Q.Depth;
+			HttpCall(Url, TEXT("GET"), FString(), GHdr, 25.f, [Wk, Url, Smp, Dq](int32 Code, const TArray<uint8>& Data)
 			{
 				TSharedPtr<FSmvRegionJob> J = Wk.Pin();
 				if (!J.IsValid() || J->Cancelled()) return;
 				--J->GInFlight;
 				TSharedPtr<FJsonObject> O = Code == 200 ? SmvJson::Parse(Utf8(Data)) : nullptr;
 				const TSharedPtr<FJsonObject> Root = SmvJson::Obj(O, TEXT("root"));
-				if (Root.IsValid()) J->VisitTile(Root, Url, Smp, 0);
+				if (Root.IsValid()) { J->GDepthBase = Dq; J->VisitTile(Root, Url, Smp, 0); }
 				else { ++J->GErr; if (J->GErr <= 4) UE_LOG(LogSimumav, Warning, TEXT("Google 3B denetimi: düğüm HTTP %d"), Code); }
 				J->UpdateProgress();
 				J->PumpGoogle();
@@ -569,10 +573,11 @@ private:
 			if (Path.FindChar(TEXT('?'), Q)) Path = Path.Left(Q);
 			if (Path.EndsWith(TEXT(".json")))
 			{
-				GQueue.Add({ ResolveUrl(Base, Uri), Hit });
+				GQueue.Add({ ResolveUrl(Base, Uri), Hit, GDepthBase + Depth + 1 });
 				return;
 			}
-			for (int32 s : Hit) Best[s] = FMath::Min(Best[s], Size);
+			const double Ge = SmvJson::Num(T, TEXT("geometricError"), 1e12);
+			for (int32 s : Hit) { Best[s] = FMath::Min(Best[s], Size); BestGe[s] = FMath::Min(BestGe[s], Ge); BestDepth[s] = FMath::Max(BestDepth[s], GDepthBase + Depth); }
 		}
 		TArray<int32> Active;
 		for (int32 s : Hit) if (Best[s] > GTargetM) Active.Add(s);
@@ -597,6 +602,14 @@ private:
 		}
 		Got.Sort();
 		const int32 N = FMath::Max(1, Best.Num());
+		{
+			TArray<double> Ge; TArray<int32> Dp;
+			for (int32 i = 0; i < Best.Num(); ++i) if (Best[i] < 1e11) { Ge.Add(BestGe[i]); Dp.Add(BestDepth[i]); }
+			Ge.Sort(); Dp.Sort();
+			if (Ge.Num())
+				SMV_KLOG(TEXT("Bölge %s Google 3B ölçüm: geometricError en küçük %.2f / ortanca %.2f / en büyük %.2f m · derinlik %d / %d / %d"), *Info.Id,
+					Ge[0], Ge[Ge.Num() / 2], Ge.Last(), Dp[0], Dp[Dp.Num() / 2], Dp.Last());
+		}
 		Info.bGoogleChecked = GReq > 0 && Best.Num() > 0 && GErr < GReq;
 		Info.GoogleAt = FDateTime::UtcNow();
 		Info.GoogleFull = (float)NFull / N;
@@ -618,7 +631,8 @@ private:
 	void PumpOsm()
 	{
 		if (Cancelled()) return;
-		while (OsmInFlight < 2 && OsmQ.Num())
+		// Overpass ana sunucusu yoğunlukta 502 / 504 / 429 veriyor (duman 40398993631): tek sorgu aynı anda
+		while (OsmInFlight < 1 && OsmQ.Num())
 		{
 			const FOsmT T = OsmQ[0];
 			OsmQ.RemoveAt(0);
@@ -658,11 +672,11 @@ private:
 				{
 					--J->OsmInFlight;
 					UE_LOG(LogSimumav, Warning, TEXT("Bölge OSM karosu %d/%d: HTTP %d (deneme %d)"), T.X, T.Y, Code, T.Tries + 1);
-					if (T.Tries < 5)
+					if (T.Tries < 9)
 					{
-						// yoğunluk (429 / 502 / 504): bekle + yeniden dene (sıradaki sunucu)
+						// yoğunluk (429 / 502 / 504): bekle + yeniden dene (sıradaki sunucu); bekleme 10 → 60 sn
 						TWeakPtr<FSmvRegionJob> Wk2 = J;
-						After(Code == 429 ? 30.f : 5.f + 8.f * T.Tries, [Wk2, T]() { if (TSharedPtr<FSmvRegionJob> J2 = Wk2.Pin()) { J2->OsmQ.Add({ T.X, T.Y, T.Tries + 1 }); J2->PumpOsm(); } });
+						After(Code == 429 ? 45.f : FMath::Min(60.f, 10.f + 10.f * T.Tries), [Wk2, T]() { if (TSharedPtr<FSmvRegionJob> J2 = Wk2.Pin()) { J2->OsmQ.Add({ T.X, T.Y, T.Tries + 1 }); J2->PumpOsm(); } });
 					}
 					else { ++J->OsmFail; ++J->OsmDone; J->UpdateProgress(); J->PumpOsm(); }
 					return;

@@ -162,6 +162,8 @@ private:
 	int32 SmokeFl = 0, SmokeSub = 0, SmokeRetries = 0;
 	/** bölge uçuşu: paket hazır karesi (Uçuş akışı bölge kartı) alındı mı; uçuş için değiştirilen Gerçek dünya tercihi */
 	bool bRegionShot = false;
+	int32 SmokeRegionShot = 0;
+	double SmokeRegT0 = 0;
 	FString SmokePrevRealWorld;
 	double SmokeDeadline = 0, SmokeT1 = 0;
 	void TickSmoke();

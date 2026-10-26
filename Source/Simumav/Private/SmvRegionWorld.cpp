@@ -57,9 +57,20 @@ namespace
 
 ASmvRegionWorld::ASmvRegionWorld()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
+}
+
+void ASmvRegionWorld::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	FollowT += DeltaSeconds;
+	if (FollowT < 0.5f || !ToUe) return;
+	FollowT = 0;
+	const FVector Now = ToUe(0, 0, CenterMsl);
+	if (!Now.Equals(GetActorLocation(), 5.0)) SetActorLocation(Now);
 }
 
 void ASmvRegionWorld::Destroyed()
@@ -131,6 +142,26 @@ bool ASmvRegionWorld::Build(const FSmvRegionInfo& Region, const FSmvTrack& Track
 	SMV_KLOG(TEXT("Bölge dünyası %s: arazi adımı %.1f m, %d bina, %d yol, %d su, %d ağaç — %.2f sn (parkur noktası paket merkezine %.0f m)"), *Region.Id, StepM,
 		NBuild, NRoad, NWater, NTree, FPlatformTime::Seconds() - T0, FMath::Sqrt(TrE * TrE + TrN * TrN));
 	return true;
+}
+
+bool ASmvRegionWorld::BuildCollisionOnly(const FSmvRegionInfo& Region, const FSmvTrack& Track, AActor* GeoActor)
+{
+	ICaySimGeoTransform* Geo = Cast<ICaySimGeoTransform>(GeoActor);
+	if (!Geo || !Dem.Load(Region)) return false;
+	const double Lat0 = Region.Lat, Lon0 = Region.Lon;
+	ToUe = [Geo, Lat0, Lon0](double E, double N, double Hmsl)
+	{
+		double La, Lo;
+		SmvRegion::EnuToLatLon(Lat0, Lon0, E, N, La, Lo);
+		return Geo->GeoToUnreal(Lo, La, Hmsl);
+	};
+	Origin = ToUe(0, 0, Region.CenterMsl);
+	CenterMsl = Region.CenterMsl;
+	SetActorLocation(Origin);
+	BuildOsm(Track, true);
+	SetActorTickEnabled(true);
+	SMV_KLOG(TEXT("Bölge %s: Google akışı altında görünmez bina çarpışması — %d bina"), *Region.Id, NBuild);
+	return NBuild > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +294,7 @@ void ASmvRegionWorld::BuildHorizon(double InnerM, double OuterM)
 // ---------------------------------------------------------------------------
 // OSM: binalar, yollar, su, ağaçlar
 // ---------------------------------------------------------------------------
-void ASmvRegionWorld::BuildOsm(const FSmvTrack& Track)
+void ASmvRegionWorld::BuildOsm(const FSmvTrack& Track, bool bCollisionOnly)
 {
 	const FSmvRegionInfo& R = Dem.Info();
 	double HomeE, HomeN;
@@ -391,7 +422,9 @@ void ASmvRegionWorld::BuildOsm(const FSmvTrack& Track)
 		P->CreateMeshSection_LinearColor(1, Rf.V, Rf.T, Rf.N, Rf.Uv, Rf.C, Rf.Tg, true);
 		if (WallMid) P->SetMaterial(0, WallMid);
 		if (RoofMid) P->SetMaterial(1, RoofMid);
+		if (bCollisionOnly) { P->SetVisibility(false); P->SetHiddenInGame(true); P->SetCastShadow(false); }
 	}
+	if (bCollisionOnly) return;   // yollar / su / ağaçlar Google karolarında var
 
 	// ---- yollar: araziye serilen şeritler (çarpışmasız); bölüm 0 asfalt, 1 kaldırım / yaya, 2 toprak ----
 	{

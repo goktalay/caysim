@@ -383,6 +383,14 @@ void ASmvGameMode::BuildScene()
 		if (RegionWorld) PushEvent(FSmvI18n::T(TEXT("region.ev_offline")).ToString(), 1);
 		bRegionWorld = RegionWorld != nullptr;
 	}
+	// Google 3B akışı + bölge paketi: OSM binaları görünmez çarpışma gövdesi olarak (Türkiye'de Google karoları 2,5B — bina ağı yok)
+	if (!bFlat && !bRegionWorld && RegionPack && WorldSetup->GetSource() == ECaySimWorldSource::GooglePhotoreal)
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		RegionWorld = W->SpawnActor<ASmvRegionWorld>(ASmvRegionWorld::StaticClass(), FTransform::Identity, Sp);
+		if (RegionWorld && !RegionWorld->BuildCollisionOnly(*RegionPack, Req.Track, WorldSetup)) { RegionWorld->Destroy(); RegionWorld = nullptr; }
+	}
 	if (!bFab && bFlat && !bRegionWorld)
 	{
 		Terrain = W->SpawnActor<ASmvProcTerrain>();

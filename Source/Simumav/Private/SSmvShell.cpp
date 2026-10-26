@@ -5080,7 +5080,7 @@ void SSmvShell::TickSmoke()
 			const FSmvTrack& Tr = Flow->Draft.Track;
 			if (!Rg.FindPack(Tr.Lat, Tr.Lon, Tr.RadiusM))
 			{
-				static double RegT0 = 0, RegLog = 0;
+				double& RegT0 = SmokeRegT0; static double RegLog = 0;
 				if (!Rg.IsRunningFor(Tr.Lat, Tr.Lon, Tr.RadiusM))
 				{
 					if (RegT0 > 0 && Rg.GetState() != ESmvRegionState::Running)
@@ -5093,7 +5093,7 @@ void SSmvShell::TickSmoke()
 					Rg.Start(Tr.Lat, Tr.Lon, Tr.RadiusM, FSmvRegions::EffectiveToken(Data() ? Data()->Settings().CesiumToken : FString()), true);
 				}
 				if (Now - RegLog > 10.0) { RegLog = Now; SMV_KLOG(TEXT("SMOKE region %s: %%%.0f %s"), Fx.Code, Rg.GetProgress() * 100.f, *Rg.GetStatus()); }
-				if (Now - RegT0 > 900.0) { SMV_KLOG(TEXT("SMOKE region ZAMAN AŞIMI %s"), Fx.Code); Rg.Cancel(); RegT0 = 0; SmokeSub = 99; SmokeAt = Now + 0.5; return; }
+				if (Now - RegT0 > 1800.0) { SMV_KLOG(TEXT("SMOKE region ZAMAN AŞIMI %s"), Fx.Code); Rg.Cancel(); RegT0 = 0; SmokeSub = 99; SmokeAt = Now + 0.5; return; }
 				SmokeAt = Now + 1.0;
 				return;
 			}
@@ -5101,9 +5101,11 @@ void SSmvShell::TickSmoke()
 			SMV_KLOG(TEXT("SMOKE region ready %s: %s, %d bina, %d yol, %d alan, %d ağaç, %.1f MB, merkez %.1f m; Google %s tam %%%.0f kapsama %%%.0f ortanca %.0f m"), Fx.Code, *Pk->Id,
 				Pk->Buildings, Pk->Roads, Pk->Areas, Pk->Trees, Pk->Bytes / 1048576.0, Pk->CenterMsl, Pk->bGoogleChecked ? TEXT("denetlendi") : TEXT("yok"),
 				Pk->GoogleFull * 100.f, Pk->GoogleAny * 100.f, Pk->GoogleMedianM);
-			if (!bRegionShot) { bRegionShot = true; Flow->FlyStep = 2; Flow->ParkurCat = TEXT("real"); Flow->SetScreen(ESmvScreen::FlyFlow); Refresh(); SmokeAt = Now + 2.0; return; }
-			bRegionShot = false;
-			Shot(Base + TEXT("_region"));
+			SmokeRegT0 = 0;
+			// Uçuş akışı bölge kartı karesi: ekran aç → (2 sn) kare → (1 sn) uçuşu başlat (kare sonraki karede çizilir)
+			if (SmokeRegionShot == 0) { SmokeRegionShot = 1; bRegionShot = true; Flow->FlyStep = 2; Flow->ParkurCat = TEXT("real"); Flow->SetScreen(ESmvScreen::FlyFlow); Refresh(); SmokeAt = Now + 2.0; return; }
+			if (SmokeRegionShot == 1) { SmokeRegionShot = 2; Shot(Base + TEXT("_region")); SmokeAt = Now + 1.0; return; }
+			SmokeRegionShot = 0; bRegionShot = false;
 		}
 		SMV_KLOG(TEXT("SMOKE flight %s map=%s tod=%s wx=%s"), Fx.Code, *Flow->Draft.Track.WorldMode, Fx.Tod, Fx.Wx);
 		StartFromWizard();

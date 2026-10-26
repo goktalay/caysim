@@ -24,11 +24,15 @@ public:
 	ASmvRegionWorld();
 	/** Paketi yükleyip sahneyi kurar; false → paket okunamadı (arazi yok). GeoActor: dünya kurulumu (ICaySimGeoTransform). */
 	bool Build(const FSmvRegionInfo& Region, const FSmvTrack& Track, double GroundMsl, AActor* GeoActor);
+	/** Yalnız GÖRÜNMEZ bina çarpışma gövdeleri (Google 3B akışında: Türkiye'de karolar 2,5B — bina ağı yok, dron binanın içinden geçiyordu) */
+	bool BuildCollisionOnly(const FSmvRegionInfo& Region, const FSmvTrack& Track, AActor* GeoActor);
 	/** Yerel ENU (m) → arazi MSL (m) */
 	double HeightMsl(double E, double N) const { return Dem.HeightEnu(E, N); }
 	/** Hava: ıslaklık / kar (arazi malzemesi) */
 	void SetSurfaceWeather(float Wetness, float Snow);
 	virtual void Destroyed() override;
+	/** Google akışında yer ofseti ölçülüp karolar kaydırılınca görünmez binalar da aynı dönüşüme taşınır */
+	virtual void Tick(float DeltaSeconds) override;
 	int32 NumBuildings() const { return NBuild; }
 
 protected:
@@ -43,9 +47,10 @@ private:
 	FVector Origin = FVector::ZeroVector;
 	TFunction<FVector(double, double, double)> ToUe;
 	int32 NBuild = 0, NRoad = 0, NTree = 0, NWater = 0;
+	double CenterMsl = 0, FollowT = 0;
 	UProceduralMeshComponent* NewPart(const TCHAR* Name, bool bCollide);
 	void BuildTerrain(double HalfM, double StepM);
 	void BuildHorizon(double InnerM, double OuterM);
-	void BuildOsm(const FSmvTrack& Track);
+	void BuildOsm(const FSmvTrack& Track, bool bCollisionOnly = false);
 	UMaterialInterface* TerrainMaterial();
 };
