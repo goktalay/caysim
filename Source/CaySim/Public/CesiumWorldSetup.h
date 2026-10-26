@@ -106,7 +106,7 @@ public:
 	/** Google Photorealistic 3D Tiles ion varlık kimliği (ion hesabı üzerinden; HEPGO anahtarı gerekmez). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) int64 GoogleIonAssetId = 2275207;
 	/** Google 3B bu sürede hiç karo yüklemezse World Terrain + Bing'e düşülür (sn). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double GoogleFallbackS = 25.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double GoogleFallbackS = 40.0;
 	/** Cesium karo seçim istatistikleri günlüğe (tanı; komut satırı -CesiumStats) */
 	bool bLogTileStats = false;
 	/** Google 3B karolarında fizik ağı — binalar gerçekten çarpışır (kapalıyken çarpışma yalnız gizli World Terrain'den: binaların içinden geçilirdi) */

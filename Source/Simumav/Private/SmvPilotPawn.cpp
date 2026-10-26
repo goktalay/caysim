@@ -714,6 +714,16 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 		CamPos = P;
 		CamRot = FMath::Lerp(CamRot, (Pos - P).Rotation(), 1.f - FMath::Clamp((U - 0.85f) / 0.15f, 0.f, 1.f));
 	}
+	// takip kamerası duvarın / binanın içine girmesin: dron gövdesinden kameraya küre süpürmesi, isabette yüzeyin 25 cm önü
+	// (kamera binaya gömülünce dron "içinden geçti" gibi görünüyordu; duman f11 _ram3 karesi)
+	if (Mode == ESmvCamMode::Chase && IntroLeft <= 0.f && GetWorld() && Target.IsValid())
+	{
+		FCollisionQueryParams Cq(SCENE_QUERY_STAT(SmvCamProbe), false, this);
+		Cq.AddIgnoredActor(Target.Get());
+		FHitResult Ch;
+		if (GetWorld()->SweepSingleByChannel(Ch, Pos, CamPos, FQuat::Identity, ECC_Camera, FCollisionShape::MakeSphere(20.f), Cq) && Ch.bBlockingHit && !Ch.bStartPenetrating)
+			CamPos = Ch.Location + Ch.ImpactNormal * 5.f;
+	}
 	SetActorLocationAndRotation(CamPos, CamRot);
 	// sarsıntı
 	if (ShakeLeft > 0.f)
