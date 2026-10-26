@@ -5090,7 +5090,7 @@ void SSmvShell::TickSmoke()
 					}
 					RegT0 = Now; RegLog = 0;
 					SMV_KLOG(TEXT("SMOKE region start %s: %.5f, %.5f, %.0f m"), Fx.Code, Tr.Lat, Tr.Lon, Tr.RadiusM);
-					Rg.Start(Tr.Lat, Tr.Lon, Tr.RadiusM, Data() ? Data()->Settings().CesiumToken : FString(), true);
+					Rg.Start(Tr.Lat, Tr.Lon, Tr.RadiusM, FSmvRegions::EffectiveToken(Data() ? Data()->Settings().CesiumToken : FString()), true);
 				}
 				if (Now - RegLog > 10.0) { RegLog = Now; SMV_KLOG(TEXT("SMOKE region %s: %%%.0f %s"), Fx.Code, Rg.GetProgress() * 100.f, *Rg.GetStatus()); }
 				if (Now - RegT0 > 900.0) { SMV_KLOG(TEXT("SMOKE region ZAMAN AŞIMI %s"), Fx.Code); Rg.Cancel(); RegT0 = 0; SmokeSub = 99; SmokeAt = Now + 0.5; return; }

@@ -2109,7 +2109,7 @@ TSharedRef<SWidget> SSmvShell::RegionCard(FSmvTrack* Tp, bool bCompact)
 	{
 		USmvDataService* D = Self->Data();
 		const FString Tok = D ? D->Settings().CesiumToken : FString();
-		FSmvRegions::Get().Start(Tp->Lat, Tp->Lon, Tp->RadiusM, Tok, true);
+		FSmvRegions::Get().Start(Tp->Lat, Tp->Lon, Tp->RadiusM, FSmvRegions::EffectiveToken(Tok), true);
 		Self->Toast(FSmvI18n::T(TEXT("region.started")).ToString(), 6);
 	};
 	TSharedRef<SHorizontalBox> Btns = SNew(SHorizontalBox);

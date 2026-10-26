@@ -54,6 +54,8 @@ public:
 	/** Kenar payı (m): arazi ağının parkur dairesinin dışında kalan kısmı */
 	static constexpr double MarginM = 600.0;
 	static FString RootDir();
+	/** Google denetimi için Cesium ion belirteci: Ayarlar, yoksa pakete gömülü */
+	static FString EffectiveToken(const FString& SettingsToken);
 	static FString IdFor(double Lat, double Lon, double RadiusM);
 
 	/** Diskteki bölgeler (ilk çağrıda okunur) */

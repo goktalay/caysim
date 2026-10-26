@@ -272,7 +272,7 @@ void ASmvRegionWorld::BuildOsm(const FSmvTrack& Track)
 	{
 		TArray<FString> Files;
 		const FString Dir = R.Dir() / TEXT("osm");
-		IFileManager::Get().FindFiles(Files, *(Dir / TEXT("*.json")), true, false);
+		IFileManager::Get().FindFiles(Files, *(Dir / TEXT("15_*.json")), true, false);   // z15 karoları (eski z14 denemeleri yok sayılır)
 		for (const FString& F : Files)
 		{
 			FString Txt;

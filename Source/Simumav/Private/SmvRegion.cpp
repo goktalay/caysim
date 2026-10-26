@@ -4,6 +4,7 @@
 #include "SimumavTypes.h"
 #include "SmvI18n.h"
 #include "SmvRegionCore.h"
+#include "CesiumWorldSetup.h"
 #include "Async/Async.h"
 #include "Containers/Ticker.h"
 #include "Dom/JsonObject.h"
@@ -25,7 +26,11 @@ namespace
 {
 	const TCHAR* GUserAgent = TEXT("Simumav/1.0 (+https://simumav.com; bolge haritasi)");
 	// Overpass: ana sunucu + yansı (yoğunlukta 429 / 504 → sıradaki)
-	const TCHAR* GOverpass[] = { TEXT("https://overpass-api.de/api/interpreter"), TEXT("https://overpass.kumi.systems/api/interpreter") };
+	// Overpass: ana sunucu iki deneme, sonra yansılar (ölçüm 2026-10-26: overpass-api.de ilk bayt ~50 sn / z14 Taksim karosu; kumi ve
+	// private.coffee 180 sn'de yanıtsız, mail.ru 504) — sorgular z15 karoya bölünür
+	const TCHAR* GOverpass[] = { TEXT("https://overpass-api.de/api/interpreter"), TEXT("https://overpass-api.de/api/interpreter"),
+		TEXT("https://overpass.private.coffee/api/interpreter"), TEXT("https://overpass-api.de/api/interpreter"), TEXT("https://overpass.kumi.systems/api/interpreter") };
+	constexpr int32 GOsmZ = 15;
 	constexpr int32 GDemZ = 14, GFarZ = 10;
 	constexpr double GFarRadiusM = 30000.0;
 	constexpr int64 GGoogleIonAsset = 2275207;
@@ -167,7 +172,9 @@ namespace
 			}
 			const FString Bld = SmvJson::Str(Tg, TEXT("building"));
 			const FString Hw = SmvJson::Str(Tg, TEXT("highway"));
-			const double Layer = SmvRegion::ParseNumber(TCHAR_TO_UTF8(*SmvJson::Str(Tg, TEXT("layer"))));
+			// katman yalnız etiket varsa (ParseNumber boşta −1 döner: etiketsiz bütün yollar "yeraltı" sayılıp atlanıyordu)
+			const FString LayerS = SmvJson::Str(Tg, TEXT("layer"));
+			const double Layer = LayerS.IsEmpty() ? 0.0 : SmvRegion::ParseNumber(TCHAR_TO_UTF8(*LayerS));
 			if (!Bld.IsEmpty() && Bld != TEXT("no"))
 			{
 				if (SmvJson::Str(Tg, TEXT("location")) == TEXT("underground") || It.P.Num() < 4) continue;
@@ -317,10 +324,10 @@ public:
 		AddRange(GFarZ, GFarRadiusM, false);
 		DemTotal = DemQ.Num();
 		int32 X0, Y0, X1, Y1;
-		SmvRegion::TileRange(Info.Lat, Info.Lon, Info.RadiusM, GDemZ, X0, Y0, X1, Y1);
+		SmvRegion::TileRange(Info.Lat, Info.Lon, Info.RadiusM, GOsmZ, X0, Y0, X1, Y1);
 		for (int32 Y = Y0; Y <= Y1; ++Y)
 			for (int32 X = X0; X <= X1; ++X)
-				if (TileDistM(GDemZ, X, Y) <= Info.RadiusM) OsmQ.Add({ X, Y, 0 });
+				if (TileDistM(GOsmZ, X, Y) <= Info.RadiusM) OsmQ.Add({ X, Y, 0 });
 		OsmTotal = OsmQ.Num();
 		SMV_KLOG(TEXT("Bölge %s: %.5f, %.5f, yarıçap %.0f m — arazi %d + %d karo, OSM %d karo, Google denetimi %s"), *Info.Id, Info.Lat, Info.Lon, Info.RadiusM,
 			N14, DemTotal - N14, OsmTotal, bGoogle && !Token.IsEmpty() ? TEXT("evet") : TEXT("hayır"));
@@ -615,7 +622,7 @@ private:
 		{
 			const FOsmT T = OsmQ[0];
 			OsmQ.RemoveAt(0);
-			const FString File = Info.Dir() / FString::Printf(TEXT("osm/%d_%d.json"), T.X, T.Y);
+			const FString File = Info.Dir() / FString::Printf(TEXT("osm/%d_%d_%d.json"), GOsmZ, T.X, T.Y);
 			if (T.Tries == 0 && IFileManager::Get().FileSize(*File) > 8)
 			{
 				// önceki yarım işten: kimlikler ve sayılar okunur (tekilleştirme sürer)
@@ -634,7 +641,7 @@ private:
 			}
 			++OsmInFlight;
 			double S, W, N, E;
-			SmvRegion::TileBounds(GDemZ, T.X, T.Y, S, W, N, E);
+			SmvRegion::TileBounds(GOsmZ, T.X, T.Y, S, W, N, E);
 			const FString Q = FString::Printf(TEXT("[out:json][timeout:150][bbox:%.6f,%.6f,%.6f,%.6f];(way[\"building\"];way[\"highway\"];")
 				TEXT("way[\"natural\"~\"^(wood|water|scrub|grassland|heath|beach|sand)$\"];way[\"landuse\"~\"^(forest|grass|meadow|recreation_ground|village_green|cemetery|farmland|orchard|vineyard|allotments|basin|reservoir)$\"];")
 				TEXT("way[\"leisure\"~\"^(park|garden|pitch|golf_course)$\"];way[\"waterway\"=\"riverbank\"];node[\"natural\"=\"tree\"];);out geom qt;"), S, W, N, E);
@@ -651,11 +658,11 @@ private:
 				{
 					--J->OsmInFlight;
 					UE_LOG(LogSimumav, Warning, TEXT("Bölge OSM karosu %d/%d: HTTP %d (deneme %d)"), T.X, T.Y, Code, T.Tries + 1);
-					if (T.Tries < 4)
+					if (T.Tries < 5)
 					{
-						// yoğunluk: bekle + yansıyla yeniden dene
+						// yoğunluk (429 / 502 / 504): bekle + yeniden dene (sıradaki sunucu)
 						TWeakPtr<FSmvRegionJob> Wk2 = J;
-						After(4.f + 6.f * T.Tries, [Wk2, T]() { if (TSharedPtr<FSmvRegionJob> J2 = Wk2.Pin()) { J2->OsmQ.Add({ T.X, T.Y, T.Tries + 1 }); J2->PumpOsm(); } });
+						After(Code == 429 ? 30.f : 5.f + 8.f * T.Tries, [Wk2, T]() { if (TSharedPtr<FSmvRegionJob> J2 = Wk2.Pin()) { J2->OsmQ.Add({ T.X, T.Y, T.Tries + 1 }); J2->PumpOsm(); } });
 					}
 					else { ++J->OsmFail; ++J->OsmDone; J->UpdateProgress(); J->PumpOsm(); }
 					return;
@@ -737,6 +744,12 @@ FSmvRegions& FSmvRegions::Get()
 {
 	static FSmvRegions R;
 	return R;
+}
+
+FString FSmvRegions::EffectiveToken(const FString& SettingsToken)
+{
+	// Ayarlar'daki belirteç, yoksa pakete gömülü olan ([/Script/CaySim.CaySimWorldSetup] CesiumIonToken; uçuş dünyasıyla aynı kural)
+	return SettingsToken.IsEmpty() ? GetDefault<ACaySimWorldSetup>()->CesiumIonToken : SettingsToken;
 }
 
 FString FSmvRegions::RootDir() { return FPaths::ProjectSavedDir() / TEXT("Simumav") / TEXT("Regions"); }
