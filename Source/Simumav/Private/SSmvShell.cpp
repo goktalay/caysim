@@ -5023,6 +5023,13 @@ void SSmvShell::TickSmoke()
 			Flow->Draft.Track.ParkurKind = TEXT("real");
 			Flow->Draft.Track.WorldMode = TEXT("google3d");
 			Flow->Draft.Track.Lat = 41.0369; Flow->Draft.Track.Lon = 28.9850; Flow->Draft.Track.GroundMsl = 80;
+			// -SmvSmokeG3d=enlem,boylam,zeminMSL: başka bir Google 3B konumu (kapsama karşılaştırması)
+			FString G3;
+			if (FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeG3d="), G3, false))
+			{
+				TArray<FString> Pp; G3.ParseIntoArray(Pp, TEXT(","), true);
+				if (Pp.Num() >= 3) { Flow->Draft.Track.Lat = FCString::Atod(*Pp[0]); Flow->Draft.Track.Lon = FCString::Atod(*Pp[1]); Flow->Draft.Track.GroundMsl = FCString::Atod(*Pp[2]); Flow->Draft.Track.Name = G3; }
+			}
 			Flow->Draft.Track.RadiusM = 600;
 		}
 		else if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Fx.Map)) Flow->Draft.Track = FSmvFabContent::MakeTrack(*M);
