@@ -316,7 +316,11 @@ void ASmvGameMode::BuildScene()
 		bRealSurround = true;
 		// harita zemini (kalkış) = Unreal Z 0 = ev MSL; yalnız gerçek dünya haritasında merkez yüzeyi ölçülür
 		// Şehir + Google 3B: kodla kurulan blok şehir yerine gerçek şehir dokusu (Ankara Kızılay; yalnız Google karoları, Fab bloğu kurulmaz)
-		bGoogleCity = FabDef->Kind == ESmvMapKind::ProcCity && Src == ECaySimWorldSource::GooglePhotoreal;
+		// VARSAYILAN KAPALI: Türkiye şehirlerinde (Kızılay, Taksim, Levent) Google karoları 2,5B — 3B bina ağı yok, 10 m'de 72 yönde 0 isabet;
+		// Manhattan'da gerçek 3B (çarpma testi geçti). Blok şehir Google çevresinin içinde kalır. [/Script/Simumav.SmvGameMode] GoogleCity=True ile açılır.
+		bool bGoogleCityCfg = false;
+		if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvGameMode"), TEXT("GoogleCity"), bGoogleCityCfg, GGameIni);
+		bGoogleCity = bGoogleCityCfg && FabDef->Kind == ESmvMapKind::ProcCity && Src == ECaySimWorldSource::GooglePhotoreal;
 		if (!FabDef->bRealOnly && !bGoogleCity) WorldSetup->SetFixedGroundOffset(WorldSetup->GeoidOffsetM);
 	}
 	else bGoogleCity = false;
