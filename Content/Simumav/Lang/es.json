@@ -824,6 +824,7 @@
  "gmode.spraying": "Fumigación de campo",
  "gmode.spraying_d": "Fumiga todo el campo bajo y a velocidad constante",
  "gmode.tour": "Recorrido del mapa",
+ "gpu.safe_mode": "El controlador gráfico falló en la sesión anterior (GPU device removed): modo gráfico seguro {n} activado; cálculo asíncrono y trazado de rayos por hardware desactivados. Se recomienda actualizar el controlador.",
  "gpws.bank_copter": "Umbral de alabeo (multirrotor)",
  "gpws.bank_plane": "Umbral de alabeo (avión)",
  "gpws.c_BANK_ANGLE": "ALABEO",

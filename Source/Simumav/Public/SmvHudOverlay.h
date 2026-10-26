@@ -25,6 +25,8 @@ struct FSmvHudState
 	bool bRace = false; FString RaceTitle; FString RaceLine1; FString RaceLine2; TArray<FString> Standings;
 	bool bDogfight = false; float HoldFrac = 0; bool bInCone = false; FString DfLine;
 	FString Countdown;         // "3", "2", "1", "BAŞLA!"
+	// fırlatma (web launchHud / handHud): büyük geri sayım ("3", "2", "1", "AT!") ve yöntem satırı (rampa açısı, araç hızı / bırakma hızı …)
+	FString LaunchBig; FString LaunchLine;
 	// hedef kilidi
 	bool bTargetOnScreen = false; FVector2D TargetPos = FVector2D::ZeroVector; bool bLocked = false; FString TargetLabel;
 	// olay şeridi (en yeni sonda)

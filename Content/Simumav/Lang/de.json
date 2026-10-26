@@ -824,6 +824,7 @@
  "gmode.spraying": "Feldsprühen",
  "gmode.spraying_d": "Besprühe das ganze Feld tief und mit gleichmäßigem Tempo",
  "gmode.tour": "Kartentour",
+ "gpu.safe_mode": "In der letzten Sitzung ist der Grafiktreiber abgestürzt (GPU device removed) — sicherer Grafikmodus {n} aktiv: Async Compute und Hardware-Raytracing aus. Treiber-Update empfohlen.",
  "gpws.bank_copter": "Kopter-Querneigungsgrenze",
  "gpws.bank_plane": "Flugzeug-Querneigungsgrenze",
  "gpws.c_BANK_ANGLE": "QUERNEIGUNG",

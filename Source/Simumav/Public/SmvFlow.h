@@ -228,6 +228,8 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Simumav") FSmvScreenChanged OnScreenChanged;
 	UPROPERTY(BlueprintAssignable, Category = "Simumav") FSmvToast OnToast;
 	void Toast(const FString& Text, int32 Severity = 6) { OnToast.Broadcast(Text, Severity); }
+	/** Açılışta bir kez gösterilecek bildirim (ör. GPU çökmesi sonrası güvenli grafik kipi; menü açılınca SSmvShell gösterir) */
+	FString StartupNotice;
 
 	USimumavClient* Client() const { return ClientObj; }
 	USmvDataService* Data() const { return DataObj; }

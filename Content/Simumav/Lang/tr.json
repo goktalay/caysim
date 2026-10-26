@@ -824,6 +824,7 @@
  "gmode.spraying": "Tarla ilaçlama",
  "gmode.spraying_d": "Tarlayı alçak ve sabit hızla tamamen ilaçla",
  "gmode.tour": "Harita turu",
+ "gpu.safe_mode": "Önceki oturumda ekran kartı sürücüsü çöktü (GPU device removed) — güvenli grafik kipi {n} açıldı: eşzamansız hesaplama ve donanımsal ışın izleme kapalı. Sürücüyü güncellemeniz önerilir.",
  "gpws.bank_copter": "Kopter yatış eşiği",
  "gpws.bank_plane": "Uçak yatış eşiği",
  "gpws.c_BANK_ANGLE": "YATIŞ AÇISI",

@@ -42,6 +42,8 @@
 #include "SmvMapRegistry.h"
 #include "SmvPhysics.h"
 #include "SmvScenery.h"
+#include "Engine/CollisionProfile.h"
+#include "ProceduralMeshComponent.h"
 #include "SmvRegion.h"
 #include "SmvRegionWorld.h"
 #include "SmvLoadGate.h"
@@ -2049,12 +2051,14 @@ void ASmvGameMode::UpdateHud()
 		if (LaunchMethodUi == TEXT("hand"))
 		{
 			const FString Cnt = LaunchPhaseUi == TEXT("armed") ? FString(Tl < 1.0 ? TEXT("3") : Tl < 2.0 ? TEXT("2") : TEXT("1")) : FSmvI18n::T(TEXT("launch.hud.throw")).ToString();
-			LaunchLine = FString::Printf(TEXT("%s   ·   LAUNCH HAND · %.0f m/s · %.0f°"), *Cnt, Req.Launch.HandSpeedMs, Req.Launch.HandPitchDeg);
+			// "AT!" atıştan sonra 1,5 sn görünür
+			if (LaunchPhaseUi == TEXT("armed") || Tl < 1.5) S.LaunchBig = Cnt;
+			LaunchLine = FString::Printf(TEXT("LAUNCH HAND · %.0f m/s · %.0f°"), Req.Launch.HandSpeedMs, Req.Launch.HandPitchDeg);
 		}
 		else if (LaunchMethodUi == TEXT("ramp")) LaunchLine = FString::Printf(TEXT("LAUNCH RAMP %.0f° · %s"), Req.Launch.AngleDeg, *FSmvI18n::T(LaunchPhaseUi == TEXT("launch") ? TEXT("launch.ev.ramp.launch") : TEXT("launch.ev.ramp.armed")).ToString());
 		else if (LaunchMethodUi == TEXT("vehicle")) LaunchLine = FString::Printf(TEXT("LAUNCH VEH · %.0f / %.0f km/h"), Gs, Req.Launch.ReleaseKmh);
 		else if (LaunchMethodUi == TEXT("wheels")) LaunchLine = FString::Printf(TEXT("LAUNCH RWY · %.0f km/h"), Gs);
-		if (!LaunchLine.IsEmpty()) { S.Toast = LaunchLine; S.ToastSeverity = 5; }
+		S.LaunchLine = LaunchLine;
 	}
 	S.bCrashed = bCrashed;
 	S.ProxLine = ProxLine; S.ProxLevel = ProxLevel;
@@ -2284,7 +2288,9 @@ bool ASmvGameMode::AlignRealRim()
 	// kenar örnekleri: içte harita zemini (ışın), dışta 3D Tiles yüzeyi (Cesium SampleHeightMostDetailed — çarpışma ağı / görünürlükten bağımsız)
 	TArray<double> Zin;
 	TArray<FVector> Out;
-	const int32 N = 40;
+	TArray<FVector> InP;     // iç örnek noktaları (harita zemininde) — geçiş eteği
+	TArray<int32> Idx;       // örneğin çevre sırası (etek yalnız ardışık örnekler arasında)
+	const int32 N = 96;
 	const double ZTop = B.Max.Z + 300000.0, ZBot = B.Min.Z - 300000.0;
 	for (int32 i = 0; i < N; ++i)
 	{
@@ -2306,6 +2312,8 @@ bool ASmvGameMode::AlignRealRim()
 		if (!OwnHit(FVector(Pi.X, Pi.Y, ZTop), FVector(Pi.X, Pi.Y, ZBot), Zi)) continue;
 		Zin.Add(Zi);
 		Out.Add(FVector(Po.X, Po.Y, Zi));
+		InP.Add(FVector(Pi.X, Pi.Y, Zi));
+		Idx.Add(i);
 	}
 	if (Zin.Num() < 6)
 	{
@@ -2316,7 +2324,8 @@ bool ASmvGameMode::AlignRealRim()
 	TWeakObjectPtr<ASmvGameMode> Weak(this);
 	const FString Key = FabMapKey;
 	const FVector Bs = B.GetSize();
-	WorldSetup->SampleSurfaceZ(Out, [Weak, Zin, Key, Bs, bClip](const TArray<double>& Zo, const TArray<bool>& Ok)
+	const FString Biome = [this]() { const FSmvMapDef* D = FSmvMapRegistry::Find(FabMapKey); return D && D->Surround ? FString(D->Surround) : FString(); }();
+	WorldSetup->SampleSurfaceZ(Out, [Weak, Zin, Key, Bs, bClip, InP, Idx, Out, N, Biome](const TArray<double>& Zo, const TArray<bool>& Ok)
 	{
 		ASmvGameMode* Self = Weak.Get();
 		if (!Self || !Self->WorldSetup) return;
@@ -2329,6 +2338,9 @@ bool ASmvGameMode::AlignRealRim()
 			// bozar: ±60 m ile sınırlı (kalan fark doğal yamaç gibi görünür)
 			const double Med = FMath::Clamp(Dz[Dz.Num() / 2], -60.0, 60.0);
 			Self->WorldSetup->ShiftVertical(Med);
+			// kalan fark (Askerî Üs: ada kenarı uçurum, karolar altta düz + arada gök boşluğu) → harita zemininden (içte) karo yüzeyine
+			// (dışta, kaydırılmış) iniş / çıkış eteği; çarpışmalı arazi
+			Self->BuildRimApron(InP, Out, Zo, Ok, Idx, N, Med * 100.0, Biome);
 			SMV_KLOG(TEXT("Gerçek dünya kenar eşleme (%s, %s): kutu %.0f×%.0f m, %d örnek, fark ortanca %.1f m (aralık %.1f…%.1f) → karolar kaydırıldı; kırpma %s"),
 				*Key, *Self->WorldSetup->SourceName(), Bs.X / 100.0, Bs.Y / 100.0, Dz.Num(), Med, Dz[0], Dz.Last(), bClip ? TEXT("tamam") : TEXT("yok"));
 		}
@@ -2337,6 +2349,73 @@ bool ASmvGameMode::AlignRealRim()
 		Self->RimAt = FPlatformTime::Seconds();
 	});
 	return true;
+}
+
+// Fab haritası kenarı ile gerçek dünya karoları arasındaki basamak / boşluk için geçiş eteği (ProceduralMesh şeridi):
+// iç kenar harita zemininde (20 cm altta), dış kenar karo yüzeyinde (düşey kaydırma sonrası); yalnız ardışık geçerli örnekler arasında
+void ASmvGameMode::BuildRimApron(const TArray<FVector>& InP, const TArray<FVector>& OutP, const TArray<double>& Zo, const TArray<bool>& Ok, const TArray<int32>& Idx, int32 N, double ShiftCm, const FString& Biome)
+{
+	UWorld* W = GetWorld();
+	if (!W || InP.Num() < 3) return;
+	TArray<FVector> V; TArray<int32> T; TArray<FVector> Nrm; TArray<FVector2D> Uv; TArray<FLinearColor> Col; TArray<FProcMeshTangent> Tg;
+	TArray<int32> Vi;   // örnek → köşe tabanı (−1 geçersiz)
+	Vi.Init(-1, InP.Num());
+	int32 NOk = 0;
+	for (int32 k = 0; k < InP.Num() && k < Zo.Num(); ++k)
+	{
+		if (!Ok[k]) continue;
+		const FVector A(InP[k].X, InP[k].Y, InP[k].Z - 20.0), B(OutP[k].X, OutP[k].Y, Zo[k] - ShiftCm - 30.0);
+		Vi[k] = V.Num();
+		V.Add(A); V.Add(B);
+		Uv.Add(FVector2D(A.X / 1000.0, A.Y / 1000.0)); Uv.Add(FVector2D(B.X / 1000.0, B.Y / 1000.0));
+		++NOk;
+	}
+	if (NOk < 3) return;
+	for (int32 k = 0; k < InP.Num(); ++k)
+	{
+		const int32 k2 = (k + 1) % InP.Num();
+		if (Vi[k] < 0 || Vi[k2] < 0) continue;
+		// çevrede komşu mu (aradaki atlanan örnek en çok 1)
+		const int32 Gap = (Idx[k2] - Idx[k] + N) % N;
+		if (Gap < 1 || Gap > 2) continue;
+		const int32 a = Vi[k], b = Vi[k] + 1, c = Vi[k2], d = Vi[k2] + 1;
+		// yukarı bakan yüz (BuildGroundDisk sözleşmesi: Cross(v1-v0, v2-v0).Z > 0)
+		auto Tri = [&V, &T](int32 x, int32 y, int32 z) { if (FVector::CrossProduct(V[y] - V[x], V[z] - V[x]).Z >= 0) T.Append({ x, y, z }); else T.Append({ x, z, y }); };
+		Tri(a, b, c); Tri(b, d, c);
+	}
+	if (T.Num() == 0) return;
+	Nrm.Init(FVector::ZeroVector, V.Num());
+	for (int32 i = 0; i < T.Num(); i += 3)
+	{
+		const FVector Fn = FVector::CrossProduct(V[T[i + 1]] - V[T[i]], V[T[i + 2]] - V[T[i]]).GetSafeNormal();
+		Nrm[T[i]] += Fn; Nrm[T[i + 1]] += Fn; Nrm[T[i + 2]] += Fn;
+	}
+	for (FVector& X : Nrm) { X = X.GetSafeNormal(); if (X.Z < 0) X = -X; }
+	for (const FVector& X : Nrm) Tg.Add(FProcMeshTangent((FVector::ForwardVector - X * FVector::DotProduct(X, FVector::ForwardVector)).GetSafeNormal(), false));
+	const bool bDesert = Biome == TEXT("Desert");
+	Col.Init(bDesert ? FLinearColor(0.5f, 0.39f, 0.25f) : FLinearColor(0.2f, 0.3f, 0.14f), V.Num());
+	FActorSpawnParameters Sp;
+	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AActor* A = W->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, Sp);
+	if (!A) return;
+	UProceduralMeshComponent* P = NewObject<UProceduralMeshComponent>(A, TEXT("RimApron"));
+	A->SetRootComponent(P);
+	P->bUseAsyncCooking = true;
+	P->ComponentTags.Add(TEXT("terrain"));
+	P->RegisterComponent();
+	P->CreateMeshSection_LinearColor(0, V, T, Nrm, Uv, Col, Tg, true);
+	P->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+	UMaterialInterface* M = bDesert ? nullptr : FSmvScenery::TerrainMaterial();
+	if (M) P->SetMaterial(0, UMaterialInstanceDynamic::Create(M, A));
+	else if (UMaterialInterface* Sm = SmvSolidMat(LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"))))
+	{
+		UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Sm, A);
+		SmvSetSolidColor(D, Col[0]);
+		D->SetScalarParameterValue(TEXT("Roughness"), 0.95f);
+		P->SetMaterial(0, D);
+	}
+	FabDecor.Add(A);
+	SMV_KLOG(TEXT("Gerçek dünya kenar eteği (%s): %d örnek, %d üçgen"), *FabMapKey, NOk, T.Num() / 3);
 }
 
 // Fab haritası seviyesini seviye örneği olarak yükle (görünür olunca HandleFabLevelShown → PlaceFabLevels)

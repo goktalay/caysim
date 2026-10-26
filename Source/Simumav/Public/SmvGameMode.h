@@ -243,6 +243,8 @@ public:
 	FString FabLevelPath;
 	bool LoadFabLevel(const FString& Level);
 	bool AlignRealRim();
+	/** Fab haritası kenarı ↔ gerçek dünya karoları arası geçiş eteği (kalan basamak / gök boşluğu) */
+	void BuildRimApron(const TArray<FVector>& InP, const TArray<FVector>& OutP, const TArray<double>& Zo, const TArray<bool>& Ok, const TArray<int32>& Idx, int32 N, double ShiftCm, const FString& Biome);
 	// ---- yükleme kapısı (SmvLoadGate): tüm aşamalar bitmeden Uçuş ekranına geçilmez ----
 	FSmvLoadGate Gate;
 	void TickLoadGate();

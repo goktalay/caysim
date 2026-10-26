@@ -560,6 +560,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 	Toasts.RemoveAll([T](const FToast& X) { return T - X.At > 5.0; });
 	if (Toasts.Num() != Before || ToastsBuilt != Toasts.Num()) RebuildToasts();
 	if (!Flow.IsValid()) return;
+	if (!Flow->StartupNotice.IsEmpty() && BootFinished()) { Toast(Flow->StartupNotice, 4); Flow->StartupNotice.Reset(); }
 	const bool bPause = GameMode.IsValid() && GameMode->IsPausedMenu();
 	const ESmvScreen Cur = Flow->GetScreen();
 	if (BackdropBox.IsValid()) BackdropBox->SetVisibility(Cur == ESmvScreen::Flight ? EVisibility::Collapsed : EVisibility::HitTestInvisible);
@@ -3050,9 +3051,10 @@ void SSmvShell::PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindo
 		}
 	}
 	// okunurluk: sol ve alt koyu degrade, üstte hafif kararma, kenar vinyeti
-	DrGradient(Out, L + 6, G, FVector2D::ZeroVector, FVector2D(W * 0.62f, H), { { 0.f, Hex(0x03060d, 0.80f) }, { 0.6f, Hex(0x03060d, 0.35f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, false);
-	DrGradient(Out, L + 6, G, FVector2D(0, H * 0.45f), FVector2D(W, H * 0.55f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, Hex(0x02040a, 0.92f) } }, true);
-	DrGradient(Out, L + 6, G, FVector2D::ZeroVector, FVector2D(W, H * 0.18f), { { 0.f, Hex(0x02040a, 0.6f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, true);
+	// (gerçek oyun içi kareler: kullanıcı "arka plan görseli çok koyu" dedi — yalnız yazıların arkası koyulaşır)
+	DrGradient(Out, L + 6, G, FVector2D::ZeroVector, FVector2D(W * 0.5f, H), { { 0.f, Hex(0x03060d, 0.62f) }, { 0.6f, Hex(0x03060d, 0.2f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, false);
+	DrGradient(Out, L + 6, G, FVector2D(0, H * 0.58f), FVector2D(W, H * 0.42f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, Hex(0x02040a, 0.82f) } }, true);
+	DrGradient(Out, L + 6, G, FVector2D::ZeroVector, FVector2D(W, H * 0.16f), { { 0.f, Hex(0x02040a, 0.4f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, true);
 	// ---- üst sol: marka + başlık ----
 	const float X0 = 72.f * K;
 	DrText(Out, L + 8, G, TEXT("SIMUMAV"), FVector2D(X0, 58.f * K), SmvUi::Font(FMath::RoundToInt(15 * K), "Black", 420), Accent(), -1);
@@ -4860,6 +4862,8 @@ void SSmvShell::TickSmoke()
 	const int32 NS = UE_ARRAY_COUNT(Steps);
 	const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke"))));
 	auto Shot = [&Dir](const FString& Name) { FScreenshotRequest::RequestScreenshot(Dir / (Name + TEXT(".png")), true, false); SMV_KLOG(TEXT("SMOKE shot %s"), *Name); };
+	// arayüzsüz sahne karesi (yükleme ekranı / harita kartı önizlemeleri: Content/Simumav/MapPreviews)
+	auto CleanShot = [&Dir](const FString& Name) { FScreenshotRequest::RequestScreenshot(Dir / (Name + TEXT(".png")), false, false); SMV_KLOG(TEXT("SMOKE shot %s"), *Name); };
 	// ekranlar: çift yarım adım = ekranı aç, tek = görüntü al
 	if (bSkipTour && SmokeStep / 2 < NS) SmokeStep = NS * 2;
 	const int32 I = SmokeStep / 2;
@@ -5165,7 +5169,8 @@ void SSmvShell::TickSmoke()
 		if (Alt < 8.5f && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
 		SMV_KLOG(TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);
 		SmokeAt = Now + 4.0; ++SmokeSub; return;
-	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = Fx.Ram ? 60 : Fx.bFull ? 20 : Fx.Vehicle ? 13 : 11; return;
+	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = 80; return;
+	case 80: CleanShot(Base + TEXT("_clean")); SmokeAt = Now + 0.8; SmokeSub = Fx.Ram ? 60 : Fx.bFull ? 20 : Fx.Vehicle ? 13 : 11; return;
 	// bilerek çarpma: hedef bul + burnu çevir (_ram0), koşu (kaçınma kapalı), çarpışma anı (_ram1), 3 sn (_ram2), 7 sn sonra yüzeyde (_ram3)
 	case 60:
 	{

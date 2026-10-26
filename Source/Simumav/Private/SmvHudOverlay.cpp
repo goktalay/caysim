@@ -4,6 +4,9 @@
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
 #include "Fonts/SlateFontInfo.h"
+#include "Fonts/FontMeasure.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Rendering/SlateRenderer.h"
 
 void USmvHudOverlay::SetState(const FSmvHudState& S)
 {
@@ -78,6 +81,23 @@ int32 USmvHudOverlay::NativePaint(const FPaintArgs& Args, const FGeometry& G, co
 		}
 	}
 	if (!State.Countdown.IsEmpty()) SmvText(Out, Layer + 3, G, FVector2D(Sz.X * 0.5f - 60.f, Sz.Y * 0.35f), State.Countdown, 64, Amber);
+	// fırlatma: ortada büyük geri sayım + altında yöntem satırı (eskiden bildirim alanına yazılıyordu; bildirimler kabuğa taşınınca görünmez olmuştu)
+	if (!State.LaunchLine.IsEmpty() || !State.LaunchBig.IsEmpty())
+	{
+		const FSlateFontInfo Fl = FCoreStyle::GetDefaultFontStyle("Bold", 16);
+		const FVector2D Lw = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(State.LaunchLine, Fl);
+		const FVector2D Lp(Sz.X * 0.5f - Lw.X * 0.5f - 16.f, Sz.Y * 0.44f);
+		if (!State.LaunchLine.IsEmpty())
+		{
+			SmvBox(Out, Layer + 2, G, Lp, FVector2D(Lw.X + 32.f, 36.f), FLinearColor(0, 0, 0, 0.55f), W);
+			SmvText(Out, Layer + 3, G, Lp + FVector2D(16.f, 6.f), State.LaunchLine, 16, Amber);
+		}
+		if (!State.LaunchBig.IsEmpty())
+		{
+			const FVector2D Bw = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(State.LaunchBig, FCoreStyle::GetDefaultFontStyle("Bold", 72));
+			SmvText(Out, Layer + 3, G, FVector2D(Sz.X * 0.5f - Bw.X * 0.5f, Sz.Y * 0.44f - Bw.Y - 6.f), State.LaunchBig, 72, Amber);
+		}
+	}
 
 	// hedef kilidi
 	if (State.bTargetOnScreen)

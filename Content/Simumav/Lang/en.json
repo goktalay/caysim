@@ -824,6 +824,7 @@
  "gmode.spraying": "Field spraying",
  "gmode.spraying_d": "Spray the whole field low and at a steady speed",
  "gmode.tour": "Map tour",
+ "gpu.safe_mode": "The graphics driver crashed last session (GPU device removed) — safe graphics mode {n} enabled: async compute and hardware ray tracing off. Updating the driver is recommended.",
  "gpws.bank_copter": "Copter bank limit",
  "gpws.bank_plane": "Plane bank limit",
  "gpws.c_BANK_ANGLE": "BANK ANGLE",

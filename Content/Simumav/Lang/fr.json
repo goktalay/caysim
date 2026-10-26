@@ -824,6 +824,7 @@
  "gmode.spraying": "Pulvérisation de champ",
  "gmode.spraying_d": "Pulvérise tout le champ à basse altitude et à vitesse constante",
  "gmode.tour": "Visite de la carte",
+ "gpu.safe_mode": "Le pilote graphique a planté lors de la dernière session (GPU device removed) — mode graphique sûr {n} activé : calcul asynchrone et ray tracing matériel désactivés. Mettez à jour le pilote.",
  "gpws.bank_copter": "Seuil d'inclinaison multirotor",
  "gpws.bank_plane": "Seuil d'inclinaison avion",
  "gpws.c_BANK_ANGLE": "INCLINAISON",
