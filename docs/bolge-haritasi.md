@@ -24,13 +24,21 @@ denetim yalnız hangi kaynağın kullanılacağına karar verir.
 
 Kalkış zemini (SITL ev irtifası) her durumda paketin arazisinden alınır.
 
+**Google akışında bina çarpışması paketten:** Türkiye'de Google karoları 2,5B (bina ağı yok; dron binanın içinden geçiyordu — duman f13 Taksim:
+72 yönde 0 isabet). Google ile uçarken paketteki OSM binaları **görünmez, BlockAll çarpışmalı** kurulur (yer ofseti ölçülünce birlikte kayar).
+Duman 40409620782: Taksim'de görünmez binaya çarpma → disarm → yüzeyde 0,18 m.
+
+**3B / 2,5B ayrımı ölçülemiyor:** Google karo ağacı Taksim ve Manhattan'da aynı (en küçük geometricError 2,01 m, derinlik 25, ortanca karo 38 m);
+arayüz yalnız kapsamayı gösterir.
+
 ## Veri kaynakları ve lisans
 
 - **Arazi:** AWS Terrain Tiles (Terrarium PNG; `s3.amazonaws.com/elevation-tiles-prod`), z14 (~9 m/px) uçuş alanı, z10 ufuk (30 km).
   Kaynaklar: SRTM, GMTED2010, ETOPO1, EU-DEM (Copernicus), NED … — atıf gerekli, ticari kullanım serbest.
   Deniz: Terrarium batimetrisi ≤ 0 m → taban −3 m'ye kırpılır, 0 m'de deniz düzlemi.
 - **Binalar / yollar / su / orman:** OpenStreetMap (Overpass API; `overpass-api.de`, yedek `overpass.kumi.systems`), z14 karo kutusu başına
-  bir sorgu, aynı anda en çok 2 (Overpass kullanım kuralı). © OpenStreetMap katkıcıları, ODbL — atıf gerekli; türetilmiş veritabanı
+  **z15** karo kutusu başına bir sorgu, aynı anda tek sorgu, 9 deneme (10 → 60 sn, 429'da 45 sn). Overpass ilk baytı ~50 sn'de gönderebildiği için
+`[HTTP] HttpActivityTimeout=200` (DefaultEngine.ini). © OpenStreetMap katkıcıları, ODbL — atıf gerekli; türetilmiş veritabanı
   paylaşılırsa ODbL ile paylaşılır (paket yalnız oyuncunun bilgisayarında kalır).
 - Bina yüksekliği: `height` → `building:levels` (+ `roof:levels`) → türe ve taban alanına göre sezgisel kat sayısı (OSM kimliğine bağlı, her seferinde aynı).
 - Uydu görüntüsü YOK: serbest lisanslı yüksek çözünürlüklü küresel görüntü bulunmadığından arazi Hyper malzemesiyle (eğim → kaya,

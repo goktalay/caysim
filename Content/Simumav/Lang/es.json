@@ -1743,7 +1743,7 @@
  "region.ev_offline": "Mapa sin conexión: terreno + OpenStreetMap",
  "region.g_low": "Google 3D: cobertura insuficiente ({any} %) — se usa el mapa sin conexión",
  "region.g_none": "Google 3D: sin comprobar",
- "region.g_ok": "Google 3D: cobertura {any} % · detalle 3D completo {full} % — se usa Google en vuelo",
+ "region.g_ok": "Google 3D: cobertura {any} % — Google en vuelo; colisión de edificios desde este mapa",
  "region.none": "Esta región no está descargada: necesaria para volar en el mapa real (terreno + edificios, sin conexión).",
  "region.note": "El círculo se descarga según la distancia máxima de vuelo: terreno (AWS Terrain Tiles; SRTM, Copernicus …) y edificios, vías, agua y bosques de OpenStreetMap; funciona sin internet. Las teselas Google 3D no se descargan (normas de Google); solo se comprueba su cobertura y se transmiten en vuelo.",
  "region.ready": "Mapa sin conexión listo · {mb} · {b} edificios · {r} vías · {d}",

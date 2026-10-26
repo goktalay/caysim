@@ -1743,7 +1743,7 @@
  "region.ev_offline": "Carte hors ligne : relief + OpenStreetMap",
  "region.g_low": "Google 3D : couverture insuffisante ({any} %) — la carte hors ligne est utilisée en vol",
  "region.g_none": "Google 3D : non vérifié",
- "region.g_ok": "Google 3D : couverture {any} % · détail 3D complet {full} % — flux Google en vol",
+ "region.g_ok": "Google 3D : couverture {any} % — flux Google en vol ; collisions des bâtiments depuis cette carte",
  "region.none": "Cette région n'est pas téléchargée — nécessaire pour voler sur la carte réelle (relief + bâtiments, hors ligne).",
  "region.note": "Le cercle est téléchargé selon la distance de vol maximale : relief (AWS Terrain Tiles ; SRTM, Copernicus …) et bâtiments, routes, eaux et forêts OpenStreetMap — fonctionne hors ligne. Les tuiles Google 3D ne sont pas téléchargées (règles Google) ; seule leur couverture est vérifiée, puis elles sont diffusées en vol.",
  "region.ready": "Carte hors ligne prête · {mb} · {b} bâtiments · {r} routes · {d}",

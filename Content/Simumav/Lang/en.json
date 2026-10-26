@@ -1743,7 +1743,7 @@
  "region.ev_offline": "Offline region map: terrain + OpenStreetMap",
  "region.g_low": "Google 3D: insufficient coverage ({any}%) — the offline map is used in flight",
  "region.g_none": "Google 3D: not checked",
- "region.g_ok": "Google 3D: coverage {any}% · full 3D detail {full}% — Google streaming is used in flight",
+ "region.g_ok": "Google 3D: coverage {any}% — Google streaming in flight; building collision from this map",
  "region.none": "This region has not been downloaded — required to fly on the real map (terrain + buildings, offline).",
  "region.note": "The circle is downloaded for the maximum flight distance: terrain (AWS Terrain Tiles; SRTM, Copernicus …) and OpenStreetMap buildings, roads, water and forests — works without internet. Google 3D tiles are not downloaded (Google terms); only their coverage is checked and they are streamed live in flight.",
  "region.ready": "Offline map ready · {mb} · {b} buildings · {r} roads · {d}",

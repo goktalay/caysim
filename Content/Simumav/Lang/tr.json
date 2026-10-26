@@ -1743,7 +1743,7 @@
  "region.ev_offline": "Çevrimdışı bölge haritası: arazi + OpenStreetMap",
  "region.g_low": "Google 3B: kapsama yetersiz (%{any}) — uçuşta çevrimdışı harita kullanılır",
  "region.g_none": "Google 3B: denetlenmedi",
- "region.g_ok": "Google 3B: kapsama %{any} · tam 3B ayrıntı %{full} — uçuşta Google akışı kullanılır",
+ "region.g_ok": "Google 3B: kapsama %{any} — uçuşta Google akışı; bina çarpışması bu haritadan",
  "region.none": "Bu bölgenin haritası indirilmedi — gerçek haritayla uçmak için gerekli (arazi + binalar, çevrimdışı).",
  "region.note": "Daire, azami uçuş mesafesine göre indirilir: arazi (AWS Terrain Tiles; SRTM, Copernicus …) ve OpenStreetMap binaları, yolları, su ve ormanları — internetsiz çalışır. Google 3B karoları Google kuralları gereği indirilmez; yalnız bölgedeki kapsaması denetlenir ve uçuşta canlı akıtılır.",
  "region.ready": "Çevrimdışı harita hazır · {mb} · {b} bina · {r} yol · {d}",

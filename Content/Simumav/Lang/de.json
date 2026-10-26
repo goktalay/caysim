@@ -1743,7 +1743,7 @@
  "region.ev_offline": "Offline-Regionskarte: Gelände + OpenStreetMap",
  "region.g_low": "Google 3D: unzureichende Abdeckung ({any} %) — im Flug wird die Offline-Karte genutzt",
  "region.g_none": "Google 3D: nicht geprüft",
- "region.g_ok": "Google 3D: Abdeckung {any} % · volles 3D-Detail {full} % — im Flug wird Google gestreamt",
+ "region.g_ok": "Google 3D: Abdeckung {any} % — im Flug Google-Streaming; Gebäudekollision aus dieser Karte",
  "region.none": "Diese Region ist nicht heruntergeladen — für Flüge auf der echten Karte nötig (Gelände + Gebäude, offline).",
  "region.note": "Der Kreis wird für die maximale Flugdistanz geladen: Gelände (AWS Terrain Tiles; SRTM, Copernicus …) und OpenStreetMap-Gebäude, Straßen, Gewässer und Wälder — funktioniert offline. Google-3D-Kacheln werden gemäß Google-Regeln nicht geladen; nur die Abdeckung wird geprüft, im Flug wird live gestreamt.",
  "region.ready": "Offline-Karte bereit · {mb} · {b} Gebäude · {r} Straßen · {d}",
