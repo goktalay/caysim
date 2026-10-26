@@ -131,6 +131,9 @@ namespace
 			// UFS (pak) içindeki dosya: göreli proje yolu korunur (pak bağlama noktası göreli; tam yola çevirmek bulamazdı)
 			const FString PreviewPath = FPaths::Combine(FPaths::ProjectContentDir(), M.Preview);
 			if (!M.Preview.IsEmpty() && FPaths::FileExists(PreviewPath)) M.PreviewFile = PreviewPath;
+			// gerçek oyun içi kare (duman testi arayüzsüz karesi; aynı adlı .jpg) varsa çizim önizlemesi yerine
+			const FString JpgPath = FPaths::ChangeExtension(PreviewPath, TEXT("jpg"));
+			if (!M.Preview.IsEmpty() && FPaths::FileExists(JpgPath)) M.PreviewFile = JpgPath;
 			if (D.Kind == ESmvMapKind::ProcCity)
 			{
 				// ağları yüklemeden say (menü açılışında)
