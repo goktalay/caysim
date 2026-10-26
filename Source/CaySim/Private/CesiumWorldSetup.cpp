@@ -18,6 +18,8 @@
 #include "Engine/StaticMesh.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/LocalPlayer.h"
+#include "Engine/GameViewportClient.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/PrimitiveComponent.h"
 #include "CollisionQueryParams.h"
@@ -658,6 +660,15 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 				if (C->GetNumChildrenComponents() == 0) ++GlRootChildless;
 			}
 			ByOwner.Add(FString::Printf(TEXT("[aktif karo kökü %d, ilkelsiz %d]"), GlRoot, GlRootChildless), 0);
+			// Cesium'un karo seçiminde kullandığı oyuncu kamerası: görünüm boyutu (< 1 → kamera atlanır, karolar incelmez), FOV, DPI ölçeği
+			if (PC)
+			{
+				int32 Vx = 0, Vy = 0;
+				PC->GetViewportSize(Vx, Vy);
+				float Dpi = 1.f;
+				if (const ULocalPlayer* Lp = Cast<ULocalPlayer>(PC->Player)) if (Lp->ViewportClient) Dpi = Lp->ViewportClient->GetDPIScale();
+				ByOwner.Add(FString::Printf(TEXT("[görünüm %dx%d, FOV %.0f, DPI %.2f, SSE %.1f]"), Vx, Vy, PC->PlayerCameraManager ? PC->PlayerCameraManager->GetFOVAngle() : -1.f, Dpi, Td->GetMaximumScreenSpaceError()), 0);
+			}
 			FString Own;
 			for (const TPair<FString, int32>& Kv : ByOwner) Own += FString::Printf(TEXT(" %s=%d"), *Kv.Key, Kv.Value);
 			UE_LOG(LogCaySim, Log, TEXT("3D Tiles tanı (%s): yükleme %%%.0f, bileşen %d (görünür %d, çarpışmalı %d), gizli %d, merkez ışını %s, kamera (%.0f, %.0f, %.0f); glTF ilkel %d (görünür %d, kayıtlı %d):%s"),
