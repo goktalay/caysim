@@ -65,6 +65,9 @@ public:
 protected:
 	UPROPERTY() TObjectPtr<ACaySimWorldSetup> WorldSetup;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> Terrain;
+	/** Çevrimdışı bölge paketinden gerçek dünya (SmvRegionWorld) */
+	UPROPERTY() TObjectPtr<class ASmvRegionWorld> RegionWorld;
+	bool bRegionWorld = false;
 	/** Fab haritası (parkur dünya kipi "fab:<anahtar>") — [0] kalıcı seviye, ardından onun alt seviyeleri; hepsi görünür olunca
 	 *  merkezi orijine (SITL ev konumu) oturtulur */
 	UPROPERTY() TArray<TObjectPtr<ULevelStreamingDynamic>> FabLevels;

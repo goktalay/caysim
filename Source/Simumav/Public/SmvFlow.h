@@ -111,6 +111,8 @@ public:
 	void NewDraft();
 	/** Taslağı doğrular; hata metni (boş = geçerli). */
 	FString ValidateDraft() const;
+	/** Gerçek dünya parkuru bölge haritası (çevrimdışı paket) ister mi (Fab / FPV hariç) */
+	static bool NeedsRegion(const FSmvTrack& T);
 	void StartFlight();
 	/** Kayıttan oynat (3B sahne + 0,25–8× telemetri; kumanda yok) */
 	bool StartReplay(const FString& File, float Speed = 1.f);

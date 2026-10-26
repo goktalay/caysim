@@ -4,6 +4,7 @@
 // çok oyunculu → UÇ), uçuş sonrası deneyim ekranı, Arkadaşlarım. Arka planlar GERÇEK 3B sahne: menü sahnesinin kamera istasyonları
 // (ASmvMenuScene::SetStation) — vitrin aracı / pilot gerçek dünyada, Lumen ışığında; düz degrade yok. Eski ekranlar Pilot menüsünden açılır.
 #include "SSmvShell.h"
+#include "SmvRegion.h"
 #include "SmvLoadGate.h"
 #include "SimumavModule.h"
 #include "SimumavClient.h"
@@ -2035,6 +2036,116 @@ TSharedRef<SWidget> SSmvShell::ParkurWizard()
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 10, 0, 0)[Footer]);
 }
 
+// ---------------------------------------------------------------------------
+// BÖLGE HARİTASI (SmvRegion): çevrimdışı paket (arazi + OSM) ve Google 3B kapsama denetimi — gerçek dünya parkuruna giriş şartı
+// ---------------------------------------------------------------------------
+
+namespace
+{
+	FString YhMb(int64 B) { return FString::Printf(TEXT("%.1f MB"), B / 1048576.0); }
+
+	FString YhRegionLine(const FSmvTrack& T)
+	{
+		FSmvRegions& Rg = FSmvRegions::Get();
+		if (Rg.IsRunningFor(T.Lat, T.Lon, T.RadiusM))
+			return FString::Printf(TEXT("%s  %d%%"), *Rg.GetStatus(), FMath::RoundToInt(Rg.GetProgress() * 100.f));
+		const FSmvRegionInfo* P = Rg.FindPack(T.Lat, T.Lon, T.RadiusM);
+		if (!P)
+		{
+			if (Rg.GetState() == ESmvRegionState::Failed && Rg.LastResult().Covers(T.Lat, T.Lon, T.RadiusM)) return Rg.GetStatus();
+			return FSmvI18n::T(TEXT("region.none")).ToString();
+		}
+		FString S = FSmvI18n::Format(TEXT("region.ready"), { { TEXT("mb"), YhMb(P->Bytes) }, { TEXT("b"), FString::FormatAsNumber(P->Buildings) },
+			{ TEXT("r"), FString::FormatAsNumber(P->Roads) }, { TEXT("d"), P->PackAt.ToString(TEXT("%d.%m.%Y")) } }).ToString();
+		return S;
+	}
+
+	FString YhGoogleLine(const FSmvTrack& T)
+	{
+		const FSmvRegionInfo* P = FSmvRegions::Get().FindAny(T.Lat, T.Lon, T.RadiusM);
+		if (!P || !P->bGoogleChecked) return FSmvI18n::T(TEXT("region.g_none")).ToString();
+		if (!P->GoogleOk()) return FSmvI18n::Format(TEXT("region.g_low"), { { TEXT("any"), FString::FromInt(FMath::RoundToInt(P->GoogleAny * 100.f)) } }).ToString();
+		return FSmvI18n::Format(TEXT("region.g_ok"), { { TEXT("full"), FString::FromInt(FMath::RoundToInt(P->GoogleFull * 100.f)) },
+			{ TEXT("any"), FString::FromInt(FMath::RoundToInt(P->GoogleAny * 100.f)) } }).ToString();
+	}
+}
+
+TSharedRef<SWidget> SSmvShell::RegionCard(FSmvTrack* Tp, bool bCompact)
+{
+	SSmvShell* Self = this;
+	auto Running = [Tp]() { return FSmvRegions::Get().IsRunningFor(Tp->Lat, Tp->Lon, Tp->RadiusM); };
+	auto HasPack = [Tp]() { return FSmvRegions::Get().FindPack(Tp->Lat, Tp->Lon, Tp->RadiusM) != nullptr; };
+	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
+	V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+		[
+			SNew(SBorder).BorderImage(Round(5.f)).Padding(FMargin(8.f, 2.f))
+			.BorderBackgroundColor_Lambda([HasPack, Running]() { return FSlateColor(Running() ? Hex(0xfbbf24, 0.25f) : HasPack() ? Hex(0x34d399, 0.25f) : Hex(0xf87171, 0.25f)); })
+			[
+				SmvUi::Text(TAttribute<FText>::CreateLambda([HasPack, Running]() { return FSmvI18n::T(Running() ? TEXT("region.b_dl") : HasPack() ? TEXT("region.b_ok") : TEXT("region.b_need")); }), 10, "Bold", Fg(), false)
+			]
+		]
+		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(Tx(TEXT("region.title")), 13, "Bold", Fg(), false)]
+	];
+	V->AddSlot().AutoHeight().Padding(0, 2)[SmvUi::Text(TAttribute<FText>::CreateLambda([Tp]() { return FText::FromString(YhRegionLine(*Tp)); }), 11, "Regular", Dim())];
+	V->AddSlot().AutoHeight().Padding(0, 2)[SmvUi::Text(TAttribute<FText>::CreateLambda([Tp]() { return FText::FromString(YhGoogleLine(*Tp)); }), 11, "Regular", Dim())];
+	// ilerleme çubuğu
+	V->AddSlot().AutoHeight().Padding(0, 6, 0, 4)
+	[
+		SNew(SBox).HeightOverride(6.f).Visibility_Lambda([Running]() { return Running() ? EVisibility::Visible : EVisibility::Collapsed; })
+		[
+			SNew(SOverlay)
+			+ SOverlay::Slot()[SNew(SBorder).BorderImage(Round(3.f)).BorderBackgroundColor(FLinearColor(1, 1, 1, 0.1f))]
+			+ SOverlay::Slot().HAlign(HAlign_Left)
+			[
+				SNew(SBox).WidthOverride_Lambda([]() { return FOptionalSize(FMath::Max(6.f, 380.f * FSmvRegions::Get().GetProgress())); })
+				[SNew(SBorder).BorderImage(Round(3.f)).BorderBackgroundColor(Hex(0x38bdf8))]
+			]
+		]
+	];
+	auto StartJob = [Self, Tp]()
+	{
+		USmvDataService* D = Self->Data();
+		const FString Tok = D ? D->Settings().CesiumToken : FString();
+		FSmvRegions::Get().Start(Tp->Lat, Tp->Lon, Tp->RadiusM, Tok, true);
+		Self->Toast(FSmvI18n::T(TEXT("region.started")).ToString(), 6);
+	};
+	TSharedRef<SHorizontalBox> Btns = SNew(SHorizontalBox);
+	Btns->AddSlot().AutoWidth().Padding(0, 0, 8, 0)
+	[
+		SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Globe).Accent(Hex(0x38bdf8))
+		.Visibility_Lambda([Running]() { return Running() ? EVisibility::Collapsed : EVisibility::Visible; })
+		.Text_Lambda([HasPack]() { return FSmvI18n::T(HasPack() ? TEXT("region.update") : TEXT("region.download")); })
+		.OnClick(StartJob)
+	];
+	Btns->AddSlot().AutoWidth().Padding(0, 0, 8, 0)
+	[
+		SNew(SSmvButton).Icon(ESmvIcon::Back).Text(Tx(TEXT("common.cancel")))
+		.Visibility_Lambda([Running]() { return Running() ? EVisibility::Visible : EVisibility::Collapsed; })
+		.OnClick([]() { FSmvRegions::Get().Cancel(); })
+	];
+	if (!bCompact)
+		Btns->AddSlot().AutoWidth()
+		[
+			SNew(SSmvButton).Icon(ESmvIcon::Trash).Text(Tx(TEXT("region.delete")))
+			.Visibility_Lambda([HasPack, Running]() { return HasPack() && !Running() ? EVisibility::Visible : EVisibility::Collapsed; })
+			.OnClick([Self, Tp]()
+			{
+				if (const FSmvRegionInfo* P = FSmvRegions::Get().FindPack(Tp->Lat, Tp->Lon, Tp->RadiusM))
+				{
+					const FString Id = P->Id;
+					FSmvRegions::Get().Delete(Id);
+					Self->Toast(FSmvI18n::T(TEXT("region.deleted")).ToString(), 6);
+				}
+			})
+		];
+	V->AddSlot().AutoHeight().Padding(0, 6, 0, 0)[Btns];
+	if (!bCompact) V->AddSlot().AutoHeight().Padding(0, 8, 0, 0)[SmvUi::Text(Tx(TEXT("region.note")), 10, "Regular", Mute())];
+	return SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Card()).Padding(FMargin(14.f, 10.f))[V];
+}
+
 TSharedRef<SWidget> SSmvShell::RealWizard()
 {
 	SSmvShell* Self = this;
@@ -2068,13 +2179,14 @@ TSharedRef<SWidget> SSmvShell::RealWizard()
 		TSharedRef<SVerticalBox> Side = SNew(SVerticalBox);
 		Side->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("parkur.s_location")), Hex(0x38bdf8))];
 		Side->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[SmvUi::Text(Tx(TEXT("parkur.map_hint")), 11, "Regular", Dim())];
-		Side->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("parkur.map_size")), Slider(&T.RadiusM, 250, 5000, 50, [](double V) { return FString::Printf(TEXT("%.1f × %.1f km"), V * 2.0 / 1000.0, V * 2.0 / 1000.0); }))];
+		Side->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("parkur.max_dist")), Slider(&T.RadiusM, 250, 5000, 50, [](double V) { return FString::Printf(TEXT("%.2f km (Ø %.1f km)"), V / 1000.0, V * 2.0 / 1000.0); }))];
 		Side->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.world")), Chips(&T.WorldMode, { TEXT("real"), TEXT("google3d") }, { Tx(TEXT("world.real")), Tx(TEXT("world.google3d")) }, { ESmvIcon::Globe, ESmvIcon::Globe }, nullptr, 1))];
 		Side->AddSlot().AutoHeight().Padding(0, 10, 0, 0)
 		[
 			SmvUi::Text(TAttribute<FText>::CreateLambda([Self]() { return FText::FromString(FString::Printf(TEXT("%.5f, %.5f"), Self->NewTrack.Lat, Self->NewTrack.Lon)); }), 13, "Mono", Fg(), false)
 		];
 		Side->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[SmvUi::Text(Tx(TEXT("parkur.real_note")), 10, "Regular", Mute())];
+		Side->AddSlot().AutoHeight().Padding(0, 12, 0, 0)[RegionCard(&NewTrack, false)];
 		Body = SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top).Padding(0, 0, 18, 0)
 			[
@@ -2736,7 +2848,7 @@ TSharedRef<SWidget> SSmvShell::FlyTracks()
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Chips(&T.Weather, { TEXT("clear"), TEXT("cloudy"), TEXT("rain"), TEXT("fog"), TEXT("snow") },
 					{ Tx(TEXT("weather.clear")), Tx(TEXT("weather.cloudy")), Tx(TEXT("weather.rain")), Tx(TEXT("weather.fog")), Tx(TEXT("weather.snow")) },
 					{ ESmvIcon::Sun, ESmvIcon::Cloud, ESmvIcon::Rain, ESmvIcon::Fog, ESmvIcon::Snow }, nullptr, 5)], FMargin(16.f, 10.f), 0.85f)
-		];
+		];	if (USmvFlow::NeedsRegion(T)) V->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[SNew(SBox).WidthOverride(620.f).HAlign(HAlign_Left)[RegionCard(&Flow->Draft.Track, true)]];
 	}
 	return V;
 }

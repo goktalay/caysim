@@ -32,7 +32,8 @@ struct SIMUMAV_API FSmvUiPrefs
 	/** Uçuş video kaydı (MJPEG AVI; uçuş başında başlar) */
 	bool bRecordVideo = false;
 	/** Gerçek dünya (Cesium): google3d (Google Photorealistic 3D Tiles; varsayılan — 25 sn'de çizilecek karo yoksa arazi + uyduya düşer) |
-	 *  terrain (World Terrain + Bing uydu) | off. Şehir parkurunda google3d = gerçek şehir (Ankara Kızılay), blok şehir yerine. */
+	 *  terrain (World Terrain + Bing uydu) | offline (yalnız çevrimdışı bölge paketi — SmvRegion; Fab haritalarında gerçek çevre yok) | off.
+	 *  Gerçek dünya parkurunda Google yalnız bölge denetimi geçtiyse akıtılır, değilse çevrimdışı paket. */
 	FString RealWorld = TEXT("google3d");
 	/** Hız efekti (ekran kenarı hız çizgileri): 0 kapalı | 1 hafif (varsayılan) | 2 belirgin */
 	int32 SpeedFx = 1;

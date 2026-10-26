@@ -1,4 +1,5 @@
 #include "SSmvShell.h"
+#include "SmvRegion.h"
 #include "Widgets/Layout/SWrapBox.h"
 #include "SmvInputGlyphs.h"
 #include "SimumavModule.h"
@@ -3926,8 +3927,8 @@ TSharedRef<SWidget> SSmvShell::SetDisplay()
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.speedfx")), Chips(&GSpeedFxStr, { TEXT("0"), TEXT("1"), TEXT("2") }, { Tx(TEXT("set.speedfx_0")), Tx(TEXT("set.speedfx_1")), Tx(TEXT("set.speedfx_2")) }, {},
 		[]() { FSmvUiPrefs::Get().SpeedFx = FMath::Clamp(FCString::Atoi(*GSpeedFxStr), 0, 2); FSmvUiPrefs::Get().Save(); }))];
 	V->AddSlot().AutoHeight().Padding(0, 14, 0, 8)[Section(Tx(TEXT("settings.cesium")), Accent3())];
-	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.realworld")), Chips(&FSmvUiPrefs::Get().RealWorld, { TEXT("terrain"), TEXT("google3d"), TEXT("off") },
-		{ Tx(TEXT("set.realworld_terrain")), Tx(TEXT("set.realworld_google")), Tx(TEXT("set.realworld_off")) }, {}, []() { FSmvUiPrefs::Get().Save(); }))];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.realworld")), Chips(&FSmvUiPrefs::Get().RealWorld, { TEXT("google3d"), TEXT("terrain"), TEXT("offline"), TEXT("off") },
+		{ Tx(TEXT("set.realworld_google")), Tx(TEXT("set.realworld_terrain")), Tx(TEXT("set.realworld_offline")), Tx(TEXT("set.realworld_off")) }, {}, []() { FSmvUiPrefs::Get().Save(); }))];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[SmvUi::Text(Tx(TEXT("set.realworld_hint")), 10, "Regular", Mute())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.cesium")), TextEdit(&S.CesiumToken, true, Tx(TEXT("settings.cesium_hint")), 360.f))];
 	return V;
@@ -4974,6 +4975,9 @@ void SSmvShell::TickSmoke()
 		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f12"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("building") },
 		{ TEXT("g3d"), TEXT("day"), TEXT("clear"), TEXT("f13"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("building") },
 		{ TEXT("orman"), TEXT("day"), TEXT("clear"), TEXT("f14"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("terrain") },
+		// BÖLGE HARİTASI (SmvRegion): Taksim çevrimdışı paketi (arazi + OSM) indirilir + Google 3B denetimi; paketle uçuş — binaya çarpma ve 120 m görünüm
+		{ TEXT("region"), TEXT("day"), TEXT("clear"), TEXT("f15"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("building") },
+		{ TEXT("region"), TEXT("golden"), TEXT("clear"), TEXT("f16"), false, TEXT("vtol"), nullptr, nullptr, nullptr, 120.f },
 	};
 	const int32 NFl = UE_ARRAY_COUNT(Fls);
 	// yalnız seçilen uçuşlar (-SmvSmokeOnly)
@@ -4995,7 +4999,7 @@ void SSmvShell::TickSmoke()
 	case 0:
 	{
 		if (bOverlay) CloseOverlay();
-		if (Flow->GetScreen() != ESmvScreen::Menu && Flow->GetScreen() != ESmvScreen::Wizard) { Flow->SetScreen(ESmvScreen::Menu); SmokeAt = Now + 3.0; return; }
+		if (Flow->GetScreen() != ESmvScreen::Menu && Flow->GetScreen() != ESmvScreen::Wizard && !(bRegionShot && Flow->GetScreen() == ESmvScreen::FlyFlow)) { Flow->SetScreen(ESmvScreen::Menu); SmokeAt = Now + 3.0; return; }
 		// tur sırasında uçuş akışı taslağa oyun türü / yarış yazdı: duman uçuşları serbest uçuştur
 		Flow->Draft.GameMode = TEXT("free");
 		Flow->Race = FSmvLocalRace();
@@ -5013,6 +5017,24 @@ void SSmvShell::TickSmoke()
 			Flow->Draft.Track.World.MountainHeight = 420.0;
 			Flow->Draft.Track.World.MountainCount = 6;
 			Flow->Draft.Track.World.TreeDensity = 0.45;
+		}
+		else if (FCString::Strcmp(Fx.Map, TEXT("region")) == 0)
+		{
+			// çevrimdışı bölge paketi (Ayarlar › Gerçek dünya = Çevrimdışı bu uçuş için): -SmvSmokeRegion=enlem,boylam,yarıçap
+			Flow->Draft.Track = FSmvTrack();
+			Flow->Draft.Track.Id = TEXT("smoke-region");
+			Flow->Draft.Track.Name = TEXT("Taksim (bölge)");
+			Flow->Draft.Track.ParkurKind = TEXT("real");
+			Flow->Draft.Track.WorldMode = TEXT("real");
+			Flow->Draft.Track.Lat = 41.0369; Flow->Draft.Track.Lon = 28.9850; Flow->Draft.Track.RadiusM = 1200;
+			FString Rs;
+			if (FParse::Value(FCommandLine::Get(), TEXT("SmvSmokeRegion="), Rs, false))
+			{
+				TArray<FString> Pp; Rs.ParseIntoArray(Pp, TEXT(","), true);
+				if (Pp.Num() >= 3) { Flow->Draft.Track.Lat = FCString::Atod(*Pp[0]); Flow->Draft.Track.Lon = FCString::Atod(*Pp[1]); Flow->Draft.Track.RadiusM = FCString::Atod(*Pp[2]); Flow->Draft.Track.Name = Rs; }
+			}
+			SmokePrevRealWorld = FSmvUiPrefs::Get().RealWorld;
+			FSmvUiPrefs::Get().RealWorld = TEXT("offline");
 		}
 		else if (FCString::Strcmp(Fx.Map, TEXT("g3d")) == 0)
 		{
@@ -5047,6 +5069,38 @@ void SSmvShell::TickSmoke()
 		Flow->Draft.Track.TimeOfDay = Fx.Tod;
 		Flow->Draft.Track.Weather = Fx.Wx;
 		Flow->Draft.bHasMission = false;
+		// gerçek dünya parkuru: bölge paketi yoksa önce indirilir (giriş kapısı) — ilerleme günlüğe, 15 dk sınır
+		if (USmvFlow::NeedsRegion(Flow->Draft.Track))
+		{
+			FSmvRegions& Rg = FSmvRegions::Get();
+			const FSmvTrack& Tr = Flow->Draft.Track;
+			if (!Rg.FindPack(Tr.Lat, Tr.Lon, Tr.RadiusM))
+			{
+				static double RegT0 = 0, RegLog = 0;
+				if (!Rg.IsRunningFor(Tr.Lat, Tr.Lon, Tr.RadiusM))
+				{
+					if (RegT0 > 0 && Rg.GetState() != ESmvRegionState::Running)
+					{
+						SMV_KLOG(TEXT("SMOKE region FAILED %s: %s — uçuş atlanır"), Fx.Code, *Rg.GetStatus());
+						RegT0 = 0; SmokeSub = 99; SmokeAt = Now + 0.5; return;
+					}
+					RegT0 = Now; RegLog = 0;
+					SMV_KLOG(TEXT("SMOKE region start %s: %.5f, %.5f, %.0f m"), Fx.Code, Tr.Lat, Tr.Lon, Tr.RadiusM);
+					Rg.Start(Tr.Lat, Tr.Lon, Tr.RadiusM, Data() ? Data()->Settings().CesiumToken : FString(), true);
+				}
+				if (Now - RegLog > 10.0) { RegLog = Now; SMV_KLOG(TEXT("SMOKE region %s: %%%.0f %s"), Fx.Code, Rg.GetProgress() * 100.f, *Rg.GetStatus()); }
+				if (Now - RegT0 > 900.0) { SMV_KLOG(TEXT("SMOKE region ZAMAN AŞIMI %s"), Fx.Code); Rg.Cancel(); RegT0 = 0; SmokeSub = 99; SmokeAt = Now + 0.5; return; }
+				SmokeAt = Now + 1.0;
+				return;
+			}
+			const FSmvRegionInfo* Pk = Rg.FindPack(Tr.Lat, Tr.Lon, Tr.RadiusM);
+			SMV_KLOG(TEXT("SMOKE region ready %s: %s, %d bina, %d yol, %d alan, %d ağaç, %.1f MB, merkez %.1f m; Google %s tam %%%.0f kapsama %%%.0f ortanca %.0f m"), Fx.Code, *Pk->Id,
+				Pk->Buildings, Pk->Roads, Pk->Areas, Pk->Trees, Pk->Bytes / 1048576.0, Pk->CenterMsl, Pk->bGoogleChecked ? TEXT("denetlendi") : TEXT("yok"),
+				Pk->GoogleFull * 100.f, Pk->GoogleAny * 100.f, Pk->GoogleMedianM);
+			if (!bRegionShot) { bRegionShot = true; Flow->FlyStep = 2; Flow->ParkurCat = TEXT("real"); Flow->SetScreen(ESmvScreen::FlyFlow); Refresh(); SmokeAt = Now + 2.0; return; }
+			bRegionShot = false;
+			Shot(Base + TEXT("_region"));
+		}
 		SMV_KLOG(TEXT("SMOKE flight %s map=%s tod=%s wx=%s"), Fx.Code, *Flow->Draft.Track.WorldMode, Fx.Tod, Fx.Wx);
 		StartFromWizard();
 		SmokeDeadline = Now + 180.0; SmokeAt = Now + 0.2; ++SmokeSub;
@@ -5188,6 +5242,8 @@ void SSmvShell::TickSmoke()
 	case 15: if (GameMode.IsValid()) GameMode->SmokeCam(1); SmokeAt = Now + 3.0; ++SmokeSub; return;
 	case 16: Shot(Base + TEXT("_fpv")); SmokeAt = Now + 0.8; ++SmokeSub; return;
 	case 17: if (GameMode.IsValid()) GameMode->SmokeCam(0); SmokeAt = Now + 1.0; SmokeSub = 11; return;
-	default: ++SmokeFl; SmokeSub = 0; SmokeAt = Now + 0.5; return;
+	default:
+		if (!SmokePrevRealWorld.IsEmpty()) { FSmvUiPrefs::Get().RealWorld = SmokePrevRealWorld; SmokePrevRealWorld.Reset(); }
+		++SmokeFl; SmokeSub = 0; SmokeAt = Now + 0.5; return;
 	}
 }

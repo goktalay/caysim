@@ -1,4 +1,5 @@
 #include "SmvFlow.h"
+#include "SmvRegion.h"
 #include "SmvMapRegistry.h"
 #include "SmvFabContent.h"
 #include "SimumavModule.h"
@@ -142,6 +143,13 @@ void USmvFlow::NewDraft()
 	if (Draft.Drone.Type == TEXT("plane")) Draft.Launch.Method = TEXT("wheels");
 }
 
+bool USmvFlow::NeedsRegion(const FSmvTrack& T)
+{
+	// Fab haritaları ve FPV parkurları kendi zeminini taşır; duman testinde -SmvNoRegionGate ile eski davranış
+	static const bool bNoGate = FParse::Param(FCommandLine::Get(), TEXT("SmvNoRegionGate"));
+	return !bNoGate && T.IsReal() && !FSmvFabContent::IsFabWorld(T.WorldMode) && !T.Id.StartsWith(TEXT("fpv:"));
+}
+
 FString USmvFlow::ValidateDraft() const
 {
 	if (Draft.Drone.Id.IsEmpty()) return FSmvI18n::T(TEXT("wizard.err_drone")).ToString();
@@ -150,6 +158,8 @@ FString USmvFlow::ValidateDraft() const
 	if (Draft.Backend == ESmvFlightBackend::Cloud && FSmvFabContent::IsFabWorld(Draft.Track.WorldMode)) return FSmvI18n::T(TEXT("wizard.err_fab_cloud")).ToString();
 	if (Draft.Backend == ESmvFlightBackend::Cloud && !ClientObj->IsLoggedIn()) return FSmvI18n::T(TEXT("wizard.err_cloud_login")).ToString();
 	if (Draft.Backend == ESmvFlightBackend::LocalSitl && !USmvLocalFlightLink::SitlAvailable()) return FSmvI18n::T(TEXT("wizard.err_no_sitl")).ToString();
+	// gerçek dünya parkuru: bölge haritası (çevrimdışı paket) inmeden girilmez — Parkur › Gerçek Dünya › Bölge haritası
+	if (NeedsRegion(Draft.Track) && !FSmvRegions::Get().FindPack(Draft.Track.Lat, Draft.Track.Lon, Draft.Track.RadiusM)) return FSmvI18n::T(TEXT("region.err_need")).ToString();
 	if (Race.Kind != TEXT("none") && (Draft.Drone.Type == TEXT("rover"))) return FSmvI18n::T(TEXT("wizard.err_race_rover")).ToString();
 	if (Race.Kind == TEXT("dogfight") && Race.Bots != 1) return FSmvI18n::T(TEXT("wizard.err_dogfight_bots")).ToString();
 	if (Fpv.IsActive())
@@ -198,6 +208,13 @@ void USmvFlow::StartFlight()
 			if (Md->Lat != 0.0) { Draft.Track.Lat = Md->Lat; Draft.Track.Lon = Md->Lon; Draft.Track.GroundMsl = Md->GroundMsl; }
 		}
 	}
+	// bölge paketi: kalkış zemini (SITL ev irtifası) paketin arazisinden — Google / paket dünyasında ev noktası yüzeyde
+	if (NeedsRegion(Draft.Track))
+		if (const FSmvRegionInfo* Rg = FSmvRegions::Get().FindPack(Draft.Track.Lat, Draft.Track.Lon, Draft.Track.RadiusM))
+		{
+			FSmvRegionDem Dm;
+			if (Dm.Load(*Rg)) Draft.Track.GroundMsl = FMath::Max(0.0, Dm.HeightMsl(Draft.Track.Lat, Draft.Track.Lon));
+		}
 	if (Draft.Backend == ESmvFlightBackend::Cloud)
 	{
 		USmvCloudFlightLink* L = NewObject<USmvCloudFlightLink>(this);

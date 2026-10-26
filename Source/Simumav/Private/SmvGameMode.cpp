@@ -42,6 +42,8 @@
 #include "SmvMapRegistry.h"
 #include "SmvPhysics.h"
 #include "SmvScenery.h"
+#include "SmvRegion.h"
+#include "SmvRegionWorld.h"
 #include "SmvLoadGate.h"
 #include "SmvLocalFlightLink.h"
 #include "Engine/PostProcessVolume.h"
@@ -304,13 +306,29 @@ void ASmvGameMode::BuildScene()
 	const bool bReal = Req.Track.WorldMode == TEXT("real") || Req.Track.WorldMode == TEXT("google3d");
 	const bool bCesiumOk = ACaySimWorldSetup::CesiumCompiled() && !WorldSetup->CesiumIonToken.IsEmpty();
 	// gerçek dünya parkuru: google3d kipi ya da "real" + Ayarlar → Görüntü → Gerçek dünya = google3d → Google fotogerçekçi 3B (yoksa arazi + uydu)
-	if (bReal && bCesiumOk) Src = (Req.Track.WorldMode == TEXT("google3d") || FSmvUiPrefs::Get().RealWorld == TEXT("google3d")) ? ECaySimWorldSource::GooglePhotoreal : ECaySimWorldSource::CesiumIon;
+	// Bölge haritası (SmvRegion): gerçek dünya parkuruna yalnız çevrimdışı paketi inmiş bölgede girilir (USmvFlow::ValidateDraft).
+	// Google 3B yalnız bölge denetimi geçtiyse (kapsama ≥ %90, ≤ 30 gün) akıtılır; değilse ya da Ayarlar › Gerçek dünya = Çevrimdışı ise
+	// paket (ASmvRegionWorld: arazi + OSM binaları / yolları / su / ağaçlar, düz dünya kaynağıyla). Cesium arazi + uydu: Ayarlar = Arazi.
+	const FSmvRegionInfo* RegionPack = (bReal && !FSmvFabContent::IsFabWorld(Req.Track.WorldMode)) ? FSmvRegions::Get().FindPack(Req.Track.Lat, Req.Track.Lon, Req.Track.RadiusM) : nullptr;
+	bRegionWorld = false;
+	if (bReal && bCesiumOk)
+	{
+		const FString Pref = FSmvUiPrefs::Get().RealWorld;
+		const bool bWantGoogle = Req.Track.WorldMode == TEXT("google3d") || Pref == TEXT("google3d");
+		if (RegionPack && (Pref == TEXT("offline") || (bWantGoogle && !RegionPack->GoogleOk())))
+		{
+			bRegionWorld = true;
+			if (bWantGoogle && Pref != TEXT("offline")) PushEvent(FSmvI18n::T(TEXT("region.ev_no_google")).ToString(), 3);
+		}
+		else Src = bWantGoogle ? ECaySimWorldSource::GooglePhotoreal : ECaySimWorldSource::CesiumIon;
+	}
+	else if (bReal && RegionPack) bRegionWorld = true;   // Cesium yok / belirteç yok: paket
 	// Fab haritası gerçek bir bölgenin içine yerleştirilir (kayıt tablosu demiri): çevre Google Photorealistic 3D Tiles (ya da World Terrain +
 	// Bing uydu), harita alanı karolardan kırpılır, kenar yükseklikleri eşlenir (TickLoadGate → AlignRealRim). Ayarlar → Görüntü → Gerçek dünya.
 	const FSmvMapDef* FabDef = FSmvFabContent::IsFabWorld(Req.Track.WorldMode) ? FSmvMapRegistry::Find(Req.Track.WorldMode.Mid(4)) : nullptr;
 	const FString RealPref = FSmvUiPrefs::Get().RealWorld;
 	bRealSurround = false; bRimPending = false; bRimDone = false;
-	if (FabDef && FabDef->Lat != 0.0 && bCesiumOk && RealPref != TEXT("off"))
+	if (FabDef && FabDef->Lat != 0.0 && bCesiumOk && RealPref != TEXT("off") && RealPref != TEXT("offline"))
 	{
 		Src = RealPref == TEXT("terrain") ? ECaySimWorldSource::CesiumIon : ECaySimWorldSource::GooglePhotoreal;
 		bRealSurround = true;
@@ -326,9 +344,10 @@ void ASmvGameMode::BuildScene()
 	else bGoogleCity = false;
 	WorldSetup->Build(S, nullptr, Src);
 	const bool bFlat = WorldSetup->GetSource() == ECaySimWorldSource::Flat;
-	SMV_KLOG(TEXT("Uçuş dünyası: %s (parkur %s, gerçek çevre %s, Cesium %s, belirteç %s) — %.5f, %.5f, zemin %.0f m MSL"), *WorldSetup->SourceName(), *Req.Track.WorldMode,
+	SMV_KLOG(TEXT("Uçuş dünyası: %s%s (parkur %s, gerçek çevre %s, Cesium %s, belirteç %s) — %.5f, %.5f, zemin %.0f m MSL"), *WorldSetup->SourceName(),
+		bRegionWorld ? *(FString(TEXT(" + bölge paketi ")) + RegionPack->Id) : TEXT(""), *Req.Track.WorldMode,
 		bRealSurround ? TEXT("evet") : TEXT("hayır"), ACaySimWorldSetup::CesiumCompiled() ? TEXT("derlemede") : TEXT("yok"), WorldSetup->CesiumIonToken.IsEmpty() ? TEXT("yok") : TEXT("var"), Req.Track.Lat, Req.Track.Lon, GroundMsl);
-	if (bFlat && bReal) PushEvent(FSmvI18n::T(TEXT("flight.no_cesium")).ToString(), 4);
+	if (bFlat && bReal && !bRegionWorld) PushEvent(FSmvI18n::T(TEXT("flight.no_cesium")).ToString(), 4);
 	// Fab haritası (satın alınmış içerik; pakette varsa; kayıt tablosu SmvMapRegistry.cpp) — yoksa (düz dünyada) prosedürel dünya
 	bool bFab = false;
 	ClearFabWorld();
@@ -353,7 +372,16 @@ void ASmvGameMode::BuildScene()
 		}
 		if (!bFab) PushEvent(FSmvI18n::T(TEXT("flight.fab_missing")).ToString(), 4);
 	}
-	if (!bFab && bFlat)
+	if (!bFab && bFlat && bRegionWorld && RegionPack)
+	{
+		FActorSpawnParameters Sp;
+		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		RegionWorld = W->SpawnActor<ASmvRegionWorld>(ASmvRegionWorld::StaticClass(), FTransform::Identity, Sp);
+		if (RegionWorld && !RegionWorld->Build(*RegionPack, Req.Track, GroundMsl, WorldSetup)) { RegionWorld->Destroy(); RegionWorld = nullptr; }
+		if (RegionWorld) PushEvent(FSmvI18n::T(TEXT("region.ev_offline")).ToString(), 1);
+		bRegionWorld = RegionWorld != nullptr;
+	}
+	if (!bFab && bFlat && !bRegionWorld)
 	{
 		Terrain = W->SpawnActor<ASmvProcTerrain>();
 		if (Terrain) Terrain->Build(Req.Track, GroundMsl, WorldSetup);
@@ -763,6 +791,8 @@ void ASmvGameMode::StopScene()
 	for (TObjectPtr<AActor>& Db : Debris) if (Db) Db->Destroy();
 	Debris.Reset(); DebrisVel.Reset();
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
+	if (RegionWorld) { RegionWorld->Destroy(); RegionWorld = nullptr; }
+	bRegionWorld = false;
 	ClearFabWorld();
 	if (LaunchRig) { LaunchRig->Destroy(); LaunchRig = nullptr; }
 	if (WorldSetup) { WorldSetup->Destroy(); WorldSetup = nullptr; }
@@ -1247,7 +1277,7 @@ void ASmvGameMode::TickLoadGate()
 			bReady = bPlacedOk;
 			D = Fmt(TEXT("load.d.levels"), { { TEXT("a"), FString::FromInt(Vis) }, { TEXT("b"), FString::FromInt(Lvs.Num()) } });
 		}
-		else D = FSmvI18n::T(WorldSetup && WorldSetup->GetSource() != ECaySimWorldSource::Flat ? TEXT("load.d.real") : TEXT("load.d.procedural")).ToString();
+		else D = FSmvI18n::T(WorldSetup && WorldSetup->GetSource() != ECaySimWorldSource::Flat ? TEXT("load.d.real") : bRegionWorld ? TEXT("load.d.region") : TEXT("load.d.procedural")).ToString();
 		const bool bLevelsOk = bReady;
 		// gerçek dünya (Cesium 3D Tiles): karolar yüklenmeli; Fab haritası varsa yerleşince kırpma + kenar eşleme, ardından karolar yeniden otursun
 		const bool bTiles = WorldSetup && WorldSetup->GetSource() != ECaySimWorldSource::Flat;

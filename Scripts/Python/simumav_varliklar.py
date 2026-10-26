@@ -7,6 +7,7 @@
 #   /Game/Simumav/Materials/M_SmvTerrainWx arazi + hava (Wetness: koyulaşma, parlaklık, su birikintisi; Snow: düz yüzeylerde kar)
 #   /Game/Simumav/Materials/M_SmvTerrainHyper  Hyper Auto Landscape dokularıyla eğim/yükseklik otomatik arazi (Fab paketi varsa)
 #   /Game/Simumav/Materials/M_SmvStreet    şehir asfaltı / kaldırım taşı (dünya hizalı gürültü + karo derzi)
+#   /Game/Simumav/Materials/M_SmvFacade    bölge haritası binaları: kat / pencere ızgarası (UV metre), gece yanan pencereler, çatı (Windows = 0)
 #   /Game/Simumav/Models/<ad>/...          Content/Simumav/ModelsSrc/*.glb (Interchange glTF; idempotent, kaynak sha1 etiketi)
 # Ayrıca Ultra Dynamic Sky / Weather değişken dökümü (USmvAtmosphereLibrary; "UDSPROP" satırları) — atmosfer ad listesinin doğrulaması.
 # Çalıştırma (Windows, şirket bilgisayarı / CI):
@@ -457,6 +458,48 @@ def sokak_malzemesi():
     log(f"M_SmvStreet hazır ({'Hyper gürültü dokusu' if gt else 'motor gürültüsü'})")
 
 
+def cephe_malzemesi():
+    """M_SmvFacade — bölge haritası (OSM) binaları: UV metre (U duvar boyunca, V yükseklik). Windows = 1 → kat / pencere ızgarası
+    (BayM × FloorM hücre, cam: koyu, parlak; gece Night > 0 iken hücre başına rastgele yanan pencereler), 0 → çatı. Duvar rengi köşe rengi × Color
+    × dünya gürültüsü (sıva lekeleri)."""
+    m = malzeme_v("/Game/Simumav/Materials", "M_SmvFacade", "1")
+    if m is None:
+        return
+    g = Graf(m)
+    uv = g.e(unreal.MaterialExpressionTextureCoordinate, coordinate_index=0)
+    hucre = g.ekle(g.skaler("BayM", 3.2), g.skaler("FloorM", 3.1))
+    q = g.ikili(unreal.MaterialExpressionDivide, uv, hucre)
+    f = g.frac(q)
+    fx = g.maske(f, r=True)
+    fy = g.maske(f, g=True)
+    pw = g.sat(g.mul(g.sub(0.29, g.abs(g.sub(fx, 0.5))), 40.0))
+    ph = g.sat(g.mul(g.sub(0.27, g.abs(g.sub(fy, 0.56))), 40.0))
+    # zemin kat (V < FloorM): pencereler yere yakın, vitrin gibi (yükseklik maskesi daha uzun)
+    zemin = g.sat(g.mul(g.sub(1.0, g.maske(q, g=True)), 1000.0))
+    ph_z = g.sat(g.mul(g.sub(0.36, g.abs(g.sub(fy, 0.48))), 40.0))
+    pen = g.mul(g.mul(pw, g.lerp(ph, ph_z, zemin)), g.skaler("Windows", 1.0))
+    wp = g.e(unreal.MaterialExpressionWorldPosition)
+    gur = g.e(unreal.MaterialExpressionNoise, scale=0.004, quality=1, levels=3, output_min=0.0, output_max=1.0)
+    g.bag(wp, gur, "Position")
+    vc = g.e(unreal.MaterialExpressionVertexColor)
+    duvar = g.mul(g.mul(vc, g.vektor("Color", 1.0, 1.0, 1.0)), g.lerp(0.82, 1.06, gur))
+    cam = g.vektor("GlassColor", 0.035, 0.05, 0.065)
+    taban = g.lerp(duvar, cam, pen)
+    mel.connect_material_property(taban, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(g.lerp(g.skaler("Rough", 0.88), 0.07, pen), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(g.mul(pen, 0.35), "", unreal.MaterialProperty.MP_METALLIC)
+    # gece: hücre kimliğinden (taban hücre koordinatı) rastgele yanan pencereler
+    tam = g.bag(q, g.e(unreal.MaterialExpressionFloor))
+    rnd = g.e(unreal.MaterialExpressionNoise, scale=1.0, quality=1, levels=1, output_min=0.0, output_max=1.0)
+    g.bag(g.ekle(g.mul(tam, 37.13), g.c(0.0)), rnd, "Position")
+    yanar = g.sat(g.mul(g.sub(rnd, 0.55), 12.0))
+    isik = g.mul(g.mul(g.mul(pen, yanar), g.skaler("Night", 0.0)), g.vektor("LitColor", 2.4, 1.7, 1.0))
+    mel.connect_material_property(isik, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    log("M_SmvFacade hazır")
+
+
 MCC = "/Game/MetaCharacterCreator/Data/MetaHumans"
 # gerçekçi MetaHuman yüzleri (ad, kadın mı, yaklaşık ten kademesi 1 açık … 8 koyu). Anime / kara elf / goblin yüzleri alınmaz.
 MCC_YUZLER = (
@@ -792,7 +835,7 @@ def main():
     arazi_malzemesi()
     parlak_malzeme()
     for adim in (lambda: pbr_malzemesi("M_SmvPbr", False), lambda: pbr_malzemesi("M_SmvPbr2S", True), pervane_diski, hava_arazi_malzemesi, niagara_sablonu,
-                 hyper_arazi_malzemesi, sokak_malzemesi, pilot_kiti):
+                 hyper_arazi_malzemesi, sokak_malzemesi, cephe_malzemesi, pilot_kiti):
         try:
             adim()
         except Exception as e:  # noqa: BLE001 — eksik malzeme oyunu durdurmaz (yedek malzemeler)

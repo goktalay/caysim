@@ -160,6 +160,9 @@ private:
 	double SmokeAt = 0;
 	/** duman testi uçuş aşaması: uçuş sırası, alt adım, bekleme sınırı */
 	int32 SmokeFl = 0, SmokeSub = 0, SmokeRetries = 0;
+	/** bölge uçuşu: paket hazır karesi (Uçuş akışı bölge kartı) alındı mı; uçuş için değiştirilen Gerçek dünya tercihi */
+	bool bRegionShot = false;
+	FString SmokePrevRealWorld;
 	double SmokeDeadline = 0, SmokeT1 = 0;
 	void TickSmoke();
 	double WorldPrevAt = 0;
@@ -268,6 +271,8 @@ private:
 	TSharedRef<SWidget> ParkurList();
 	TSharedRef<SWidget> ParkurWizard();
 	TSharedRef<SWidget> RealWizard();
+	/** Bölge haritası kartı (SmvRegion): durum, indirme ilerlemesi, İndir / Güncelle / İptal / Sil. Tp kalıcı bir parkura işaret etmeli. */
+	TSharedRef<SWidget> RegionCard(FSmvTrack* Tp, bool bCompact);
 	TSharedRef<SWidget> CrewV2();
 	TSharedRef<SWidget> CrewWizard();
 	TSharedRef<SWidget> FlyFlow();
