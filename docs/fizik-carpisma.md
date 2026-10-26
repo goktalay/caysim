@@ -139,7 +139,13 @@ Kullanıcının kendi günlükleri (`C:\claude\Simumav-dev\Simumav\Saved\Logs`, 
    bina ağlarında bu çoğu kez `NoCollision`. `SmvPhysics::PrepareActorsCollision`: profil `BlockAll`, sorgu açık, `Visibility` Block;
    **pişmiş çarpışma verisi olmayan** (basit şekil yok, üçgen ağ yok) ≥ 2 m ağlara sınır kutusu çarpışması (`EnsureMeshCollision`;
    seviyelerde de). "Yalnız karmaşık" sayımı artık pişmiş üçgen ağ gerçekten varsa.
+   Ayrıca City Sample kule ağları (`UseComplexAsSimple`, pişmiş üçgen ağ var) **karmaşık** sorguda hiç isabet vermiyor, basit sorguda
+   veriyor: gövde süpürmesi, MTD, engel sensörleri ve çarpma hedefi artık karmaşık + basit **ikili** sorgu (`SmvPhysics::LineBoth` /
+   `SweepBoth`, en yakın isabet). Kalkış noktası araması tek kip kaldı (ikili sorgu ağaç taçlarının basit şekline takılıyordu).
 3. **Google 3B karolarında fizik ağı kapalıydı** (önceki tur): Google binaları çarpışmıyordu. `bGooglePhysics=True` (varsayılan).
+   Ayrıca paketli oyunda glTF dönüştürücüleri kayıtsız olduğundan Google karoları hiç oluşmuyordu (CaySim modül başlangıcında kaydedilir).
+   Doğrulama: Manhattan'da Google binasına `hard` çarpma → disarm → gövde 0,4 m üstte. Türkiye'de (Kızılay, Taksim, Levent) Google
+   karoları 2,5B — alçak irtifada çarpılacak bina ağı yok.
 4. **Kaçınma**: çok rotorda `AVOID_ENABLE=3` LOITER / ALT_HOLD / GUIDED'da duvardan 2 m önce durdurur — "çarpamıyorum" algısı
    buradan gelebilir; ACRO / STABILIZE'de kaçınma yoktur. Duman testindeki çarpma koşusu kaçınmayı kapatır.
 
