@@ -35,3 +35,12 @@ jobs:
           Get-Process -Name zenserver -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("  pid {0} {1}" -f $_.Id, $_.Path) }
           Write-Host "=== D: yazma denemesi"
           if (Test-Path 'D:\') { try { New-Item -ItemType Directory -Force -Path 'D:\Simumav' | Out-Null; [IO.File]::WriteAllText('D:\Simumav\.yazma-denemesi', 'ok'); Remove-Item 'D:\Simumav\.yazma-denemesi'; Write-Host "  D:\Simumav yazilabilir (NETWORK SERVICE)" } catch { Write-Host ("  D:\Simumav YAZILAMADI: " + $_.Exception.Message) } } else { Write-Host "  D: surucusu yok" }
+      - name: Tasima betigini D:\Simumav'a koy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (-not (Test-Path 'D:\')) { Write-Host 'D: yok'; exit 0 }
+          New-Item -ItemType Directory -Force -Path 'D:\Simumav' | Out-Null
+          $u = 'https://api.github.com/repos/' + $env:GITHUB_REPOSITORY + '/contents/Tools/ci/d-tasima.ps1?ref=' + $env:GITHUB_SHA
+          Invoke-WebRequest -Uri $u -Headers @{ Authorization = ('Bearer ' + $env:GH_TOKEN); Accept = 'application/vnd.github.raw' } -OutFile 'D:\Simumav\d-tasima.ps1' -UseBasicParsing
+          Get-Item 'D:\Simumav\d-tasima.ps1' | ForEach-Object { Write-Host ('D:\Simumav\d-tasima.ps1 hazir (' + $_.Length + ' bayt)') }
