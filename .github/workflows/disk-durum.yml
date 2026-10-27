@@ -1,0 +1,37 @@
+# Simumav - disk durumu (yalniz okur): suruculerin bos alani, C:\claude ve runner altindaki buyuk klasorler, Zen/DDC, Epic onbellegi.
+name: disk-durum
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner etiketi (bos = vars.RUNNER_LABEL ya da unreal)"
+        type: string
+        default: ""
+
+jobs:
+  rapor:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Disk raporu
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host "=== Suruculer"
+          Get-PSDrive -PSProvider FileSystem | ForEach-Object { Write-Host ("{0}:  kullanilan {1:N1} GB  bos {2:N1} GB  kok {3}" -f $_.Name, ($_.Used / 1GB), ($_.Free / 1GB), $_.Root) }
+          function Boyut([string]$p) { if (-not (Test-Path -LiteralPath $p)) { return -1 }; $s = (Get-ChildItem -LiteralPath $p -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum; if ($s) { return $s } else { return 0 } }
+          Write-Host "=== C:\claude alt klasorleri"
+          Get-ChildItem -LiteralPath 'C:\claude' -Directory -Force -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("  {0,8:N1} GB  {1}" -f ((Boyut $_.FullName) / 1GB), $_.FullName) }
+          Write-Host "=== Calisma alani"
+          $ws = $env:GITHUB_WORKSPACE
+          foreach ($k in @('Paketler\Shipping', 'Paketler\Development', 'Paketler\Kurulum', 'Content', 'Intermediate', 'Saved', 'Binaries', 'DerivedDataCache', 'ThirdParty', '.git')) { Write-Host ("  {0,8:N1} GB  {1}" -f ((Boyut (Join-Path $ws $k)) / 1GB), $k) }
+          Write-Host "=== Diger"
+          foreach ($p in @('C:\ProgramData\Epic\EpicGamesLauncher\VaultCache', "$env:LOCALAPPDATA\UnrealEngine", "$env:LOCALAPPDATA\Simumav", 'C:\Windows\ServiceProfiles\NetworkService\AppData\Local\UnrealEngine', 'C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Simumav', 'C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Temp')) { Write-Host ("  {0,8:N1} GB  {1}" -f ((Boyut $p) / 1GB), $p) }
+          Write-Host "=== Zen sunuculari"
+          Get-Process -Name zenserver -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("  pid {0} {1}" -f $_.Id, $_.Path) }
+          Write-Host "=== D: yazma denemesi"
+          if (Test-Path 'D:\') { try { New-Item -ItemType Directory -Force -Path 'D:\Simumav' | Out-Null; [IO.File]::WriteAllText('D:\Simumav\.yazma-denemesi', 'ok'); Remove-Item 'D:\Simumav\.yazma-denemesi'; Write-Host "  D:\Simumav yazilabilir (NETWORK SERVICE)" } catch { Write-Host ("  D:\Simumav YAZILAMADI: " + $_.Exception.Message) } } else { Write-Host "  D: surucusu yok" }
