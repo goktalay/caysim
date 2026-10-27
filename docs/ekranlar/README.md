@@ -22,6 +22,13 @@
 ### Yükleme ekranı (Türkçe, daha açık arka plan)
 ![Yükleme ekranı (Türkçe, daha açık arka plan)](B6_yukleme_tr.jpg)
 
+### Şehir — City Sample Crowds yakın plan MetaHuman yayalar (öndeki grup; arkada OverCrowd kalabalığı)
+![City Sample yayaları](B7_citysample_yayalar.jpg)
+
+### Mürettebat — pilot Workbrand Techwear kıyafetiyle
+![Pilot Techwear](B8_pilot_techwear.jpg)
+
+
 ## 1. Açılış — logo + menü sahnesi hazırlık ilerlemesi (atmosfer hazır olmadan menü açılmaz)
 
 ![Açılış — logo + menü sahnesi hazırlık ilerlemesi (atmosfer hazır olmadan menü açılmaz)](01_00_boot.jpg)
