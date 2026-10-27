@@ -1,0 +1,45 @@
+# Simumav - Windows kurulum dosyasi (Inno Setup): runner diskindeki son paketten SimumavSetup-<surum>.exe (+ 2 GB .bin parcalari)
+# C:\claude\Kurulum\<surum> altina yazilir (yazilamazsa calisma alani Paketler\Kurulum). Hicbir yere yuklenmez.
+name: kurulum
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner etiketi (bos = vars.RUNNER_LABEL ya da unreal)"
+        type: string
+        default: ""
+      config:
+        description: "Shipping ya da Development"
+        type: string
+        default: "Shipping"
+      cikis:
+        description: "Cikis klasoru"
+        type: string
+        default: "C:\\claude\\Kurulum"
+
+jobs:
+  kurulum:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Kurulum dosyasi
+        env:
+          CFG: ${{ inputs.config }}
+          CIKIS: ${{ inputs.cikis }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # depo alinmaz: calisma alani son derlemenin (build-windows) kopyasi; betik oradan calisir
+          Set-Location $env:GITHUB_WORKSPACE
+          if (-not (Test-Path '.\Tools\ci\kurulum.ps1')) { throw 'Tools\ci\kurulum.ps1 yok - once build-windows calismali' }
+          $paket = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
+          $surum = (Get-Date -Format 'yyyy.MM.dd-HHmm') + '-' + $env:GITHUB_SHA.Substring(0, 7)
+          if ($env:CFG -ne 'Shipping') { $surum = $surum + '-' + $env:CFG.ToLower() }
+          $cikis = Join-Path $env:CIKIS $surum
+          try { New-Item -ItemType Directory -Force -Path $cikis | Out-Null; [IO.File]::WriteAllText((Join-Path $cikis '.yazma-denemesi'), 'ok'); Remove-Item (Join-Path $cikis '.yazma-denemesi') }
+          catch { Write-Host ("Cikis klasorune yazilamadi (" + $_.Exception.Message + ") - calisma alanina yaziliyor"); $cikis = Join-Path $env:GITHUB_WORKSPACE ("Paketler\Kurulum\" + $surum) }
+          & .\Tools\ci\kurulum.ps1 -Paket $paket -Cikis $cikis -Surum $surum
