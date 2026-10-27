@@ -697,7 +697,7 @@ int32 ASmvCityLife::BuildCsNear(const TArray<FVector>& Spots, uint32& Rs)
 	TArray<FVector> Sp;
 	for (const FVector& X : Spots) Sp.Add(X - GetActorLocation());
 	Sp.Sort([&Home](const FVector& A, const FVector& B) { return FVector::DistSquared2D(A, Home) < FVector::DistSquared2D(B, Home); });
-	if (FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke"))) Sp.Insert(Home + FVector(800.0, 0.0, 0.0), 0);   // duman: kameranın önünde görünür grup
+	if (FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke"))) Sp.Insert(Home + FVector(0.0, -800.0, 0.0), 0);   // duman: kameranın önünde görünür grup (kuzey = −Y)
 	if (Sp.Num() == 0 || FVector::Dist2D(Sp[0], Home) > 6000.0)
 		for (int32 k = 0; k < 4; ++k) { const double A = SmvRand(Rs) * UE_DOUBLE_TWO_PI, Rr = 1000.0 + 2000.0 * SmvRand(Rs); Sp.Insert(Home + FVector(FMath::Cos(A) * Rr, FMath::Sin(A) * Rr, 0.0), 0); }
 	for (int32 i = 0, g = 0; i < NIdle && Sp.Num(); ++g)
@@ -776,7 +776,7 @@ void ASmvCityLife::Tick(float Dt)
 		}
 	}
 	// City Sample tanısı: 6 sn sonra ilk yayaların çizilip çizilmediği
-	if (!bCsDiag && CsParts.Num() && T > 6.0)
+	if (!bCsDiag && CsParts.Num() && T > 70.0)   // yükleme bittikten sonra
 	{
 		bCsDiag = true;
 		int32 Shown = 0, N = 0;
