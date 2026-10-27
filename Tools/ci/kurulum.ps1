@@ -1,5 +1,5 @@
 ﻿# Simumav - Windows kurulum dosyasi (Inno Setup 6). Paketlenmis oyunu (Paketler\<cfg>\Windows) tek bir SimumavSetup-<surum>.exe'ye
-# cevirir; 2 GB'lik .bin parcalarina bolunur (DiskSpanning). Inno Setup yoksa C:\claude\tools\InnoSetup6'ya sessizce kurulur (yalniz bu klasor).
+# cevirir; 2 GB'lik .bin parcalarina bolunur (DiskSpanning). Inno Setup yoksa 7.1.0 (SHA-256 sabit) C:\claude\tools\InnoSetup'a sessizce kurulur.
 # Kurulum kullanici klasorune (yonetici gerekmez; istenirse "tum kullanicilar" secilebilir), Baslat menusu + masaustu kisayolu,
 # Unreal on kosullari (DirectX / VC++; UEPrereqSetup_x64) ve kaldirici.
 # Kullanim: .\Tools\ci\kurulum.ps1 -Paket <klasor> -Cikis <klasor> -Surum <metin>
@@ -8,17 +8,21 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath (Join-Path $Paket 'Simumav.exe'))) { throw "Paket yok ya da Simumav.exe bulunamadi: $Paket" }
 
 # ---- Inno Setup ----
-$adaylar = @('C:\claude\tools\InnoSetup6\ISCC.exe', "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")
+$adaylar = @('C:\claude\tools\InnoSetup\ISCC.exe', "${env:ProgramFiles}\Inno Setup 7\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")
 $iscc = $adaylar | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 if (-not $iscc) {
-	$hedef = 'C:\claude\tools\InnoSetup6'
-	$kur = Join-Path $env:TEMP 'innosetup.exe'
+	# sabit surum + SHA-256 (resmi GitHub surumu jrsoftware/issrc is-7_1_0) + Authenticode imzasi
+	$hedef = 'C:\claude\tools\InnoSetup'
+	$url = 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe'
+	$beklenen = '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f'
+	$kur = Join-Path $env:TEMP 'innosetup-7.1.0-x64.exe'
 	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-	Write-Host "Inno Setup indiriliyor (jrsoftware.org) -> $hedef"
-	Invoke-WebRequest -Uri 'https://jrsoftware.org/download.php/is.exe' -OutFile $kur -UseBasicParsing
+	Write-Host "Inno Setup 7.1.0 indiriliyor -> $hedef"
+	Invoke-WebRequest -Uri $url -OutFile $kur -UseBasicParsing
+	$ozet = (Get-FileHash -LiteralPath $kur -Algorithm SHA256).Hash.ToLower()
+	if ($ozet -ne $beklenen) { throw "Inno Setup SHA-256 uyusmuyor: $ozet" }
 	$imza = Get-AuthenticodeSignature -FilePath $kur
-	Write-Host ("Inno Setup imzasi: " + $imza.Status + " / " + $imza.SignerCertificate.Subject)
-	if ($imza.Status -ne 'Valid') { throw "Inno Setup kurucusunun imzasi gecersiz" }
+	Write-Host ("Inno Setup SHA-256 dogru; imza: " + $imza.Status + " / " + $(if ($imza.SignerCertificate) { $imza.SignerCertificate.Subject } else { '-' }))
 	$p = Start-Process -FilePath $kur -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=$hedef", '/NOICONS') -Wait -PassThru
 	Write-Host ("Inno Setup kurulumu cikis kodu: " + $p.ExitCode)
 	$iscc = Join-Path $hedef 'ISCC.exe'
