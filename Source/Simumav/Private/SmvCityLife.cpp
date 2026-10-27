@@ -7,6 +7,7 @@
 #include "Components/PoseableMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/Material.h"
 #include "Engine/SkeletalMesh.h"
@@ -37,6 +38,29 @@ namespace
 		TEXT("/Game/DroneMegaPack/Drone_D/Models"),
 		TEXT("/Game/Drone-Sounds/Cue/44_1kHz-24bit"),
 		TEXT("/Game/150SpaceRank/PNG/128"),
+		// City Sample Crowds (Epic; yakın plan MetaHuman yayalar): gövde / giysi / ayakkabı ağları, yüzler, saç "kask"ları, yürüme / bekleme
+		TEXT("/Game/CitySampleCrowd/Character/Male/NormalWeight/Meshes"),
+		TEXT("/Game/CitySampleCrowd/Character/Male/OverWeight/Meshes"),
+		TEXT("/Game/CitySampleCrowd/Character/Male/UnderWeight/Meshes"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/NormalWeight/Meshes"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/OverWeight/Meshes"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/UnderWeight/Meshes"),
+		TEXT("/Game/CitySampleCrowd/Character/Male/m_001"),
+		TEXT("/Game/CitySampleCrowd/Character/Male/m_002"),
+		TEXT("/Game/CitySampleCrowd/Character/Male/m_003"),
+		TEXT("/Game/CitySampleCrowd/Character/Male/m_004"),
+		TEXT("/Game/CitySampleCrowd/Character/Male/m_005"),
+		TEXT("/Game/CitySampleCrowd/Character/Male/m_006"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/f_001"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/f_002"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/f_003"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/f_004"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/f_005"),
+		TEXT("/Game/CitySampleCrowd/Character/Female/f_006"),
+		TEXT("/Game/CitySampleCrowd/Character/Anims/Loco"),
+		// Workbrand Techwear (MetaHuman giysisi; pilot kıyafeti — SmvPilotFigure)
+		TEXT("/Game/WB_Techwear/SkeletalMeshes/MTN"),
+		TEXT("/Game/WB_Techwear/SkeletalMeshes/FTN"),
 		// </PISIR-KLASORLERI>
 	};
 	const TCHAR* GCarDir = TEXT("/Game/City_Traffic_Pro/Cars/Meshes/Skeletal_Meshes");
@@ -57,6 +81,83 @@ namespace
 	}
 
 	double SmvRand(uint32& S) { S = S * 1664525u + 1013904223u; return (S >> 8) / 16777216.0; }
+
+	// ---- City Sample Crowds (/Game/CitySampleCrowd): modüler MetaHuman yaya — gövde + üst + alt + ayakkabı + yüz + saç kaskı ----
+	struct FCsBody { USkeletalMesh* Body = nullptr; TArray<USkeletalMesh*> Tops, Bottoms, Shoes; bool bF = false; };
+	struct FCsFace { USkeletalMesh* Face = nullptr; TArray<UObject*> Hair; bool bF = false; };
+	struct FCsKit
+	{
+		TArray<FCsBody> Bodies;
+		TArray<FCsFace> Faces;
+		TArray<UAnimSequence*> Walk[2], Idle[2];   // [0] erkek, [1] kadın
+		bool Has(bool bF) const
+		{
+			bool bB = false, bFc = false;
+			for (const FCsBody& B : Bodies) bB |= B.bF == bF;
+			for (const FCsFace& F : Faces) bFc |= F.bF == bF;
+			return bB && bFc && Walk[bF ? 1 : 0].Num() > 0;
+		}
+	};
+
+	const FCsKit& SmvCsKit()
+	{
+		static FCsKit K;
+		static bool bRead = false;
+		if (bRead) return K;
+		bRead = true;
+		const FString R = TEXT("/Game/CitySampleCrowd/Character");
+		for (int32 g = 0; g < 2; ++g)
+		{
+			const TCHAR* Sex = g ? TEXT("Female") : TEXT("Male");
+			for (const TCHAR* Wt : { TEXT("NormalWeight"), TEXT("OverWeight"), TEXT("UnderWeight") })
+			{
+				TArray<USkeletalMesh*> Ms;
+				SmvAssetsIn<USkeletalMesh>(*FString::Printf(TEXT("%s/%s/%s/Meshes"), *R, Sex, Wt), Ms, [](const FAssetData&) { return true; });
+				FCsBody B; B.bF = g == 1;
+				for (USkeletalMesh* M : Ms)
+				{
+					const FString N = M->GetName().ToLower();
+					if (N.EndsWith(TEXT("_body"))) B.Body = M;
+					else if (N.EndsWith(TEXT("_base"))) continue;
+					else if (N.Contains(TEXT("loafers")) || N.Contains(TEXT("oxfords")) || N.Contains(TEXT("flats"))) B.Shoes.Add(M);
+					else if (N.Contains(TEXT("jeans")) || N.Contains(TEXT("slacks")) || N.Contains(TEXT("skirt"))) B.Bottoms.Add(M);
+					else B.Tops.Add(M);
+				}
+				if (B.Body && B.Tops.Num() && B.Bottoms.Num()) K.Bodies.Add(B);
+			}
+			for (int32 i = 1; i <= 6; ++i)
+			{
+				const FString Dir = FString::Printf(TEXT("%s/%s/%s_%03d"), *R, Sex, g ? TEXT("f") : TEXT("m"), i);
+				TArray<USkeletalMesh*> Fm;
+				SmvAssetsIn<USkeletalMesh>(*(Dir + TEXT("/Face")), Fm, [](const FAssetData&) { return true; });
+				if (Fm.Num() == 0) continue;
+				FCsFace F; F.Face = Fm[0]; F.bF = g == 1;
+				// saç / sakal "kask"ları (MetaHuman uzak LOD saçı; LOD5 en ayrıntılısı) — groom yerine, kalabalıkta ucuz
+				TArray<FAssetData> Ha;
+				IAssetRegistry::GetChecked().GetAssetsByPath(FName(*(Dir + TEXT("/Hair/Helmets"))), Ha, true);
+				for (const FAssetData& A : Ha)
+					if (A.AssetName.ToString().Contains(TEXT("LOD5")))
+						if (UObject* O = A.GetAsset()) if (O->IsA<USkeletalMesh>() || O->IsA<UStaticMesh>()) { O->AddToRoot(); F.Hair.Add(O); }
+				K.Faces.Add(F);
+			}
+		}
+		TArray<UAnimSequence*> An;
+		SmvAssetsIn<UAnimSequence>(*FString::Printf(TEXT("%s/Anims/Loco"), *R), An, [](const FAssetData&) { return true; });
+		for (UAnimSequence* A : An)
+		{
+			const FString N = A->GetName();
+			const int32 g = N.StartsWith(TEXT("FTN")) ? 1 : N.StartsWith(TEXT("MTN")) ? 0 : -1;
+			if (g < 0) continue;
+			const bool bWalk = N.Contains(TEXT("_N_Walk")) && !N.Contains(TEXT("Quickly")) && !N.Contains(TEXT("_B")) && !N.Contains(TEXT("45")) && !N.Contains(TEXT("LF")) && !N.Contains(TEXT("RF"));
+			const bool bIdle = N.Contains(TEXT("_N_Idle"));
+			// kök hareketi kilitli: konum kodla yürütülür (yerinde yürüme yoksa kök kemiği ileri kayıp geri sıçrıyordu)
+			if (bWalk) { A->bForceRootLock = true; K.Walk[g].Add(A); }
+			else if (bIdle) { A->bForceRootLock = true; K.Idle[g].Add(A); }
+		}
+		UE_LOG(LogSimumav, Log, TEXT("City Sample yayaları: %d gövde kümesi, %d yüz, yürüme %d/%d, bekleme %d/%d (erkek/kadın)"), K.Bodies.Num(), K.Faces.Num(),
+			K.Walk[0].Num(), K.Walk[1].Num(), K.Idle[0].Num(), K.Idle[1].Num());
+		return K;
+	}
 }
 
 TArrayView<const TCHAR* const> FSmvCityLife::CookDirs() { return MakeArrayView(GCookDirs); }
@@ -374,7 +475,7 @@ bool ASmvCityLife::BuildVatCrowd(const TArray<FVector>& Spots, int32 Count, uint
 int32 ASmvCityLife::BuildCrowd(const TArray<TArray<FVector>>& Walk, const TArray<FVector>& Spots, int32 Count, int32 Seed)
 {
 	const TArray<USkeletalMesh*>& People = FSmvCityLife::PeopleModels();
-	if ((People.Num() == 0 && FSmvCityLife::VatCrowdMeshes().Num() == 0) || Count <= 0) return 0;
+	if ((People.Num() == 0 && FSmvCityLife::VatCrowdMeshes().Num() == 0 && !FSmvCityLife::HasCsCrowd()) || Count <= 0) return 0;
 	uint32 Rs = (uint32)Seed * 2246822519u + 5u;
 	const FVector Me = GetActorLocation();
 	for (const TArray<FVector>& W : Walk)
@@ -387,8 +488,8 @@ int32 ASmvCityLife::BuildCrowd(const TArray<TArray<FVector>>& Walk, const TArray
 		WalkPaths.Add(L);
 		WalkLen.Add(FMath::Max(1.0, Len));
 	}
-	if (BuildVatCrowd(Spots, Count, Rs)) return VatPeople;
-	if (People.Num() == 0) return 0;
+	if (BuildVatCrowd(Spots, Count, Rs)) return VatPeople + BuildCsNear(Spots, Rs);
+	if (People.Num() == 0) return BuildCsNear(Spots, Rs);
 	const float CullCm = FSmvCityLife::GetFloat(TEXT("PeopleCullM"), 450.f) * 100.f;
 	auto Make = [&](USkeletalMesh* M, UAnimSequence* A, float Rate) -> USkeletalMeshComponent*
 	{
@@ -458,7 +559,156 @@ int32 ASmvCityLife::BuildCrowd(const TArray<TArray<FVector>>& Walk, const TArray
 		}
 	}
 	UE_LOG(LogSimumav, Log, TEXT("Şehir kalabalığı kuruldu: %d kişi (%d yürüyen, %d yol; yalnız görsel)"), PeopleComps.Num(), Walkers.Num(), WalkPaths.Num());
+	BuildCsNear(Spots, Rs);
 	return PeopleComps.Num();
+}
+
+bool FSmvCityLife::HasCsCrowd() { return SmvCsKit().Has(false) || SmvCsKit().Has(true); }
+
+// Yakın plan (kalkış noktasının ~90 m çevresi) City Sample MetaHuman yayaları: uzakta OverCrowd VAT / manken kalabalığı kalır.
+// [/Script/Simumav.SmvCityLife] CsWalkers (12), CsIdle (10), CsCullM (80), CsFaceMinLod (1)
+int32 ASmvCityLife::BuildCsNear(const TArray<FVector>& Spots, uint32& Rs)
+{
+	const FCsKit& K = SmvCsKit();
+	const bool bM = K.Has(false), bFm = K.Has(true);
+	if (!bM && !bFm) return 0;
+	const int32 NWalk = FMath::Clamp((int32)FSmvCityLife::GetFloat(TEXT("CsWalkers"), 12.f), 0, 60);
+	const int32 NIdle = FMath::Clamp((int32)FSmvCityLife::GetFloat(TEXT("CsIdle"), 10.f), 0, 60);
+	const float CullCm = FSmvCityLife::GetFloat(TEXT("CsCullM"), 80.f) * 100.f;
+	const int32 FaceLod = FMath::Clamp((int32)FSmvCityLife::GetFloat(TEXT("CsFaceMinLod"), 1.f), 0, 7);
+	const FVector Home = -GetActorLocation();   // dünya orijini (kalkış noktası) aktöre göre
+	static bool bDumped = false;
+	auto Part = [this, CullCm](USkeletalMeshComponent* Leader, USkeletalMesh* M) -> USkeletalMeshComponent*
+	{
+		USkeletalMeshComponent* C = NewObject<USkeletalMeshComponent>(this);
+		C->SetSkeletalMeshAsset(M);
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		C->SetCastShadow(true);
+		C->LDMaxDrawDistance = CullCm;
+		C->SetCachedMaxDrawDistance(CullCm);
+		C->SetupAttachment(Leader ? (USceneComponent*)Leader : (USceneComponent*)Root.Get());
+		C->RegisterComponent();
+		if (Leader) C->SetLeaderPoseComponent(Leader);
+		CsParts.Add(C);
+		return C;
+	};
+	auto MakeOne = [&](bool bF, UAnimSequence* A, float Rate) -> int32
+	{
+		TArray<const FCsBody*> Bs; for (const FCsBody& B : K.Bodies) if (B.bF == bF) Bs.Add(&B);
+		TArray<const FCsFace*> Fs; for (const FCsFace& F : K.Faces) if (F.bF == bF) Fs.Add(&F);
+		const FCsBody& B = *Bs[(int32)(SmvRand(Rs) * Bs.Num()) % Bs.Num()];
+		const FCsFace& F = *Fs[(int32)(SmvRand(Rs) * Fs.Num()) % Fs.Num()];
+		USkeletalMeshComponent* L = NewObject<USkeletalMeshComponent>(this);
+		L->SetSkeletalMeshAsset(B.Body);
+		L->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		L->SetCastShadow(true);
+		L->bEnableUpdateRateOptimizations = true;
+		L->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		L->LDMaxDrawDistance = CullCm;
+		L->SetCachedMaxDrawDistance(CullCm);
+		L->SetupAttachment(Root);
+		L->RegisterComponent();
+		USkeletalMesh* Top = B.Tops[(int32)(SmvRand(Rs) * B.Tops.Num()) % B.Tops.Num()];
+		USkeletalMesh* Bot = B.Bottoms[(int32)(SmvRand(Rs) * B.Bottoms.Num()) % B.Bottoms.Num()];
+		Part(L, Top);
+		Part(L, Bot);
+		if (B.Shoes.Num()) Part(L, B.Shoes[(int32)(SmvRand(Rs) * B.Shoes.Num()) % B.Shoes.Num()]);
+		USkeletalMeshComponent* Fc = Part(L, F.Face);
+		Fc->OverrideMinLOD(FaceLod);
+		for (UObject* H : F.Hair)
+		{
+			if (USkeletalMesh* Hs = Cast<USkeletalMesh>(H)) Part(L, Hs);
+			else if (UStaticMesh* Hm = Cast<UStaticMesh>(H))
+			{
+				UStaticMeshComponent* Sc = NewObject<UStaticMeshComponent>(this);
+				Sc->SetStaticMesh(Hm);
+				Sc->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				Sc->LDMaxDrawDistance = CullCm;
+				Sc->SetCachedMaxDrawDistance(CullCm);
+				Sc->SetupAttachment(L);
+				Sc->RegisterComponent();
+				CsStatic.Add(Sc);
+			}
+		}
+		if (!bDumped)
+		{
+			bDumped = true;
+			// malzeme parametreleri günlüğe (giysi rengi çeşitlemesi için; FSmvFabContent::DumpMaterialParams)
+			UE_LOG(LogSimumav, Log, TEXT("City Sample yaya örneği: gövde %s, üst %s, alt %s, yüz %s, saç %d"), *B.Body->GetName(), *Top->GetName(), *Bot->GetName(), *F.Face->GetName(), F.Hair.Num());
+			for (USkeletalMeshComponent* Pc : { L, CsParts.Last().Get() })
+				for (int32 k = 0; k < Pc->GetNumMaterials(); ++k)
+					if (UMaterialInterface* Mi = Pc->GetMaterial(k)) UE_LOG(LogSimumav, Log, TEXT("  %s yuva %d: %s"), *Pc->GetSkeletalMeshAsset()->GetName(), k, *Mi->GetPathName());
+		}
+		if (A)
+		{
+			L->PlayAnimation(A, true);
+			L->SetPlayRate(Rate);
+			L->SetPosition((float)(SmvRand(Rs) * A->GetPlayLength()), false);
+		}
+		PeopleComps.Add(L);
+		return PeopleComps.Num() - 1;
+	};
+	auto PickSex = [&]() { return bM && bFm ? SmvRand(Rs) < 0.5 : bFm; };
+	auto PickAnim = [&](bool bF, bool bWalk) -> UAnimSequence*
+	{
+		const TArray<UAnimSequence*>& A = bWalk ? K.Walk[bF ? 1 : 0] : K.Idle[bF ? 1 : 0];
+		return A.Num() ? A[(int32)(SmvRand(Rs) * A.Num()) % A.Num()] : nullptr;
+	};
+	int32 Made = 0;
+	// yürüyenler: kalkış noktasına en yakın yollar (≤ 120 m), en yakın noktadan ±25 m
+	TArray<TPair<double, int32>> Near;
+	for (int32 p = 0; p < WalkPaths.Num(); ++p)
+	{
+		double Best = 1e18, S = 0, BestS = 0;
+		const TArray<FVector>& L = WalkPaths[p];
+		for (int32 i = 0; i < L.Num(); ++i)
+		{
+			const double D = FVector::Dist2D(L[i], Home);
+			if (D < Best) { Best = D; BestS = S; }
+			S += FVector::Dist(L[i], L[(i + 1) % L.Num()]);
+		}
+		if (Best < 12000.0) Near.Add(TPair<double, int32>(BestS, p));
+	}
+	for (int32 i = 0; i < NWalk && Near.Num(); ++i)
+	{
+		const TPair<double, int32>& Np = Near[i % Near.Num()];
+		const bool bF = PickSex();
+		FWalker Wk;
+		Wk.Path = Np.Value;
+		Wk.S = Np.Key + (SmvRand(Rs) - 0.5) * 5000.0;
+		Wk.Dir = SmvRand(Rs) < 0.5 ? 1 : -1;
+		Wk.V = 115.0 + 35.0 * SmvRand(Rs);
+		Wk.Side = (SmvRand(Rs) - 0.5) * 180.0;
+		Wk.Comp = MakeOne(bF, PickAnim(bF, true), (float)(Wk.V / 135.0));
+		Walkers.Add(Wk);
+		++Made;
+	}
+	// duranlar: en yakın gruplar (yoksa kalkış noktasının 10–30 m çevresi), 2–3 kişilik, ortaya bakan
+	TArray<FVector> Sp;
+	for (const FVector& X : Spots) Sp.Add(X - GetActorLocation());
+	Sp.Sort([&Home](const FVector& A, const FVector& B) { return FVector::DistSquared2D(A, Home) < FVector::DistSquared2D(B, Home); });
+	if (Sp.Num() == 0 || FVector::Dist2D(Sp[0], Home) > 6000.0)
+		for (int32 k = 0; k < 4; ++k) { const double A = SmvRand(Rs) * UE_DOUBLE_TWO_PI, Rr = 1000.0 + 2000.0 * SmvRand(Rs); Sp.Insert(Home + FVector(FMath::Cos(A) * Rr, FMath::Sin(A) * Rr, 0.0), 0); }
+	for (int32 i = 0, g = 0; i < NIdle && Sp.Num(); ++g)
+	{
+		const FVector C0 = Sp[g % FMath::Min(Sp.Num(), 4)] + FVector((SmvRand(Rs) - 0.5) * 600.0, (SmvRand(Rs) - 0.5) * 600.0, 0.0);
+		const int32 Grp = 2 + (int32)(SmvRand(Rs) * 2.0);
+		for (int32 k = 0; k < Grp && i < NIdle; ++k, ++i)
+		{
+			const bool bF = PickSex();
+			UAnimSequence* A = PickAnim(bF, false);
+			const int32 Ci = MakeOne(bF, A ? A : PickAnim(bF, true), A ? 1.f : 0.f);
+			const double Ang = UE_DOUBLE_TWO_PI * k / Grp + SmvRand(Rs) * 0.4;
+			const FVector P = C0 + FVector(FMath::Cos(Ang), FMath::Sin(Ang), 0.0) * (60.0 + 25.0 * SmvRand(Rs));
+			const FVector To = (C0 - P).GetSafeNormal2D();
+			// zemin: grup merkezinin yüksekliği (Spots / yollar zemin üstünde verilir)
+			PeopleComps[Ci]->SetRelativeLocationAndRotation(P, FRotator(0.0, To.Rotation().Yaw - 90.0, 0.0));
+			++Made;
+		}
+	}
+	UE_LOG(LogSimumav, Log, TEXT("City Sample yakın plan yayalar: %d (%d yürüyen, %d duran; %d parça bileşeni, %.0f m'de kaybolur)"), Made, FMath::Min(NWalk, Near.Num() ? NWalk : 0),
+		Made - FMath::Min(NWalk, Near.Num() ? NWalk : 0), CsParts.Num() + CsStatic.Num(), CullCm / 100.f);
+	return Made;
 }
 
 void ASmvCityLife::Tick(float Dt)

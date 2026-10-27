@@ -32,7 +32,9 @@ struct SIMUMAV_API FSmvCityLife
 	static UAnimSequence* IdleAnim(const USkeletalMesh* For);
 	/** OverCrowd VAT kalabalık ağları (/Game/Fab/Crowd; CI'da OverCrowd ile pişirilir). Yoksa boş. */
 	static const TArray<UStaticMesh*>& VatCrowdMeshes();
-	static bool HasCrowd() { return VatCrowdMeshes().Num() > 0 || PeopleModels().Num() > 0; }
+	static bool HasCrowd() { return VatCrowdMeshes().Num() > 0 || PeopleModels().Num() > 0 || HasCsCrowd(); }
+	/** City Sample Crowds (Epic) modüler MetaHuman yayaları pakette mi */
+	static bool HasCsCrowd();
 	/** Pişirilecek klasörler (CI bloğu) */
 	static TArrayView<const TCHAR* const> CookDirs();
 	/** [/Script/Simumav.SmvCityLife] ayarları */
@@ -62,7 +64,10 @@ protected:
 	UPROPERTY() TObjectPtr<USceneComponent> Root;
 	UPROPERTY() TArray<TObjectPtr<UMeshComponent>> CarComps;
 	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> PeopleComps;
-	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> CrowdHisms;   // OverCrowd VAT kalabalığı: ağ başına bir ISM
+	UPROPERTY() TArray<TObjectPtr<UInstancedStaticMeshComponent>> CrowdHisms;
+	/** City Sample yaya parçaları (giysi / ayakkabı / yüz / saç; gövdenin pozunu izler) */
+	UPROPERTY() TArray<TObjectPtr<USkeletalMeshComponent>> CsParts;
+	UPROPERTY() TArray<TObjectPtr<class UStaticMeshComponent>> CsStatic;   // OverCrowd VAT kalabalığı: ağ başına bir ISM
 
 private:
 	struct FLane
@@ -107,5 +112,7 @@ private:
 	FVector PathPoint(int32 Path, double S, FVector& OutDir) const;
 	/** OverCrowd VAT kalabalığı (ISM + M_SmvCrowdVat; iskelet / animasyon güncellemesi yok). false → VAT ağı yok, iskeletli yedek kurulur. */
 	bool BuildVatCrowd(const TArray<FVector>& Spots, int32 Count, uint32& Rs);
+	/** Yakın plan City Sample MetaHuman yayaları (kalkış noktası çevresi); kurulan kişi sayısı */
+	int32 BuildCsNear(const TArray<FVector>& Spots, uint32& Rs);
 	TArray<TArray<FTransform>> VatWalkXf;   // ISM başına yürüyenlerin örnek dönüşümleri (0..n-1, her karede toplu güncellenir)
 };

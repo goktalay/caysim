@@ -54,7 +54,8 @@ namespace
 		if (const TArray<USkeletalMesh*>* F = Cache.Find(Set)) return *F;
 		TArray<USkeletalMesh*>& Out = Cache.Add(Set);
 		TArray<FAssetData> As;
-		IAssetRegistry::GetChecked().GetAssetsByPath(FName(*(FString(TEXT("/Game/Fab/")) + Set)), As, true);
+		// "/Game/..." tam yol: UE biçimli paket (Workbrand Techwear); değilse fab-hazirla içe aktarması /Game/Fab/<paket>
+		IAssetRegistry::GetChecked().GetAssetsByPath(FName(*(Set.StartsWith(TEXT("/Game/")) ? Set : FString(TEXT("/Game/Fab/")) + Set)), As, true);
 		As.Sort([](const FAssetData& A, const FAssetData& B) { return A.PackageName.LexicalLess(B.PackageName); });
 		for (const FAssetData& A : As)
 		{
@@ -70,6 +71,25 @@ namespace
 		return Out;
 	}
 
+	/** Workbrand Techwear (Fab, MetaHuman giysisi): bir üst + bir alt; Chaos kumaş sürümleri atlanır. Seçim avatardan
+	 *  (her pilot hep aynı), [/Script/Simumav.SmvPilot] TechwearTop / TechwearBottom (1 tabanlı) ile sabitlenebilir. */
+	TArray<USkeletalMesh*> PfTechwear(bool bF, uint32 Seed)
+	{
+		const TArray<USkeletalMesh*>& All = PfOutfitParts(bF ? TEXT("/Game/WB_Techwear/SkeletalMeshes/FTN") : TEXT("/Game/WB_Techwear/SkeletalMeshes/MTN"));
+		TArray<USkeletalMesh*> Tops, Bots, Out;
+		for (USkeletalMesh* M : All)
+		{
+			const FString N = M->GetName();
+			if (N.Contains(TEXT("Chaos"))) continue;
+			if (N.Contains(TEXT("Tops"))) Tops.Add(M); else if (N.Contains(TEXT("Bottoms"))) Bots.Add(M);
+		}
+		int32 Ti = -1, Bi = -1;
+		if (GConfig) { GConfig->GetInt(TEXT("/Script/Simumav.SmvPilot"), TEXT("TechwearTop"), Ti, GGameIni); GConfig->GetInt(TEXT("/Script/Simumav.SmvPilot"), TEXT("TechwearBottom"), Bi, GGameIni); }
+		if (Tops.Num()) Out.Add(Tops[Ti > 0 ? (Ti - 1) % Tops.Num() : Seed % Tops.Num()]);
+		if (Bots.Num()) Out.Add(Bots[Bi > 0 ? (Bi - 1) % Bots.Num() : (Seed / 7) % Bots.Num()]);
+		return Out;
+	}
+
 	/** Avatar → giysi parçaları: kıyafet türü (suit / jacket / casual) ve cinsiyete göre Fab paketleri; ini ile değiştirilebilir
 	 *  ([/Script/Simumav.SmvPilot] Outfit_suit_m=Paket1+Paket2 …). Başlık parçaları (kask / başlık / şapka) atlanır — kask avatardan. */
 	TArray<USkeletalMesh*> PfOutfitFor(const FSmvAvatar& A)
@@ -80,16 +100,24 @@ namespace
 		if (GConfig) GConfig->GetString(TEXT("/Script/Simumav.SmvPilot"), *FString::Printf(TEXT("Outfit_%s_%s"), *Kind, bF ? TEXT("f") : TEXT("m")), Cfg, GGameIni);
 		TArray<TArray<FString>> Choices;   // sırayla denenen paket grupları (grubun ilk paketi varsa grup kullanılır)
 		if (!Cfg.IsEmpty()) { TArray<FString> G; Cfg.ParseIntoArray(G, TEXT("+")); Choices.Add(G); }
-		if (bF) Choices.Add({ TEXT("FemaleOutfitBomberMetahuman") });
-		else if (Kind == TEXT("jacket")) { Choices.Add({ TEXT("BomberJeansOutfitMetahuman") }); Choices.Add({ TEXT("BomberMetahuman"), TEXT("ShirtCombatPantsMetahuman") }); }
+		// "@WB": Workbrand Techwear üst + alt (ayakkabı yok → bomber botları)
+		if (bF) { if (Kind != TEXT("casual")) Choices.Add({ TEXT("@WB"), TEXT("FemaleOutfitBomberMetahuman:Boots") }); Choices.Add({ TEXT("FemaleOutfitBomberMetahuman") }); }
+		else if (Kind == TEXT("jacket")) { Choices.Add({ TEXT("@WB"), TEXT("BomberJeansOutfitMetahuman:Boots") }); Choices.Add({ TEXT("BomberJeansOutfitMetahuman") }); Choices.Add({ TEXT("BomberMetahuman"), TEXT("ShirtCombatPantsMetahuman") }); }
 		else if (Kind == TEXT("casual")) { Choices.Add({ TEXT("ShirtCombatPantsMetahuman"), TEXT("BomberJeansOutfitMetahuman:Boots") }); }
-		else { Choices.Add({ TEXT("AstronautsFlightSuitsMetahumanClothing") }); Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56") }); }
+		else { Choices.Add({ TEXT("AstronautsFlightSuitsMetahumanClothing") }); Choices.Add({ TEXT("@WB"), TEXT("BomberJeansOutfitMetahuman:Boots") }); Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56") }); }
 		if (!bF) Choices.Add({ TEXT("TacticalSoldierOutfitforMetaHumanUE56") });
 		TArray<USkeletalMesh*> Out;
 		for (const TArray<FString>& G : Choices)
 		{
 			for (int32 i = 0; i < G.Num(); ++i)
 			{
+				if (G[i] == TEXT("@WB"))
+				{
+					const TArray<USkeletalMesh*> Wb = PfTechwear(bF, GetTypeHash(A.Skin + A.Outfit + A.Body) ^ 0x5bd1e995u);
+					if (i == 0 && Wb.Num() == 0) break;
+					Out.Append(Wb);
+					continue;
+				}
 				FString Set = G[i], Only;
 				G[i].Split(TEXT(":"), &Set, &Only);
 				if (Set.IsEmpty()) Set = G[i];
