@@ -105,6 +105,7 @@ private:
 	TArray<FWalker> Walkers;
 	double Half = 0, Road = 0, T = 0;
 	int32 VatPeople = 0;
+	bool bCsDiag = false;
 	UMeshComponent* MakeCar(USkeletalMesh* Model, FCar& C);
 	void PlaceCar(int32 i, const FVector& At, float Yaw);
 	FVector LanePoint(const FLane& L, double S, float& OutYaw) const;

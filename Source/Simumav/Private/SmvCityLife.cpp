@@ -14,6 +14,8 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "ReferenceSkeleton.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "SmvUiKit.h"
@@ -633,6 +635,14 @@ int32 ASmvCityLife::BuildCsNear(const TArray<FVector>& Spots, uint32& Rs)
 		if (!bDumped)
 		{
 			bDumped = true;
+			auto NaniteOn = [](UObject* M) -> int32
+			{
+				FStructProperty* Sp = M ? CastField<FStructProperty>(M->GetClass()->FindPropertyByName(TEXT("NaniteSettings"))) : nullptr;
+				FBoolProperty* Bp = Sp ? CastField<FBoolProperty>(Sp->Struct->FindPropertyByName(TEXT("bEnabled"))) : nullptr;
+				return Bp ? (Bp->GetPropertyValue_InContainer(Sp->ContainerPtrToValuePtr<void>(M)) ? 1 : 0) : -1;
+			};
+			UE_LOG(LogSimumav, Log, TEXT("City Sample Nanite (1 açık, 0 kapalı, -1 alan yok): gövde %d, üst %d, yüz %d · LOD gövde %d, yüz %d"), NaniteOn(B.Body), NaniteOn(Top), NaniteOn(F.Face),
+				B.Body->GetLODNum(), F.Face->GetLODNum());
 			// malzeme parametreleri günlüğe (giysi rengi çeşitlemesi için; FSmvFabContent::DumpMaterialParams)
 			UE_LOG(LogSimumav, Log, TEXT("City Sample yaya örneği: gövde %s, üst %s, alt %s, yüz %s, saç %d"), *B.Body->GetName(), *Top->GetName(), *Bot->GetName(), *F.Face->GetName(), F.Hair.Num());
 			for (USkeletalMeshComponent* Pc : { L, CsParts.Last().Get() })
@@ -687,11 +697,12 @@ int32 ASmvCityLife::BuildCsNear(const TArray<FVector>& Spots, uint32& Rs)
 	TArray<FVector> Sp;
 	for (const FVector& X : Spots) Sp.Add(X - GetActorLocation());
 	Sp.Sort([&Home](const FVector& A, const FVector& B) { return FVector::DistSquared2D(A, Home) < FVector::DistSquared2D(B, Home); });
+	if (FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke"))) Sp.Insert(Home + FVector(800.0, 0.0, 0.0), 0);   // duman: kameranın önünde görünür grup
 	if (Sp.Num() == 0 || FVector::Dist2D(Sp[0], Home) > 6000.0)
 		for (int32 k = 0; k < 4; ++k) { const double A = SmvRand(Rs) * UE_DOUBLE_TWO_PI, Rr = 1000.0 + 2000.0 * SmvRand(Rs); Sp.Insert(Home + FVector(FMath::Cos(A) * Rr, FMath::Sin(A) * Rr, 0.0), 0); }
 	for (int32 i = 0, g = 0; i < NIdle && Sp.Num(); ++g)
 	{
-		const FVector C0 = Sp[g % FMath::Min(Sp.Num(), 4)] + FVector((SmvRand(Rs) - 0.5) * 600.0, (SmvRand(Rs) - 0.5) * 600.0, 0.0);
+		const FVector C0 = Sp[g % FMath::Min(Sp.Num(), 4)] + (g == 0 ? FVector::ZeroVector : FVector((SmvRand(Rs) - 0.5) * 600.0, (SmvRand(Rs) - 0.5) * 600.0, 0.0));
 		const int32 Grp = 2 + (int32)(SmvRand(Rs) * 2.0);
 		for (int32 k = 0; k < Grp && i < NIdle; ++k, ++i)
 		{
@@ -763,6 +774,20 @@ void ASmvCityLife::Tick(float Dt)
 					for (int32 w = 0; w < C.Wheels.Num(); ++w)
 						P->SetBoneRotationByName(C.Wheels[w], (FQuat(FVector::RightVector, -C.WheelPhase) * C.WheelRef[w]).Rotator(), EBoneSpaces::ComponentSpace);
 		}
+	}
+	// City Sample tanısı: 6 sn sonra ilk yayaların çizilip çizilmediği
+	if (!bCsDiag && CsParts.Num() && T > 6.0)
+	{
+		bCsDiag = true;
+		int32 Shown = 0, N = 0;
+		for (USkeletalMeshComponent* C : PeopleComps)
+		{
+			if (!C || !C->GetSkeletalMeshAsset() || !C->GetSkeletalMeshAsset()->GetPathName().StartsWith(TEXT("/Game/CitySampleCrowd"))) continue;
+			if (N < 3) UE_LOG(LogSimumav, Log, TEXT("City Sample yaya %d: %s dünya %s, sınır %.0f cm, görünür %d, çizildi %d, LOD %d"), N, *C->GetSkeletalMeshAsset()->GetName(),
+				*C->GetComponentLocation().ToString(), C->Bounds.SphereRadius, C->IsVisible() ? 1 : 0, C->WasRecentlyRendered(1.f) ? 1 : 0, C->GetPredictedLODLevel());
+			Shown += C->WasRecentlyRendered(1.f) ? 1 : 0; ++N;
+		}
+		UE_LOG(LogSimumav, Log, TEXT("City Sample yayaları çizim: %d / %d son 1 sn'de çizildi"), Shown, N);
 	}
 	// ---- yayalar ----
 	for (FWalker& Wk : Walkers)

@@ -500,6 +500,32 @@ def cephe_malzemesi():
     log("M_SmvFacade hazır")
 
 
+def kalabalik_nanite_kapat():
+    """City Sample Crowds iskeletli ağlarında Nanite açıksa kapatılır: duman testinde yakın plan yayalar hiç çizilmedi ve baş malzemesi
+    (M_Crowd_Head_v2) Nanite köşe üreticisi için derlenemedi. Varlık yoksa / Nanite kapalıysa hiçbir şey yapılmaz."""
+    kok = "/Game/CitySampleCrowd/Character"
+    if not eal.does_directory_exist(kok):
+        return
+    n = k = 0
+    for yol in eal.list_assets(kok, recursive=True, include_folder=False):
+        veri = eal.find_asset_data(yol)
+        if not veri or str(veri.asset_class_path.asset_name) != "SkeletalMesh":
+            continue
+        n += 1
+        m = eal.load_asset(yol)
+        try:
+            ns = m.get_editor_property("nanite_settings")
+        except Exception:  # noqa: BLE001 — bu UE sürümünde iskeletli Nanite alanı yok
+            log("kalabalık: iskeletli ağda nanite_settings yok — atlandı")
+            return
+        if ns.get_editor_property("enabled"):
+            ns.set_editor_property("enabled", False)
+            m.set_editor_property("nanite_settings", ns)
+            eal.save_loaded_asset(m)
+            k += 1
+    log(f"kalabalık: {n} iskeletli ağ, Nanite kapatılan {k}")
+
+
 MCC = "/Game/MetaCharacterCreator/Data/MetaHumans"
 # gerçekçi MetaHuman yüzleri (ad, kadın mı, yaklaşık ten kademesi 1 açık … 8 koyu). Anime / kara elf / goblin yüzleri alınmaz.
 MCC_YUZLER = (
@@ -835,7 +861,7 @@ def main():
     arazi_malzemesi()
     parlak_malzeme()
     for adim in (lambda: pbr_malzemesi("M_SmvPbr", False), lambda: pbr_malzemesi("M_SmvPbr2S", True), pervane_diski, hava_arazi_malzemesi, niagara_sablonu,
-                 hyper_arazi_malzemesi, sokak_malzemesi, cephe_malzemesi, pilot_kiti):
+                 hyper_arazi_malzemesi, sokak_malzemesi, cephe_malzemesi, kalabalik_nanite_kapat, pilot_kiti):
         try:
             adim()
         except Exception as e:  # noqa: BLE001 — eksik malzeme oyunu durdurmaz (yedek malzemeler)
