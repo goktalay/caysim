@@ -395,7 +395,34 @@ bool ASmvScenery::BuildSurround(const TArray<ULevel*>& Levels, const FString& Bi
 	const double BoxR = 0.5 * FMath::Max(Box.GetSize().X, Box.GetSize().Y);
 	const double FlatM = BoxR / 100.0 * 1.05;
 	const double OuterM = FMath::Max(FlatM * 8.0, (double)FSmvScenery::GetFloat(TEXT("SurroundRadiusM"), 12000.f));
-	BuildGroundDisk(C, FlatM, OuterM, Biome, Seed, bScatter);
+	if (bScatter) BuildGroundDisk(C, FlatM, OuterM, Biome, Seed, bScatter);
+	else
+	{
+		// saha çitli harita: prosedürel disk ışıkta beyaz-mor benekli görünüyordu (düz yapılınca da — Lumen, kartı olmayan dev ağ;
+		// duman 40754333551) → statik küp ağından düz, mat kum zemin (Rafineri'nin beton zemini gibi temiz) + uzak dağlar.
+		// Ötesi atmosferin gezegen zemini (ufukta düz ova) — saha dışı ayrıntı gösterilmez.
+		if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
+		{
+			const double HalfCm = FMath::Clamp(FlatM * 100.0 * 4.0, 150000.0, 400000.0);
+			UStaticMeshComponent* G = NewObject<UStaticMeshComponent>(this, TEXT("FlatApron"));
+			G->SetupAttachment(Root);
+			G->SetStaticMesh(Cube);
+			G->SetWorldLocation(FVector(C.X, C.Y, C.Z - 50.0));
+			G->SetWorldScale3D(FVector(HalfCm * 2.0 / 100.0, HalfCm * 2.0 / 100.0, 1.0));
+			G->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			G->SetCastShadow(false);
+			if (UMaterialInterface* Sm = SmvSolidMat(G->GetMaterial(0)))
+			{
+				UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Sm, this);
+				SmvSetSolidColor(D, Biome == TEXT("Desert") ? FLinearColor(0.50f, 0.39f, 0.25f) : FLinearColor(0.2f, 0.26f, 0.13f));
+				D->SetScalarParameterValue(TEXT("Roughness"), 0.95f);
+				D->SetScalarParameterValue(TEXT("Specular"), 0.2f);
+				G->SetMaterial(0, D);
+			}
+			G->RegisterComponent();
+		}
+		AddMountains(C, OuterM * 100.0 * 0.42, OuterM * 100.0 * 0.85, C.Z, 14, Biome == TEXT("Desert") ? FString(TEXT("Rocky")) : Biome, Seed, 45000.0, 140000.0);
+	}
 	UE_LOG(LogSimumav, Log, TEXT("Fab çevresi kuruldu (%s): ada yarıçapı %.0f m, zemin Z %.0f cm, disk %.0f km"), *Biome, BoxR / 100.0, BaseZ, OuterM / 1000.0);
 	return true;
 }
