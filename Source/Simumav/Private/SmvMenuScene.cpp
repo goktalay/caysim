@@ -37,6 +37,10 @@
 #include "SmvMapRegistry.h"
 #include "Components/AudioComponent.h"
 #include "SmvGameRulesActor.h"
+#include "MediaPlayer.h"
+#include "MediaTexture.h"
+#include "FileMediaSource.h"
+#include "HAL/FileManager.h"
 
 namespace
 {
@@ -164,6 +168,46 @@ void ASmvMenuScene::BeginPlay()
 
 	// ---- canlı dünya ----
 	if (FSmvUiPrefs::Get().bMenuScene) BuildWorld();
+	StartMenuVideo();
+}
+
+void ASmvMenuScene::StartMenuVideo()
+{
+	bool bOn = true;
+	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("MenuVideo"), bOn, GGameIni);
+	if (!bOn || FParse::Param(FCommandLine::Get(), TEXT("SmvRecordMenu")) || FParse::Param(FCommandLine::Get(), TEXT("SmvNoMenuVideo"))) return;
+	const FString Path = FPaths::ConvertRelativePathToFull(FPaths::ProjectContentDir() / TEXT("Movies/SmvMenu.mp4"));
+	if (!IFileManager::Get().FileExists(*Path)) { UE_LOG(LogSimumav, Log, TEXT("Menü videosu yok (%s) — canlı sahne"), *Path); return; }
+	BgPlayer = NewObject<UMediaPlayer>(this, TEXT("SmvMenuPlayer"));
+	BgPlayer->SetLooping(true);
+	BgPlayer->PlayOnOpen = true;
+	BgTex = NewObject<UMediaTexture>(this, TEXT("SmvMenuVideoTex"));
+	BgTex->AutoClear = true;
+	BgTex->ClearColor = FLinearColor::Black;
+	BgTex->SetMediaPlayer(BgPlayer);
+	BgTex->UpdateResource();
+	BgSrc = NewObject<UFileMediaSource>(this, TEXT("SmvMenuVideoSrc"));
+	BgSrc->SetFilePath(Path);
+	const bool bOk = BgPlayer->OpenSource(BgSrc);
+	UE_LOG(LogSimumav, Log, TEXT("Menü videosu: %s %s"), *Path, bOk ? TEXT("açılıyor") : TEXT("AÇILAMADI — canlı sahne"));
+	if (!bOk) { BgPlayer = nullptr; BgTex = nullptr; BgSrc = nullptr; }
+}
+
+UTexture* ASmvMenuScene::GetMenuVideo() const { return IsMenuVideoPlaying() ? BgTex.Get() : nullptr; }
+
+bool ASmvMenuScene::IsMenuVideoPlaying() const
+{
+	// ilk kareler çözülene dek (≈0,3 sn) canlı sahne görünür kalır
+	return BgPlayer && BgTex && BgPlayer->IsPlaying() && BgPlayer->GetTime() > FTimespan::FromSeconds(0.3);
+}
+
+void ASmvMenuScene::BeginRecord()
+{
+	SceneT = 0.0;
+	bCamInit = false;
+	bFlyZ = false;
+	LookS = FVector::ZeroVector;
+	UE_LOG(LogSimumav, Log, TEXT("Menü kaydı: sahne saati sıfırlandı (döngü %.0f sn)"), LoopSeconds);
 }
 
 void ASmvMenuScene::BuildWorld()
@@ -431,23 +475,23 @@ void ASmvMenuScene::UpdateCamera(float Dt, const FVector& D, const FVector& Fwd)
 {
 	// sinematik kamera döngüsü: takip 18 sn → yan 12 sn → yörünge 14 sn → yerden 10 sn
 	const double T = SceneT;
-	const double Period = 54.0;
+	const double Period = LoopSeconds * 0.5;   // 42 sn (84 sn video döngüsünün yarısı)
 	const double U = FMath::Fmod(T, Period);
 	const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
 	FVector Want;
 	FVector Look = D;
-	if (U < 18.0)
+	if (U < 14.0)
 	{
-		Want = D - Fwd * 1400.0 + FVector(0, 0, 380.0) + Right * (220.0 * FMath::Sin(T * 0.3));
+		Want = D - Fwd * 1400.0 + FVector(0, 0, 380.0) + Right * (220.0 * FMath::Sin(T * UE_DOUBLE_TWO_PI * 4.0 / LoopSeconds));
 	}
-	else if (U < 30.0)
+	else if (U < 23.5)
 	{
-		const double K = (U - 18.0) / 12.0;
+		const double K = (U - 14.0) / 9.5;
 		Want = D + Right * 1700.0 - Fwd * FMath::Lerp(900.0, -900.0, K) + FVector(0, 0, 150.0);
 	}
-	else if (U < 44.0)
+	else if (U < 34.5)
 	{
-		const double A = (U - 30.0) * 0.35;
+		const double A = (U - 23.5) * 0.45;
 		Want = D + FVector(FMath::Cos(A) * 1800.0, FMath::Sin(A) * 1800.0, 520.0);
 	}
 	else
@@ -481,7 +525,7 @@ void ASmvMenuScene::Tick(float Dt)
 		auto Path = [Wv](double t, double& E, double& N) { const double A = t * Wv; E = 900.0 * FMath::Cos(A); N = 520.0 * FMath::Sin(A) * FMath::Cos(A); };
 		double E0, N0, E1, N1, E2, N2;
 		Path(T, E0, N0); Path(T + 0.5, E1, N1); Path(T + 1.0, E2, N2);
-		const double Agl = 46.0 + 7.0 * FMath::Sin(T * 0.37);
+		const double Agl = 46.0 + 7.0 * FMath::Sin(T * UE_DOUBLE_TWO_PI * 5.0 / LoopSeconds);
 		FVector P0 = EnuToWorld(E0, N0, Agl), P1 = EnuToWorld(E1, N1, Agl), P2 = EnuToWorld(E2, N2, Agl);
 		// Fab haritasında yer yüksekliği 10 m hücrelerde iz düşümüyle (ağaç tepeleri dahil) bulunur: hücre geçişlerinde dron ve kamera
 		// basamak basamak zıplıyordu ("arka plan uçağı titriyor, ekran sallanıyor"). İrtifa zamanla yumuşatılır; yön yatay düzlemde.
@@ -507,13 +551,13 @@ void ASmvMenuScene::Tick(float Dt)
 		// kopter: kalkış alanı yakınında yavaş yörünge (18 m, 25 sn); VTOL: geniş tur (1,4 km, 120 sn) yüksekte
 		if (Extras.Num() > 0 && Extras[0])
 		{
-			const double A = T * UE_DOUBLE_TWO_PI / 25.0;
-			const FVector Q0 = EnuToWorld(140.0 + 18.0 * FMath::Cos(A), -120.0 + 18.0 * FMath::Sin(A), 14.0 + 3.0 * FMath::Sin(T * 0.6));
-			Extras[0]->SetActorLocationAndRotation(Q0, FRotator(-6.0 * FMath::Cos(T * 0.5), FMath::RadiansToDegrees(A) + 90.0, 4.0 * FMath::Sin(A)));
+			const double A = T * UE_DOUBLE_TWO_PI / (LoopSeconds / 4.0);   // 21 sn (video döngüsü)
+			const FVector Q0 = EnuToWorld(140.0 + 18.0 * FMath::Cos(A), -120.0 + 18.0 * FMath::Sin(A), 14.0 + 3.0 * FMath::Sin(T * UE_DOUBLE_TWO_PI * 8.0 / LoopSeconds));
+			Extras[0]->SetActorLocationAndRotation(Q0, FRotator(-6.0 * FMath::Cos(T * UE_DOUBLE_TWO_PI * 7.0 / LoopSeconds), FMath::RadiansToDegrees(A) + 90.0, 4.0 * FMath::Sin(A)));
 		}
 		if (Extras.Num() > 1 && Extras[1])
 		{
-			const double A = T * UE_DOUBLE_TWO_PI / 120.0;
+			const double A = T * UE_DOUBLE_TWO_PI / LoopSeconds;
 			const FVector V0 = EnuToWorld(1400.0 * FMath::Cos(A), 900.0 * FMath::Sin(A), 140.0), V1 = EnuToWorld(1400.0 * FMath::Cos(A + 0.01), 900.0 * FMath::Sin(A + 0.01), 140.0);
 			FRotator Rv = (V1 - V0).Rotation(); Rv.Roll = -18.0;
 			Extras[1]->SetActorLocationAndRotation(V0, Rv);
@@ -928,13 +972,22 @@ void ASmvMenuScene::RecenterFabMap()
 	UE_LOG(LogSimumav, Log, TEXT("Menü Fab haritası %s içerik: %d aktör, %d ağ, kutu %s, World Partition %s"), *MapKey, MenuLevel->GetLoadedLevel()->Actors.Num(), N,
 		Box.IsValid ? *Box.GetSize().ToString() : TEXT("-"), (MenuLevel->GetLoadedLevel()->GetTypedOuter<UWorld>() && MenuLevel->GetLoadedLevel()->GetTypedOuter<UWorld>()->IsPartitionedWorld()) ? TEXT("evet") : TEXT("hayır"));
 	if (!Box.IsValid || N < 5) return;
+	const FSmvMapDef* Def = FSmvMapRegistry::Find(MapKey);
+	const bool bFenced = Def && Def->FenceM >= 0.0;
+	TourR = 280.0; TourAlt = 95.0;
+	if (bFenced)
+	{
+		// saha dışı gösterilmesin: tur yörüngesi sahanın içinde, alçakta
+		TourR = FMath::Clamp(0.36 * FMath::Min(Box.GetSize().X, Box.GetSize().Y) / 100.0, 40.0, 280.0);
+		TourAlt = FMath::Clamp(TourR * 0.3, 16.0, 95.0);
+	}
 	const double La = Lat0 + FMath::RadiansToDegrees(FabStartN / 6378137.0);
 	const double Lo = Lon0 + FMath::RadiansToDegrees(FabStartE / (6378137.0 * FMath::Cos(FMath::DegreesToRadians(Lat0))));
 	const FVector P0 = WorldSetup->GeoToUnreal(Lo, La, WorldSetup->MslToWorldHeight(La, Lo, GroundMsl));
 	const FBox Inner = Box.ExpandBy(-FMath::Min(5000.0, 0.25 * FMath::Min(Box.GetSize().X, Box.GetSize().Y)));
-	if (Inner.IsValid && Inner.IsInsideXY(P0)) return;
+	if (!bFenced && Inner.IsValid && Inner.IsInsideXY(P0)) return;
 	FVector C = Box.GetCenter();
-	for (const FVector& S : Starts) if (Box.IsInsideXY(S)) { C = S; break; }
+	if (!bFenced) for (const FVector& S : Starts) if (Box.IsInsideXY(S)) { C = S; break; }
 	const double DE = (C.X - P0.X) / 100.0, DN = -(C.Y - P0.Y) / 100.0;
 	FabStartE += DE; FabStartN += DN;
 	GroundCache.Reset();
@@ -1548,30 +1601,38 @@ void ASmvMenuScene::UpdateStationCamera(float Dt)
 	}
 	case EStation::Tour:
 	{
-		// harita içinden tur: alçak geçiş → yörünge → yükselen vinç → dron takibi (her biri 10 sn)
+		// harita içinden tur: alçak geçiş → yörünge → yükselen vinç → dron takibi (her biri 10 sn); ölçek TourR (çitli sahada küçük)
 		const int32 Shot = (int32)(T / 10.0) % 4;
 		const double U = FMath::Fmod(T, 10.0) / 10.0;
+		const double Kr = TourR / 280.0;
 		if (Shot == 0)
 		{
-			Want = EnuToWorld(FMath::Lerp(-320.0, 320.0, U), -90.0 + 30.0 * FMath::Sin(U * 3.0), 22.0);
-			Look = EnuToWorld(FMath::Lerp(-320.0, 320.0, U) + 120.0, -40.0, 8.0);
+			Want = EnuToWorld(FMath::Lerp(-320.0, 320.0, U) * Kr, (-90.0 + 30.0 * FMath::Sin(U * 3.0)) * Kr, FMath::Max(8.0, 22.0 * Kr));
+			Look = EnuToWorld((FMath::Lerp(-320.0, 320.0, U) + 120.0) * Kr, -40.0 * Kr, 8.0 * Kr);
 		}
 		else if (Shot == 1)
 		{
 			const double A = U * 1.4 + 2.0;
-			Want = EnuToWorld(FMath::Cos(A) * 280.0, FMath::Sin(A) * 280.0, 95.0);
+			Want = EnuToWorld(FMath::Cos(A) * TourR, FMath::Sin(A) * TourR, TourAlt);
 			Look = EnuToWorld(0.0, 0.0, 0.0);
 		}
 		else if (Shot == 2)
 		{
-			Want = EnuToWorld(140.0, 160.0, FMath::Lerp(4.0, 150.0, U));
-			Look = EnuToWorld(0.0, 0.0, 10.0);
+			Want = EnuToWorld(140.0 * Kr, 160.0 * Kr, FMath::Lerp(4.0, 150.0 * Kr, U));
+			Look = EnuToWorld(0.0, 0.0, 10.0 * Kr);
 		}
-		else if (Flyer)
+		else if (Flyer && Kr > 0.95)
 		{
 			const FVector D0 = Flyer->GetActorLocation(), Fw = Flyer->GetActorForwardVector();
 			Want = D0 - Fw * 1300.0 + FVector(0, 0, 320.0);
 			Look = D0;
+		}
+		else
+		{
+			// çitli saha: menü dronu sahanın dışına uçar — onun yerine saha çevresinde ters yönde yavaş yörünge
+			const double A = -U * 1.1 + 0.5;
+			Want = EnuToWorld(FMath::Cos(A) * TourR * 0.8, FMath::Sin(A) * TourR * 0.8, TourAlt * 0.6);
+			Look = EnuToWorld(0.0, 0.0, 4.0);
 		}
 		Fstop = 8.f;
 		break;

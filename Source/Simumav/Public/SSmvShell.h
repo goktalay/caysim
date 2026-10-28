@@ -58,6 +58,11 @@ private:
 	TWeakObjectPtr<ASmvGameMode> GameMode;
 	TSharedPtr<SBox> Content;
 	TSharedPtr<SBox> BackdropBox;
+	/** ana menü arka plan videosu (ASmvMenuScene::GetMenuVideo); oynarken dünya çizimi kapalı */
+	FSlateBrush MenuVideoBrush;
+	bool bMenuVideoOn = false;
+	/** -SmvRecordMenu: menü sinematiği sabit adımlı kare kaydı (menu-video.yml) */
+	void TickRecordMenu();
 	TSharedPtr<SVerticalBox> ToastStack;
 	TSharedPtr<SBox> OverlayBox;
 	TSharedPtr<SWidget> DefaultFocus;

@@ -1,4 +1,6 @@
 #include "SSmvShell.h"
+#include "Misc/App.h"
+#include "Widgets/Layout/SScaleBox.h"
 #include "SmvRegion.h"
 #include "Widgets/Layout/SWrapBox.h"
 #include "SmvInputGlyphs.h"
@@ -316,6 +318,14 @@ void SSmvShell::Construct(const FArguments& InArgs)
 	ChildSlot
 	[
 		SNew(SOverlay)
+		// ana menü: önceden kaydedilmiş sinematik video (canlı dünya bu sırada çizilmez)
+		+ SOverlay::Slot()
+		[
+			SNew(SScaleBox).Stretch(EStretch::ScaleToFill).Visibility_Lambda([this]() { return bMenuVideoOn ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+			[
+				SNew(SImage).Image(&MenuVideoBrush)
+			]
+		]
 		+ SOverlay::Slot()
 		[
 			SAssignNew(BackdropBox, SBox).Visibility(EVisibility::HitTestInvisible)
@@ -564,6 +574,23 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 	const bool bPause = GameMode.IsValid() && GameMode->IsPausedMenu();
 	const ESmvScreen Cur = Flow->GetScreen();
 	if (BackdropBox.IsValid()) BackdropBox->SetVisibility(Cur == ESmvScreen::Flight ? EVisibility::Collapsed : EVisibility::HitTestInvisible);
+	{
+		ASmvMenuScene* Sc = Scene();
+		UTexture* Vt = (Sc && Cur == ESmvScreen::Menu && !bPause) ? Sc->GetMenuVideo() : nullptr;
+		if (Vt && MenuVideoBrush.GetResourceObject() != Vt)
+		{
+			MenuVideoBrush.DrawAs = ESlateBrushDrawType::Image;
+			MenuVideoBrush.SetResourceObject(Vt);
+			MenuVideoBrush.ImageSize = FVector2D(1920, 1080);
+		}
+		const bool bOn = Vt != nullptr;
+		if (bOn != bMenuVideoOn)
+		{
+			bMenuVideoOn = bOn;
+			if (GEngine && GEngine->GameViewport) GEngine->GameViewport->bDisableWorldRendering = bOn;
+			UE_LOG(LogSimumav, Log, TEXT("Menü arka planı: %s"), bOn ? TEXT("video (dünya çizimi kapalı)") : TEXT("canlı sahne"));
+		}
+	}
 	if (bDirty || Built != Cur || bBuiltPause != bPause)
 	{
 		const bool bScreenChanged = Built != Cur;
@@ -4757,10 +4784,57 @@ TSharedRef<SWidget> SSmvShell::Support()
 // duman testi (-SmvSmoke): runner'da paketlenmiş oyunu açıp her ekranın görüntüsünü alır
 // ---------------------------------------------------------------------------
 
+void SSmvShell::TickRecordMenu()
+{
+	// menü sinematiği: sabit 30 kare/sn adımla bir tam döngü ısınma (kamera yumuşatması oturur), sonra döngü + 1 sn geçiş payı kaydı
+	// (Saved/Screenshots/MenuRec/f_00000.png …); menu-video.yml ffmpeg ile kusursuz döngü MP4'e çevirir
+	static int32 Phase = 0, Frame = 0;
+	static double T0 = 0;
+	ASmvMenuScene* Sc = Scene();
+	if (!Sc) return;
+	if (Phase == 0)
+	{
+		if (!BootFinished() || !Sc->IsSceneReady()) return;
+		if (Flow->GetScreen() != ESmvScreen::Menu) Flow->SetScreen(ESmvScreen::Menu);
+		FSmvUiPrefs::Get().bTutorialDone = true;
+		if (bOverlay) CloseOverlay();
+		Phase = 1; T0 = FPlatformTime::Seconds();
+		return;
+	}
+	if (Phase == 1)
+	{
+		if (FPlatformTime::Seconds() - T0 < 10.0) return;
+		FApp::SetUseFixedTimeStep(true);
+		FApp::SetFixedDeltaTime(1.0 / 30.0);
+		Sc->BeginRecord();
+		Phase = 2; Frame = 0;
+		SMV_KLOG(TEXT("SMOKE menü kaydı: ısınma başladı"));
+		return;
+	}
+	const int32 Loop = FMath::RoundToInt(ASmvMenuScene::LoopSeconds * 30.0);
+	const int32 Total = Loop + 30;
+	const int32 K = Frame - Loop;
+	if (K >= 0 && K < Total)
+	{
+		const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots/MenuRec"));
+		FScreenshotRequest::RequestScreenshot(Dir / FString::Printf(TEXT("f_%05d.png"), K), false, false);
+		if (K % 300 == 0) SMV_KLOG(TEXT("SMOKE menü kaydı: kare %d / %d"), K, Total);
+	}
+	++Frame;
+	if (K >= Total + 3)
+	{
+		FApp::SetUseFixedTimeStep(false);
+		SMV_KLOG(TEXT("SMOKE menü kaydı bitti: %d kare (30 kare/sn)"), Total);
+		FPlatformMisc::RequestExit(false);
+	}
+}
+
 void SSmvShell::TickSmoke()
 {
 	static const bool bSmoke = FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke"));
 	if (!bSmoke || !Flow.IsValid()) return;
+	static const bool bRecMenu = FParse::Param(FCommandLine::Get(), TEXT("SmvRecordMenu"));
+	if (bRecMenu) { TickRecordMenu(); return; }
 	const double Now = FPlatformTime::Seconds();
 	// -SmvSmokeLang=tr: arayüz dili (Türkçe tur; görüntüler Screenshots/Smoke_tr) · -SmvSmokeFlights=N: uçuş sayısı (0–4)
 	static FString SmokeLang;
@@ -4803,6 +4877,14 @@ void SSmvShell::TickSmoke()
 	}
 	// harita turu yükleme katmanı karesi (tur adımı açıldıktan 1,5 sn sonra; adım beklemesinden bağımsız)
 	static double TourShotAt = 0; static FString TourShotName;
+	// harita turunun arayüzsüz karesi (map_<anahtar>.png → Content/Simumav/MapPreviews/<anahtar>.jpg: karşılaşma kartları + yükleme ekranı)
+	static double TourCleanAt = 0; static FString TourCleanName;
+	if (TourCleanAt > 0 && Now >= TourCleanAt)
+	{
+		TourCleanAt = 0;
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke")))) / (TourCleanName + TEXT(".png")), false, false);
+		SMV_KLOG(TEXT("SMOKE shot %s"), *TourCleanName);
+	}
 	if (TourShotAt > 0 && Now >= TourShotAt)
 	{
 		TourShotAt = 0;
@@ -4830,7 +4912,8 @@ void SSmvShell::TickSmoke()
 		{ ESmvScreen::Tracks, -1, -1, -1, TEXT("04_parkur"), 7.f },
 		{ ESmvScreen::ParkurList, -1, 0, -1, TEXT("05_enc_list"), 3.f }, { ESmvScreen::ParkurList, -1, 0, 1, TEXT("05_enc_tour"), 18.f },
 		{ ESmvScreen::ParkurList, -1, 0, 2, TEXT("05_enc_tour2"), 18.f }, { ESmvScreen::ParkurList, -1, 0, 3, TEXT("05_enc_tour3"), 18.f },
-		{ ESmvScreen::ParkurList, -1, 0, 4, TEXT("05_enc_tour4"), 18.f },
+		{ ESmvScreen::ParkurList, -1, 0, 4, TEXT("05_enc_tour4"), 18.f }, { ESmvScreen::ParkurList, -1, 0, 5, TEXT("05_enc_tour5"), 18.f },
+		{ ESmvScreen::ParkurList, -1, 0, 6, TEXT("05_enc_tour6"), 18.f }, { ESmvScreen::ParkurList, -1, 0, 7, TEXT("05_enc_tour7"), 18.f },
 		{ ESmvScreen::ParkurList, -1, 1, -1, TEXT("05_custom_list"), 4.f },
 		{ ESmvScreen::ParkurWizard, 0, -1, -1, TEXT("06_pw0_biome"), 3.f }, { ESmvScreen::ParkurWizard, 1, -1, -1, TEXT("06_pw1_world"), 6.f },
 		{ ESmvScreen::ParkurWizard, 2, -1, -1, TEXT("06_pw2_weather"), 2.5f }, { ESmvScreen::ParkurWizard, 3, -1, -1, TEXT("06_pw3_name"), 2.5f },
@@ -4938,6 +5021,7 @@ void SSmvShell::TickSmoke()
 			else Refresh();
 			if (FCString::Strcmp(S.Name, TEXT("01_pilotmenu")) == 0) OpenPilotMenu();
 			if (S.Screen == ESmvScreen::ParkurList && S.Log >= 1 && S.Log <= 2) { TourShotAt = Now + 1.5; TourShotName = FString(S.Name) + TEXT("_load"); }
+			if (S.Screen == ESmvScreen::ParkurList && S.Log >= 1 && !TourKey.IsEmpty()) { TourCleanAt = Now + S.Wait - 4.0; TourCleanName = TEXT("map_") + TourKey; }
 			SmokeAt = Now + S.Wait;
 		}
 		else { Shot(S.Name); SmokeAt = Now + 1.0; }

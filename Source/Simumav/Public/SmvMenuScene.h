@@ -90,6 +90,16 @@ public:
 	/** Parkur kartı: canlı dünyadan ikinci görünüm (harita içinde alçak yörünge; 640×360) — Karşılaşma kartının "video döngüsü" */
 	UTextureRenderTarget2D* GetCardTarget();
 	void SetCardActive(bool bOn);
+	// ---- menü arka plan videosu: Menu istasyonunun sinematik döngüsü bir kez kaydedilir (Content/Movies/SmvMenu.mp4, 84 sn kusursuz döngü;
+	//      .github/workflows/menu-video.yml) ve ana menüde canlı dünya yerine oynatılır (dünya çizimi kapanır — her seferinde hesaplama yok).
+	//      Dosya yoksa / [/Script/Simumav.SmvMenuScene] MenuVideo=False ise canlı sahne. ----
+	/** Oynayan video dokusu (yoksa nullptr) */
+	class UTexture* GetMenuVideo() const;
+	bool IsMenuVideoPlaying() const;
+	/** Kayıt kipi (-SmvRecordMenu): sahne saati sıfırlanır; döngü süresi (sn) */
+	void BeginRecord();
+	static constexpr double LoopSeconds = 84.0;
+
 	/** Hangar → Kamera adımı: seçilen kamera türünün son işlemi sahne kamerasına (gece görüşü / termal / multispektral önizleme; day = kapalı) */
 	void SetCameraFx(const FString& Kind);
 
@@ -125,6 +135,10 @@ protected:
 	void PlaceStudio(float FloorZ);
 	/** Anahtar / kenar ışığını konumlar; şiddet hedefe uzaklığın karesiyle ölçeklenir (uzak ışık figürü karartmasın) */
 	void PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt, float Scale = 1.f);
+	UPROPERTY() TObjectPtr<class UMediaPlayer> BgPlayer;
+	UPROPERTY() TObjectPtr<class UMediaTexture> BgTex;
+	UPROPERTY() TObjectPtr<class UFileMediaSource> BgSrc;
+	void StartMenuVideo();
 	UPROPERTY() TMap<FString, FSmvSpinSet> Spins;
 	UPROPERTY() TObjectPtr<AActor> SpinSubject;
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> SpinFig;
@@ -156,6 +170,8 @@ private:
 	double SceneT = 0, FlyZ = 0, FlyVz = 0;
 	bool bFlyZ = false;
 	FVector LookS = FVector::ZeroVector;
+	/** harita turu ölçeği (saha çitli haritalarda kamera saha içinde kalır): yörünge yarıçapı / irtifa (m) */
+	double TourR = 280.0, TourAlt = 95.0;
 	float PreviewYaw = 0.f;
 	float PreviewDistCm = 300.f;
 	double LastChannelFix = 0;

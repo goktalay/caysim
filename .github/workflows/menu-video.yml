@@ -1,0 +1,104 @@
+# Simumav - menu arka plan videosu (bir kez kaydedilir; depoyu degistirmez): runner diskindeki son paketle -SmvRecordMenu calisir,
+# menu sinematigi sabit 30 kare/sn adimla bir dongu isinir, sonra 84 sn + 1 sn gecis payi kare kare kaydedilir (Saved/Screenshots/MenuRec).
+# ffmpeg (surumu ve SHA-256 sabit) kareleri kusursuz donguye cevirir: son 1 sn ilk 1 sn ile capraz gecis -> Content/Movies/SmvMenu.mp4 olarak
+# depoya elle eklenir (Git LFS). Oyun ana menude canli dunya yerine bu videoyu oynatir.
+name: menu-video
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: "Development ya da Shipping"
+        type: string
+        default: "Development"
+      res:
+        description: "Cozunurluk GxY"
+        type: string
+        default: "1920x1080"
+      crf:
+        description: "x264 kalite (dusuk = iyi; 18-26)"
+        type: string
+        default: "21"
+
+jobs:
+  record:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Kareleri kaydet
+        env:
+          CFG: ${{ inputs.config }}
+          SRES: ${{ inputs.res }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $base = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
+          if (-not (Test-Path $base)) { Write-Host "Paket yok"; exit 1 }
+          $exe = Get-ChildItem $base -Filter *.exe -File | Select-Object -First 1
+          $saved = Join-Path $base 'Simumav\Saved'
+          if ($env:CFG -eq 'Shipping') { $saved = Join-Path $env:LOCALAPPDATA 'Simumav\Saved' }
+          $shots = Join-Path $saved 'Screenshots'
+          if (Test-Path $shots) { Remove-Item $shots -Recurse -Force -ErrorAction SilentlyContinue }
+          $oldlogs = Join-Path $saved 'Logs'
+          if (Test-Path $oldlogs) { Remove-Item $oldlogs -Recurse -Force -ErrorAction SilentlyContinue }
+          $rx = '1920'; $ry = '1080'
+          if ($env:SRES -match '^(\d+)x(\d+)$') { $rx = $Matches[1]; $ry = $Matches[2] }
+          $argl = @('-SmvSmoke','-SmvRecordMenu','-RenderOffScreen',('-ResX=' + $rx),('-ResY=' + $ry),'-windowed','-log','-unattended')
+          Write-Host ("Args: " + ($argl -join ' '))
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList $argl -PassThru
+          $deadline = (Get-Date).AddSeconds(5400)
+          while (-not $p.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 10 }
+          if (-not $p.HasExited) { Write-Host "Zaman asimi: kapatiliyor"; Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          $out = Join-Path $env:RUNNER_TEMP 'menuvideo'
+          if (Test-Path $out) { Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue }
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $logs = Join-Path $saved 'Logs'
+          if (Test-Path $logs) { Copy-Item -Recurse -Force $logs (Join-Path $out 'Logs') }
+          $rec = Join-Path $shots 'MenuRec'
+          $n = (Get-ChildItem $rec -Filter 'f_*.png' -File -ErrorAction SilentlyContinue | Measure-Object).Count
+          Write-Host ("Kare sayisi: " + $n)
+          "REC=$rec" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          "OUT=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          $log = Get-ChildItem (Join-Path $out 'Logs') -Filter *.log -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|Error|D3D|Men' | Select-Object -First 200 | ForEach-Object { Write-Host $_.Line } }
+          if ($n -lt 2550) { Write-Host "Eksik kare"; exit 1 }
+      - name: ffmpeg ile MP4 (kusursuz dongu)
+        env:
+          CRF: ${{ inputs.crf }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-27-18-38/ffmpeg-n8.1.3-24-g92611900bb-win64-gpl-8.1.zip'
+          $sha = '79a803e134ffbd69c08b380aac33693dc028135785b23213f292d84c59c1e95e'
+          $zip = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+          $dir = Join-Path $env:RUNNER_TEMP 'ffmpeg'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          $got = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+          if ($got -ne $sha) { Write-Host ("SHA-256 uyusmuyor: " + $got); exit 1 }
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          Expand-Archive -Path $zip -DestinationPath $dir
+          $ff = Get-ChildItem $dir -Recurse -Filter ffmpeg.exe -File | Select-Object -First 1
+          Write-Host ("ffmpeg: " + $ff.FullName)
+          $in = Join-Path $env:REC 'f_%05d.png'
+          $mp4 = Join-Path $env:OUT 'SmvMenu.mp4'
+          # A: kare 30..2549 (84 sn), B: kare 0..29; A'nin son 1 sn'si B'ye capraz gecer -> son kare 29, dongu 30'dan surer
+          $fc = '[0:v]trim=end_frame=2520,setpts=PTS-STARTPTS,format=yuv420p[a];[1:v]trim=end_frame=30,setpts=PTS-STARTPTS,format=yuv420p[b];[a][b]xfade=transition=fade:duration=1:offset=83,format=yuv420p[v]'
+          & $ff.FullName -y -hide_banner -framerate 30 -start_number 30 -i $in -framerate 30 -start_number 0 -i $in -filter_complex $fc -map '[v]' -c:v libx264 -preset slow -crf $env:CRF -g 60 -pix_fmt yuv420p -movflags +faststart -an $mp4
+          if (-not (Test-Path $mp4)) { Write-Host "MP4 yok"; exit 1 }
+          Write-Host ("MP4: " + (Get-Item $mp4).Length + " bayt")
+          # ornek kareler (kontrol icin)
+          $prev = Join-Path $env:OUT 'kareler'
+          New-Item -ItemType Directory -Force -Path $prev | Out-Null
+          foreach ($k in @(0, 630, 1260, 1890, 2490, 2519, 2549)) { $f = Join-Path $env:REC ('f_{0:D5}.png' -f $k); if (Test-Path $f) { Copy-Item $f $prev } }
+          Remove-Item $env:REC -Recurse -Force -ErrorAction SilentlyContinue
+      - name: Artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: menu-video
+          path: ${{ runner.temp }}/menuvideo
+          if-no-files-found: warn
+          retention-days: 7

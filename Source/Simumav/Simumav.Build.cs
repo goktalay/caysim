@@ -41,6 +41,7 @@ public class Simumav : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"ApplicationCore",
+			"MediaAssets",
 			"Sockets",
 			"Networking",
 			"OnlineSubsystem",
