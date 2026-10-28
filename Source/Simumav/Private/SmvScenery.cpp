@@ -404,22 +404,22 @@ bool ASmvScenery::BuildSurround(const TArray<ULevel*>& Levels, const FString& Bi
 		if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
 		{
 			const double HalfCm = FMath::Clamp(FlatM * 100.0 * 4.0, 150000.0, 400000.0);
-			UStaticMeshComponent* G = NewObject<UStaticMeshComponent>(this, TEXT("FlatApron"));
-			G->SetupAttachment(Root);
-			G->SetStaticMesh(Cube);
-			G->SetWorldLocation(FVector(C.X, C.Y, C.Z - 50.0));
-			G->SetWorldScale3D(FVector(HalfCm * 2.0 / 100.0, HalfCm * 2.0 / 100.0, 1.0));
-			G->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-			G->SetCastShadow(false);
-			if (UMaterialInterface* Sm = SmvSolidMat(G->GetMaterial(0)))
+			UStaticMeshComponent* Apron = NewObject<UStaticMeshComponent>(this, TEXT("FlatApron"));
+			Apron->SetupAttachment(Root);
+			Apron->SetStaticMesh(Cube);
+			Apron->SetWorldLocation(FVector(C.X, C.Y, C.Z - 50.0));
+			Apron->SetWorldScale3D(FVector(HalfCm * 2.0 / 100.0, HalfCm * 2.0 / 100.0, 1.0));
+			Apron->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			Apron->SetCastShadow(false);
+			if (UMaterialInterface* Sm = SmvSolidMat(Apron->GetMaterial(0)))
 			{
 				UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Sm, this);
 				SmvSetSolidColor(D, Biome == TEXT("Desert") ? FLinearColor(0.50f, 0.39f, 0.25f) : FLinearColor(0.2f, 0.26f, 0.13f));
 				D->SetScalarParameterValue(TEXT("Roughness"), 0.95f);
 				D->SetScalarParameterValue(TEXT("Specular"), 0.2f);
-				G->SetMaterial(0, D);
+				Apron->SetMaterial(0, D);
 			}
-			G->RegisterComponent();
+			Apron->RegisterComponent();
 		}
 		AddMountains(C, OuterM * 100.0 * 0.42, OuterM * 100.0 * 0.85, C.Z, 14, Biome == TEXT("Desert") ? FString(TEXT("Rocky")) : Biome, Seed, 45000.0, 140000.0);
 	}
