@@ -1,0 +1,46 @@
+# Simumav - bakim (yalniz gerektiginde, elle): oyun-kopyala.ps1 betigini D:\Simumav'a koyar; istenirse eski kurulum dosyalarini
+# (D:\Simumav\Kurulum, C:\claude\tools\InnoSetup) siler.
+name: bakim
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner etiketi (bos = vars.RUNNER_LABEL ya da unreal)"
+        type: string
+        default: ""
+      kurulumlari_sil:
+        description: "Eski kurulum dosyalarini sil (Kurulum klasoru + Inno Setup)"
+        type: boolean
+        default: false
+
+jobs:
+  bakim:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ inputs.runner || vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Kopya betigini D:\Simumav'a koy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force -Path 'D:\Simumav' | Out-Null
+          $u = 'https://api.github.com/repos/' + $env:GITHUB_REPOSITORY + '/contents/Tools/oyun-kopyala.ps1?ref=' + $env:GITHUB_SHA
+          Invoke-WebRequest -Uri $u -Headers @{ Authorization = ('Bearer ' + $env:GH_TOKEN); Accept = 'application/vnd.github.raw' } -OutFile 'D:\Simumav\oyun-kopyala.ps1' -UseBasicParsing
+          Write-Host ('D:\Simumav\oyun-kopyala.ps1 hazir (' + (Get-Item 'D:\Simumav\oyun-kopyala.ps1').Length + ' bayt)')
+      - name: Eski kurulumlari sil
+        if: ${{ inputs.kurulumlari_sil }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          foreach ($k in @('D:\Simumav\Kurulum', 'C:\claude\tools\InnoSetup')) {
+            if (-not (Test-Path -LiteralPath $k)) { Write-Host ("yok: " + $k); continue }
+            $b = (Get-ChildItem -LiteralPath $k -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+            Get-ChildItem -LiteralPath $k -Force | ForEach-Object { Write-Host ("  siliniyor: " + $_.FullName) }
+            Remove-Item -LiteralPath $k -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host ("{0}: {1:N1} GB silindi, kalan: {2}" -f $k, ($b / 1GB), (Test-Path -LiteralPath $k))
+          }
+          if ((Get-Item -LiteralPath 'C:\claude\Kurulum' -Force -ErrorAction SilentlyContinue).Attributes -band [IO.FileAttributes]::ReparsePoint) { cmd /c rmdir "C:\claude\Kurulum"; Write-Host 'C:\claude\Kurulum baglantisi kaldirildi' }
+          Get-PSDrive -Name D | ForEach-Object { Write-Host ("D: bos {0:N1} GB" -f ($_.Free / 1GB)) }
