@@ -342,7 +342,7 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	SkyActors.Reset();
 	for (TObjectPtr<AActor>& X : SceneryActors) if (X) X->Destroy();
 	SceneryActors.Reset();
-	if (MenuLevel) { MenuLevel->SetShouldBeLoaded(false); MenuLevel->SetShouldBeVisible(false); MenuLevel->SetIsRequestingUnloadAndRemoval(true); MenuLevel = nullptr; }
+	DropMenuLevels();
 	if (Preview) Preview->Destroy();
 	if (PilotPrev) PilotPrev->Destroy();
 	if (Showcase) Showcase->Destroy();
@@ -970,7 +970,9 @@ void ASmvMenuScene::RecenterFabMap()
 	FBox Box(ForceInit);
 	TArray<FVector> Starts;
 	int32 N = 0;
-	for (AActor* A : MenuLevel->GetLoadedLevel()->Actors)
+	TArray<AActor*> AllActors;
+	for (ULevel* Lv : MenuLevels()) for (AActor* X : Lv->Actors) AllActors.Add(X);
+	for (AActor* A : AllActors)
 	{
 		if (!IsValid(A)) continue;
 		if (A->IsA<APlayerStart>()) { Starts.Add(A->GetActorLocation()); continue; }
@@ -1018,6 +1020,22 @@ void ASmvMenuScene::TickScenery()
 	UWorld* W = GetWorld();
 	if (!W) return;
 	if (bFabMap && (!MenuLevel || !MenuLevel->IsLevelVisible() || !MenuLevel->GetLoadedLevel())) return;
+	if (bFabMap && !bMenuSubsReq)
+	{
+		bMenuSubsReq = true;
+		MenuSubsAt = FPlatformTime::Seconds();
+		UWorld* LW = MenuLevel->GetLoadedLevel()->GetTypedOuter<UWorld>();
+		if (LW && LW != W)
+			for (ULevelStreaming* Sub : LW->GetStreamingLevels())
+			{
+				if (!Sub || Sub->GetWorldAssetPackageName().IsEmpty()) continue;
+				bool bOk = false;
+				if (ULevelStreamingDynamic* Lv = ULevelStreamingDynamic::LoadLevelInstance(W, Sub->GetWorldAssetPackageName(), Sub->LevelTransform.GetLocation(), Sub->LevelTransform.Rotator(), bOk); bOk && Lv) MenuSubs.Add(Lv);
+			}
+		if (MenuSubs.Num()) { UE_LOG(LogSimumav, Log, TEXT("Menü Fab haritası %s: %d alt seviye yükleniyor"), *MapKey, MenuSubs.Num()); return; }
+	}
+	if (bFabMap && MenuSubs.Num() && FPlatformTime::Seconds() - MenuSubsAt < 45.0)
+		for (const TObjectPtr<ULevelStreamingDynamic>& L : MenuSubs) if (L && !L->IsLevelVisible()) return;
 	bSceneryDone = true;
 	if (const FSmvMapDef* Kd = bFabMap ? FSmvMapRegistry::Find(MapKey) : nullptr)
 		if (Kd->KitDir && *Kd->KitDir) FSmvKitYard::Build(W, MenuLevel->GetLoadedLevel(), Kd->KitDir, 7);
@@ -1027,7 +1045,7 @@ void ASmvMenuScene::TickScenery()
 	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	// Fab haritası "havada ada" ise çevresine arazi diski + uzak dağlar (uçuştakiyle aynı: ASmvScenery::BuildSurround)
 	const FSmvMapDef* Def = bFabMap ? FSmvMapRegistry::Find(MapKey) : nullptr;
-	if (Def && Def->FenceM >= 0.0) FSmvScenery::HideOutsideSite({ MenuLevel->GetLoadedLevel() }, 3000.0);
+	if (Def && Def->FenceM >= 0.0) FSmvScenery::HideOutsideSite(MenuLevels(), 3000.0);
 	if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
 	{
 		if (ASmvScenery* Sc = W->SpawnActor<ASmvScenery>(ASmvScenery::StaticClass(), FTransform::Identity, Sp))
@@ -1035,7 +1053,7 @@ void ASmvMenuScene::TickScenery()
 			TArray<AActor*> Ig;
 			if (Flyer) Ig.Add(Flyer);
 			for (const TObjectPtr<ASmvDroneActor>& X : Extras) if (X) Ig.Add(X);
-			if (Sc->BuildSurround({ MenuLevel->GetLoadedLevel() }, Def->Surround, 11, Ig, Def->FenceM < 0.0)) SceneryActors.Add(Sc);
+			if (Sc->BuildSurround(MenuLevels(), Def->Surround, 11, Ig, Def->FenceM < 0.0)) SceneryActors.Add(Sc);
 			else Sc->Destroy();
 		}
 		GroundCache.Reset();
@@ -1249,7 +1267,7 @@ void ASmvMenuScene::LoadMenuMap(const FString& Want)
 {
 	UWorld* W = GetWorld();
 	if (!W) return;
-	if (MenuLevel) { MenuLevel->SetShouldBeLoaded(false); MenuLevel->SetShouldBeVisible(false); MenuLevel->SetIsRequestingUnloadAndRemoval(true); MenuLevel = nullptr; }
+	DropMenuLevels();
 	for (TObjectPtr<AActor>& X : SceneryActors) if (X) X->Destroy();
 	SceneryActors.Reset();
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
@@ -1362,6 +1380,22 @@ void ASmvMenuScene::SetMap(const FString& Key)
 	const FString K = Key.IsEmpty() ? FString(TEXT("proc")) : Key;
 	if (K == MapKey || (K == TEXT("proc") && !bFabMap && MapKey.IsEmpty() && Terrain)) return;
 	LoadMenuMap(K);
+}
+
+void ASmvMenuScene::DropMenuLevels()
+{
+	for (TObjectPtr<ULevelStreamingDynamic>& L : MenuSubs) if (L) { L->SetShouldBeLoaded(false); L->SetShouldBeVisible(false); L->SetIsRequestingUnloadAndRemoval(true); }
+	MenuSubs.Reset();
+	bMenuSubsReq = false;
+	if (MenuLevel) { MenuLevel->SetShouldBeLoaded(false); MenuLevel->SetShouldBeVisible(false); MenuLevel->SetIsRequestingUnloadAndRemoval(true); MenuLevel = nullptr; }
+}
+
+TArray<ULevel*> ASmvMenuScene::MenuLevels() const
+{
+	TArray<ULevel*> Out;
+	if (MenuLevel && MenuLevel->GetLoadedLevel()) Out.Add(MenuLevel->GetLoadedLevel());
+	for (const TObjectPtr<ULevelStreamingDynamic>& L : MenuSubs) if (L && L->GetLoadedLevel() && L->IsLevelVisible()) Out.Add(L->GetLoadedLevel());
+	return Out;
 }
 
 bool ASmvMenuScene::IsMapReady() const

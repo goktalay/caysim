@@ -120,6 +120,13 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<ASmvDroneActor>> Extras;
 	/** Fab haritası (varsa menü arka planı) ve gök */
 	UPROPERTY() TObjectPtr<class ULevelStreamingDynamic> MenuLevel;
+	/** Fab haritasının alt seviyeleri (kalıcı seviyenin akış listesi: Modern City blokları, US_Military ışık/dekor) — seviye örneği
+	 *  olarak yüklenen dünyanın alt seviyeleri kendiliğinden gelmez (uçuştaki ASmvGameMode::HandleFabLevelShown ile aynı) */
+	UPROPERTY() TArray<TObjectPtr<class ULevelStreamingDynamic>> MenuSubs;
+	bool bMenuSubsReq = false;
+	double MenuSubsAt = 0;
+	TArray<ULevel*> MenuLevels() const;
+	void DropMenuLevels();
 	UPROPERTY() TArray<TObjectPtr<AActor>> SkyActors;
 	/** Fab haritası çevresi (havada ada görünmesin; kayıt tablosu Surround) ve gökte uzak trafik (yalnız görsel) */
 	UPROPERTY() TArray<TObjectPtr<AActor>> SceneryActors;

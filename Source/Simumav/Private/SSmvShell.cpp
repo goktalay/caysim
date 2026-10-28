@@ -4914,6 +4914,8 @@ void SSmvShell::TickSmoke()
 		{ ESmvScreen::ParkurList, -1, 0, 2, TEXT("05_enc_tour2"), 18.f }, { ESmvScreen::ParkurList, -1, 0, 3, TEXT("05_enc_tour3"), 18.f },
 		{ ESmvScreen::ParkurList, -1, 0, 4, TEXT("05_enc_tour4"), 18.f }, { ESmvScreen::ParkurList, -1, 0, 5, TEXT("05_enc_tour5"), 18.f },
 		{ ESmvScreen::ParkurList, -1, 0, 6, TEXT("05_enc_tour6"), 18.f }, { ESmvScreen::ParkurList, -1, 0, 7, TEXT("05_enc_tour7"), 18.f },
+		{ ESmvScreen::ParkurList, -1, 0, 8, TEXT("05_enc_tour8"), 18.f }, { ESmvScreen::ParkurList, -1, 0, 9, TEXT("05_enc_tour9"), 18.f },
+		{ ESmvScreen::ParkurList, -1, 0, 10, TEXT("05_enc_tour10"), 18.f },
 		{ ESmvScreen::ParkurList, -1, 1, -1, TEXT("05_custom_list"), 4.f },
 		{ ESmvScreen::ParkurWizard, 0, -1, -1, TEXT("06_pw0_biome"), 3.f }, { ESmvScreen::ParkurWizard, 1, -1, -1, TEXT("06_pw1_world"), 6.f },
 		{ ESmvScreen::ParkurWizard, 2, -1, -1, TEXT("06_pw2_weather"), 2.5f }, { ESmvScreen::ParkurWizard, 3, -1, -1, TEXT("06_pw3_name"), 2.5f },

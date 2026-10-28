@@ -509,7 +509,7 @@ try {
 		# alt seviyeler (Sub_Levels / SubLevels klasorleri: haritanin klasoru ve bir ustu) - calisma aninda kalici seviyeyle yuklenir
 		$hDir = Split-Path ((DiskYolu $secilen) + '.umap')
 		foreach ($kok in @($hDir, (Split-Path $hDir))) {
-			foreach ($sd in (Get-ChildItem -LiteralPath $kok -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)^sub_?levels?$' })) {
+			foreach ($sd in (Get-ChildItem -LiteralPath $kok -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)^(sub|streaming)_?levels?$' })) {
 				foreach ($u in (Get-ChildItem -LiteralPath $sd.FullName -Filter *.umap -File -Recurse -ErrorAction SilentlyContinue)) {
 					$r2 = Diskten $u.FullName
 					if (-not ($pisirilecek -contains $r2)) { [void]$pisirilecek.Add($r2) }

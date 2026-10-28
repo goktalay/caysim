@@ -37,6 +37,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "Fab",
+			"Enabled": false
+		},
+		{
 			"Name": "CesiumForUnreal",
 			"Enabled": true,
 			"Optional": true,

@@ -41,8 +41,6 @@ namespace
 		TEXT("/Game/NiagaraExamples/FX_Fog"),
 		TEXT("/Game/Aircraft_HUD"),
 		TEXT("/Game/SpeedEffects/Assets/Blueprints"),
-		// parça paketi sahası (FSmvMapDef::KitDir — Rafineri)
-		TEXT("/Game/refineries/Geometries"),
 		// </MANZARA-KLASORLERI>
 	};
 
