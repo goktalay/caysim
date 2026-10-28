@@ -41,6 +41,8 @@ namespace
 		TEXT("/Game/NiagaraExamples/FX_Fog"),
 		TEXT("/Game/Aircraft_HUD"),
 		TEXT("/Game/SpeedEffects/Assets/Blueprints"),
+		// parça paketi sahası (FSmvMapDef::KitDir — Rafineri)
+		TEXT("/Game/refineries/Geometries"),
 		// </MANZARA-KLASORLERI>
 	};
 
@@ -410,7 +412,8 @@ void ASmvScenery::BuildGroundDisk(const FVector& C, double FlatM, double OuterM,
 	Ground->RegisterComponent();
 	const int32 Rings = 72, Segs = 160;
 	TArray<FVector> V; TArray<int32> Tri; TArray<FVector> Nrm; TArray<FVector2D> Uv; TArray<FLinearColor> Col; TArray<FProcMeshTangent> Tan;
-	auto HeightM = [FlatM, Seed](double E, double N) { return SmvDune(E, N, FlatM, Seed); };
+	// bitkisiz (saha çitli) disk düz: kum tepecikleri geniş diskte ışıkla beyaz-mor benekler gibi görünüyordu (duman 40745165146)
+	auto HeightM = [FlatM, Seed, bScatter](double E, double N) { return bScatter ? SmvDune(E, N, FlatM, Seed) : 0.0; };
 	auto RingR = [OuterM, Rings](int32 r) { const double U = (double)r / Rings; return OuterM * U * U * (0.35 + 0.65 * U) + OuterM * 0.002 * r; };
 	V.Reserve((Rings + 1) * Segs + 1);
 	V.Add(Off);

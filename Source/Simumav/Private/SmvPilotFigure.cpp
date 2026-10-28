@@ -479,7 +479,9 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 		{
 			UMaterialInstanceDynamic* M = UMaterialInstanceDynamic::Create(Sm, this);
 			// tam boy giysi altında gövde yalnız ellerde / boyunda görünür → ten rengi
-			SmvSetSolidColor(M, bFullOutfit ? PfSkin(A.Skin) : A.Outfit == TEXT("casual") ? FMath::Lerp(Suit, FLinearColor::White, 0.3f) : Suit);
+			// giysi varken de gövde koyu tulum renginde: parçaların arasından / içinden taşan gövde ten rengiyken bacaklarda ve göğüste
+			// "yama" gibi görünüyordu (duman 40745165146); eller eldivenli görünür
+			SmvSetSolidColor(M, Garments.Num() ? Suit * 0.6f : A.Outfit == TEXT("casual") ? FMath::Lerp(Suit, FLinearColor::White, 0.3f) : Suit);
 			M->SetScalarParameterValue(TEXT("Roughness"), 0.72f);
 			MhBody->SetMaterial(i, M);
 		}

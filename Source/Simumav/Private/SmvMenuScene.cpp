@@ -35,6 +35,7 @@
 #include "SmvScenery.h"
 #include "Misc/PackageName.h"
 #include "SmvMapRegistry.h"
+#include "SmvKitYard.h"
 #include "Components/AudioComponent.h"
 #include "SmvGameRulesActor.h"
 #include "MediaPlayer.h"
@@ -823,8 +824,9 @@ void ASmvMenuScene::TickSpin()
 			SmvSpinPrims(SpinSubject);   // GLB ile eklenen bileşenler dahil
 			if (SpinJob.bAvatar && SpinFig)
 			{
+				// kadraj baş-omuz; figür ayakları GSmvSpinAt'ta kalır (dönme ekseni dikey → yerel kayma yalnız yukarı)
 				SpinAt = GSmvSpinAt + FVector(0.0, 0.0, SpinFig->HeadHeightCm() - 16.0);
-				SpinLocalOff = FVector::ZeroVector;
+				SpinLocalOff = FVector(0.0, 0.0, SpinFig->HeadHeightCm() - 16.0);
 				SpinDist = 128.f;
 			}
 			else
@@ -1004,6 +1006,8 @@ void ASmvMenuScene::TickScenery()
 	if (!W) return;
 	if (bFabMap && (!MenuLevel || !MenuLevel->IsLevelVisible() || !MenuLevel->GetLoadedLevel())) return;
 	bSceneryDone = true;
+	if (const FSmvMapDef* Kd = bFabMap ? FSmvMapRegistry::Find(MapKey) : nullptr)
+		if (Kd->KitDir && *Kd->KitDir) FSmvKitYard::Build(W, MenuLevel->GetLoadedLevel(), Kd->KitDir, 7);
 	RecenterFabMap();
 	ClearShowcaseSpot();
 	FActorSpawnParameters Sp;

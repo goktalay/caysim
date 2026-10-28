@@ -50,6 +50,8 @@ struct SIMUMAV_API FSmvMapDef
 	/** Saha çiti (m; < 0 yok): oyun alanı = haritanın ağ kutusu, bu kadar içeri. Uçuşta sınıra yaklaşınca uyarı, aşınca hata + uçuş biter;
 	 *  menü turu kamerası saha içinde kalır, çevre diskinde dağınık bitki yok (saha dışı gösterilmez — kullanıcı, 2026-10-28). */
 	double FenceM = -1.0;
+	/** Parça paketi klasörü (/Game/...): haritanın içine paket ağlarından tesis sahası dizilir (FSmvKitYard; hazır haritası boş paketler) */
+	const TCHAR* KitDir = nullptr;
 };
 
 struct SIMUMAV_API FSmvMapRegistry

@@ -15,6 +15,7 @@
 #include "SmvToneSynth.h"
 #include "SmvMotorSynth.h"
 #include "SmvI18n.h"
+#include "SmvKitYard.h"
 #include "SSmvShell.h"
 #include "SSmvFlightUi.h"
 #include "SmvMenuScene.h"
@@ -2518,6 +2519,13 @@ void ASmvGameMode::PlaceFabLevels()
 	UWorld* W = GetWorld();
 	if (!W) return;
 	bFabPlaced = true;
+	// parça paketi sahası (Rafineri): seviyenin içine kurulur — kutu, kalkış, çit ve çevre onu seviye aktörü olarak görür
+	if (const FSmvMapDef* Kd = FSmvMapRegistry::Find(FabMapKey))
+	{
+		if (Kd->KitDir && *Kd->KitDir)
+			for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
+				if (Lv && Lv->GetLoadedLevel()) { FSmvKitYard::Build(W, Lv->GetLoadedLevel(), Kd->KitDir, 7); break; }
+	}
 	FBox Box(ForceInit);
 	TArray<AActor*> Drop;
 	TArray<ULevel*> Levels;
