@@ -36,10 +36,12 @@ arayüz yalnız kapsamayı gösterir.
 - **Arazi:** AWS Terrain Tiles (Terrarium PNG; `s3.amazonaws.com/elevation-tiles-prod`), z14 (~9 m/px) uçuş alanı, z10 ufuk (30 km).
   Kaynaklar: SRTM, GMTED2010, ETOPO1, EU-DEM (Copernicus), NED … — atıf gerekli, ticari kullanım serbest.
   Deniz: Terrarium batimetrisi ≤ 0 m → taban −3 m'ye kırpılır, 0 m'de deniz düzlemi.
-- **Binalar / yollar / su / orman:** OpenStreetMap (Overpass API; `overpass-api.de`, yedek `overpass.kumi.systems`), z14 karo kutusu başına
-  **z15** karo kutusu başına bir sorgu, aynı anda tek sorgu, 9 deneme (10 → 60 sn, 429'da 45 sn). Overpass ilk baytı ~50 sn'de gönderebildiği için
-`[HTTP] HttpActivityTimeout=200` (DefaultEngine.ini). © OpenStreetMap katkıcıları, ODbL — atıf gerekli; türetilmiş veritabanı
-  paylaşılırsa ODbL ile paylaşılır (paket yalnız oyuncunun bilgisayarında kalır).
+- **Binalar / yollar / su / orman:** OpenStreetMap verisi, **OpenFreeMap** vektör karolarından (OpenMapTiles şeması, z14; Cloudflare önbelleği,
+  anahtar / hız sınırı yok; ~0,4 sn ve ~400 KB / karo; TileJSON `https://tiles.openfreemap.org/planet`). Katmanlar: building (render_height),
+  transportation, water, landcover, landuse (mezarlık), park. Çözücü `Core/SmvMvt` (tests/cpp/test_mvt.py, mapbox_vector_tile'a karşı).
+  © OpenStreetMap katkıcıları (ODbL), © OpenMapTiles, OpenFreeMap — atıf gerekli.
+  Yedek: Overpass API (`[/Script/Simumav.SmvRegion] OsmSource=overpass`; z15, tek sorgu, 9 deneme) — kamu sunucusu yoğunlukta 502 / 504 / 429
+  veriyordu, 2 km bölge saatlerce sürüp "takılı" görünüyordu (kullanıcı, 2026-10-28).
 - Bina yüksekliği: `height` → `building:levels` (+ `roof:levels`) → türe ve taban alanına göre sezgisel kat sayısı (OSM kimliğine bağlı, her seferinde aynı).
 - Uydu görüntüsü YOK: serbest lisanslı yüksek çözünürlüklü küresel görüntü bulunmadığından arazi Hyper malzemesiyle (eğim → kaya,
   yükseklik → kar) çizilir. Sentinel-2 cloudless 2016 (CC BY 4.0, 10 m) eklenebilir ama EOX hizmetinin ticari kullanımı abonelik ister.

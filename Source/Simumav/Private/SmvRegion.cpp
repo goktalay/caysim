@@ -4,6 +4,7 @@
 #include "SimumavTypes.h"
 #include "SmvI18n.h"
 #include "SmvRegionCore.h"
+#include "SmvMvt.h"
 #include "CesiumWorldSetup.h"
 #include "Async/Async.h"
 #include "Containers/Ticker.h"
@@ -30,7 +31,6 @@ namespace
 	// private.coffee 180 sn'de yanıtsız, mail.ru 504) — sorgular z15 karoya bölünür
 	const TCHAR* GOverpass[] = { TEXT("https://overpass-api.de/api/interpreter"), TEXT("https://overpass-api.de/api/interpreter"),
 		TEXT("https://overpass.private.coffee/api/interpreter"), TEXT("https://overpass-api.de/api/interpreter"), TEXT("https://overpass.kumi.systems/api/interpreter") };
-	constexpr int32 GOsmZ = 15;
 	constexpr int32 GDemZ = 14, GFarZ = 10;
 	constexpr double GFarRadiusM = 30000.0;
 	constexpr int64 GGoogleIonAsset = 2275207;
@@ -220,6 +220,91 @@ namespace
 		}
 	}
 
+	// ---- OpenFreeMap (OpenMapTiles şeması) z14 vektör karosu → bölge öğeleri ----
+	void ConvertMvt(const TArray<uint8>& Bytes, int32 Tx, int32 Ty, int32 Z, double Lat0, double Lon0, TArray<FOsmItem>& Out, bool& bOk)
+	{
+		std::vector<SmvMvt::FLayer> Ls;
+		bOk = SmvMvt::Decode(Bytes.GetData(), (size_t)Bytes.Num(), Ls);
+		if (!bOk) return;
+		for (const SmvMvt::FLayer& L : Ls)
+		{
+			const double Ex = L.Extent > 0 ? L.Extent : 4096;
+			auto ToEnu = [Tx, Ty, Z, Ex, Lat0, Lon0](const SmvMvt::FPt& P) -> SmvRegion::FXY
+			{
+				double Lo, La, E, N;
+				SmvRegion::PixelToLonLat((Tx + P.X / Ex) * 256.0, (Ty + P.Y / Ex) * 256.0, Z, Lo, La);
+				SmvRegion::LatLonToEnu(Lat0, Lon0, La, Lo, E, N);
+				return { E, N };
+			};
+			const bool bBld = L.Name == "building", bRoad = L.Name == "transportation", bWater = L.Name == "water";
+			const bool bCover = L.Name == "landcover", bUse = L.Name == "landuse", bPark = L.Name == "park";
+			if (!bBld && !bRoad && !bWater && !bCover && !bUse && !bPark) continue;
+			for (const SmvMvt::FFeature& F : L.Features)
+			{
+				if (bRoad)
+				{
+					if (F.Type != 2 || F.Str("brunnel") == "tunnel") continue;
+					std::string C = F.Str("class"), Sc = F.Str("subclass");
+					if (C.find("_construction") != std::string::npos) continue;
+					std::string Hw;
+					if (C == "motorway" || C == "trunk" || C == "primary" || C == "secondary" || C == "tertiary") Hw = C;
+					else if (C == "minor") Hw = "residential";
+					else if (C == "service" || C == "busway" || C == "raceway") Hw = "service";
+					else if (C == "track") Hw = "track";
+					else if (C == "path") Hw = Sc == "pedestrian" ? "pedestrian" : Sc == "steps" ? "steps" : Sc == "cycleway" ? "cycleway" : "footway";
+					else continue;   // demiryolu, raylı sistem, feribot, teleferik
+					const double W = SmvRegion::RoadWidth(Hw, "");
+					if (W <= 0) continue;
+					for (const auto& Part : F.Parts)
+						for (const auto& Run : SmvMvt::ClipLine(Part, Ex))
+						{
+							FOsmItem It; It.Kind = 2; It.W = (float)W;
+							It.Sub = C == "path" ? 1 : C == "track" ? 2 : (F.Str("surface") == "unpaved" ? 2 : 0);
+							for (const SmvMvt::FPt& Q : Run) { const SmvRegion::FXY E = ToEnu(Q); It.P.Add(FVector2f((float)E.X, (float)E.Y)); }
+							if (It.P.Num() >= 2) Out.Add(MoveTemp(It));
+						}
+					continue;
+				}
+				if (F.Type != 3) continue;
+				uint8 Ak = 0;
+				const std::string C = F.Str("class"), Sc = F.Str("subclass");
+				if (bWater) { if (C == "ocean") continue; Ak = 1; }   // deniz: arazinin deniz düzlemi
+				else if (bCover) Ak = C == "wood" ? 2 : C == "grass" ? (Sc == "scrub" ? 4 : 3) : C == "farmland" ? 5 : C == "sand" ? 6 : C == "wetland" ? 3 : 0;
+				else if (bUse) Ak = C == "cemetery" ? 7 : 0;
+				else if (bPark) Ak = 3;
+				if (!bBld && !Ak) continue;
+				for (const auto& Part : F.Parts)
+				{
+					if (SmvMvt::RingArea(Part) <= 0) continue;   // delik (iç halka) atlanır
+					const std::vector<SmvMvt::FPt> Cl = SmvMvt::ClipRing(Part, Ex);   // karo tamponu: komşu karoyla çift kalmasın
+					if (Cl.size() < 3) continue;
+					std::vector<SmvRegion::FXY> Ring;
+					for (const SmvMvt::FPt& Q : Cl) Ring.push_back(ToEnu(Q));
+					if (!SmvRegion::CleanRing(Ring, bBld ? 0.25 : 0.5)) continue;
+					const double Area = std::fabs(SmvRegion::SignedArea(Ring));
+					FOsmItem It;
+					if (bBld)
+					{
+						if (Area < 6.0) continue;
+						const double Rh = F.Num("render_height", -1.0), Rmin = F.Num("render_min_height", 0.0);
+						if (Rh < 0) continue;   // yeraltı
+						// OpenMapTiles yüksekliği yoksa 5 m yazar → tür / taban alanı sezgisi (konuma bağlı, her seferinde aynı)
+						double Ce = 0, Cn = 0;
+						for (const SmvRegion::FXY& Q : Ring) { Ce += Q.X; Cn += Q.Y; }
+						const uint64_t Hs = (uint64_t)(int64_t)FMath::RoundToInt(Ce / Ring.size() * 10.0) * 73856093ull ^ (uint64_t)(int64_t)FMath::RoundToInt(Cn / Ring.size() * 10.0) * 19349663ull;
+						const bool bDef = Rh <= 0.5 || std::fabs(Rh - 5.0) < 0.01;
+						It.Kind = 1;
+						It.H = (float)(bDef ? SmvRegion::BuildingHeight("yes", "", "", "", Hs, Area) : Rh);
+						It.MinH = Rmin > 0 && Rmin < It.H - 1.0 ? (float)Rmin : 0.f;
+					}
+					else { It.Kind = 3; It.Sub = Ak; }
+					for (const SmvRegion::FXY& Q : Ring) It.P.Add(FVector2f((float)Q.X, (float)Q.Y));
+					Out.Add(MoveTemp(It));
+				}
+			}
+		}
+	}
+
 	void AppendPts(FString& S, const TArray<FVector2f>& P)
 	{
 		for (const FVector2f& Q : P) S += FString::Printf(TEXT(",%.1f,%.1f"), Q.X, Q.Y);
@@ -323,12 +408,11 @@ public:
 		const int32 N14 = DemQ.Num();
 		AddRange(GFarZ, GFarRadiusM, false);
 		DemTotal = DemQ.Num();
-		int32 X0, Y0, X1, Y1;
-		SmvRegion::TileRange(Info.Lat, Info.Lon, Info.RadiusM, GOsmZ, X0, Y0, X1, Y1);
-		for (int32 Y = Y0; Y <= Y1; ++Y)
-			for (int32 X = X0; X <= X1; ++X)
-				if (TileDistM(GOsmZ, X, Y) <= Info.RadiusM) OsmQ.Add({ X, Y, 0 });
-		OsmTotal = OsmQ.Num();
+		// OSM kaynağı: OpenFreeMap vektör karoları (varsayılan; CDN, ~0,4 sn / karo) ya da Overpass ([/Script/Simumav.SmvRegion] OsmSource=overpass)
+		FString Src = TEXT("mvt");
+		if (GConfig) GConfig->GetString(TEXT("/Script/Simumav.SmvRegion"), TEXT("OsmSource"), Src, GGameIni);
+		bMvt = Src != TEXT("overpass");
+		FillOsmQueue();
 		SMV_KLOG(TEXT("Bölge %s: %.5f, %.5f, yarıçap %.0f m — arazi %d + %d karo, OSM %d karo, Google denetimi %s"), *Info.Id, Info.Lat, Info.Lon, Info.RadiusM,
 			N14, DemTotal - N14, OsmTotal, bGoogle && !Token.IsEmpty() ? TEXT("evet") : TEXT("hayır"));
 		Phase = 0;
@@ -346,6 +430,23 @@ private:
 	int32 Phase = 0;
 	TSet<int64> Seen;
 	int32 NB = 0, NR = 0, NA = 0, NT = 0;
+	// OSM kaynağı: OpenFreeMap z14 vektör karoları (bMvt) ya da Overpass z15; yeniden deneme bekleyen karo sayısı (bitti sayılmasın)
+	bool bMvt = true;
+	int32 OsmZ = 15, OsmWaiting = 0, MvtJsonTries = 0;
+	FString MvtUrl;
+
+	void FillOsmQueue()
+	{
+		OsmQ.Reset();
+		OsmZ = bMvt ? 14 : 15;
+		int32 X0, Y0, X1, Y1;
+		SmvRegion::TileRange(Info.Lat, Info.Lon, Info.RadiusM, OsmZ, X0, Y0, X1, Y1);
+		for (int32 Y = Y0; Y <= Y1; ++Y)
+			for (int32 X = X0; X <= X1; ++X)
+				if (TileDistM(OsmZ, X, Y) <= Info.RadiusM) OsmQ.Add({ X, Y, 0 });
+		OsmTotal = OsmQ.Num(); OsmDone = 0; OsmFail = 0;
+		SMV_KLOG(TEXT("Bölge %s: OSM kaynağı %s, z%d, %d karo"), *Info.Id, bMvt ? TEXT("OpenFreeMap vektör karoları") : TEXT("Overpass"), OsmZ, OsmTotal);
+	}
 
 	double TileDistM(int32 Z, int32 X, int32 Y) const
 	{
@@ -631,12 +732,13 @@ private:
 	void PumpOsm()
 	{
 		if (Cancelled()) return;
+		if (bMvt) { PumpMvt(); return; }
 		// Overpass ana sunucusu yoğunlukta 502 / 504 / 429 veriyor (duman 40398993631): tek sorgu aynı anda
 		while (OsmInFlight < 1 && OsmQ.Num())
 		{
 			const FOsmT T = OsmQ[0];
 			OsmQ.RemoveAt(0);
-			const FString File = Info.Dir() / FString::Printf(TEXT("osm/%d_%d_%d.json"), GOsmZ, T.X, T.Y);
+			const FString File = Info.Dir() / FString::Printf(TEXT("osm/%d_%d_%d.json"), OsmZ, T.X, T.Y);
 			if (T.Tries == 0 && IFileManager::Get().FileSize(*File) > 8)
 			{
 				// önceki yarım işten: kimlikler ve sayılar okunur (tekilleştirme sürer)
@@ -655,7 +757,7 @@ private:
 			}
 			++OsmInFlight;
 			double S, W, N, E;
-			SmvRegion::TileBounds(GOsmZ, T.X, T.Y, S, W, N, E);
+			SmvRegion::TileBounds(OsmZ, T.X, T.Y, S, W, N, E);
 			const FString Q = FString::Printf(TEXT("[out:json][timeout:150][bbox:%.6f,%.6f,%.6f,%.6f];(way[\"building\"];way[\"highway\"];")
 				TEXT("way[\"natural\"~\"^(wood|water|scrub|grassland|heath|beach|sand)$\"];way[\"landuse\"~\"^(forest|grass|meadow|recreation_ground|village_green|cemetery|farmland|orchard|vineyard|allotments|basin|reservoir)$\"];")
 				TEXT("way[\"leisure\"~\"^(park|garden|pitch|golf_course)$\"];way[\"waterway\"=\"riverbank\"];node[\"natural\"=\"tree\"];);out geom qt;"), S, W, N, E);
@@ -676,7 +778,8 @@ private:
 					{
 						// yoğunluk (429 / 502 / 504): bekle + yeniden dene (sıradaki sunucu); bekleme 10 → 60 sn
 						TWeakPtr<FSmvRegionJob> Wk2 = J;
-						After(Code == 429 ? 45.f : FMath::Min(60.f, 10.f + 10.f * T.Tries), [Wk2, T]() { if (TSharedPtr<FSmvRegionJob> J2 = Wk2.Pin()) { J2->OsmQ.Add({ T.X, T.Y, T.Tries + 1 }); J2->PumpOsm(); } });
+						++J->OsmWaiting;
+						After(Code == 429 ? 45.f : FMath::Min(60.f, 10.f + 10.f * T.Tries), [Wk2, T]() { if (TSharedPtr<FSmvRegionJob> J2 = Wk2.Pin()) { --J2->OsmWaiting; J2->OsmQ.Add({ T.X, T.Y, T.Tries + 1 }); J2->PumpOsm(); } });
 					}
 					else { ++J->OsmFail; ++J->OsmDone; J->UpdateProgress(); J->PumpOsm(); }
 					return;
@@ -711,7 +814,105 @@ private:
 			});
 		}
 		UpdateProgress();
-		if (OsmInFlight == 0 && OsmQ.Num() == 0 && Phase == 2) Complete();
+		if (OsmInFlight == 0 && OsmQ.Num() == 0 && OsmWaiting == 0 && Phase == 2) Complete();
+	}
+
+	// ---------------- OpenFreeMap vektör karoları (z14; Cloudflare önbelleği, hız sınırı yok) ----------------
+	void PumpMvt()
+	{
+		if (Cancelled()) return;
+		if (MvtUrl.IsEmpty())
+		{
+			if (OsmInFlight > 0) return;
+			// güncel karo adresi TileJSON'dan (adres planet sürümüyle değişir)
+			++OsmInFlight;
+			TWeakPtr<FSmvRegionJob> Wk = AsShared();
+			HttpCall(TEXT("https://tiles.openfreemap.org/planet"), TEXT("GET"), FString(), {}, 20.f, [Wk](int32 Code, const TArray<uint8>& Data)
+			{
+				TSharedPtr<FSmvRegionJob> J = Wk.Pin();
+				if (!J.IsValid() || J->Cancelled()) return;
+				--J->OsmInFlight;
+				TSharedPtr<FJsonObject> O = Code == 200 ? SmvJson::Parse(Utf8(Data)) : nullptr;
+				const TArray<TSharedPtr<FJsonValue>>* Tl = nullptr;
+				if (O.IsValid() && O->TryGetArrayField(TEXT("tiles"), Tl) && Tl->Num()) J->MvtUrl = (*Tl)[0]->AsString();
+				if (J->MvtUrl.IsEmpty())
+				{
+					UE_LOG(LogSimumav, Warning, TEXT("OpenFreeMap TileJSON HTTP %d (deneme %d)"), Code, J->MvtJsonTries + 1);
+					if (++J->MvtJsonTries >= 3) { SMV_KLOG(TEXT("Bölge %s: OpenFreeMap'e ulaşılamadı — Overpass'e geçiliyor"), *J->Info.Id); J->bMvt = false; J->FillOsmQueue(); }
+					TWeakPtr<FSmvRegionJob> Wk2 = J;
+					++J->OsmWaiting;
+					After(3.f, [Wk2]() { if (TSharedPtr<FSmvRegionJob> J2 = Wk2.Pin()) { --J2->OsmWaiting; J2->PumpOsm(); } });
+					return;
+				}
+				SMV_KLOG(TEXT("Bölge %s: OpenFreeMap karo adresi %s"), *J->Info.Id, *J->MvtUrl);
+				J->PumpMvt();
+			});
+			return;
+		}
+		while (OsmInFlight < 6 && OsmQ.Num())
+		{
+			const FOsmT T = OsmQ[0];
+			OsmQ.RemoveAt(0);
+			const FString File = Info.Dir() / FString::Printf(TEXT("osm/t%d_%d_%d.json"), OsmZ, T.X, T.Y);
+			if (T.Tries == 0 && IFileManager::Get().FileSize(*File) > 8)
+			{
+				FString Txt;
+				FFileHelper::LoadFileToString(Txt, *File);
+				TSharedPtr<FJsonObject> O = SmvJson::Parse(Txt);
+				if (O.IsValid())
+				{
+					auto Cnt = [&O](const TCHAR* K) { const TArray<TSharedPtr<FJsonValue>>* A = nullptr; return O->TryGetArrayField(K, A) ? A->Num() : 0; };
+					NB += Cnt(TEXT("b")); NR += Cnt(TEXT("r")); NA += Cnt(TEXT("a"));
+					++OsmDone;
+					continue;
+				}
+			}
+			++OsmInFlight;
+			const FString Url = MvtUrl.Replace(TEXT("{z}"), *FString::FromInt(OsmZ)).Replace(TEXT("{x}"), *FString::FromInt(T.X)).Replace(TEXT("{y}"), *FString::FromInt(T.Y));
+			TWeakPtr<FSmvRegionJob> Wk = AsShared();
+			const double Lat0 = Info.Lat, Lon0 = Info.Lon;
+			const int32 Z = OsmZ;
+			HttpCall(Url, TEXT("GET"), FString(), {}, 60.f, [Wk, T, File, Lat0, Lon0, Z](int32 Code, const TArray<uint8>& Data)
+			{
+				TSharedPtr<FSmvRegionJob> J = Wk.Pin();
+				if (!J.IsValid() || J->Cancelled()) return;
+				if (Code != 200)
+				{
+					--J->OsmInFlight;
+					UE_LOG(LogSimumav, Warning, TEXT("Bölge vektör karosu %d/%d/%d: HTTP %d (deneme %d)"), Z, T.X, T.Y, Code, T.Tries + 1);
+					if (Code == 404) { ++J->OsmDone; J->UpdateProgress(); J->PumpOsm(); return; }   // boş karo (deniz / veri yok)
+					if (T.Tries < 4)
+					{
+						TWeakPtr<FSmvRegionJob> Wk2 = J;
+						++J->OsmWaiting;
+						After(3.f + 4.f * T.Tries, [Wk2, T]() { if (TSharedPtr<FSmvRegionJob> J2 = Wk2.Pin()) { --J2->OsmWaiting; J2->OsmQ.Add({ T.X, T.Y, T.Tries + 1 }); J2->PumpOsm(); } });
+					}
+					else { ++J->OsmFail; ++J->OsmDone; J->UpdateProgress(); J->PumpOsm(); }
+					return;
+				}
+				TSharedPtr<TArray<uint8>, ESPMode::ThreadSafe> Raw = MakeShared<TArray<uint8>, ESPMode::ThreadSafe>(Data);
+				Async(EAsyncExecution::ThreadPool, [Wk, T, File, Lat0, Lon0, Z, Raw]()
+				{
+					TSharedPtr<TArray<FOsmItem>, ESPMode::ThreadSafe> Items = MakeShared<TArray<FOsmItem>, ESPMode::ThreadSafe>();
+					bool bOk = false;
+					ConvertMvt(*Raw, T.X, T.Y, Z, Lat0, Lon0, *Items, bOk);
+					AsyncTask(ENamedThreads::GameThread, [Wk, T, File, Items, bOk]()
+					{
+						TSharedPtr<FSmvRegionJob> J = Wk.Pin();
+						if (!J.IsValid() || J->Cancelled()) return;
+						--J->OsmInFlight;
+						if (!bOk) { UE_LOG(LogSimumav, Warning, TEXT("Bölge vektör karosu %d/%d çözülemedi"), T.X, T.Y); ++J->OsmFail; ++J->OsmDone; J->PumpOsm(); return; }
+						J->WriteOsm(File, *Items);
+						++J->OsmDone;
+						J->UpdateProgress();
+						J->SetStatus(TEXT("region.st_osm"), FString::Printf(TEXT("%d / %d · %d"), J->OsmDone, J->OsmTotal, J->NB));
+						J->PumpOsm();
+					});
+				});
+			});
+		}
+		UpdateProgress();
+		if (OsmInFlight == 0 && OsmQ.Num() == 0 && OsmWaiting == 0 && Phase == 2) Complete();
 	}
 
 	void WriteOsm(const FString& File, const TArray<FOsmItem>& Items)
@@ -719,9 +920,12 @@ private:
 		FString B, R, A, T, Ids;
 		for (const FOsmItem& It : Items)
 		{
-			if (Seen.Contains(It.Id)) continue;   // komşu karonun sorgusunda da gelen yol / bina
-			Seen.Add(It.Id);
-			Ids += FString::Printf(TEXT("%s%lld"), Ids.IsEmpty() ? TEXT("") : TEXT(","), It.Id);
+			if (It.Id != 0)
+			{
+				if (Seen.Contains(It.Id)) continue;   // komşu karonun sorgusunda da gelen yol / bina (Overpass)
+				Seen.Add(It.Id);
+				Ids += FString::Printf(TEXT("%s%lld"), Ids.IsEmpty() ? TEXT("") : TEXT(","), It.Id);
+			}
 			if (It.Kind == 1) { B += FString::Printf(TEXT("%s[%.1f,%.1f"), B.IsEmpty() ? TEXT("") : TEXT(","), It.H, It.MinH); AppendPts(B, It.P); B += TEXT("]"); ++NB; }
 			else if (It.Kind == 2) { R += FString::Printf(TEXT("%s[%.1f,%d"), R.IsEmpty() ? TEXT("") : TEXT(","), It.W, It.Sub); AppendPts(R, It.P); R += TEXT("]"); ++NR; }
 			else if (It.Kind == 3) { A += FString::Printf(TEXT("%s[%d"), A.IsEmpty() ? TEXT("") : TEXT(","), It.Sub); AppendPts(A, It.P); A += TEXT("]"); ++NA; }

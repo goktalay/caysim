@@ -309,7 +309,9 @@ void ASmvRegionWorld::BuildOsm(const FSmvTrack& Track, bool bCollisionOnly)
 	{
 		TArray<FString> Files;
 		const FString Dir = R.Dir() / TEXT("osm");
-		IFileManager::Get().FindFiles(Files, *(Dir / TEXT("15_*.json")), true, false);   // z15 karoları (eski z14 denemeleri yok sayılır)
+		// Overpass z15 karoları (15_*) ve OpenFreeMap z14 vektör karoları (t14_*); ilk Overpass z14 denemeleri yok sayılır
+		IFileManager::Get().FindFiles(Files, *(Dir / TEXT("15_*.json")), true, false);
+		{ TArray<FString> Vt; IFileManager::Get().FindFiles(Vt, *(Dir / TEXT("t14_*.json")), true, false); Files.Append(Vt); }
 		for (const FString& F : Files)
 		{
 			FString Txt;
