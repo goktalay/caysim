@@ -47,6 +47,9 @@ struct SIMUMAV_API FSmvMapDef
 	double GroundMsl = 0.0;
 	/** Haritanın kendi sahnesi yok / kullanılmaz: gerçek dünyada yalnız 3D Tiles (Cesium yoksa harita seviyesi yüklenir) */
 	bool bRealOnly = false;
+	/** Saha çiti (m; < 0 yok): oyun alanı = haritanın ağ kutusu, bu kadar içeri. Uçuşta sınıra yaklaşınca uyarı, aşınca hata + uçuş biter;
+	 *  menü turu kamerası saha içinde kalır, çevre diskinde dağınık bitki yok (saha dışı gösterilmez — kullanıcı, 2026-10-28). */
+	double FenceM = -1.0;
 };
 
 struct SIMUMAV_API FSmvMapRegistry

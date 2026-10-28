@@ -79,7 +79,8 @@ public:
 	void AddMeshInstances(UStaticMesh* Mesh, const TArray<FTransform>& WorldXf, bool bCollide, double CullM, UMaterialInterface* Material = nullptr, bool bShadow = true);
 	/** Fab seviyesinin çevresine zemin (Hyper malzemeli geniş arazi diski, adanın altından), kaya/çalı ve uzak dağlar:
 	 *  "havada ada" görünümü kalkar. Levels: yüklenmiş seviyeler; Ignore: ışın sorgularında yok sayılacak aktörler. */
-	bool BuildSurround(const TArray<ULevel*>& Levels, const FString& Biome, int32 Seed, const TArray<AActor*>& Ignore);
+	/** bScatter false: yalnız düz zemin + uzak dağlar (saha çitli haritalar; uzak bitki kümeleri benekli görünüyordu) */
+	bool BuildSurround(const TArray<ULevel*>& Levels, const FString& Biome, int32 Seed, const TArray<AActor*>& Ignore, bool bScatter = true);
 	/** Merkez (taban Z = Center.Z) çevresinde FlatM (m) yarıçapına dek düz, dışında kum tepeli / dalgalı arazi diski (OuterM m),
 	 *  ufuk dağları ve isteğe bağlı kaya/çalı/ağaç dağıtımı. Prosedürel dünyada arazinin dışını kapatmak için de kullanılır. */
 	void BuildGroundDisk(const FVector& Center, double FlatM, double OuterM, const FString& Biome, int32 Seed, bool bScatter);

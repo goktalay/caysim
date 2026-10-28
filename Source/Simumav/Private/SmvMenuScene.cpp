@@ -964,7 +964,7 @@ void ASmvMenuScene::TickScenery()
 			TArray<AActor*> Ig;
 			if (Flyer) Ig.Add(Flyer);
 			for (const TObjectPtr<ASmvDroneActor>& X : Extras) if (X) Ig.Add(X);
-			if (Sc->BuildSurround({ MenuLevel->GetLoadedLevel() }, Def->Surround, 11, Ig)) SceneryActors.Add(Sc);
+			if (Sc->BuildSurround({ MenuLevel->GetLoadedLevel() }, Def->Surround, 11, Ig, Def->FenceM < 0.0)) SceneryActors.Add(Sc);
 			else Sc->Destroy();
 		}
 		GroundCache.Reset();

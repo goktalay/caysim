@@ -1220,6 +1220,7 @@ void ASmvGameMode::Tick(float Dt)
 	if (Flow.IsValid() && Flow->GetScreen() == ESmvScreen::Loading) TickLoadGate();
 	TickPhysics(Dt);
 	TickDebris(Dt);
+	TickFence();
 	TickCityWindows();
 	TickCreditsPlacement();
 	UpdateRace(Dt);
@@ -2690,6 +2691,21 @@ void ASmvGameMode::PlaceFabLevels()
 	SMV_KLOG(TEXT("Fab haritası yerleştirildi (%s): %d seviye, kutu %s, kalkış (%.0f, %.0f, %.0f) — %s; %d gök/ışık aktörü kaldırıldı; fizik kalkış araması %d aday eledi (son: %s)"),
 		*FabMapKey, Levels.Num(), *Box.GetSize().ToString(), Start.X, Start.Y, Zg, *How, Drop.Num(), Rejected, LastWhy.IsEmpty() ? TEXT("-") : *LastWhy);
 	if (Def && Def->bDecor) SpawnFabDecor(FVector::ZeroVector, true);
+	// saha çiti: haritanın ağ kutusu (800 m'den büyük arka plan ağları hariç), FenceM içeri; tavan en yüksek yapının 60 m üstü
+	bFence = bFenceWarned = bFenceBreached = false;
+	if (Def && Def->FenceM >= 0.0)
+	{
+		FBox Fb = Box.ShiftBy(Off);
+		const double Mg = Def->FenceM * 100.0;
+		Fb.Min.X += Mg; Fb.Min.Y += Mg; Fb.Max.X -= Mg; Fb.Max.Y -= Mg;
+		if (Fb.Max.X - Fb.Min.X > 4000.0 && Fb.Max.Y - Fb.Min.Y > 4000.0)
+		{
+			FenceBox = Fb;
+			FenceTopZ = Fb.Max.Z + 6000.0;
+			bFence = true;
+			SMV_KLOG(TEXT("Saha çiti (%s): %.0f × %.0f m, tavan %.0f m (kalkışa göre)"), *FabMapKey, Fb.GetSize().X / 100.0, Fb.GetSize().Y / 100.0, FenceTopZ / 100.0);
+		}
+	}
 	// gerçek dünya çevresi (Cesium): harita kutusu karolardan kırpılır, kenar yükseklikleri eşlenir (karolar yüklenince TickLoadGate → AlignRealRim)
 	if (bRealSurround)
 	{
@@ -2710,7 +2726,7 @@ void ASmvGameMode::PlaceFabLevels()
 			if (Drone) Ig.Add(Drone);
 			if (PilotFigure) Ig.Add(PilotFigure);
 			for (const TObjectPtr<AActor>& X : FabDecor) if (X) Ig.Add(X);
-			if (Sc->BuildSurround(Levels, Def->Surround, 11, Ig)) FabDecor.Add(Sc);
+			if (Sc->BuildSurround(Levels, Def->Surround, 11, Ig, Def->FenceM < 0.0)) FabDecor.Add(Sc);
 			else Sc->Destroy();
 		}
 	}
@@ -3399,6 +3415,32 @@ void ASmvGameMode::CrashFx()
 		Debris.Add(A);
 		DebrisVel.Add(FVector(FMath::FRandRange(-600.f, 600.f), FMath::FRandRange(-600.f, 600.f), FMath::FRandRange(200.f, 900.f)));
 	}
+}
+
+void ASmvGameMode::TickFence()
+{
+	if (!bFence || bFenceBreached || !Drone || !Flow.IsValid() || Flow->GetScreen() != ESmvScreen::Flight) return;
+	const FVector P = Drone->GetActorLocation();
+	const double Side = FMath::Min(FMath::Min(P.X - FenceBox.Min.X, FenceBox.Max.X - P.X), FMath::Min(P.Y - FenceBox.Min.Y, FenceBox.Max.Y - P.Y)) / 100.0;
+	const double D = FMath::Min(Side, (FenceTopZ - P.Z) / 100.0);
+	if (D < 0.0)
+	{
+		bFenceBreached = true;
+		bCrashed = true;
+		PushEvent(FSmvI18n::T(TEXT("fence.breach")).ToString(), 2);
+		HandleToast(FSmvI18n::T(TEXT("fence.breach")).ToString(), 2);
+		SMV_KLOG(TEXT("Saha çiti aşıldı (%s): dron %.0f, %.0f, %.0f — uçuş sonlandırılıyor"), *FabMapKey, P.X / 100.0, P.Y / 100.0, P.Z / 100.0);
+		Command(TEXT("land"));
+		EndAt = FPlatformTime::Seconds() + 3.0;
+		EndReasonPending = TEXT("geofence");
+		return;
+	}
+	if (D < 15.0 && !bFenceWarned)
+	{
+		bFenceWarned = true;
+		PushEvent(FSmvI18n::Format(TEXT("fence.near"), { { TEXT("m"), FString::Printf(TEXT("%.0f"), FMath::Max(0.0, D)) } }).ToString(), 3);
+	}
+	else if (D > 25.0) bFenceWarned = false;
 }
 
 void ASmvGameMode::TickDebris(float Dt)

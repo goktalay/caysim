@@ -219,6 +219,11 @@ public:
 		FString SmokeRamLastContact;
 		FString HudLang;
 	void TickDebris(float Dt);
+	/** Saha çiti (FSmvMapDef::FenceM): sınıra 15 m kala uyarı, aşınca hata + uçuş 3 sn sonra biter (neden geofence) */
+	void TickFence();
+	bool bFence = false, bFenceWarned = false, bFenceBreached = false;
+	FBox FenceBox = FBox(ForceInit);
+	double FenceTopZ = 0;
 	void UpdateFpv(const FCaySimTelemetry& T, double Now);
 	FString RaceResultBadge;
 	// yerel botlar

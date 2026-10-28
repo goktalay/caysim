@@ -343,7 +343,7 @@ void ASmvScenery::AddMountains(const FVector& Center, double InnerCm, double Out
 	UE_LOG(LogSimumav, Log, TEXT("Manzara: %d uzak dağ (%s, %.1f–%.1f km)"), Count, *Biome, InnerCm / 100000.0, OuterCm / 100000.0);
 }
 
-bool ASmvScenery::BuildSurround(const TArray<ULevel*>& Levels, const FString& Biome, int32 Seed, const TArray<AActor*>& Ignore)
+bool ASmvScenery::BuildSurround(const TArray<ULevel*>& Levels, const FString& Biome, int32 Seed, const TArray<AActor*>& Ignore, bool bScatter)
 {
 	UWorld* W = GetWorld();
 	if (!W) return false;
@@ -393,7 +393,7 @@ bool ASmvScenery::BuildSurround(const TArray<ULevel*>& Levels, const FString& Bi
 	const double BoxR = 0.5 * FMath::Max(Box.GetSize().X, Box.GetSize().Y);
 	const double FlatM = BoxR / 100.0 * 1.05;
 	const double OuterM = FMath::Max(FlatM * 8.0, (double)FSmvScenery::GetFloat(TEXT("SurroundRadiusM"), 12000.f));
-	BuildGroundDisk(C, FlatM, OuterM, Biome, Seed, true);
+	BuildGroundDisk(C, FlatM, OuterM, Biome, Seed, bScatter);
 	UE_LOG(LogSimumav, Log, TEXT("Fab çevresi kuruldu (%s): ada yarıçapı %.0f m, zemin Z %.0f cm, disk %.0f km"), *Biome, BoxR / 100.0, BaseZ, OuterM / 1000.0);
 	return true;
 }

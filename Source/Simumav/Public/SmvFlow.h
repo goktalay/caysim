@@ -87,6 +87,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Simumav") ESmvScreen GetScreen() const { return Screen; }
 	UFUNCTION(BlueprintCallable, Category = "Simumav") void SetScreen(ESmvScreen S);
 	UFUNCTION(BlueprintCallable, Category = "Simumav") void Back();
+	/** Geçmişi sıfırlayıp S ekranına geçer (Geri: Mid varsa önce ona, sonra ana menüye) — sihirbaz kaydet / geri dönüşleri */
+	void ResetTo(ESmvScreen S, ESmvScreen Mid = ESmvScreen::Menu);
 	/** İlk açılış mı (Hoş geldin ekranı gösterilir; sonraki açılışlarda doğrudan ana menü, misafir). */
 	bool IsFirstRun() const { return bFirstRun; }
 	void MarkWelcomeDone();

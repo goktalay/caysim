@@ -3256,7 +3256,7 @@ TSharedRef<SWidget> SSmvShell::Summary()
 			[
 				SNew(SVerticalBox)
 				+ SVerticalBox::Slot().AutoHeight()[Title(FSmvI18n::T(FString(TEXT("result.")) + S.Result), 30, ResC)]
-				+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s · %s"), *F->Draft.Drone.Name, *F->Draft.Track.Name) + (S.EndReason.IsEmpty() ? FString() : FString::Printf(TEXT(" · %s"), *S.EndReason))), 12, "Regular", Dim(), false)]
+				+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s · %s"), *F->Draft.Drone.Name, *F->Draft.Track.Name) + (S.EndReason.IsEmpty() ? FString() : FString::Printf(TEXT(" · %s"), *[&S]() { const FString K = TEXT("endreason.") + S.EndReason; const FString V = FSmvI18n::T(K).ToString(); return V == K || V.IsEmpty() ? S.EndReason : V; }()))), 12, "Regular", Dim(), false)]
 			]
 		]
 	];
