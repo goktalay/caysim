@@ -444,6 +444,8 @@
  "fabmap.city.desc": "Manzana con calles, edificios europeos y torres; despegue desde la plaza.",
  "fabmap.forest": "Bosque",
  "fabmap.forest.desc": "Denso pinar con lago y colinas; vuelo bajo entre los árboles.",
+ "fabmap.islands": "Islas",
+ "fabmap.islands.desc": "Mundo abierto de 16 × 16 km: islas con ciudad, aeropuerto, estaciones de tren, puentes y faro; vuelo libre de largo alcance.",
  "fabmap.military": "Base militar",
  "fabmap.military.desc": "Base militar con hangares, torres y vehículos aparcados; los vehículos son solo decorado.",
  "fabmap.moderncity": "Ciudad moderna",

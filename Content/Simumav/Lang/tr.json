@@ -444,6 +444,8 @@
  "fabmap.city.desc": "Caddeler, Avrupa tipi binalar ve gökdelenlerle çevrili şehir bloğu; meydandan kalkış.",
  "fabmap.forest": "Orman",
  "fabmap.forest.desc": "Sık çam ormanı, göl ve tepeler; ağaçlar arasında alçak irtifa uçuşu.",
+ "fabmap.islands": "Adalar",
+ "fabmap.islands.desc": "16 × 16 km açık dünya: adalarda şehir, havalimanı, tren istasyonları, köprüler ve deniz feneri; uzun menzilli serbest uçuş.",
  "fabmap.military": "Askeri Üs",
  "fabmap.military.desc": "Hangarlar, kuleler ve araç parkıyla askeri üs; sahnedeki araçlar yalnız dekordur.",
  "fabmap.moderncity": "Modern Şehir",

@@ -444,6 +444,8 @@
  "fabmap.city.desc": "Pâté de maisons avec rues, immeubles européens et tours ; décollage depuis la place.",
  "fabmap.forest": "Forêt",
  "fabmap.forest.desc": "Forêt de pins dense avec lac et collines ; vol à basse altitude entre les arbres.",
+ "fabmap.islands": "Îles",
+ "fabmap.islands.desc": "Monde ouvert de 16 × 16 km : îles avec ville, aéroport, gares, ponts et phare ; vol libre longue portée.",
  "fabmap.military": "Base militaire",
  "fabmap.military.desc": "Base militaire avec hangars, tours et véhicules stationnés ; les véhicules sont uniquement du décor.",
  "fabmap.moderncity": "Ville moderne",

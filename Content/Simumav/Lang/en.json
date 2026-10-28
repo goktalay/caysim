@@ -444,6 +444,8 @@
  "fabmap.city.desc": "City block of streets, European buildings and towers; take off from the square.",
  "fabmap.forest": "Forest",
  "fabmap.forest.desc": "Dense pine forest with a lake and hills; low-level flying between the trees.",
+ "fabmap.islands": "Islands",
+ "fabmap.islands.desc": "16 × 16 km open world: islands with a city, airport, railway stations, bridges and a lighthouse; long-range free flight.",
  "fabmap.military": "Military Base",
  "fabmap.military.desc": "Military base with hangars, towers and parked vehicles; vehicles are scenery only.",
  "fabmap.moderncity": "Modern City",

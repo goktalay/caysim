@@ -444,6 +444,8 @@
  "fabmap.city.desc": "Stadtblock mit Straßen, europäischen Gebäuden und Hochhäusern; Start vom Platz.",
  "fabmap.forest": "Wald",
  "fabmap.forest.desc": "Dichter Kiefernwald mit See und Hügeln; Tiefflug zwischen den Bäumen.",
+ "fabmap.islands": "Inseln",
+ "fabmap.islands.desc": "16 × 16 km offene Welt: Inseln mit Stadt, Flughafen, Bahnhöfen, Brücken und Leuchtturm; Freiflug mit großer Reichweite.",
  "fabmap.military": "Militärbasis",
  "fabmap.military.desc": "Militärbasis mit Hangars, Türmen und abgestellten Fahrzeugen; Fahrzeuge sind nur Kulisse.",
  "fabmap.moderncity": "Moderne Stadt",
