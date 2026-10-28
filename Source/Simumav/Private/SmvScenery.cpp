@@ -345,6 +345,49 @@ void ASmvScenery::AddMountains(const FVector& Center, double InnerCm, double Out
 	UE_LOG(LogSimumav, Log, TEXT("Manzara: %d uzak dağ (%s, %.1f–%.1f km)"), Count, *Biome, InnerCm / 100000.0, OuterCm / 100000.0);
 }
 
+int32 FSmvScenery::HideOutsideSite(const TArray<ULevel*>& Levels, double MarginCm)
+{
+	FBox Site(ForceInit);
+	for (ULevel* L : Levels)
+	{
+		if (!L) continue;
+		for (AActor* A : L->Actors)
+		{
+			if (!IsValid(A) || A->GetClass()->GetName().Contains(TEXT("Landscape"))) continue;
+			TInlineComponentArray<UStaticMeshComponent*> Cs(A);
+			for (UStaticMeshComponent* C : Cs)
+				if (C && C->IsRegistered() && C->GetStaticMesh() && C->Bounds.BoxExtent.GetMax() < 20000.0) Site += C->Bounds.GetBox();
+		}
+	}
+	if (!Site.IsValid) return 0;
+	const FBox Keep = Site.ExpandBy(FVector(MarginCm, MarginCm, 1.0e7));
+	int32 N = 0;
+	for (ULevel* L : Levels)
+	{
+		if (!L) continue;
+		for (AActor* A : L->Actors)
+		{
+			if (!IsValid(A)) continue;
+			const bool bLand = A->GetClass()->GetName().Contains(TEXT("Landscape"));
+			TInlineComponentArray<UPrimitiveComponent*> Ps(A);
+			for (UPrimitiveComponent* P : Ps)
+			{
+				if (!P || !P->IsRegistered()) continue;
+				const FBox B = P->Bounds.GetBox();
+				const bool bBig = !bLand && P->Bounds.BoxExtent.GetMax() > 40000.0 && !P->IsA<UInstancedStaticMeshComponent>();
+				if (!(bLand || bBig)) continue;
+				if (Keep.Intersect(B) && !bBig) continue;   // saha içindeki arazi parçası kalır
+				P->SetHiddenInGame(true);
+				P->SetVisibility(false);
+				P->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				++N;
+			}
+		}
+	}
+	UE_LOG(LogSimumav, Log, TEXT("Saha dışı gizlendi: %d bileşen (saha %.0f × %.0f m)"), N, Site.GetSize().X / 100.0, Site.GetSize().Y / 100.0);
+	return N;
+}
+
 bool ASmvScenery::BuildSurround(const TArray<ULevel*>& Levels, const FString& Biome, int32 Seed, const TArray<AActor*>& Ignore, bool bScatter)
 {
 	UWorld* W = GetWorld();
@@ -401,25 +444,30 @@ bool ASmvScenery::BuildSurround(const TArray<ULevel*>& Levels, const FString& Bi
 		// saha çitli harita: prosedürel disk ışıkta beyaz-mor benekli görünüyordu (düz yapılınca da — Lumen, kartı olmayan dev ağ;
 		// duman 40754333551) → statik küp ağından düz, mat kum zemin (Rafineri'nin beton zemini gibi temiz) + uzak dağlar.
 		// Ötesi atmosferin gezegen zemini (ufukta düz ova) — saha dışı ayrıntı gösterilmez.
+		// tek dev ağ Lumen yüzey önbelleğinde kaba çözünürlük alıp benekli görünüyordu → 400 m'lik karolar (örnekli ağ)
 		if (UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")))
 		{
 			const double HalfCm = FMath::Clamp(FlatM * 100.0 * 4.0, 150000.0, 400000.0);
-			UStaticMeshComponent* Apron = NewObject<UStaticMeshComponent>(this, TEXT("FlatApron"));
+			const double TileCm = 40000.0;
+			UInstancedStaticMeshComponent* Apron = NewObject<UInstancedStaticMeshComponent>(this, TEXT("FlatApron"));
 			Apron->SetupAttachment(Root);
 			Apron->SetStaticMesh(Cube);
-			Apron->SetWorldLocation(FVector(C.X, C.Y, C.Z - 50.0));
-			Apron->SetWorldScale3D(FVector(HalfCm * 2.0 / 100.0, HalfCm * 2.0 / 100.0, 1.0));
-			Apron->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			Apron->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			Apron->SetCollisionProfileName(TEXT("BlockAll"));
 			Apron->SetCastShadow(false);
 			if (UMaterialInterface* Sm = SmvSolidMat(Apron->GetMaterial(0)))
 			{
 				UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Sm, this);
 				SmvSetSolidColor(D, Biome == TEXT("Desert") ? FLinearColor(0.50f, 0.39f, 0.25f) : FLinearColor(0.2f, 0.26f, 0.13f));
 				D->SetScalarParameterValue(TEXT("Roughness"), 0.95f);
-				D->SetScalarParameterValue(TEXT("Specular"), 0.2f);
 				Apron->SetMaterial(0, D);
 			}
 			Apron->RegisterComponent();
+			const int32 Nt = FMath::CeilToInt(HalfCm * 2.0 / TileCm);
+			const FVector Base(C.X - Nt * TileCm * 0.5 + TileCm * 0.5, C.Y - Nt * TileCm * 0.5 + TileCm * 0.5, C.Z - 50.0);
+			for (int32 ix = 0; ix < Nt; ++ix)
+				for (int32 iy = 0; iy < Nt; ++iy)
+					Apron->AddInstance(FTransform(FRotator::ZeroRotator, Base + FVector(ix * TileCm, iy * TileCm, 0.0), FVector(TileCm / 100.0, TileCm / 100.0, 1.0)), true);
 		}
 		AddMountains(C, OuterM * 100.0 * 0.42, OuterM * 100.0 * 0.85, C.Z, 14, Biome == TEXT("Desert") ? FString(TEXT("Rocky")) : Biome, Seed, 45000.0, 140000.0);
 	}

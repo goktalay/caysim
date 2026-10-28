@@ -36,6 +36,9 @@ struct SIMUMAV_API FSmvScenery
 {
 	/** Pakette bulunan ağlar (ilk çağrıda yüklenir; yoksa boş). */
 	static const TArray<UStaticMesh*>& Meshes(ESmvSceneryKind Kind);
+	/** Saha çitli haritalar: saha kutusunun (≤ 400 m'lik statik ağlar) MarginCm dışında kalan arazi bileşenlerini ve dev arka plan
+	 *  ağlarını gizler, çarpışmasını kapatır ("saha dışı gösterilmesin"; Yıkık İnşaat'ın uzak kum tepeleri). Gizlenen sayısı. */
+	static int32 HideOutsideSite(const TArray<ULevel*>& Levels, double MarginCm);
 	/** Hyper dokulu otomatik arazi malzemesi (/Game/Simumav/Materials/M_SmvTerrainHyper; yoksa nullptr). */
 	static UMaterialInterface* TerrainMaterial();
 	/** Şehir asfaltı / kaldırım (/Game/Simumav/Materials/M_SmvStreet; yoksa nullptr). */

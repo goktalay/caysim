@@ -501,6 +501,16 @@ void ASmvMenuScene::UpdateCamera(float Dt, const FVector& D, const FVector& Fwd)
 		Want = EnuToWorld(120.0, -160.0, 1.7);
 		Look = D;
 	}
+	// kamera arazinin içine girmesin (takip açısı tepelerin içinden geçip arazinin alt yüzünü gösteriyordu — "ters tepe" karesi)
+	if (UWorld* W = GetWorld())
+	{
+		FHitResult H;
+		FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvMenuCam), false);
+		if (Flyer) Q.AddIgnoredActor(Flyer);
+		for (const TObjectPtr<ASmvDroneActor>& X : Extras) Q.AddIgnoredActor(X);
+		if (W->LineTraceSingleByChannel(H, Want + FVector(0, 0, 200000.0), Want - FVector(0, 0, 200000.0), ECC_Visibility, Q))
+			Want.Z = FMath::Max(Want.Z, H.ImpactPoint.Z + 1500.0);
+	}
 	if (!bCamInit || FVector::Dist(Want, CamPos) > 60000.0) { CamPos = Want; bCamInit = true; }
 	const double K = 1.0 - FMath::Exp(-FMath::Clamp((double)Dt, 0.0, 0.1) * 2.2);   // kare hızından bağımsız
 	CamPos = FMath::Lerp(CamPos, Want, K);
@@ -567,6 +577,9 @@ void ASmvMenuScene::Tick(float Dt)
 		{
 			Cam->GetCameraComponent()->PostProcessSettings.DepthOfFieldFocalDistance = (float)FVector::Dist(CamPos, P0);
 			Cam->GetCameraComponent()->PostProcessSettings.DepthOfFieldFstop = 5.6f;
+			// hareket bulanıklığı yok (menü videosu kaydında hızlı kamera geçişleri kareleri bulandırıyordu)
+			Cam->GetCameraComponent()->PostProcessSettings.bOverride_MotionBlurAmount = true;
+			Cam->GetCameraComponent()->PostProcessSettings.MotionBlurAmount = 0.f;
 		}
 		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
@@ -1014,6 +1027,7 @@ void ASmvMenuScene::TickScenery()
 	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	// Fab haritası "havada ada" ise çevresine arazi diski + uzak dağlar (uçuştakiyle aynı: ASmvScenery::BuildSurround)
 	const FSmvMapDef* Def = bFabMap ? FSmvMapRegistry::Find(MapKey) : nullptr;
+	if (Def && Def->FenceM >= 0.0) FSmvScenery::HideOutsideSite({ MenuLevel->GetLoadedLevel() }, 3000.0);
 	if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
 	{
 		if (ASmvScenery* Sc = W->SpawnActor<ASmvScenery>(ASmvScenery::StaticClass(), FTransform::Identity, Sp))

@@ -2726,6 +2726,7 @@ void ASmvGameMode::PlaceFabLevels()
 	// "havada ada" haritaları (kayıt tablosu Surround biyomu; gerçek dünya yoksa): çevreye Hyper malzemeli arazi diski + kaya/çalı + uzak dağlar
 	else if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
 	{
+		if (Def->FenceM >= 0.0) FSmvScenery::HideOutsideSite(Levels, 3000.0);
 		FActorSpawnParameters Sp;
 		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		if (ASmvScenery* Sc = W->SpawnActor<ASmvScenery>(ASmvScenery::StaticClass(), FTransform::Identity, Sp))
