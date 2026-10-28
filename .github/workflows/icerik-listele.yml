@@ -1,0 +1,39 @@
+# Simumav - Fab icerik listesi (yalniz okur): verilen klasordeki .umap dosyalari ve ilk iki duzey klasorler (boyutlariyla)
+name: icerik-listele
+
+on:
+  workflow_dispatch:
+    inputs:
+      yol:
+        description: "Klasor (ornek D:\\Simumav\\SimumavFab\\refineries)"
+        type: string
+        default: "D:\\Simumav\\SimumavFab"
+      desen:
+        description: "Dosya deseni"
+        type: string
+        default: "*.umap"
+
+jobs:
+  liste:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Liste
+        env:
+          YOL: ${{ inputs.yol }}
+          DESEN: ${{ inputs.desen }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if (-not (Test-Path -LiteralPath $env:YOL)) { Write-Host "Yok: $env:YOL"; exit 0 }
+          Write-Host "=== Dosyalar ($env:DESEN)"
+          Get-ChildItem -LiteralPath $env:YOL -Recurse -File -Filter $env:DESEN -ErrorAction SilentlyContinue | Select-Object -First 300 | ForEach-Object { Write-Host ("{0,12} {1}" -f $_.Length, $_.FullName) }
+          Write-Host "=== Klasorler"
+          Get-ChildItem -LiteralPath $env:YOL -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $s = (Get-ChildItem -LiteralPath $_.FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+            Write-Host ("{0,10:N1} MB  {1}" -f ($s / 1MB), $_.FullName)
+            Get-ChildItem -LiteralPath $_.FullName -Directory -ErrorAction SilentlyContinue | Select-Object -First 30 | ForEach-Object { Write-Host ("              {0}" -f $_.FullName) }
+          }
