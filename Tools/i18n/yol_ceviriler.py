@@ -20,6 +20,7 @@ _T = {
  # ---- hangar ----
  "hangar2.sub": ("Deine gespeicherten Drohnen — mit Mission Planner verbindbar, Parameter und Skripte bleiben erhalten", "Tes drones enregistrés — connectables depuis Mission Planner, paramètres et scripts conservés", "Tus drones guardados — conectables desde Mission Planner, parámetros y scripts persistentes", "Твои сохранённые дроны — подключаются из Mission Planner, параметры и скрипты сохраняются", "طائراتك المحفوظة — يمكن الاتصال بها من Mission Planner، وتبقى المعلمات والبرامج النصية محفوظة"),
  "hangar2.new": ("Neu", "Nouveau", "Nuevo", "Новый", "جديد"),
+ "hangar2.actions": ("Aktionen", "Actions", "Acciones", "Действия", "الإجراءات"),
  "hangar2.edit": ("Bearbeiten", "Modifier", "Editar", "Изменить", "تعديل"),
  "hangar2.ask": ("Was möchtest du mit dieser Drohne tun?", "Que veux-tu faire avec ce drone ?", "¿Qué quieres hacer con este dron?", "Что сделать с этим дроном?", "ماذا تريد أن تفعل بهذه الطائرة؟"),
  "hangar2.equipment": ("Ausrüstung", "Équipement", "Equipamiento", "Оснащение", "المعدات"),

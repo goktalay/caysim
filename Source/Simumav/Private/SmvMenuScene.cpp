@@ -21,6 +21,8 @@
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "UObject/UObjectIterator.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Texture2D.h"
+#include "TextureResource.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -301,8 +303,9 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	if (Showcase) Showcase->Destroy();
 	if (ShowPilot) ShowPilot->Destroy();
 	Showcase = nullptr; ShowPilot = nullptr;
-	if (SnapFig) SnapFig->Destroy();
-	if (DSnapActor) DSnapActor->Destroy();
+	if (SpinSubject) SpinSubject->Destroy();
+	if (SpinFig) SpinFig->Destroy();
+	SpinSubject = nullptr; SpinFig = nullptr;
 	if (WorldPrev) WorldPrev->Destroy();
 	if (Cam) Cam->Destroy();
 	if (Terrain) Terrain->Destroy();
@@ -401,8 +404,8 @@ void ASmvMenuScene::SetPilotPreview(const FSmvAvatar& A, bool bFace)
 	}
 	if (!PilotPrev) return;
 	PilotKey = Key;
-	// mürettebat önizlemesi: pilot RC kumandayı tutarken (MetaHuman ya da temel şekil; ayar CrewRcPose)
-	bool bRc = true;
+	// mürettebat önizlemesi: serbest duruş (RC kumanda gerçekçi görünmüyordu — kullanıcı, 2026-10-28; ayar CrewRcPose)
+	bool bRc = false;
 	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("CrewRcPose"), bRc, GGameIni);
 	PilotPrev->Build(A, bRc);
 	Capture->ShowOnlyActors.Reset();
@@ -427,7 +430,7 @@ void ASmvMenuScene::SetPreviewActive(bool bOn)
 void ASmvMenuScene::UpdateCamera(float Dt, const FVector& D, const FVector& Fwd)
 {
 	// sinematik kamera döngüsü: takip 18 sn → yan 12 sn → yörünge 14 sn → yerden 10 sn
-	const double T = FPlatformTime::Seconds() - T0;
+	const double T = SceneT;
 	const double Period = 54.0;
 	const double U = FMath::Fmod(T, Period);
 	const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
@@ -454,20 +457,23 @@ void ASmvMenuScene::UpdateCamera(float Dt, const FVector& D, const FVector& Fwd)
 		Look = D;
 	}
 	if (!bCamInit || FVector::Dist(Want, CamPos) > 60000.0) { CamPos = Want; bCamInit = true; }
-	const float K = FMath::Clamp(Dt * 2.2f, 0.f, 1.f);
-	CamPos = FMath::Lerp(CamPos, Want, (double)K);
+	const double K = 1.0 - FMath::Exp(-FMath::Clamp((double)Dt, 0.0, 0.1) * 2.2);   // kare hızından bağımsız
+	CamPos = FMath::Lerp(CamPos, Want, K);
 	// konu kadrajın sağ yarısında (sol yarı kartlarla kaplı): bakış sola kaydırılır, hafif yukarı
 	FRotator WantRot = (Look - CamPos).Rotation();
 	WantRot.Yaw -= 14.f;
 	WantRot.Pitch += 3.f;
-	CamRot = FMath::RInterpTo(CamRot, WantRot, Dt, 5.f);
+	CamRot = FQuat::Slerp(CamRot.Quaternion(), WantRot.Quaternion(), (float)(1.0 - FMath::Exp(-FMath::Clamp((double)Dt, 0.0, 0.1) * 5.0))).Rotator();
+	CamRot.Roll = 0.f;
 	Cam->SetActorLocationAndRotation(CamPos, CamRot);
 }
 
 void ASmvMenuScene::Tick(float Dt)
 {
 	Super::Tick(Dt);
-	const double T = FPlatformTime::Seconds() - T0;
+	// sahne saati kare süresinden birikir (duvar saati + Dt'li kamera yumuşatması takılmalarda sarsıntı veriyordu)
+	SceneT += FMath::Clamp((double)Dt, 0.0, 0.1);
+	const double T = SceneT;
 	if (bLive && Flyer && Cam)
 	{
 		// Gerono lemniskatı (web flightcore.js flightPath): rx 900, ry 520 m, periyot 84 sn, 46 m AGL
@@ -476,11 +482,24 @@ void ASmvMenuScene::Tick(float Dt)
 		double E0, N0, E1, N1, E2, N2;
 		Path(T, E0, N0); Path(T + 0.5, E1, N1); Path(T + 1.0, E2, N2);
 		const double Agl = 46.0 + 7.0 * FMath::Sin(T * 0.37);
-		const FVector P0 = EnuToWorld(E0, N0, Agl), P1 = EnuToWorld(E1, N1, Agl), P2 = EnuToWorld(E2, N2, Agl);
+		FVector P0 = EnuToWorld(E0, N0, Agl), P1 = EnuToWorld(E1, N1, Agl), P2 = EnuToWorld(E2, N2, Agl);
+		// Fab haritasında yer yüksekliği 10 m hücrelerde iz düşümüyle (ağaç tepeleri dahil) bulunur: hücre geçişlerinde dron ve kamera
+		// basamak basamak zıplıyordu ("arka plan uçağı titriyor, ekran sallanıyor"). İrtifa zamanla yumuşatılır; yön yatay düzlemde.
+		{
+			if (!bFlyZ) { FlyZ = P0.Z; bFlyZ = true; }
+			const double MinZ = P0.Z - (Agl - 18.0) * 100.0;   // en az 18 m yer açıklığı
+			const double Prev = FlyZ;
+			FlyZ = FMath::Lerp(FlyZ, P0.Z, 1.0 - FMath::Exp(-FMath::Clamp((double)Dt, 0.0, 0.1) * 0.9));
+			if (FlyZ < MinZ) FlyZ = FMath::Lerp(FlyZ, MinZ, 1.0 - FMath::Exp(-FMath::Clamp((double)Dt, 0.0, 0.1) * 4.0));
+			FlyVz = FMath::Lerp(FlyVz, (FlyZ - Prev) / FMath::Max(1e-3, (double)Dt), 1.0 - FMath::Exp(-(double)Dt * 3.0));
+			P0.Z = FlyZ; P1.Z = FlyZ; P2.Z = FlyZ;
+		}
 		const FVector Fwd = (P1 - P0).GetSafeNormal();
 		const FVector Fwd2 = (P2 - P1).GetSafeNormal();
 		const float Turn = (float)FMath::RadiansToDegrees(FMath::Atan2(FVector::CrossProduct(Fwd, Fwd2).Z, FVector::DotProduct(Fwd, Fwd2)));
 		FRotator R = Fwd.Rotation();
+		const double Hs = FVector::Dist(P1, P0) / 0.5;
+		R.Pitch = FMath::Clamp((float)FMath::RadiansToDegrees(FMath::Atan2(FlyVz, FMath::Max(1.0, Hs))), -12.f, 12.f);
 		R.Roll = FMath::Clamp(Turn * 9.f, -40.f, 40.f);
 		Flyer->SetActorLocationAndRotation(P0, R);
 		if (Station == EStation::Menu) UpdateCamera(Dt, P0, Fwd);
@@ -514,7 +533,7 @@ void ASmvMenuScene::Tick(float Dt)
 		}
 	}
 	TickGate();
-	TickSnaps();
+	TickSpin();
 	TickScenery();
 	if (bSceneryDone) ClearShowcaseGrass();
 	SettleShowcase();
@@ -591,67 +610,295 @@ void ASmvMenuScene::Tick(float Dt)
 }
 
 // ---------------------------------------------------------------------------
-// avatar anlık görüntüleri (TOP10 vb.): kare N'de figür kurulur, N+1'de yakalanır
+// dönen küçük görüntüler: konu ayrı noktada (GSmvSpinAt), yalnız sahne yakalamasında görünür, 2. ışık kanalındaki kendi ışıklarıyla
+// 24 açıdan bir kez çekilir. Her açı için FinalColorLDR (renk) + SceneColorHDR (alfa = 1 − örtme) yakalanır, sonraki karede okunur
+// (yakalama ertelenmiş olabilir) ve UTexture2D'ye yazılır. Eski tek karelik AvatarSnap stüdyo duvarına bağlıydı, menüde duvar
+// yokken / konu aynı karede gizlenince siyah kalıyordu (pilot rozeti siyah kare — kullanıcı, 2026-10-28).
 // ---------------------------------------------------------------------------
 
-UTextureRenderTarget2D* ASmvMenuScene::AvatarSnap(const FSmvAvatar& A)
+namespace
 {
-	const FString Key = SmvJson::ToString(A.ToJson());
-	if (TObjectPtr<UTextureRenderTarget2D>* Found = Snaps.Find(Key)) return Found->Get();
-	if (Snaps.Num() > 64) return nullptr;
-	UTextureRenderTarget2D* Rt = NewObject<UTextureRenderTarget2D>(this);
-	Rt->ClearColor = FLinearColor(0.f, 0.f, 0.f, 0.f);
-	Rt->InitAutoFormat(160, 160);
-	Rt->UpdateResourceImmediate(true);
-	Snaps.Add(Key, Rt);
-	SnapQueue.Add(TPair<FString, FSmvAvatar>(Key, A));
-	return Rt;
+	const FVector GSmvSpinAt(0.0, 300000.0, 400000.0);
+
+	void SmvSpinPrims(AActor* A)
+	{
+		if (!A) return;
+		TArray<AActor*> Acts;
+		A->GetAttachedActors(Acts, true, true);
+		Acts.Add(A);
+		for (AActor* X : Acts)
+		{
+			if (!X) continue;
+			TInlineComponentArray<UPrimitiveComponent*> Prims(X);
+			for (UPrimitiveComponent* Pc : Prims)
+			{
+				if (!Pc) continue;
+				Pc->SetLightingChannels(false, false, true);
+				Pc->SetCastShadow(false);
+				Pc->SetVisibleInSceneCaptureOnly(true);
+			}
+		}
+	}
+
+	FBox SmvSpinBounds(AActor* A)
+	{
+		FBox Bx(ForceInit);
+		if (!A) return Bx;
+		TArray<AActor*> Acts;
+		A->GetAttachedActors(Acts, true, true);
+		Acts.Add(A);
+		for (AActor* Ac : Acts)
+		{
+			if (!Ac) continue;
+			TInlineComponentArray<UMeshComponent*> Ms(Ac);
+			for (UMeshComponent* Mc : Ms) if (Mc && Mc->IsRegistered() && Mc->IsVisible() && !Mc->bHiddenInGame) Bx += Mc->Bounds.GetBox();
+		}
+		return Bx;
+	}
+
+	/** Renk (LDR, gama kodlu) + alfa (HDR ters örtme) → saydam doku. Alfa yorumu sınanır: hepsi 0 / hepsi 1 çıkarsa ters, o da
+	 *  olmazsa opak (görüntü hiç kaybolmasın). */
+	UTexture2D* SmvSpinTexture(UTextureRenderTarget2D* L, UTextureRenderTarget2D* H, UObject* Outer)
+	{
+		if (!L || !H) return nullptr;
+		FTextureRenderTargetResource* RL = L->GameThread_GetRenderTargetResource();
+		FTextureRenderTargetResource* RH = H->GameThread_GetRenderTargetResource();
+		if (!RL || !RH) return nullptr;
+		TArray<FColor> C;
+		TArray<FLinearColor> A;
+		if (!RL->ReadPixels(C) || !RH->ReadLinearColorPixels(A) || C.Num() != A.Num() || C.Num() == 0) return nullptr;
+		const int32 N = C.Num();
+		auto Count = [&A, N](bool bInv) { int32 K = 0; for (const FLinearColor& X : A) if ((bInv ? 1.f - X.A : X.A) > 0.5f) ++K; return K; };
+		int32 Mode = 0;   // 0: 1 − a, 1: a, 2: opak
+		{
+			const int32 K0 = Count(true);
+			if (K0 == 0 || K0 == N) { const int32 K1 = Count(false); Mode = (K1 == 0 || K1 == N) ? 2 : 1; }
+		}
+		for (int32 i = 0; i < N; ++i)
+		{
+			const float Al = Mode == 2 ? 1.f : FMath::Clamp(Mode == 0 ? 1.f - A[i].A : A[i].A, 0.f, 1.f);
+			FColor& P = C[i];
+			if (Mode != 2 && Al > 0.04f && Al < 0.98f)
+			{
+				// kenar: siyah fonla karışmış rengi ön-çarpımdan çöz (koyu hale olmasın)
+				P.R = (uint8)FMath::Min(255.f, P.R / Al); P.G = (uint8)FMath::Min(255.f, P.G / Al); P.B = (uint8)FMath::Min(255.f, P.B / Al);
+			}
+			P.A = (uint8)FMath::RoundToInt(Al * 255.f);
+		}
+		const int32 W = L->SizeX, Ht = L->SizeY;
+		UTexture2D* T = UTexture2D::CreateTransient(W, Ht, PF_B8G8R8A8, NAME_None);
+		if (!T || !T->GetPlatformData() || T->GetPlatformData()->Mips.Num() == 0) return nullptr;
+		T->SRGB = true;
+		T->Filter = TF_Bilinear;
+		T->LODGroup = TEXTUREGROUP_UI;
+		T->NeverStream = true;
+		FTexture2DMipMap& Mip = T->GetPlatformData()->Mips[0];
+		void* Dst = Mip.BulkData.Lock(LOCK_READ_WRITE);
+		FMemory::Memcpy(Dst, C.GetData(), (SIZE_T)N * sizeof(FColor));
+		Mip.BulkData.Unlock();
+		T->UpdateResource();
+		return T;
+	}
 }
 
-void ASmvMenuScene::TickSnaps()
+FString ASmvMenuScene::RequestDroneSpin(const FString& Type, const FString& ModelKey, const FString& ColorHex)
+{
+	const FString Key = TEXT("d|") + Type + TEXT("|") + ModelKey + TEXT("|") + ColorHex;
+	if (!Spins.Contains(Key) && Spins.Num() < 48)
+	{
+		Spins.Add(Key).Want = SpinFrameCount;
+		FSpinJob J; J.Key = Key; J.Type = Type; J.Model = ModelKey; J.Color = ColorHex;
+		SpinQueue.Add(J);
+	}
+	return Key;
+}
+
+FString ASmvMenuScene::RequestAvatarSpin(const FSmvAvatar& A)
+{
+	const FString Key = TEXT("a|") + SmvJson::ToString(A.ToJson());
+	if (!Spins.Contains(Key) && Spins.Num() < 48)
+	{
+		Spins.Add(Key).Want = SpinFrameCount;
+		FSpinJob J; J.Key = Key; J.Avatar = A; J.bAvatar = true;
+		// pilot rozetleri / listeler önce (küçük, hemen görünür)
+		SpinQueue.Insert(J, 0);
+	}
+	return Key;
+}
+
+void ASmvMenuScene::EnsureSpinLights()
+{
+	if (SpinLights.Num()) return;
+	// anahtar (sıcak, sol-üst), kenar (soğuk, sağ-arka), dolgu (kamera yanı, zayıf): yalnız 2. ışık kanalı
+	const FLinearColor Cols[] = { FLinearColor(1.f, 0.96f, 0.9f), FLinearColor(0.45f, 0.78f, 1.f), FLinearColor(0.9f, 0.93f, 1.f) };
+	for (int32 i = 0; i < 3; ++i)
+	{
+		UPointLightComponent* Lt = NewObject<UPointLightComponent>(this);
+		Lt->SetupAttachment(Root);
+		Lt->SetIntensityUnits(ELightUnits::Candelas);
+		Lt->SetCastShadows(false);
+		Lt->SetLightingChannels(false, false, true);
+		Lt->SetLightColor(Cols[i]);
+		Lt->RegisterComponent();
+		SpinLights.Add(Lt);
+	}
+}
+
+void ASmvMenuScene::EndSpinJob()
+{
+	if (SpinSubject && SpinSubject != SpinFig) SpinSubject->Destroy();
+	if (SpinFig) SpinFig->SetActorHiddenInGame(true);
+	SpinSubject = nullptr;
+	bSpinRead = false;
+	bSpinFramed = false;
+}
+
+void ASmvMenuScene::TickSpin()
 {
 	UWorld* W = GetWorld();
-	if (!W) return;
-	if (SnapPhase == 1 && SnapFig)
+	if (!W || !SnapCap) return;
+	if (SpinSubject)
 	{
-		if (TObjectPtr<UTextureRenderTarget2D>* Rt = Snaps.Find(SnapPending))
+		++SpinTick;
+		FSmvSpinSet* Set = Spins.Find(SpinJob.Key);
+		if (!Set) { EndSpinJob(); return; }
+		if (bSpinRead)
 		{
-			const FVector At = GSmvPreviewAt + FVector(0.0, 0.0, SnapFig->HeadHeightCm() - 14.0);
-			const FVector CamAt = At + FVector(-125.0, 0.0, 6.0);
-			SnapCap->TextureTarget = Rt->Get();
-			SnapCap->SetWorldLocationAndRotation(CamAt, (At - CamAt).Rotation());
-			PlaceLights(At, GSmvPreviewAt + FVector(-180, 160, 220), GSmvPreviewAt + FVector(160, -120, 200));
-			SnapCap->ShowOnlyActors.Reset();
-			SnapCap->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
-			SnapCap->ShowOnlyActors.Add(SnapFig);
-			SnapCap->CaptureScene();
+			bSpinRead = false;
+			if (UTexture2D* Tx = SmvSpinTexture(SpinRtL, SpinRtH, this)) Set->Frames.Add(Tx);
+			else Set->Want = FMath::Max(0, Set->Want - 1);   // okunamayan açı atlanır
+			if (Set->Frames.Num() >= Set->Want) { EndSpinJob(); return; }
 		}
-		SnapFig->SetActorHiddenInGame(true);
-		SnapPhase = 0;
+		// hazır mı: dron GLB gövdesi yüklenip 3 kare geçti (modelsiz 4. kare; en çok 240 kare) · pilot 20 kare (MetaHuman ağları)
+		const bool bReady = SpinJob.bAvatar ? SpinTick >= 20
+			: ((bSpinHasModel ? (SpinGlbTick >= 0 && SpinTick >= SpinGlbTick + 3) : SpinTick >= 4) || SpinTick >= 240);
+		if (!bReady) return;
+		if (!bSpinFramed)
+		{
+			bSpinFramed = true;
+			SmvSpinPrims(SpinSubject);   // GLB ile eklenen bileşenler dahil
+			if (SpinJob.bAvatar && SpinFig)
+			{
+				SpinAt = GSmvSpinAt + FVector(0.0, 0.0, SpinFig->HeadHeightCm() - 16.0);
+				SpinLocalOff = FVector::ZeroVector;
+				SpinDist = 128.f;
+			}
+			else
+			{
+				const FBox Bx = SmvSpinBounds(SpinSubject);
+				float Rcm = 60.f;
+				if (ASmvDroneActor* Dr = Cast<ASmvDroneActor>(SpinSubject)) Rcm = Dr->GetVisualRadiusM() * 100.f;
+				SpinAt = GSmvSpinAt;
+				if (Bx.IsValid && Bx.GetExtent().GetMax() > 3.0 && Bx.GetExtent().GetMax() < 5000.0)
+				{
+					SpinAt = Bx.GetCenter();
+					// dönüşte kadrajdan taşmasın: yatay yarıçap (dönen kutunun köşegeni)
+					Rcm = FMath::Max(Rcm * 0.5f, (float)Bx.GetExtent().Size2D());
+				}
+				SpinLocalOff = SpinSubject->GetActorRotation().UnrotateVector(SpinAt - SpinSubject->GetActorLocation());
+				// yatay FOV 26° (yarım açı tanjantı 0,231) + %10 pay
+				SpinDist = FMath::Clamp(Rcm / 0.231f * 1.1f, 120.f, 4000.f);
+			}
+		}
+		const int32 Idx = Set->Frames.Num();
+		const float Yaw0 = SpinJob.bAvatar ? 180.f : 25.f;
+		const FRotator Rot(0.f, Yaw0 + 360.f * Idx / FMath::Max(1, SpinFrameCount), 0.f);
+		SpinSubject->SetActorLocationAndRotation(SpinAt - Rot.RotateVector(SpinLocalOff), Rot);
+		const float D = SpinDist;
+		const FVector CamAt = SpinJob.bAvatar ? SpinAt + FVector(-D, 0.0, 6.0) : SpinAt + FVector(-D * 0.88, -D * 0.42, D * 0.3);
+		const float Base = SmvCfg(TEXT("SpinLight"), 40.f);
+		auto K = [](const FVector& A, const FVector& B) { const float Dd = (float)FVector::Dist(A, B) / 171.f; return FMath::Clamp(Dd * Dd, 0.3f, 60.f); };
+		const FVector LAt[3] = { SpinAt + FVector(-D * 0.6, D * 0.7, D * 0.8), SpinAt + FVector(D * 0.8, -D * 0.5, D * 0.4), CamAt + FVector(0.0, -D * 0.3, D * 0.1) };
+		const float LMul[3] = { 1.f, 0.8f, 0.45f };
+		for (int32 i = 0; i < SpinLights.Num() && i < 3; ++i)
+		{
+			SpinLights[i]->SetWorldLocation(LAt[i]);
+			SpinLights[i]->SetIntensity(Base * LMul[i] * K(SpinAt, LAt[i]));
+			SpinLights[i]->SetAttenuationRadius((float)FVector::Dist(SpinAt, LAt[i]) * 3.f);
+		}
+		SnapCap->FOVAngle = 26.f;
+		SnapCap->SetWorldLocationAndRotation(CamAt, (SpinAt - CamAt).Rotation());
+		SnapCap->ShowOnlyActors.Reset();
+		SnapCap->ShowOnlyActors.Add(SpinSubject);
+		{
+			TArray<AActor*> Acts;
+			SpinSubject->GetAttachedActors(Acts, true, true);
+			for (AActor* X : Acts) if (X) SnapCap->ShowOnlyActors.Add(X);
+		}
+		SnapCap->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+		SnapCap->TextureTarget = SpinRtL;
+		SnapCap->CaptureScene();
+		SnapCap->CaptureSource = ESceneCaptureSource::SCS_SceneColorHDR;
+		SnapCap->TextureTarget = SpinRtH;
+		SnapCap->CaptureScene();
+		bSpinRead = true;
 		return;
 	}
-	if (SnapQueue.Num() == 0)
+	if (SpinQueue.Num() == 0) return;
+	SpinJob = SpinQueue[0];
+	SpinQueue.RemoveAt(0);
+	EnsureSpinLights();
+	// hedef boyut: dron 240×150, pilot baş-omuz 160×176
+	const int32 Wd = SpinJob.bAvatar ? 160 : 240, Hd = SpinJob.bAvatar ? 176 : 150;
+	if (!SpinRtL || SpinRtL->SizeX != Wd || SpinRtL->SizeY != Hd)
 	{
-		TickDroneSnaps();
+		SpinRtL = NewObject<UTextureRenderTarget2D>(this);
+		SpinRtL->ClearColor = FLinearColor(0.f, 0.f, 0.f, 0.f);
+		SpinRtL->InitAutoFormat(Wd, Hd);
+		SpinRtL->UpdateResourceImmediate(true);
+		SpinRtH = NewObject<UTextureRenderTarget2D>(this);
+		SpinRtH->ClearColor = FLinearColor(0.f, 0.f, 0.f, 1.f);
+		SpinRtH->InitCustomFormat(Wd, Hd, PF_FloatRGBA, true);
+		SpinRtH->UpdateResourceImmediate(true);
+	}
+	FActorSpawnParameters P;
+	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpinTick = 0;
+	SpinGlbTick = -1;
+	bSpinHasModel = false;
+	bSpinRead = false;
+	bSpinFramed = false;
+	if (SpinJob.bAvatar)
+	{
+		if (!SpinFig) SpinFig = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(GSmvSpinAt), P);
+		if (!SpinFig) return;
+		SpinFig->bLowDetail = false;   // gerçek baş-omuz (MetaHuman varsa)
+		SpinFig->Build(SpinJob.Avatar, false);
+		SpinFig->SetActorHiddenInGame(false);
+		SpinFig->SetActorLocationAndRotation(GSmvSpinAt, FRotator(0.f, 180.f, 0.f));
+		SpinSubject = SpinFig;
+		SmvSpinPrims(SpinFig);
 		return;
 	}
-	const TPair<FString, FSmvAvatar> Job = SnapQueue[0];
-	SnapQueue.RemoveAt(0);
-	if (!SnapFig)
+	ASmvDroneActor* Dr = W->SpawnActor<ASmvDroneActor>(ASmvDroneActor::StaticClass(), FTransform(FRotator(0.f, 25.f, 0.f), GSmvSpinAt), P);
+	if (!Dr) return;
+	FCaySimSession S;
+	S.Type = SmvMenuCaysimType(SpinJob.Type);
+	S.Model.Orient.Forward = TEXT("+x");
+	S.Model.Orient.Up = TEXT("+y");
+	S.Model.Orient.Scale = 1.f;
+	Dr->Setup(S, nullptr);
+	Dr->ConfigureVisual(SpinJob.Type, SpinJob.Model, SmvHexColor(SpinJob.Color));
+	Dr->SetActorTickEnabled(false);
+	Dr->SetActorLocationAndRotation(GSmvSpinAt, FRotator(0.f, 25.f, 0.f));
+	if (USmvMotorSynth* M = Dr->GetMotor()) M->Stop();
+	SpinSubject = Dr;
+	SmvSpinPrims(Dr);
+	if (USmvGameInstance* GI = USmvGameInstance::GetSmv(this))
 	{
-		FActorSpawnParameters P;
-		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		SnapFig = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(GSmvPreviewAt), P);
+		TWeakObjectPtr<ASmvDroneActor> WP(Dr);
+		TWeakObjectPtr<ASmvMenuScene> WS(this);
+		if (GI->GetData() && !SpinJob.Model.IsEmpty())
+		{
+			bSpinHasModel = true;
+			GI->GetData()->FetchModelGlb(SpinJob.Model, [WP, WS](bool bOk, const TArray<uint8>& Bytes)
+			{
+				if (bOk && WP.IsValid()) { WP->LoadGlbBytes(Bytes); SmvSpinPrims(WP.Get()); }
+				// yüklenemese de iş sürsün (siluet)
+				if (WS.IsValid() && WS->SpinSubject == WP.Get()) WS->SpinGlbTick = WS->SpinTick;
+			});
+		}
 	}
-	if (!SnapFig) return;
-	SnapFig->bLowDetail = true;   // küçük resimler: temel şekil (MetaHuman yüz ağları büyük)
-	SnapFig->Build(Job.Value, false);
-	SnapFig->SetActorHiddenInGame(false);
-	SnapFig->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, 200.f, 0.f));
-	TInlineComponentArray<UPrimitiveComponent*> Prims(SnapFig.Get());
-	for (UPrimitiveComponent* Pc : Prims) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
-	SnapPending = Job.Key;
-	SnapPhase = 1;
 }
 
 void ASmvMenuScene::PlayLanding() { LandAt = FPlatformTime::Seconds(); }
@@ -745,117 +992,6 @@ void ASmvMenuScene::TickScenery()
 		const FVector C = WorldSetup->GeoToUnreal(Lon0, Lat0, WorldSetup->MslToWorldHeight(Lat0, Lon0, GroundMsl));
 		if (St->Build(C, 4, 160000.0, 22000.0, 52000.0, 7)) SceneryActors.Add(St);
 		else St->Destroy();
-	}
-}
-
-UTextureRenderTarget2D* ASmvMenuScene::DroneSnap(const FString& Type, const FString& ModelKey, const FString& ColorHex)
-{
-	const FString Key = TEXT("d|") + Type + TEXT("|") + ModelKey + TEXT("|") + ColorHex;
-	if (TObjectPtr<UTextureRenderTarget2D>* Found = Snaps.Find(Key)) return Found->Get();
-	if (Snaps.Num() > 96) return nullptr;
-	UTextureRenderTarget2D* Rt = NewObject<UTextureRenderTarget2D>(this);
-	Rt->ClearColor = FLinearColor(0.f, 0.f, 0.f, 0.f);
-	Rt->InitAutoFormat(240, 150);
-	Rt->UpdateResourceImmediate(true);
-	Snaps.Add(Key, Rt);
-	DQueue.Add({ Key, Type, ModelKey, ColorHex });
-	return Rt;
-}
-
-void ASmvMenuScene::TickDroneSnaps()
-{
-	UWorld* W = GetWorld();
-	if (!W) return;
-	if (DSnapActor)
-	{
-		++DFrames;
-		// 3. karede siluet (yer tutucu gövde) hemen çekilir; GLB gövdesi yüklenince 3 kare sonra yeniden çekilip iş biter
-		// (eski: 12. ve 90. kare — sırayla işlenen kuyrukta hangar şeridinde Cessna/VTOL küçük görüntüleri geç doluyordu)
-		const bool bGlbShot = DGlbFrame >= 0 && DFrames == DGlbFrame + 3;
-		const bool bDone = bGlbShot || (!bDHasModel && DFrames >= 4) || DFrames >= 240;
-		if (DFrames == 3 || bGlbShot || (bDone && !bGlbShot))
-		{
-			if (TObjectPtr<UTextureRenderTarget2D>* Rt = Snaps.Find(DPending))
-			{
-				// kadraj: görünür ağların gerçek sınırı (Fab Blueprint gövdeleri aktör kökünden kaymış / farklı ölçekli olabiliyor —
-				// Mini Quad D küçük resmi gövdenin içinden yakın plan çıkıyordu); geçersizse aktör kökü + görsel yarıçap
-				FVector At = GSmvPreviewAt;
-				float Rcm = DSnapActor->GetVisualRadiusM() * 100.f;
-				{
-					FBox Bx(ForceInit);
-					TArray<AActor*> Acts;
-					DSnapActor->GetAttachedActors(Acts, true, true);
-					Acts.Add(DSnapActor.Get());
-					for (AActor* Ac : Acts)
-					{
-						if (!Ac) continue;
-						TInlineComponentArray<UMeshComponent*> Ms(Ac);
-						for (UMeshComponent* Mc : Ms) if (Mc && Mc->IsRegistered() && Mc->IsVisible() && !Mc->bHiddenInGame) Bx += Mc->Bounds.GetBox();
-					}
-					if (Bx.IsValid && Bx.GetExtent().GetMax() > 3.0 && Bx.GetExtent().GetMax() < 5000.0)
-					{
-						At = Bx.GetCenter();
-						Rcm = FMath::Max(Rcm * 0.5f, (float)Bx.GetExtent().Size2D());
-					}
-				}
-				// kadraja sığdır: yatay FOV 26° (yarım açı tanjantı 0,231) + %15 pay
-				const float D = FMath::Clamp(Rcm / 0.231f * 1.15f, 120.f, 4000.f);
-				const FVector CamAt = At + FVector(-D * 0.86, -D * 0.5, D * 0.36);
-				DSnapActor->SetActorHiddenInGame(false);
-				SnapCap->TextureTarget = Rt->Get();
-				SnapCap->SetWorldLocationAndRotation(CamAt, (At - CamAt).Rotation());
-				PlaceLights(At, At + FVector(-D * 0.6, D * 0.7, D * 0.8), At + FVector(D * 0.8, -D * 0.5, D * 0.4));
-				SnapCap->ShowOnlyActors.Reset();
-				SnapCap->ShowOnlyActors.Add(this);   // stüdyo duvarı + zemini
-				SnapCap->ShowOnlyActors.Add(DSnapActor);
-				SnapCap->CaptureScene();
-			}
-		}
-		if (bDone) { DSnapActor->Destroy(); DSnapActor = nullptr; }
-		return;
-	}
-	if (DQueue.Num() == 0) return;
-	const FDroneJob Job = DQueue[0];
-	DQueue.RemoveAt(0);
-	FActorSpawnParameters P;
-	P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	DSnapActor = W->SpawnActor<ASmvDroneActor>(ASmvDroneActor::StaticClass(), FTransform(FRotator(0.f, 25.f, 0.f), GSmvPreviewAt), P);
-	if (!DSnapActor) return;
-	FCaySimSession S;
-	S.Type = SmvMenuCaysimType(Job.Type);
-	S.Model.Orient.Forward = TEXT("+x");
-	S.Model.Orient.Up = TEXT("+y");
-	S.Model.Orient.Scale = 1.f;
-	DSnapActor->Setup(S, nullptr);
-	DSnapActor->ConfigureVisual(Job.Type, Job.Model, SmvHexColor(Job.Color));
-	DSnapActor->SetActorTickEnabled(false);
-	DSnapActor->SetActorLocationAndRotation(GSmvPreviewAt, FRotator(0.f, 25.f, 0.f));
-	if (USmvMotorSynth* M = DSnapActor->GetMotor()) M->Stop();
-	TInlineComponentArray<UPrimitiveComponent*> Prims(DSnapActor.Get());
-	for (UPrimitiveComponent* Pc : Prims) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
-	DPending = Job.Key;
-	DFrames = 0;
-	DGlbFrame = -1;
-	bDHasModel = false;
-	if (USmvGameInstance* GI = USmvGameInstance::GetSmv(this))
-	{
-		TWeakObjectPtr<ASmvDroneActor> WP(DSnapActor);
-		TWeakObjectPtr<ASmvMenuScene> WS(this);
-		if (GI->GetData() && !Job.Model.IsEmpty())
-		{
-			bDHasModel = true;
-			GI->GetData()->FetchModelGlb(Job.Model, [WP, WS](bool bOk, const TArray<uint8>& Bytes)
-			{
-				if (bOk && WP.IsValid())
-				{
-					WP->LoadGlbBytes(Bytes);
-					TInlineComponentArray<UPrimitiveComponent*> Pr(WP.Get());
-					for (UPrimitiveComponent* Pc : Pr) if (Pc) { Pc->SetLightingChannels(false, true, false); Pc->SetCastShadow(false); }
-				}
-				// yüklenemese de iş bitsin (siluet kalır)
-				if (WS.IsValid() && WS->DSnapActor == WP.Get()) WS->DGlbFrame = WS->DFrames;
-			});
-		}
 	}
 }
 
@@ -1317,7 +1453,7 @@ void ASmvMenuScene::SetShowcasePilot(const FSmvAvatar& A, bool bFace)
 		ShowPilot = W->SpawnActor<ASmvPilotFigure>(ASmvPilotFigure::StaticClass(), FTransform(FRotator(0.f, 215.f, 0.f), ShowGround()), P);
 	}
 	if (!ShowPilot) return;
-	bool bRc = true;
+	bool bRc = false;
 	if (GConfig) GConfig->GetBool(GSmvMenuSection, TEXT("CrewRcPose"), bRc, GGameIni);
 	ShowPilot->Build(A, bRc);
 	ShowPilot->SetActorHiddenInGame(Station != EStation::Crew);
@@ -1444,9 +1580,13 @@ void ASmvMenuScene::UpdateStationCamera(float Dt)
 	}
 	StationFocus = Look;
 	if (!bCamInit || FVector::Dist(Want, CamPos) > 60000.0) { CamPos = Want; bCamInit = true; }
-	CamPos = FMath::Lerp(CamPos, Want, (double)FMath::Clamp(Dt * 2.0f, 0.f, 1.f));
-	const FRotator WantRot = (Look - CamPos).Rotation();
-	CamRot = FMath::RInterpTo(CamRot, WantRot, Dt, 4.5f);
+	const double Dc = FMath::Clamp((double)Dt, 0.0, 0.1);
+	CamPos = FMath::Lerp(CamPos, Want, 1.0 - FMath::Exp(-Dc * 2.0));
+	// bakış noktası da yumuşatılır (Fab haritasında EnuToWorld yer yüksekliği 10 m hücrelerde basamaklı)
+	LookS = (LookS.IsZero() || FVector::Dist(LookS, Look) > 60000.0) ? Look : FMath::Lerp(LookS, Look, 1.0 - FMath::Exp(-Dc * 3.0));
+	const FRotator WantRot = (LookS - CamPos).Rotation();
+	CamRot = FQuat::Slerp(CamRot.Quaternion(), WantRot.Quaternion(), (float)(1.0 - FMath::Exp(-Dc * 4.5))).Rotator();
+	CamRot.Roll = 0.f;
 	Cam->SetActorLocationAndRotation(CamPos, CamRot);
 	if (UCameraComponent* Cc = Cam->GetCameraComponent())
 	{

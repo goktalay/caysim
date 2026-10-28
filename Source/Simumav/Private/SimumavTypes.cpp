@@ -335,6 +335,7 @@ TSharedRef<FJsonObject> FSmvAvatar::ToJson() const
 	O->SetStringField(TEXT("hair"), Hair);
 	O->SetStringField(TEXT("hair_color"), HairColor);
 	O->SetStringField(TEXT("headgear"), Headgear);
+	O->SetBoolField(TEXT("hg2"), true);
 	O->SetStringField(TEXT("outfit"), Outfit);
 	O->SetBoolField(TEXT("freckles"), bFreckles);
 	O->SetBoolField(TEXT("mole"), bMole);
@@ -368,6 +369,8 @@ FSmvAvatar FSmvAvatar::FromJson(const TSharedPtr<FJsonObject>& O)
 	A.Hair = SmvJson::Str(O, TEXT("hair"), A.Hair);
 	A.HairColor = SmvJson::Str(O, TEXT("hair_color"), A.HairColor);
 	A.Headgear = SmvJson::Str(O, TEXT("headgear"), A.Headgear);
+	// eski kayıtlar: kask varsayılandı (seçilmeden geliyordu) → hg2 işareti olmayan "helmet" kaskısız sayılır
+	if (!SmvJson::Bool(O, TEXT("hg2"), false) && (A.Headgear == TEXT("helmet") || A.Headgear.IsEmpty())) A.Headgear = TEXT("none");
 	A.Outfit = SmvJson::Str(O, TEXT("outfit"), A.Outfit);
 	A.bFreckles = SmvJson::Bool(O, TEXT("freckles"), A.bFreckles);
 	A.bMole = SmvJson::Bool(O, TEXT("mole"), A.bMole);

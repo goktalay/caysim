@@ -354,7 +354,7 @@ void ASmvPilotFigure::HeadGear(const FSmvAvatar& A, const FVector& Hs, float Fx,
 		Part(Head, 0, FVector(Fx + 0.8f, 0, 2.5f), FVector(0.6f, 2.f, 0.6f), FLinearColor(0.7f, 0.6f, 0.3f));
 	}
 	// saç (kasklıyken kask örter)
-	const bool bHelmet = A.Headgear == TEXT("helmet") || A.Headgear.IsEmpty();
+	const bool bHelmet = A.Headgear == TEXT("helmet");
 	if (bPrimHair && !bHelmet && A.Hair != TEXT("bald"))
 	{
 		const FString& H = A.Hair;
@@ -389,8 +389,10 @@ void ASmvPilotFigure::HeadGear(const FSmvAvatar& A, const FVector& Hs, float Fx,
 	}
 	else if (A.Headgear == TEXT("cap"))
 	{
-		Part(Head, 1, FVector(-1.f, 0, 8.f), FVector(Hs.X + 2, Hs.Y + 2, 7), Helmet);
-		Part(Head, 0, FVector(Fx + 3.f, 0, 5.f), FVector(10, 16, 1), Helmet);
+		// şapka: başın tepesine oturan kubbe + öne eğik siper (eski silindir alına / yüze iniyordu — kullanıcı, 2026-10-28)
+		Mat(Part(Head, 2, FVector(-1.5f, 0, 8.5f), FVector(Hs.X + 3.f, Hs.Y + 3.f, 13.f), Helmet), 0.75f, 0.f);
+		Mat(Part(Head, 1, FVector(-1.5f, 0, 3.2f), FVector(Hs.X + 3.2f, Hs.Y + 3.2f, 1.6f), Helmet * 0.8f), 0.75f, 0.f);
+		Mat(Part(Head, 0, FVector(Fx + 4.5f, 0, 3.6f), FVector(11.f, 16.5f, 0.9f), Helmet * 0.9f, FRotator(-10.f, 0, 0)), 0.7f, 0.f);
 	}
 	else if (A.Headgear == TEXT("headset"))
 	{
@@ -420,6 +422,10 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 		if (D.Size() > 1.0) F = D.GetSafeNormal();
 	}
 	MhBody->SetRelativeRotation(FRotator(0.0, -FMath::RadiansToDegrees(FMath::Atan2(F.Y, F.X)), 0.0));
+	// vücut tipi: kit'te cinsiyet başına tek MetaHuman gövdesi var → yatayda ölçek (ince / orta / geniş; "vücut tipi hiç değişmiyor" —
+	// kullanıcı, 2026-10-28). Giysiler gövdeye bağlı (birlikte ölçeklenir); yüz ters ölçekle düzeltilir.
+	const float Bs = A.Build == TEXT("slim") ? 0.9f : A.Build == TEXT("broad") ? 1.13f : 1.f;
+	MhBody->SetRelativeScale3D(FVector(Bs, Bs, 1.f));
 	// Fab MetaHuman giysi paketi varsa parçalar gövdeye lider pozla giydirilir (gövde kendi deri malzemesinde kalır: eller, boyun);
 	// yoksa gövde ağının tüm yuvaları kıyafet rengi (tek parça uçuş tulumu) + temel şekil katmanları
 	const FLinearColor Suit = PfHex(A.Suit, FLinearColor(0.12f, 0.2f, 0.3f));
@@ -458,8 +464,15 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 	}
 	// tam boy giysi (≥ 120 cm yüksek parça) gövdeyi örter → gövde kendi malzemesinde; yalnız kemer / teçhizat gibi kısmi parçalar varsa
 	// gövde tulum renginde kalır ve temel şekil katmanları (yelek, bot) da kurulur
-	bool bFullOutfit = false;
-	for (USkeletalMesh* Gm : Garments) if (Gm && Gm->GetBounds().BoxExtent.Z > 60.0) bFullOutfit = true;
+	// parçaların BİRLEŞİK yüksekliği ölçülür: Techwear üst + alt + ayakkabı ayrı parçalar (her biri < 120 cm) — eski parça başına eşik
+	// tam kıyafeti kısmi sayıp üstüne temel şekil yelek ve KUTU botlar kuruyordu ("ayakkabılar kare" — kullanıcı, 2026-10-28)
+	bool bFullOutfit = false, bFeet = false;
+	{
+		FBox U(ForceInit);
+		for (USkeletalMesh* Gm : Garments) if (Gm) U += Gm->GetBounds().GetBox();
+		bFullOutfit = U.IsValid && U.GetSize().Z > 110.0;
+		bFeet = U.IsValid && U.Min.Z < 14.0;
+	}
 	if (UMaterialInterface* Sm = SmvSolidMat(BaseMat))
 	{
 		for (int32 i = 0; i < MhBody->GetNumMaterials(); ++i)
@@ -478,6 +491,7 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 	MhFace->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	MhFace->RegisterComponent();
 	MhFace->SetLeaderPoseComponent(MhBody);
+	MhFace->SetRelativeScale3D(FVector(1.f / Bs, 1.f / Bs, 1.f));
 	// tüyler: saç / kaş / sakal / kirpik (yüze bağlı groom; saç rengi melanin/kızıllık parametreleriyle)
 	const FLinearColor Hc = PfHex(A.HairColor, FLinearColor(0.2f, 0.14f, 0.1f));
 	const float Lum = 0.3f * Hc.R + 0.59f * Hc.G + 0.11f * Hc.B;
@@ -533,7 +547,7 @@ bool ASmvPilotFigure::BuildMetaHuman(const FSmvAvatar& A, bool bWithRc)
 			Mat(Part(Torso, 0, Pel + FVector(13.0, 0.0, 8.0), FVector(1.5f, 6.5f, 4.2f), FLinearColor(0.55f, 0.57f, 0.6f)), 0.25f, 0.9f);
 			Mat(Part(Torso, 1, Pel + FVector(0.0, 0.0, -3.0), FVector(23.f, Hw - 4.f, 15.f), Suit * 0.7f), 0.75f, 0.f);  // kalça örtüsü
 		}
-		if (B(TEXT("foot_l"), FtL) && B(TEXT("foot_r"), FtR) && B(TEXT("calf_l"), CaL) && B(TEXT("calf_r"), CaR))
+		if (!bFeet && B(TEXT("foot_l"), FtL) && B(TEXT("foot_r"), FtR) && B(TEXT("calf_l"), CaL) && B(TEXT("calf_r"), CaR))
 		{
 			for (const FVector& Ft : { FtL, FtR }) Mat(Part(Torso, 0, FVector(Ft.X + 8.0, Ft.Y, 5.5), FVector(31.f, 12.f, 11.f), Boot), 0.45f, 0.f);
 			for (const FVector& Ca : { CaL, CaR }) Mat(Part(Torso, 1, FVector(Ca.X, Ca.Y, 15.0), FVector(13.f, 13.f, 20.f), Boot), 0.45f, 0.f);

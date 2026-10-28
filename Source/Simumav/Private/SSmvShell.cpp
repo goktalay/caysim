@@ -1621,15 +1621,8 @@ TSharedRef<SWidget> SSmvShell::Hangar()
 	{
 		const FSmvDrone Copy = X;
 		const FLinearColor Ac = SmvHex(X.Color, Accent());
-		UTextureRenderTarget2D* Rt = (Scene() && FSmvUiPrefs::Get().bPreview3d) ? Scene()->DroneSnap(X.Type, X.ModelKey, X.Color) : nullptr;
-		TSharedRef<SWidget> Img = SNullWidget::NullWidget;
-		if (Rt)
-		{
-			TSharedPtr<FSlateBrush>& Br = AvatarBrushes.FindOrAdd(Rt->GetName());
-			if (!Br.IsValid()) { Br = MakeShared<FSlateBrush>(); Br->DrawAs = ESlateBrushDrawType::Image; Br->SetResourceObject(Rt); Br->ImageSize = FVector2D(144, 90); }
-			Img = SNew(SImage).Image(Br.Get());
-		}
-		else Img = SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)[Icon(IconForType(X.Type), 40.f, Ac)];
+		TSharedRef<SWidget> Img = SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)[Icon(IconForType(X.Type), 40.f, Ac)];
+		if (Scene() && FSmvUiPrefs::Get().bPreview3d) Img = SpinThumb(Scene()->RequestDroneSpin(X.Type, X.ModelKey, X.Color), 144.f, 90.f, Img);
 		Strip->AddSlot().AutoWidth().Padding(0, 0, 10, 0)
 		[
 			SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Ac).MinWidth(160.f).Selected(X.Id == EditDrone.Id).OnClick([Self, Copy]() { Self->EditDrone = Copy; Self->Refresh(); })
@@ -1734,7 +1727,7 @@ TSharedRef<SWidget> SSmvShell::Crew()
 			Av.HairColor = R({ TEXT("#1c1410"), TEXT("#3b2a1e"), TEXT("#5a3b22"), TEXT("#8a5a2b"), TEXT("#c48a3f"), TEXT("#e1c27a"), TEXT("#9a9a9a"), TEXT("#b23a2e") });
 			Av.EyeColor = R({ TEXT("#5b3a1e"), TEXT("#2f5d8a"), TEXT("#3f7a33"), TEXT("#6b4f2a"), TEXT("#444444") });
 			Av.Glasses = R({ TEXT("none"), TEXT("none"), TEXT("none"), TEXT("aviator"), TEXT("sun") });
-			Av.Headgear = R({ TEXT("helmet"), TEXT("helmet"), TEXT("none"), TEXT("cap"), TEXT("headset") });
+			Av.Headgear = R({ TEXT("none"), TEXT("none"), TEXT("cap"), TEXT("headset"), TEXT("helmet") });
 			Av.Outfit = R({ TEXT("suit"), TEXT("jacket"), TEXT("casual") });
 			Av.bFreckles = FMath::RandRange(0, 5) == 0; Av.bMole = FMath::RandRange(0, 6) == 0; Av.bVisorOpen = FMath::RandBool();
 			Av.Helmet = C(); Av.Suit = C(); Av.Visor = C(); Av.PatchColor = C(); Av.bMirror = FMath::RandBool();
@@ -1831,9 +1824,9 @@ TSharedRef<SWidget> SSmvShell::Crew()
 		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.patch_color")), ColorPick(&A.PatchColor, Re))];
 		break;
 	default:
-		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Headgear, TEXT("headgear"), { TEXT("helmet"), TEXT("none"), TEXT("cap"), TEXT("headset") }, 4)];
+		Ed->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Headgear, TEXT("headgear"), { TEXT("none"), TEXT("cap"), TEXT("headset"), TEXT("helmet") }, 4)];
 		Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.gear_color")), ColorPick(&A.Helmet, Re))];
-		if (A.Headgear == TEXT("helmet") || A.Headgear.IsEmpty())
+		if (A.Headgear == TEXT("helmet"))
 		{
 			Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.visor")), ColorPick(&A.Visor, Re))];
 			Ed->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.mirror")), Toggle(&A.bMirror, Re))];
@@ -3539,19 +3532,12 @@ TSharedRef<SWidget> SSmvShell::Leaderboard()
 		// 3B avatar (menü sahnesinde baş-omuz anlık görüntüsü; yoksa çizilmiş portre)
 		TSharedRef<SWidget> Avatar = SNullWidget::NullWidget;
 		{
-			UTextureRenderTarget2D* Rt = (R.bHasAvatar && Scene() && FSmvUiPrefs::Get().bPreview3d) ? Scene()->AvatarSnap(R.Avatar) : nullptr;
-			if (Rt)
-			{
-				TSharedPtr<FSlateBrush>& Br = AvatarBrushes.FindOrAdd(Rt->GetName());
-				if (!Br.IsValid()) { Br = MakeShared<FSlateBrush>(); Br->DrawAs = ESlateBrushDrawType::Image; Br->SetResourceObject(Rt); Br->ImageSize = FVector2D(56, 56); }
-				Avatar = SNew(SBox).WidthOverride(56.f).HeightOverride(56.f)
-					[
-						SNew(SOverlay)
-						+ SOverlay::Slot()[SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(Medal.CopyWithNewOpacity(0.22f))]
-						+ SOverlay::Slot()[SNew(SImage).Image(Br.Get())]
-					];
-			}
-			else Avatar = SNew(SBox).WidthOverride(52.f).HeightOverride(56.f)[Portrait(R.bHasAvatar ? &R.Avatar : nullptr, 50.f)];
+			Avatar = SNew(SBox).WidthOverride(56.f).HeightOverride(56.f)
+				[
+					SNew(SOverlay)
+					+ SOverlay::Slot()[SNew(SBorder).BorderImage(Circle()).BorderBackgroundColor(Medal.CopyWithNewOpacity(0.22f))]
+					+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom)[AvatarThumb(R.bHasAvatar ? &R.Avatar : nullptr, 50.f)]
+				];
 		}
 		// puan bileşen çipleri
 		TSharedRef<SHorizontalBox> PartsBox = SNew(SHorizontalBox);

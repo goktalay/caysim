@@ -40,6 +40,7 @@
 #include "Fonts/FontMeasure.h"
 #include "Rendering/SlateRenderer.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Texture2D.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
@@ -484,13 +485,7 @@ TSharedRef<SWidget> SSmvShell::PilotChip()
 	const FString Name = P ? P->Name : FString(TEXT("Pilot"));
 	const bool bIn = Client() && Client()->IsLoggedIn();
 	SSmvShell* Self = this;
-	TSharedRef<SWidget> Face = Portrait(P ? &P->Avatar : nullptr, 38.f);
-	if (Scene() && P)
-	{
-		if (UTextureRenderTarget2D* Rt = Scene()->AvatarSnap(P->Avatar))
-			if (const FSlateBrush* B = YhRtBrush(YhBrushes, Rt, FVector2D(42, 42)))
-				Face = SNew(SBox).WidthOverride(42.f).HeightOverride(42.f)[SNew(SImage).Image(B)];
-	}
+	TSharedRef<SWidget> Face = AvatarThumb(P ? &P->Avatar : nullptr, 38.f);
 	return SNew(SSmvButton).Kind(ESmvBtn::Ghost).Accent(Accent()).OnClick([Self]() { Self->OpenPilotMenu(); })
 		.Extra()
 		[
@@ -532,12 +527,64 @@ TSharedRef<SWidget> SSmvShell::DroneThumb(const FSmvDrone& D, float W, float H)
 
 TSharedRef<SWidget> SSmvShell::ModelThumb(const FString& Type, const FString& Model, float W, float H)
 {
-	UTextureRenderTarget2D* Rt = (Scene() && FSmvUiPrefs::Get().bPreview3d) ? Scene()->DroneSnap(Type, Model, TEXT("#cfd8dc")) : nullptr;
-	const FSlateBrush* B = YhRtBrush(YhBrushes, Rt, FVector2D(240, 150));
+	TSharedRef<SWidget> Fb = SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)[Icon(IconForType(Type), H * 0.5f, Accent())];
+	if (!Scene() || !FSmvUiPrefs::Get().bPreview3d) return SNew(SBox).WidthOverride(W).HeightOverride(H)[Fb];
+	return SpinThumb(Scene()->RequestDroneSpin(Type, Model, TEXT("#cfd8dc")), W, H, Fb);
+}
+
+namespace
+{
+	const FSlateBrush* YhTexBrush(UTexture2D* T)
+	{
+		static TMap<UTexture2D*, TSharedPtr<FSlateBrush>> Cache;
+		TSharedPtr<FSlateBrush>& B = Cache.FindOrAdd(T);
+		if (!B.IsValid() || B->GetResourceObject() != T)
+		{
+			B = MakeShared<FSlateBrush>();
+			B->DrawAs = ESlateBrushDrawType::Image;
+			B->SetResourceObject(T);
+			B->ImageSize = FVector2D(T->GetSizeX(), T->GetSizeY());
+		}
+		return B.Get();
+	}
+}
+
+TSharedRef<SWidget> SSmvShell::SpinThumb(const FString& Key, float W, float H, TSharedRef<SWidget> Fallback)
+{
+	TWeakObjectPtr<ASmvMenuScene> Sc = Scene();
+	TSharedRef<SSmvCanvas> C = SNew(SSmvCanvas).Size(FVector2D(W, H)).Visibility(EVisibility::HitTestInvisible);
+	C->Painter = [Sc, Key](const FGeometry& G, FSlateWindowElementList& Out, int32 L)
+	{
+		const FSmvSpinSet* S = Sc.IsValid() ? Sc->SpinFrames(Key) : nullptr;
+		if (!S || S->Frames.Num() == 0) return;
+		const int32 N = S->Frames.Num();
+		// tamamlanınca 8 kare/sn (3 sn'de bir tur); çekim sürerken ilk açı
+		const int32 I = (N >= S->Want && !ReducedMotion()) ? (int32)FMath::Fmod(SmvUi::Now() * 8.0, (double)N) : 0;
+		UTexture2D* T = S->Frames[FMath::Clamp(I, 0, N - 1)];
+		if (!T) return;
+		FSlateDrawElement::MakeBox(Out, L, G.ToPaintGeometry(), YhTexBrush(T), ESlateDrawEffect::None, FLinearColor::White);
+	};
 	return SNew(SBox).WidthOverride(W).HeightOverride(H)
 		[
-			B ? YhW<SImage>(SNew(SImage).Image(B)) : YhW<SBox>(SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)[Icon(IconForType(Type), H * 0.5f, Accent())])
+			SNew(SOverlay)
+			+ SOverlay::Slot()
+			[
+				SNew(SBox).Visibility_Lambda([Sc, Key]()
+				{
+					const FSmvSpinSet* S = Sc.IsValid() ? Sc->SpinFrames(Key) : nullptr;
+					return (S && S->Frames.Num()) ? EVisibility::Collapsed : EVisibility::HitTestInvisible;
+				})
+				[Fallback]
+			]
+			+ SOverlay::Slot()[C]
 		];
+}
+
+TSharedRef<SWidget> SSmvShell::AvatarThumb(const FSmvAvatar* Av, float Size)
+{
+	TSharedRef<SWidget> Fb = Portrait(Av, Size);
+	if (!Av || !Scene() || !FSmvUiPrefs::Get().bPreview3d) return SNew(SBox).WidthOverride(Size).HeightOverride(Size * 1.1f)[Fb];
+	return SpinThumb(Scene()->RequestAvatarSpin(*Av), Size, Size * 1.1f, Fb);
 }
 
 TSharedRef<SWidget> SSmvShell::SatThumb(double Lat, double Lon, float W, float H, bool bAnimate)
@@ -864,34 +911,7 @@ TSharedRef<SWidget> SSmvShell::HangarV2()
 		if (Eq.bParachute) Badge(ESmvIcon::Ghost, Danger());
 		if (!X.Script.IsEmpty()) Badge(ESmvIcon::Book, Accent2());
 		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Normal).LeftAlign(true).MinWidth(340.f).Accent(YhHex(X.Color, Accent())).Selected(X.Id == EditDrone.Id)
-			.OnClick([Self, F, Copy]()
-			{
-				Self->EditDrone = Copy;
-				Self->Refresh();
-				// yol haritası: kayıtlı dron tıklanınca sor — Düzenle / Sil
-				TArray<FChoice> Ch;
-				FChoice E1; E1.Label = YhT(TEXT("hangar2.edit")); E1.Icon = ESmvIcon::Gear; E1.Kind = 1;
-				E1.Fn = [Self, F, Copy]() { Self->EditDrone = Copy; Self->bHwEdit = true; Self->HwStep = 2; Self->HwKind = YhKindOf(Copy.Type); Self->HwMaxSpeed = YhMaxSpeedOf(Copy); if (F.IsValid()) F->SetScreen(ESmvScreen::HangarWizard); };
-				Ch.Add(E1);
-				FChoice E2; E2.Label = YhT(TEXT("common.make_default")); E2.Icon = ESmvIcon::Star;
-				E2.Fn = [Self, Copy]() { if (Self->Data()) Self->Data()->SetDefault(TEXT("drone"), Copy.Id); Self->Refresh(); };
-				Ch.Add(E2);
-				FChoice E3; E3.Label = YhT(TEXT("common.delete")); E3.Icon = ESmvIcon::Trash; E3.Kind = 2;
-				E3.Fn = [Self, Copy]()
-				{
-					Self->Confirm(FSmvI18n::T(TEXT("dlg.delete_title")), FSmvI18n::Format(TEXT("dlg.delete_body"), { { TEXT("n"), Copy.Name } }), FSmvI18n::T(TEXT("dlg.yes_delete")), true, [Self, Copy]()
-					{
-						Self->Data()->DeleteDrone(Copy.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& Msg)
-						{
-							Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : Msg, bOk ? 6 : 3);
-							if (bOk && Self->Data()->Drones().Num()) Self->EditDrone = Self->Data()->Drones()[0];
-							Self->Refresh();
-						}));
-					});
-				};
-				Ch.Add(E3);
-				Self->OpenChoice(FText::FromString(Copy.Name), YhT(TEXT("hangar2.ask")), Ch);
-			})
+			.OnClick([Self, Copy]() { Self->EditDrone = Copy; Self->Refresh(); })   // yalnız seçer; işlemler sağ alttaki düğmede
 			.Extra()
 			[
 				SNew(SHorizontalBox)
@@ -971,6 +991,34 @@ TSharedRef<SWidget> SSmvShell::HangarV2()
 			Self->HwMaxSpeed = -1;
 			if (F.IsValid()) F->SetScreen(ESmvScreen::HangarWizard);
 		});
+	TSharedRef<SWidget> ActBtn = SNew(SSmvButton).Kind(ESmvBtn::Normal).Icon(ESmvIcon::Gear).Text(Tx(TEXT("hangar2.actions")))
+		.IsEnabled(!EditDrone.Id.IsEmpty())
+		.OnClick([Self, F]()
+		{
+			const FSmvDrone Sel = Self->EditDrone;
+			TArray<FChoice> Ch;
+			FChoice E1; E1.Label = YhT(TEXT("hangar2.edit")); E1.Icon = ESmvIcon::Gear; E1.Kind = 1;
+			E1.Fn = [Self, F, Sel]() { Self->EditDrone = Sel; Self->bHwEdit = true; Self->HwStep = 2; Self->HwKind = YhKindOf(Sel.Type); Self->HwMaxSpeed = YhMaxSpeedOf(Sel); if (F.IsValid()) F->SetScreen(ESmvScreen::HangarWizard); };
+			Ch.Add(E1);
+			FChoice E2; E2.Label = YhT(TEXT("common.make_default")); E2.Icon = ESmvIcon::Star;
+			E2.Fn = [Self, Sel]() { if (Self->Data()) Self->Data()->SetDefault(TEXT("drone"), Sel.Id); Self->Refresh(); };
+			Ch.Add(E2);
+			FChoice E3; E3.Label = YhT(TEXT("common.delete")); E3.Icon = ESmvIcon::Trash; E3.Kind = 2;
+			E3.Fn = [Self, Sel]()
+			{
+				Self->Confirm(FSmvI18n::T(TEXT("dlg.delete_title")), FSmvI18n::Format(TEXT("dlg.delete_body"), { { TEXT("n"), Sel.Name } }), FSmvI18n::T(TEXT("dlg.yes_delete")), true, [Self, Sel]()
+				{
+					Self->Data()->DeleteDrone(Sel.Id, FSmvDone::CreateLambda([Self](bool bOk, const FString& Msg)
+					{
+						Self->Toast(bOk ? FSmvI18n::T(TEXT("common.deleted")).ToString() : Msg, bOk ? 6 : 3);
+						if (bOk && Self->Data()->Drones().Num()) Self->EditDrone = Self->Data()->Drones()[0];
+						Self->Refresh();
+					}));
+				});
+			};
+			Ch.Add(E3);
+			Self->OpenChoice(FText::FromString(Sel.Name), YhT(TEXT("hangar2.ask")), Ch);
+		});
 	TSharedRef<SWidget> Body = SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth()
 		[
@@ -989,7 +1037,16 @@ TSharedRef<SWidget> SSmvShell::HangarV2()
 		[
 			SNew(SBox).WidthOverride(400.f).VAlign(VAlign_Top)[Glass(Info, FMargin(22.f), 0.9f)]
 		];
-	return YhPage(Tx(TEXT("menu.hangar")), Tx(TEXT("hangar2.sub")), Body, nullptr, NewBtn);
+	// sağ alt: İşlemler (seçili dron: düzenle / varsayılan / sil) + Yeni
+	TSharedRef<SWidget> Page = SNew(SOverlay)
+		+ SOverlay::Slot()[Body]
+		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0, 0, 0, 12)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 10, 0)[ActBtn]
+			+ SHorizontalBox::Slot().AutoWidth()[NewBtn]
+		];
+	return YhPage(Tx(TEXT("menu.hangar")), Tx(TEXT("hangar2.sub")), Page);
 }
 
 TSharedRef<SWidget> SSmvShell::HangarWizard()
@@ -1031,7 +1088,7 @@ TSharedRef<SWidget> SSmvShell::HangarWizard()
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)[YhSteps(Steps, HwStep, [Self, MinStep](int32 I) { if (I >= MinStep) { Self->HwStep = I; Self->Refresh(); } })]
 		+ SVerticalBox::Slot().FillHeight(1.f)[Body]
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 10, 0, 0)[Footer],
-		[Self, F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Hangar); });
+		[Self, F]() { if (F.IsValid()) F->ResetTo(ESmvScreen::Hangar); });
 }
 
 TSharedRef<SWidget> SSmvShell::HwType()
@@ -1420,7 +1477,7 @@ void SSmvShell::HwSave()
 		if (ASmvMenuScene* Sc = Self->Scene()) Sc->PlayLanding();
 		Self->Toast(bWasNew ? Self->EditDrone.Name + TEXT(" — ") + FSmvI18n::T(TEXT("hangar.landed")).ToString() : FSmvI18n::T(TEXT("common.saved")).ToString(), 6);
 		Self->bHwEdit = false;
-		if (Self->Flow.IsValid()) Self->Flow->SetScreen(ESmvScreen::Hangar);
+		if (Self->Flow.IsValid()) Self->Flow->ResetTo(ESmvScreen::Hangar);
 	}));
 }
 
@@ -2021,7 +2078,7 @@ TSharedRef<SWidget> SSmvShell::ParkurWizard()
 			Self->Data()->SaveTrack(Tr, FSmvDone::CreateLambda([Self, F](bool bOk, const FString& Msg)
 			{
 				Self->Toast(bOk ? FSmvI18n::T(TEXT("parkur.saved")).ToString() : Msg, bOk ? 6 : 3);
-				if (bOk && F.IsValid()) { F->ParkurCat = TEXT("custom"); F->SetScreen(ESmvScreen::ParkurList); }
+				if (bOk && F.IsValid()) { F->ParkurCat = TEXT("custom"); F->ResetTo(ESmvScreen::ParkurList, ESmvScreen::Tracks); }
 			}));
 		});
 	if (!DefaultFocus.IsValid()) DefaultFocus = Next;
@@ -2241,7 +2298,7 @@ TSharedRef<SWidget> SSmvShell::RealWizard()
 			Self->Data()->SaveTrack(Tr, FSmvDone::CreateLambda([Self, F](bool bOk, const FString& Msg)
 			{
 				Self->Toast(bOk ? FSmvI18n::T(TEXT("parkur.saved")).ToString() : Msg, bOk ? 6 : 3);
-				if (bOk && F.IsValid()) { F->ParkurCat = TEXT("real"); F->SetScreen(ESmvScreen::ParkurList); }
+				if (bOk && F.IsValid()) { F->ParkurCat = TEXT("real"); F->ResetTo(ESmvScreen::ParkurList, ESmvScreen::Tracks); }
 			}));
 		});
 	if (!DefaultFocus.IsValid()) DefaultFocus = Next;
@@ -2289,33 +2346,30 @@ TSharedRef<SWidget> SSmvShell::CrewV2()
 	TWeakObjectPtr<USmvFlow> F = Flow;
 	const FSmvPilot* Act = D->DefaultPilot();
 	if (!Act && D->Pilots().Num()) Act = &D->Pilots()[0];
-	// üst şerit: pilot değiştir (seçili = etkin pilot; tıklayınca etkin yapılır) + "+ Yeni pilot"
-	TSharedRef<SHorizontalBox> Strip = SNew(SHorizontalBox);
-	Strip->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 12, 0)[SmvUi::Text(Tx(TEXT("crew2.switch")), 11, "Bold", Dim(), false)];
+	// sol: pilot listesi (Hangar'daki gibi; seçili = etkin pilot, tıklayınca etkin yapılır)
+	TSharedRef<SVerticalBox> Strip = SNew(SVerticalBox);
 	for (const FSmvPilot& X : D->Pilots())
 	{
 		const FString Pid = X.Id;
 		const bool bAct = Act && Act->Id == X.Id;
 		const int32 Lv = SmvCore::LevelForXp(X.Xp);
-		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Normal).Selected(bAct).Accent(YhHex(X.Avatar.Helmet, Accent()))
+		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Normal).LeftAlign(true).MinWidth(340.f).Selected(bAct).Accent(YhHex(X.Avatar.Helmet, Accent()))
 			.OnClick([F, Pid]() { if (F.IsValid()) F->SwitchPilot(Pid); })
 			.Extra()
 			[
 				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)[SNew(SBox).WidthOverride(30.f).HeightOverride(33.f)[Portrait(&X.Avatar, 30.f)]]
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 12, 0)[AvatarThumb(&X.Avatar, 76.f)]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 				[
 					SNew(SVerticalBox)
-					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(X.Name), 12, "Bold", Fg(), false)]
-					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FSmvI18n::Format(TEXT("level.short"), { { TEXT("n"), FString::FromInt(Lv) } }), 10, "Regular", bAct ? Accent() : Dim(), false)]
+					+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString((bAct ? FString(TEXT("★ ")) : FString()) + X.Name), 14, "Bold", Fg(), false)]
+					+ SVerticalBox::Slot().AutoHeight().Padding(0, 1, 0, 0)[SmvUi::Text(FSmvI18n::Format(TEXT("level.short"), { { TEXT("n"), FString::FromInt(Lv) } }), 10, "Regular", bAct ? Accent() : Dim(), false)]
 				]
 			];
 		if (bAct) DefaultFocus = B;
-		Strip->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)[B];
+		Strip->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[B];
 	}
-	Strip->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(6, 0, 0, 0)
-	[
-		SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Plus).Text(Tx(TEXT("crew.new")))
+	TSharedRef<SWidget> NewBtn = SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Plus).Text(Tx(TEXT("crew.new")))
 		.OnClick([Self, F]()
 		{
 			FSmvPilot P;
@@ -2323,10 +2377,15 @@ TSharedRef<SWidget> SSmvShell::CrewV2()
 			Self->NewPilot = P;
 			Self->CwStep = 0; Self->CwFirst.Empty(); Self->CwLast.Empty();
 			if (F.IsValid()) F->SetScreen(ESmvScreen::CrewWizard);
-		})
-	];
+		});
+	auto WithNew = [NewBtn](TSharedRef<SWidget> W) -> TSharedRef<SWidget>
+	{
+		return SNew(SOverlay)
+			+ SOverlay::Slot()[W]
+			+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0, 0, 0, 12)[NewBtn];
+	};
 	if (!Act)
-		return YhPage(Tx(TEXT("menu.crew")), Tx(TEXT("crew2.sub")), SNew(SVerticalBox) + SVerticalBox::Slot().AutoHeight()[Strip]);
+		return YhPage(Tx(TEXT("menu.crew")), Tx(TEXT("crew2.sub")), WithNew(SNew(SVerticalBox) + SVerticalBox::Slot().AutoHeight()[Strip]));
 	// sağ kart: seviye, XP çubuğu, madalyalar, istatistik
 	const FSmvPilot& P = *Act;
 	const int32 Lv = SmvCore::LevelForXp(P.Xp);
@@ -2420,23 +2479,25 @@ TSharedRef<SWidget> SSmvShell::CrewV2()
 				});
 			})]
 	];
-	TSharedRef<SWidget> Body = SNew(SVerticalBox)
-		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 10)[SNew(SScrollBox).Orientation(Orient_Horizontal).ScrollBarVisibility(EVisibility::Collapsed) + SScrollBox::Slot()[Strip]]
-		+ SVerticalBox::Slot().FillHeight(1.f)
+	TSharedRef<SWidget> Body = SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth()
 		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Bottom).HAlign(HAlign_Center).Padding(0, 0, 0, 18)
+			SNew(SBox).WidthOverride(380.f)
 			[
-				SNew(SVerticalBox).Visibility(EVisibility::HitTestInvisible)
-				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SmvUi::Text(Tx(TEXT("crew2.active")), 11, "Bold", Accent(), false)]
-				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[Title(FText::FromString(P.Name), 34)]
+				SNew(SScrollBox).ScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll) + SScrollBox::Slot()[Strip]
 			]
-			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top)
-			[
-				SNew(SBox).WidthOverride(430.f)[SNew(SScrollBox) + SScrollBox::Slot()[Glass(Info, FMargin(22.f), 0.9f)]]
-			]
+		]
+		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Bottom).HAlign(HAlign_Center).Padding(0, 0, 0, 18)
+		[
+			SNew(SVerticalBox).Visibility(EVisibility::HitTestInvisible)
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SmvUi::Text(Tx(TEXT("crew2.active")), 11, "Bold", Accent(), false)]
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[Title(FText::FromString(P.Name), 34)]
+		]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top).Padding(0, 0, 0, 64)
+		[
+			SNew(SBox).WidthOverride(430.f)[SNew(SScrollBox) + SScrollBox::Slot()[Glass(Info, FMargin(22.f), 0.9f)]]
 		];
-	return YhPage(Tx(TEXT("menu.crew")), Tx(TEXT("crew2.sub")), Body);
+	return YhPage(Tx(TEXT("menu.crew")), Tx(TEXT("crew2.sub")), WithNew(Body));
 }
 
 TSharedRef<SWidget> SSmvShell::CrewWizard()
@@ -2545,9 +2606,9 @@ TSharedRef<SWidget> SSmvShell::CrewWizard()
 		else if (CwStep == 3)
 		{
 			V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("cw.s_acc")), Accent2())];
-			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Headgear, TEXT("headgear"), { TEXT("helmet"), TEXT("none"), TEXT("cap"), TEXT("headset") }, 4)];
+			V->AddSlot().AutoHeight().Padding(0, 3)[Pick(&A.Headgear, TEXT("headgear"), { TEXT("none"), TEXT("cap"), TEXT("headset"), TEXT("helmet") }, 4)];
 			V->AddSlot().AutoHeight().Padding(0, 3)[RowV(Tx(TEXT("avatar.gear_color")), ColorPick(&A.Helmet, Re))];
-			if (A.Headgear == TEXT("helmet") || A.Headgear.IsEmpty())
+			if (A.Headgear == TEXT("helmet"))
 			{
 				V->AddSlot().AutoHeight().Padding(0, 3)[RowV(Tx(TEXT("avatar.visor")), ColorPick(&A.Visor, Re))];
 				V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("avatar.mirror")), Toggle(&A.bMirror, Re))];
@@ -2592,7 +2653,7 @@ TSharedRef<SWidget> SSmvShell::CrewWizard()
 				Self->Toast(FSmvI18n::Format(TEXT("crew.welcome"), { { TEXT("name"), Nm } }).ToString(), 6);
 				// yeni pilot etkin pilot olur
 				for (const FSmvPilot& X : Self->Data()->Pilots()) if (X.Name == Nm && F.IsValid()) { F->SwitchPilot(X.Id); }
-				if (F.IsValid()) F->SetScreen(ESmvScreen::Crew);
+				if (F.IsValid()) F->ResetTo(ESmvScreen::Crew);
 			}));
 		});
 	if (!DefaultFocus.IsValid()) DefaultFocus = Next;
@@ -2621,7 +2682,7 @@ TSharedRef<SWidget> SSmvShell::CrewWizard()
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)[YhSteps(Steps, CwStep, [Self](int32 I) { Self->CwStep = I; Self->Refresh(); })]
 		+ SVerticalBox::Slot().FillHeight(1.f)[Body]
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 10, 0, 0)[Footer],
-		[F]() { if (F.IsValid()) F->SetScreen(ESmvScreen::Crew); });
+		[F]() { if (F.IsValid()) F->ResetTo(ESmvScreen::Crew); });
 }
 
 // ---------------------------------------------------------------------------

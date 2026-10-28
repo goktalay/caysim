@@ -56,6 +56,15 @@ void USmvFlow::Back()
 	OnScreenChanged.Broadcast(Screen);
 }
 
+void USmvFlow::ResetTo(ESmvScreen S, ESmvScreen Mid)
+{
+	History.Reset();
+	if (S != ESmvScreen::Menu) History.Add(ESmvScreen::Menu);
+	if (Mid != ESmvScreen::Menu && Mid != S) History.Add(Mid);
+	Screen = S;
+	OnScreenChanged.Broadcast(S);
+}
+
 // ---------------------------------------------------------------------------
 // hesap
 // ---------------------------------------------------------------------------

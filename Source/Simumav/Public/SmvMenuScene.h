@@ -19,6 +19,17 @@ class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class UPointLightComponent;
 class ASmvPilotFigure;
+class UTexture2D;
+
+/** Dönen küçük görüntünün kareleri (arka plansız, alfa kanallı) */
+USTRUCT()
+struct FSmvSpinSet
+{
+	GENERATED_BODY()
+	UPROPERTY() TArray<TObjectPtr<UTexture2D>> Frames;
+	/** tamamlanan kare sayısı hedefi (SpinFrameCount) */
+	int32 Want = 0;
+};
 
 UCLASS()
 class SIMUMAV_API ASmvMenuScene : public AActor
@@ -40,10 +51,14 @@ public:
 	/** Fareyle sürükleyerek döndürme (derece) — otomatik dönüş bir süre durur */
 	void AddPreviewYaw(float Deg);
 	UTextureRenderTarget2D* GetPreviewTarget() const { return PreviewRT; }
-	/** Avatar anlık görüntüsü (baş-omuz, 160×160; TOP10 / listeler): önbellekte yoksa sıraya alınır, kare başına bir tane çizilir */
-	UTextureRenderTarget2D* AvatarSnap(const FSmvAvatar& A);
-	/** Dron anlık görüntüsü (hangar şeridi mini kartları, 240×150): sıraya alınır; model yüklenince yeniden çekilir */
-	UTextureRenderTarget2D* DroneSnap(const FString& Type, const FString& ModelKey, const FString& ColorHex);
+	/** Dönen küçük görüntüler (hangar dron listesi, mürettebat pilot listesi, pilot rozeti, TOP10): konu bir kez, ayrı bir noktada
+	 *  kendi ışıklarıyla (2. ışık kanalı) 24 açıdan çekilir, arka plan saydam (SceneColorHDR ters örtme alfası) → UTexture2D kareleri.
+	 *  Sonra yalnız kareler oynatılır (her karede sahne yakalaması yok). Anahtar döner; kareler SpinFrames ile okunur. */
+	FString RequestDroneSpin(const FString& Type, const FString& ModelKey, const FString& ColorHex);
+	FString RequestAvatarSpin(const FSmvAvatar& A);
+	/** nullptr: anahtar bilinmiyor; Frames.Num() < Want: çekim sürüyor */
+	const FSmvSpinSet* SpinFrames(const FString& Key) const { return Spins.Find(Key); }
+	static constexpr int32 SpinFrameCount = 24;
 	/** "Hangara indi": önizlemedeki araç yukarıdan süzülerek iner (1,6 sn) */
 	void PlayLanding();
 	/** Dünya oluşturucu canlı 3B önizlemesi: parkurun prosedürel dünyası uzak bir noktada kurulur, önizleme yakalaması yörüngede döner */
@@ -110,9 +125,12 @@ protected:
 	void PlaceStudio(float FloorZ);
 	/** Anahtar / kenar ışığını konumlar; şiddet hedefe uzaklığın karesiyle ölçeklenir (uzak ışık figürü karartmasın) */
 	void PlaceLights(const FVector& Target, const FVector& KeyAt, const FVector& RimAt, float Scale = 1.f);
-	UPROPERTY() TObjectPtr<ASmvPilotFigure> SnapFig;
-	UPROPERTY() TMap<FString, TObjectPtr<UTextureRenderTarget2D>> Snaps;
-	UPROPERTY() TObjectPtr<ASmvDroneActor> DSnapActor;
+	UPROPERTY() TMap<FString, FSmvSpinSet> Spins;
+	UPROPERTY() TObjectPtr<AActor> SpinSubject;
+	UPROPERTY() TObjectPtr<ASmvPilotFigure> SpinFig;
+	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> SpinRtL;
+	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> SpinRtH;
+	UPROPERTY() TArray<TObjectPtr<UPointLightComponent>> SpinLights;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> WorldPrev;
 	/** Dünya önizlemesinin kendi güneşi (1. ışık kanalı) ve gök kartı (yalnız yakalamada görünür) */
 	UPROPERTY() TObjectPtr<class UDirectionalLightComponent> PrevSun;
@@ -134,6 +152,10 @@ private:
 	bool bLive = false;
 	bool bPreviewOn = false;
 	double T0 = 0;
+	/** sahne saati (Dt birikimi) ve yumuşatılmış uçuş irtifası */
+	double SceneT = 0, FlyZ = 0, FlyVz = 0;
+	bool bFlyZ = false;
+	FVector LookS = FVector::ZeroVector;
 	float PreviewYaw = 0.f;
 	float PreviewDistCm = 300.f;
 	double LastChannelFix = 0;
@@ -152,20 +174,20 @@ private:
 	TMap<int64, float> GroundCache;
 	float GroundAt(double E, double N);
 	ASmvDroneActor* SpawnFlyer(const FString& Type, const FLinearColor& Color);
-	TArray<TPair<FString, FSmvAvatar>> SnapQueue;
-	FString SnapPending;
-	int32 SnapPhase = 0;
-	struct FDroneJob { FString Key, Type, Model, Color; };
-	TArray<FDroneJob> DQueue;
-	FString DPending;
-	int32 DFrames = 0;
-	/** GLB gövdesi yüklendiği kare (−1 bekleniyor; modelsiz işte 0) */
-	int32 DGlbFrame = -1;
-	bool bDHasModel = false;
+	struct FSpinJob { FString Key, Type, Model, Color; FSmvAvatar Avatar; bool bAvatar = false; };
+	TArray<FSpinJob> SpinQueue;
+	FSpinJob SpinJob;
+	int32 SpinTick = 0;
+	/** GLB gövdesi yüklendiği kare (−1 bekleniyor) */
+	int32 SpinGlbTick = -1;
+	bool bSpinHasModel = false, bSpinRead = false, bSpinFramed = false;
+	FVector SpinAt = FVector::ZeroVector, SpinLocalOff = FVector::ZeroVector;
+	float SpinDist = 300.f;
 	double LandAt = -100.0;
 	double WpLat = 0, WpLon = 0, WpSize = 4000;
-	void TickSnaps();
-	void TickDroneSnaps();
+	void TickSpin();
+	void EndSpinJob();
+	void EnsureSpinLights();
 
 	EStation Station = EStation::Menu;
 	bool bCardOn = false;

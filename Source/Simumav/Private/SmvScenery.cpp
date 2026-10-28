@@ -104,12 +104,12 @@ namespace
 		TEXT("/Game/Brushify/Meshes/Cliffs/Meshes/Cliff_Large_01/S_Cliff_Large_01"),
 		TEXT("/Game/Brushify/Meshes/Cliffs/Meshes/Cliff_Large_02/S_Cliff_Large_02"),
 	};
-	// gök trafiği: Planes in the Sky yolcu uçakları (yüksekte, iz bulutuyla) + Flying AI (alçakta)
+	// gök trafiği: Planes in the Sky yolcu uçakları (yüksekte, iz bulutuyla). Flying AI'nin FlyingAI_SM'si eklentinin yer tutucu
+	// kutusu — gökte "yolcu uçağı yerine kare uçuyor" (kullanıcı, 2026-10-28); listeden çıkarıldı.
 	const TCHAR* const GFlyers[] =
 	{
 		TEXT("/Game/Planes_in_the_Sky/Meshes/SM_Airliner"),
 		TEXT("/Game/Planes_in_the_Sky/Meshes/SM_Regional_Jet"),
-		TEXT("/Game/FlyingAI/Meshes/FlyingAI_SM"),
 	};
 
 	FString SmvObjPath(const FString& Pkg)

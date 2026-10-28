@@ -896,6 +896,7 @@
  "hangar.params_kept": "{name}: сохранено параметров из Mission Planner — {n}",
  "hangar.power": "Энергия и топливо",
  "hangar.type": "Тип",
+ "hangar2.actions": "Действия",
  "hangar2.ask": "Что сделать с этим дроном?",
  "hangar2.edit": "Изменить",
  "hangar2.equipment": "Оснащение",

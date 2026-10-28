@@ -162,7 +162,7 @@ struct SIMUMAV_API FSmvAvatar
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Glasses = TEXT("none");
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Hair = TEXT("short");
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString HairColor = TEXT("#3b2a1e");
-	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Headgear = TEXT("helmet");
+	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Headgear = TEXT("none");   // kask yalnız kullanıcı seçerse (kullanıcı, 2026-10-28)
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") FString Outfit = TEXT("suit");
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bFreckles = false;
 	UPROPERTY(BlueprintReadWrite, Category = "Simumav") bool bMole = false;

@@ -1134,7 +1134,8 @@ void SSmvButton::Tick(const FGeometry& G, const double InNow, const float Dt)
 	// sıralı giriş: aşağıdan kayma (ease-out)
 	const float Slide = bSlideIn ? FMath::Pow(1.f - Intro, 3.f) * 26.f : 0.f;
 	// kart 3B eğilme (web en çok ±9°): fareye göre kayma (shear) ile perspektif hissi
-	const bool bTiltKind = (Kind == ESmvBtn::Tile || Kind == ESmvBtn::Hero) && !ReducedMotion();
+	// kapalı: fare konumu eğilmiş geometride ölçülüyordu → eğim fareyi, fare eğimi değiştirip kartlar titriyordu (kullanıcı, 2026-10-28)
+	const bool bTiltKind = false;
 	TiltN = FMath::Lerp(TiltN, bTiltKind && bHover ? MouseN : FVector2D::ZeroVector, (double)K);
 	const float Tx = (float)TiltN.X * 0.035f, Ty = (float)TiltN.Y * 0.035f;
 	if (FMath::Abs(S - 1.f) > 0.0005f || FMath::Abs(Tx) + FMath::Abs(Ty) > 0.0005f || Slide > 0.01f)

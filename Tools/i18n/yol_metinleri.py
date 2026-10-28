@@ -14,7 +14,7 @@ Y = {
  "level.short": ("Sv {n}", "Lv {n}"), "level.line": ("Seviye {n} · {xp} / {next} XP", "Level {n} · {xp} / {next} XP"),
  # ---- hangar ----
  "hangar2.sub": ("Kayıtlı dronların — Mission Planner'dan bağlanabilir, parametre ve betikleri kalıcı", "Your saved drones — connectable from Mission Planner, parameters and scripts persist"),
- "hangar2.new": ("Yeni", "New"), "hangar2.edit": ("Düzenle", "Edit"), "hangar2.ask": ("Bu dronla ne yapmak istersin?", "What would you like to do with this drone?"),
+ "hangar2.new": ("Yeni", "New"), "hangar2.actions": ("İşlemler", "Actions"), "hangar2.edit": ("Düzenle", "Edit"), "hangar2.ask": ("Bu dronla ne yapmak istersin?", "What would you like to do with this drone?"),
  "hangar2.equipment": ("Donanım", "Equipment"), "hangar2.none": ("Yok", "None"), "hangar2.fly_this": ("Bu dronla uç", "Fly this drone"),
  "hangar2.params_n": ("{n} parametre", "{n} parameters"), "hangar2.script_lines": ("Lua betiği · {n} satır", "Lua script · {n} lines"),
  "hangar2.mp_hint": ("Uçuşta Mission Planner'dan (UDP 14550) değiştirdiğin parametreler uçuş sonunda bu drona kalıcı yazılır.",

@@ -896,6 +896,7 @@
  "hangar.params_kept": "{name}: {n} parameters from Mission Planner saved",
  "hangar.power": "Power and fuel",
  "hangar.type": "Type",
+ "hangar2.actions": "Actions",
  "hangar2.ask": "What would you like to do with this drone?",
  "hangar2.edit": "Edit",
  "hangar2.equipment": "Equipment",

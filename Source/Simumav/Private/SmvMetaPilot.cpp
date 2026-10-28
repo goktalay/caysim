@@ -85,8 +85,9 @@ bool FSmvMetaPilot::Resolve(const FSmvAvatar& A, FSmvMetaPilotParts& Out)
 	if (!Out.Face) return false;
 	// tüyler: saç (kask yokken), kaş, sakal/bıyık (erkek), kirpik
 	TArray<FString> Want;
-	const bool bHelmet = A.Headgear == TEXT("helmet") || A.Headgear.IsEmpty();
-	if (!bHelmet) { const FString Hg = SmvHairGroom(A.Hair, bF); if (!Hg.IsEmpty()) Want.Add(Hg); }
+	const bool bHelmet = A.Headgear == TEXT("helmet");
+	// şapkada saç tüyü şapkanın içinden taşıyordu: yalnız kaskısız ve şapkasızken
+	if (!bHelmet && A.Headgear != TEXT("cap")) { const FString Hg = SmvHairGroom(A.Hair, bF); if (!Hg.IsEmpty()) Want.Add(Hg); }
 	Want.Add(A.BrowW == TEXT("thin") ? TEXT("Eyebrows_M_Thin") : A.BrowW == TEXT("thick") ? TEXT("Eyebrows_M_Thick") : TEXT("Eyebrows_M_Natural"));
 	if (!bF)
 	{

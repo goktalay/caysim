@@ -293,6 +293,10 @@ private:
 	TSharedRef<SWidget> XpBar(int64 Xp, float W, float H = 6.f);
 	TSharedRef<SWidget> DroneThumb(const FSmvDrone& D, float W, float H);
 	TSharedRef<SWidget> ModelThumb(const FString& Type, const FString& Model, float W, float H);
+	/** Menü sahnesinin dönen, arka plansız küçük görüntüsü (ASmvMenuScene::Request*Spin); kareler gelene dek Fallback */
+	TSharedRef<SWidget> SpinThumb(const FString& Key, float W, float H, TSharedRef<SWidget> Fallback);
+	/** Pilotun dönen baş-omuz görüntüsü (yoksa çizilmiş portre); yükseklik Size × 1,1 */
+	TSharedRef<SWidget> AvatarThumb(const FSmvAvatar* Av, float Size);
 	TSharedRef<SWidget> SatThumb(double Lat, double Lon, float W, float H, bool bAnimate);
 	// sihirbaz durumları
 	int32 HwStep = 0;

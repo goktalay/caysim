@@ -896,6 +896,7 @@
  "hangar.params_kept": "{name}: {n} Parameter aus Mission Planner gespeichert",
  "hangar.power": "Antrieb & Kraftstoff",
  "hangar.type": "Typ",
+ "hangar2.actions": "Aktionen",
  "hangar2.ask": "Was möchtest du mit dieser Drohne tun?",
  "hangar2.edit": "Bearbeiten",
  "hangar2.equipment": "Ausrüstung",
