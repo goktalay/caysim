@@ -126,6 +126,7 @@ namespace SmvUi
 
 	bool& ReducedMotion() { static bool b = false; return b; }
 	bool& PadActive() { static bool b = false; return b; }
+	bool& IntroOn() { static bool b = true; return b; }
 	double Now()
 	{
 		static const double Start = FPlatformTime::Seconds();
@@ -1052,7 +1053,7 @@ void SSmvButton::Construct(const FArguments& A)
 	Selected = A._Selected;
 	AccentCol = A._Accent;
 	OnClick = A._OnClick;
-	BornAt = FPlatformTime::Seconds() + FMath::Max(0.f, A._IntroDelay);
+	BornAt = SmvUi::IntroOn() ? FPlatformTime::Seconds() + FMath::Max(0.f, A._IntroDelay) : FPlatformTime::Seconds() - 10.0;
 	bSlideIn = A._IntroDelay > 0.f;
 	const bool bTile = Kind == ESmvBtn::Tile || Kind == ESmvBtn::Hero;
 	const int32 Fs = A._FontSize > 0 ? A._FontSize : (Kind == ESmvBtn::Hero ? 30 : bTile ? 17 : 13);
@@ -1131,9 +1132,10 @@ void SSmvButton::Tick(const FGeometry& G, const double InNow, const float Dt)
 	HoverA = FMath::Lerp(HoverA, (bHover || (bNavFocus && (bCauseNav || PadActive()))) && IsEnabled() ? 1.f : 0.f, K);
 	PressA = FMath::Lerp(PressA, bPressed ? 1.f : 0.f, FMath::Clamp(Dt * 20.f, 0.f, 1.f));
 	FocusA = FMath::Lerp(FocusA, bNavFocus && (bCauseNav || PadActive()) ? 1.f : 0.f, K);
-	const float Gain = Kind == ESmvBtn::Hero ? 0.035f : Kind == ESmvBtn::Tile ? 0.04f : 0.02f;
+	// fare üzerindeyken büyüme yok: ölçek dönüşümü sol üst köşeden büyütüp komşuların üstüne taşıyor, fare kenardayken titriyordu
+	const float Gain = 0.f;
 	const float Intro = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - BornAt) * (bSlideIn ? 2.6f : 4.f), 0.f, 1.f);
-	const float S = (1.f + Gain * HoverA - 0.03f * PressA) * FMath::Lerp(0.96f, 1.f, Intro);
+	const float S = (1.f + Gain * HoverA) * FMath::Lerp(0.96f, 1.f, Intro);
 	// sıralı giriş: aşağıdan kayma (ease-out)
 	const float Slide = bSlideIn ? FMath::Pow(1.f - Intro, 3.f) * 26.f : 0.f;
 	// kart 3B eğilme (web en çok ±9°): fareye göre kayma (shear) ile perspektif hissi
@@ -1157,7 +1159,7 @@ int32 SSmvButton::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSla
 	const float R = bTile ? 18.f : 12.f;
 	const double T = Now();
 	FLinearColor Fill = FMath::Lerp(Card(), CardHover(), HoverA);
-	FLinearColor Ring = FMath::Lerp(Edge(), AccentCol.CopyWithNewOpacity(0.75f), FMath::Max(HoverA, bSel ? 1.f : 0.f));
+	FLinearColor Ring = FMath::Lerp(Edge(), AccentCol.CopyWithNewOpacity(0.45f), HoverA);
 	switch (Kind)
 	{
 	case ESmvBtn::Primary: Fill = FMath::Lerp(AccentCol * 0.62f, AccentCol * 0.85f, HoverA).CopyWithNewOpacity(0.95f); Ring = AccentCol.CopyWithNewOpacity(0.9f); break;
@@ -1168,7 +1170,8 @@ int32 SSmvButton::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSla
 	}
 	if (bSel && Kind != ESmvBtn::Primary) Fill = FMath::Lerp(Fill, AccentCol.CopyWithNewOpacity(0.28f), 0.6f);
 	// parıltı
-	const float GlowA = (Kind == ESmvBtn::Hero ? 0.35f + 0.15f * FMath::Sin((float)T * 2.2f) : 0.f) + HoverA * 0.45f + (bSel ? 0.25f : 0.f);
+	// dış hale yalnız Hero (ana menü) düğmesinde; seçili / üzerine gelinen düğmelerde dış çerçeve-hale yok (kullanıcı, 2026-10-29)
+	const float GlowA = Kind == ESmvBtn::Hero ? 0.35f + 0.15f * FMath::Sin((float)T * 2.2f) + HoverA * 0.3f : 0.f;
 	if (GlowA > 0.01f && bEn)
 	{
 		for (int32 i = 3; i >= 1; --i)
@@ -1204,8 +1207,8 @@ int32 SSmvButton::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSla
 	DrRoundRect(Out, L + 3, G, FVector2D(0.5f, 0.5f), Sz - FVector2D(1, 1), R, Ring, Kind == ESmvBtn::Hero ? 1.6f : 1.f);
 	if (bSel && !bTile) DrBox(Out, L + 3, G, FVector2D(0, Sz.Y * 0.2f), FVector2D(3.f, Sz.Y * 0.6f), AccentCol, Round(1.5f));
 	if (bTile && Kind == ESmvBtn::Tile) DrBox(Out, L + 3, G, FVector2D(R, Sz.Y - 3.f), FVector2D((Sz.X - 2 * R) * (0.25f + 0.75f * HoverA), 2.f), AccentCol.CopyWithNewOpacity(0.5f + 0.5f * HoverA), Round(1.f));
-	// odak halkası (gezinme)
-	if (FocusA > 0.02f)
+	// odak halkası: yalnız gamepad / klavye ile gezinirken (fare kullanımında görünmez)
+	if (FocusA > 0.02f && PadActive())
 	{
 		const float Pulse = 0.75f + 0.25f * FMath::Sin((float)T * 6.f);
 		DrRoundRect(Out, L + 3, G, FVector2D(-4.f, -4.f), Sz + FVector2D(8.f, 8.f), R + 4.f, Hex(0x7dd3fc, FocusA * Pulse), 2.5f);

@@ -594,6 +594,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 	if (bDirty || Built != Cur || bBuiltPause != bPause)
 	{
 		const bool bScreenChanged = Built != Cur;
+		SmvUi::IntroOn() = bScreenChanged || bBuiltPause != bPause;
 		bDirty = false;
 		Built = Cur;
 		bBuiltPause = bPause;

@@ -652,6 +652,44 @@ void SSmvShell::OpenChoice(const FText& InTitle, const FText& Body, const TArray
 	bWantFocus = true;
 }
 
+namespace
+{
+	/** Her Kelimenin İlk Harfi Büyük (Türkçede i → İ, I → ı; diğer dillerde ICU kuralları) — pilot menüsü etiketleri */
+	FString YhTitleCase(const FString& In)
+	{
+		const bool bTr = FSmvI18n::Language() == TEXT("tr");
+		static const TSet<FString> Keep = { TEXT("FPV"), TEXT("SITL"), TEXT("RC"), TEXT("XP"), TEXT("GPS"), TEXT("UAV"), TEXT("İHA"), TEXT("3B"), TEXT("3D") };
+		FString Out, Word;
+		auto Flush = [&]()
+		{
+			if (Word.IsEmpty()) return;
+			if (Keep.Contains(Word)) { Out += Word; Word.Reset(); return; }
+			for (int32 i = 0; i < Word.Len(); ++i)
+			{
+				TCHAR C = Word[i];
+				if (i == 0)
+				{
+					if (bTr && C == TEXT('i')) C = TEXT('\u0130');
+					else if (bTr && C == TEXT('\u0131')) C = TEXT('I');
+					else C = FChar::ToUpper(C);
+				}
+				else if (bTr && C == TEXT('I')) C = TEXT('\u0131');
+				else if (bTr && C == TEXT('\u0130')) C = TEXT('i');
+				else C = FChar::ToLower(C);
+				Out.AppendChar(C);
+			}
+			Word.Reset();
+		};
+		for (TCHAR C : In)
+		{
+			if (FChar::IsWhitespace(C) || C == TEXT('-') || C == TEXT('/') || C == TEXT('.')) { Flush(); Out.AppendChar(C); }
+			else Word.AppendChar(C);
+		}
+		Flush();
+		return Out;
+	}
+}
+
 void SSmvShell::OpenPilotMenu()
 {
 	if (!OverlayBox.IsValid() || !Flow.IsValid()) return;
@@ -680,7 +718,7 @@ void SSmvShell::OpenPilotMenu()
 				]
 				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).HAlign(HAlign_Left)
 				[
-					SmvUi::Text(L, 13, "Bold", bDanger ? Danger() : Fg(), false)
+					SmvUi::Text(FText::FromString(YhTitleCase(L.ToString())), 13, "Bold", bDanger ? Danger() : Fg(), false)
 				]
 			];
 		if (!First.IsValid()) First = B;
@@ -694,7 +732,7 @@ void SSmvShell::OpenPilotMenu()
 	Sep();
 	Item(Tx(TEXT("menu.top10")), ESmvIcon::Trophy, Go(ESmvScreen::Leaderboard));
 	Item(Tx(TEXT("menu.settings")), ESmvIcon::Gear, Go(ESmvScreen::Settings));
-	Item(bIn ? Tx(TEXT("menu.account")) : Tx(TEXT("welcome.login")), ESmvIcon::Globe, Go(bIn ? ESmvScreen::Account : ESmvScreen::Login));
+	Item(bIn ? Tx(TEXT("menu.account")) : Tx(TEXT("pilotmenu.login")), ESmvIcon::Globe, Go(bIn ? ESmvScreen::Account : ESmvScreen::Login));
 	Sep();
 	Item(Tx(TEXT("menu.missions")), ESmvIcon::Mission, Go(ESmvScreen::Missions));
 	Item(Tx(TEXT("pilotmenu.fpv")), ESmvIcon::Fpv, Go(ESmvScreen::FpvGallery));
@@ -1150,6 +1188,21 @@ TSharedRef<SWidget> SSmvShell::HwType()
 	return SNew(SBox).VAlign(VAlign_Bottom).HAlign(HAlign_Center).Padding(FMargin(0, 0, 0, 10))[Row];
 }
 
+namespace
+{
+	/** model satırının temel özellik satırı: kütle · açıklık · azami hız · dayanım (olanlar) */
+	FString YhSpecLine(const FSmvCatalogModel& M)
+	{
+		TArray<FString> B;
+		if (M.MassKg > 0) B.Add(FString::Printf(TEXT("%.1f kg"), M.MassKg));
+		if (M.SpanM > 0) B.Add(FString::Printf(TEXT("%.2f m"), M.SpanM));
+		if (M.MaxKmh > 0) B.Add(FString::Printf(TEXT("%.0f km/h"), M.MaxKmh));
+		if (M.EnduranceMin > 0) B.Add(FString::Printf(TEXT("%.0f min"), M.EnduranceMin));
+		if (M.Motors > 0) B.Add(FSmvI18n::Format(TEXT("hw.motors_n"), { { TEXT("n"), FString::FromInt(M.Motors) } }).ToString());
+		return FString::Join(B, TEXT("  ·  "));
+	}
+}
+
 TSharedRef<SWidget> SSmvShell::HwModel()
 {
 	SSmvShell* Self = this;
@@ -1160,14 +1213,15 @@ TSharedRef<SWidget> SSmvShell::HwModel()
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	for (const FString& Gp : Groups)
 	{
-		TSharedRef<SWrapBox> Wrap = SNew(SWrapBox).PreferredSize(1100.f).UseAllottedSize(true);
+		// her model bir satır: solda dönen 3B, sağda ad · tür · temel özellikler (kullanıcı, 2026-10-29)
+		TSharedRef<SVerticalBox> Wrap = SNew(SVerticalBox);
 		int32 N = 0;
 		for (const FSmvCatalogModel& M : USmvDataService::Catalog())
 		{
 			if (!YhTypeInKind(M.Type, HwKind) || YhGroupOf(M) != Gp) continue;
 			const FSmvCatalogModel Mc = M;
 			const bool bSel = EditDrone.ModelKey == M.Key;
-			TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Accent()).MinWidth(196.f).Selected(bSel).IntroDelay(0.03f * N)
+			TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Normal).LeftAlign(true).Accent(Accent()).MinWidth(600.f).Selected(bSel).IntroDelay(0.03f * N)
 				.OnClick([Self, Mc]()
 				{
 					Self->EditDrone.Type = Mc.Type;
@@ -1184,13 +1238,18 @@ TSharedRef<SWidget> SSmvShell::HwModel()
 				})
 				.Extra()
 				[
-					SNew(SVerticalBox)
-					+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[ModelThumb(M.Type, M.Key, 176.f, 110.f)]
-					+ SVerticalBox::Slot().AutoHeight().Padding(2, 6, 0, 0)[SmvUi::Text(FText::FromString(M.Label), 12, "Bold", Fg(), false)]
-					+ SVerticalBox::Slot().AutoHeight().Padding(2, 1, 0, 0)[SmvUi::Text(FText::FromString(M.Key.StartsWith(TEXT("fab:")) ? FSmvI18n::T(TEXT("hw.fab_body")).ToString() : FSmvI18n::T(FString(TEXT("type.")) + M.Type).ToString()), 10, "Regular", Dim(), false)]
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 14, 0)[ModelThumb(M.Type, M.Key, 144.f, 90.f)]
+					+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(M.Label), 14, "Bold", Fg(), false)]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 2, 0, 4)[SmvUi::Text(FText::FromString(M.Key.StartsWith(TEXT("fab:")) ? FSmvI18n::T(FString(TEXT("type.")) + M.Type).ToString() + TEXT(" · ") + FSmvI18n::T(TEXT("hw.fab_body")).ToString() : FSmvI18n::T(FString(TEXT("type.")) + M.Type).ToString()), 11, "Regular", Accent(), false)]
+						+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(YhSpecLine(M)), 10, "Regular", Dim(), false)]
+					]
 				];
 			if (bSel) DefaultFocus = B;
-			Wrap->AddSlot().Padding(0, 0, 10, 10)[B];
+			Wrap->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[B];
 			++N;
 		}
 		if (N == 0) continue;
@@ -1226,7 +1285,7 @@ TSharedRef<SWidget> SSmvShell::HwModel()
 	return SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth()
 		[
-			SNew(SBox).WidthOverride(640.f)
+			SNew(SBox).WidthOverride(680.f)
 			[
 				SNew(SScrollBox).ScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll) + SScrollBox::Slot()[Glass(V, FMargin(18.f), 0.85f)]
 			]
@@ -2961,8 +3020,33 @@ TSharedRef<SWidget> SSmvShell::FlyModes()
 		if (bSel || (!DefaultFocus.IsValid() && bOk)) DefaultFocus = B;
 		Wrap->AddSlot().Padding(0, 0, 12, 12)[SNew(SBox).WidthOverride(340.f)[B]];
 	}
+	// sabit kanat kalkış yöntemi (kullanıcı, 2026-10-29: "direkt kalkıyor"): tekerlekli pist · 2 eksenli rampa (açı + yön) · elden · araç üstü
+	TSharedRef<SWidget> LaunchBox = SNullWidget::NullWidget;
+	if (F.IsValid() && F->Draft.Drone.Type == TEXT("plane"))
+	{
+		FSmvLaunch& Ln = F->Draft.Launch;
+		if (Ln.Method.IsEmpty() || !(Ln.Method == TEXT("wheels") || Ln.Method == TEXT("ramp") || Ln.Method == TEXT("vehicle") || Ln.Method == TEXT("hand"))) Ln.Method = TEXT("wheels");
+		TSharedRef<SVerticalBox> L = SNew(SVerticalBox);
+		L->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("wizard.launch")), Warn())];
+		L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("wizard.launch_method")), Chips(&Ln.Method, { TEXT("wheels"), TEXT("ramp"), TEXT("hand"), TEXT("vehicle") },
+			{ Tx(TEXT("launch.wheels")), Tx(TEXT("launch.ramp")), Tx(TEXT("launch.hand")), Tx(TEXT("launch.vehicle")) }, {}, [Self]() { Self->Refresh(); }, 4))];
+		if (Ln.Method == TEXT("ramp"))
+		{
+			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.angle")), Slider(&Ln.AngleDeg, 10, 30, 1, [](double V) { return FString::Printf(TEXT("%.0f°"), V); }))];
+			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.ramp_az")), Slider(&Ln.AimAzDeg, 0, 355, 5, [](double V) { return V <= 0 ? FSmvI18n::T(TEXT("launch.ramp_az_auto")).ToString() : FString::Printf(TEXT("%.0f°"), V); }))];
+		}
+		if (Ln.Method == TEXT("ramp") || Ln.Method == TEXT("vehicle"))
+			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.release")), Slider(&Ln.ReleaseKmh, 40, 110, 1, [](double V) { return FString::Printf(TEXT("%.0f km/h"), V); }))];
+		if (Ln.Method == TEXT("hand"))
+		{
+			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.hand_speed")), Slider(&Ln.HandSpeedMs, 4, 14, 0.5, [](double V) { return FString::Printf(TEXT("%.1f m/s"), V); }))];
+			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.hand_pitch")), Slider(&Ln.HandPitchDeg, 0, 30, 1, [](double V) { return FString::Printf(TEXT("%.0f°"), V); }))];
+		}
+		LaunchBox = SNew(SBox).WidthOverride(560.f)[Glass(L, FMargin(16.f), 0.85f)];
+	}
 	return SNew(SVerticalBox)
 		+ SVerticalBox::Slot().FillHeight(1.f)
+		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12).HAlign(HAlign_Left)[LaunchBox]
 		+ SVerticalBox::Slot().AutoHeight()[SNew(SScrollBox) + SScrollBox::Slot()[Wrap]]
 		+ SVerticalBox::Slot().AutoHeight().Padding(4, 4, 0, 0)[SmvUi::Text(Tx(TEXT("fly2.rule")), 10, "Regular", Mute())];
 }

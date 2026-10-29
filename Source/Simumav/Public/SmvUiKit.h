@@ -85,6 +85,9 @@ namespace SmvUi
 	SIMUMAV_API bool& PadActive();
 	/** Zaman (sn; hareket azaltmada sabit) */
 	SIMUMAV_API double Now();
+	/** Giriş animasyonu (soluk başlama / kayma) yalnız ekran değişince: aynı ekranda yeniden kurulumda (seçim → Refresh) düğmeler
+	 *  animasyonu baştan oynatıp ekranı titretiyordu (kullanıcı, 2026-10-29). Kabuk ekran değişince true, aksi hâlde false yapar. */
+	SIMUMAV_API bool& IntroOn();
 
 	// ---- çizim yardımcıları (OnPaint) ----
 	SIMUMAV_API void DrBox(FSlateWindowElementList& Out, int32 L, const FGeometry& G, const FVector2D& P, const FVector2D& S, const FLinearColor& C, const FSlateBrush* B = nullptr);

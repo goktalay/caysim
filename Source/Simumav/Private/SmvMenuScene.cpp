@@ -1574,6 +1574,49 @@ void ASmvMenuScene::SetShowcasePilot(const FSmvAvatar& A, bool bFace)
 void ASmvMenuScene::SettleShowcase()
 {
 	if (!bLive) return;
+	const bool bShowOn = Showcase && !Showcase->IsHidden();
+	// vitrin ışıkları: kamera tarafından anahtar + karşı yandan dolgu; yalnız 2. ışık kanalındaki araç gövdesini aydınlatır
+	if (ShowLights.Num() == 0 && bShowOn)
+	{
+		for (int32 i = 0; i < 2; ++i)
+		{
+			UPointLightComponent* Lt = NewObject<UPointLightComponent>(this);
+			Lt->SetupAttachment(Root);
+			Lt->SetIntensityUnits(ELightUnits::Candelas);
+			Lt->SetCastShadows(false);
+			Lt->SetLightingChannels(false, false, true);
+			Lt->SetLightColor(i == 0 ? FLinearColor(1.f, 0.97f, 0.92f) : FLinearColor(0.75f, 0.85f, 1.f));
+			Lt->RegisterComponent();
+			ShowLights.Add(Lt);
+		}
+	}
+	for (UPointLightComponent* Lt : ShowLights) if (Lt && Lt->IsVisible() != bShowOn) Lt->SetVisibility(bShowOn);
+	if (bShowOn && ShowLights.Num() == 2)
+	{
+		FVector O, E;
+		Showcase->GetActorBounds(false, O, E);
+		const FVector ToCam = (CamPos - O).GetSafeNormal2D();
+		const FVector Side = FVector::CrossProduct(FVector::UpVector, ToCam);
+		const double D = FMath::Max(150.0, (double)E.Size() * 2.2);
+		const FVector Kp = O + ToCam * D + Side * D * 0.45 + FVector(0, 0, D * 0.7), Fp = O - ToCam * D * 0.3 - Side * D + FVector(0, 0, D * 0.3);
+		const float Base = SmvCfg(TEXT("ShowcaseLight"), 9000.f);
+		auto K = [](const FVector& A, const FVector& B) { const float Dd = (float)FVector::Dist(A, B) / 171.f; return FMath::Clamp(Dd * Dd, 0.3f, 400.f); };
+		ShowLights[0]->SetWorldLocation(Kp); ShowLights[0]->SetIntensity(Base * K(O, Kp)); ShowLights[0]->SetAttenuationRadius((float)D * 4.f);
+		ShowLights[1]->SetWorldLocation(Fp); ShowLights[1]->SetIntensity(Base * 0.4f * K(O, Fp)); ShowLights[1]->SetAttenuationRadius((float)D * 4.f);
+		// gövde (GLB ve donanım dahil) 0 + 2. kanalda: güneş + vitrin ışıkları (GLB sonradan yüklendiği için saniyede bir)
+		const double Now = FPlatformTime::Seconds();
+		if (Now - ShowChanAt > 1.0)
+		{
+			ShowChanAt = Now;
+			TArray<AActor*> Acts; Showcase->GetAttachedActors(Acts, true, true); Acts.Add(Showcase.Get());
+			for (AActor* A : Acts)
+			{
+				if (!A) continue;
+				TInlineComponentArray<UPrimitiveComponent*> Ps(A);
+				for (UPrimitiveComponent* Pc : Ps) if (Pc && !Pc->LightingChannels.bChannel2) Pc->SetLightingChannels(true, false, true);
+			}
+		}
+	}
 	if (Showcase && !Showcase->IsHidden())
 	{
 		// gövdenin alt yüzü zemine oturur (GLB gövdesi yüklenince boyut değişir; her kare ucuz bir sınır kutusu); yeni araç yukarıdan süzülür

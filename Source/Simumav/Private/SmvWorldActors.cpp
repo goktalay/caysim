@@ -191,6 +191,9 @@ bool ASmvDroneActor::BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, floa
 	FString Names;
 	FVector PropSum = FVector::ZeroVector, FrontSum = FVector::ZeroVector, BackSum = FVector::ZeroVector;
 	int32 NFront = 0, NBack = 0;
+	// yalnız sol/sağ adlı pervaneler (AT_Drone: Rotor1_r, Rotor2_r, Rotor1_l, Rotor2_l): sıra numarası ekseni + sağın sağda kalması burnu verir
+	FVector R1 = FVector::ZeroVector, R2 = FVector::ZeroVector, RSide = FVector::ZeroVector, LSide = FVector::ZeroVector;
+	int32 N1 = 0, N2 = 0, NR = 0, NL = 0;
 	for (int32 i = 0; i < NB; ++i)
 	{
 		const int32 P = Ref.GetParentIndex(i);
@@ -215,6 +218,8 @@ bool ASmvDroneActor::BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, floa
 			const bool bLeft = L.EndsWith(TEXT("_l")) || L.Contains(TEXT("left"));
 			const bool bNamed = (bF || L.Contains(TEXT("_b_")) || L.Contains(TEXT("back")) || L.Contains(TEXT("rear")));
 			FabPropDir.Add(bNamed ? ((bF == bLeft) ? 1.f : -1.f) : ((FabPropBones.Num() % 2) ? 1.f : -1.f));
+			if (L.Contains(TEXT("1"))) { R1 += Pl; ++N1; } else if (L.Contains(TEXT("2"))) { R2 += Pl; ++N2; }
+			if (L.EndsWith(TEXT("_r")) || L.Contains(TEXT("right"))) { RSide += Pl; ++NR; } else if (L.EndsWith(TEXT("_l")) || L.Contains(TEXT("left"))) { LSide += Pl; ++NL; }
 		}
 		if (Gimbal == INDEX_NONE && (L.Contains(TEXT("gimbal")) || L.Contains(TEXT("camera")) || L.StartsWith(TEXT("cam")))) Gimbal = i;
 	}
@@ -226,6 +231,15 @@ bool ASmvDroneActor::BuildFabBody(const TCHAR* Dir, const TCHAR* IniPrefix, floa
 	// yön ipucu: ön/arka pervane adları, o da yoksa gimbal/kamera kemiği burun (+X) kabul edilir
 	FVector Fwd = FVector::ZeroVector;
 	if (NFront > 0 && NBack > 0) Fwd = FrontSum / NFront - BackSum / NBack;
+	else if (N1 > 0 && N2 > 0 && NR > 0 && NL > 0)
+	{
+		// ön/arka adı yok: 1 ↔ 2 ekseni boylamasına; yönü, sağ pervanelerin burna göre sağda (UE: sağ = Yukarı × İleri) kalmasından
+		Fwd = R1 / N1 - R2 / N2;
+		const FVector Right = RSide / NR - LSide / NL;
+		if (FVector::DotProduct(FVector::CrossProduct(FVector::UpVector, Fwd), Right) < 0.0) Fwd = -Fwd;
+		// "1 ↔ 2" yanal çıkarsa (pervaneler sağ / sol diye numaralı değil) eksen sağ-sol dikmesi
+		if (FMath::Abs(FVector::DotProduct(Fwd.GetSafeNormal(), Right.GetSafeNormal())) > 0.7) Fwd = FVector::CrossProduct(Right, FVector::UpVector);
+	}
 	else if (Gimbal != INDEX_NONE) Fwd = Cs[Gimbal].GetLocation() - Ctr;
 	return PlaceFabBody(C, B, Ctr, Fwd, *SpanKey, *YawKey, DefaultSpanM);
 }

@@ -154,6 +154,9 @@ protected:
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> SpinRtL;
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> SpinRtH;
 	UPROPERTY() TArray<TObjectPtr<UPointLightComponent>> SpinLights;
+	/** vitrin aracının kendi anahtar / dolgu ışıkları (2. kanal: yalnız araç; güneş arkadayken gövde karanlık kalıyordu) */
+	UPROPERTY() TArray<TObjectPtr<UPointLightComponent>> ShowLights;
+	double ShowChanAt = 0;
 	UPROPERTY() TObjectPtr<ASmvProcTerrain> WorldPrev;
 	/** Dünya önizlemesinin kendi güneşi (1. ışık kanalı) ve gök kartı (yalnız yakalamada görünür) */
 	UPROPERTY() TObjectPtr<class UDirectionalLightComponent> PrevSun;
