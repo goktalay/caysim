@@ -3433,6 +3433,14 @@ void ASmvGameMode::CrashFx()
 	}
 }
 
+void ASmvGameMode::SmokeMap(int32 Mode)
+{
+	if (!FlightUi.IsValid()) return;
+	FSmvUiPrefs::Get().bMap = Mode > 0;
+	FlightUi->SetMapBig(Mode == 2);
+	SMV_KLOG(TEXT("SMOKE map %d"), Mode);
+}
+
 void ASmvGameMode::UpdateMap(FSmvFlightUiState& U)
 {
 	const bool bOn = FlightUi.IsValid() && FlightUi->IsMapOn() && Drone && !bPauseMenu;

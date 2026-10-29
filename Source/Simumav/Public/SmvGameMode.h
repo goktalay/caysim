@@ -106,6 +106,10 @@ protected:
 	UPROPERTY() TObjectPtr<class ASmvMapCam> MapCam;
 	bool bMapWorldOff = false;
 	void UpdateMap(FSmvFlightUiState& U);
+public:
+	/** duman testi: 0 harita kapalı, 1 mini harita, 2 büyük harita */
+	void SmokeMap(int32 Mode);
+protected:
 	/** Oyun türü mantığı (yük bırakma / ilaçlama / tesis ve gemi savunma; SmvGameRulesActor) */
 	UPROPERTY() TObjectPtr<class ASmvGameRulesActor> Rules;
 	UPROPERTY() TArray<TObjectPtr<ASmvGateActor>> Gates;

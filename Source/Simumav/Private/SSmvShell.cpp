@@ -5262,7 +5262,13 @@ void SSmvShell::TickSmoke()
 		SMV_KLOG(TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);
 		SmokeAt = Now + 4.0; ++SmokeSub; return;
 	case 5: Shot(Base + TEXT("_hover")); SmokeAt = Now + 0.8; SmokeSub = 80; return;
-	case 80: CleanShot(Base + TEXT("_clean")); SmokeAt = Now + 0.8; SmokeSub = Fx.Ram ? 60 : Fx.bFull ? 20 : Fx.Vehicle ? 13 : 11; return;
+	case 80: CleanShot(Base + TEXT("_clean")); SmokeAt = Now + 0.8; SmokeSub = 85; return;
+	// mini harita (_map) ve büyük harita + kamera penceresi (_mapbig)
+	case 85: if (GameMode.IsValid()) GameMode->SmokeMap(1); SmokeAt = Now + 3.0; SmokeSub = 86; return;
+	case 86: Shot(Base + TEXT("_map")); SmokeAt = Now + 0.8; SmokeSub = 87; return;
+	case 87: if (GameMode.IsValid()) GameMode->SmokeMap(2); SmokeAt = Now + 3.0; SmokeSub = 88; return;
+	case 88: Shot(Base + TEXT("_mapbig")); SmokeAt = Now + 0.8; SmokeSub = 89; return;
+	case 89: if (GameMode.IsValid()) GameMode->SmokeMap(0); SmokeAt = Now + 1.0; SmokeSub = Fx.Ram ? 60 : Fx.bFull ? 20 : Fx.Vehicle ? 13 : 11; return;
 	// bilerek çarpma: hedef bul + burnu çevir (_ram0), koşu (kaçınma kapalı), çarpışma anı (_ram1), 3 sn (_ram2), 7 sn sonra yüzeyde (_ram3)
 	case 60:
 	{
