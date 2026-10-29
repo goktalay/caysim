@@ -1,0 +1,39 @@
+# Simumav - gunluk dosyasindan suzulmus satirlari dogrudan is ciktisina yazar (yalniz okur; artefakt kullanmaz - depolama kotasindan bagimsiz)
+name: gunluk-yaz
+
+on:
+  workflow_dispatch:
+    inputs:
+      klasor:
+        description: "Gunluk klasoru"
+        type: string
+        default: "D:\\Simumav\\Simumav-dev\\Simumav\\Saved\\Logs"
+      desen:
+        description: "Suzgec (regex)"
+        type: string
+        default: "Error|Warning"
+      azami:
+        description: "En cok satir"
+        type: string
+        default: "1500"
+
+jobs:
+  yaz:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Satirlar
+        env:
+          KLASOR: ${{ inputs.klasor }}
+          DESEN: ${{ inputs.desen }}
+          AZAMI: ${{ inputs.azami }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $f = Get-ChildItem -LiteralPath $env:KLASOR -Filter 'Simumav*.log' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $f) { Write-Host "Gunluk yok: $env:KLASOR"; exit 0 }
+          Write-Host ("Dosya: " + $f.FullName + "  " + $f.Length + " bayt  " + $f.LastWriteTime)
+          Select-String -LiteralPath $f.FullName -Pattern $env:DESEN -Encoding UTF8 | Select-Object -First ([int]$env:AZAMI) | ForEach-Object { Write-Host $_.Line }
