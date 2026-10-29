@@ -24,6 +24,7 @@
 #include "Engine/Texture2D.h"
 #include "TextureResource.h"
 #include "Engine/World.h"
+#include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ConfigCacheIni.h"
@@ -1391,10 +1392,14 @@ void ASmvMenuScene::SetMap(const FString& Key)
 
 void ASmvMenuScene::DropMenuLevels()
 {
+	// harita turu art arda büyük haritalar yükler (Karakol 4 × 4 km, Modern Şehir, Adalar 16 km): önceki seviye boşaltılırken çöp toplama
+	// da zorlanır (bellek birikip Modern Şehir'de GPU zaman aşımı — duman 40954102653)
+	const bool bHad = MenuLevel != nullptr || MenuSubs.Num() > 0;
 	for (TObjectPtr<ULevelStreamingDynamic>& L : MenuSubs) if (L) { L->SetShouldBeLoaded(false); L->SetShouldBeVisible(false); L->SetIsRequestingUnloadAndRemoval(true); }
 	MenuSubs.Reset();
 	bMenuSubsReq = false;
 	if (MenuLevel) { MenuLevel->SetShouldBeLoaded(false); MenuLevel->SetShouldBeVisible(false); MenuLevel->SetIsRequestingUnloadAndRemoval(true); MenuLevel = nullptr; }
+	if (bHad && GEngine) GEngine->ForceGarbageCollection(true);
 }
 
 TArray<ULevel*> ASmvMenuScene::MenuLevels() const

@@ -105,7 +105,7 @@ jobs:
           if (Test-Path $logs) { Copy-Item -Recurse -Force $logs (Join-Path $out 'Logs') }
           Get-ChildItem $out -Recurse -File | ForEach-Object { Write-Host ($_.FullName + "  " + $_.Length) }
           $log = Get-ChildItem (Join-Path $out 'Logs') -Filter *.log -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|SMVLOAD|3D Tiles|Error|D3D|RHI|Fab haritas|GPS/EKF|Need Position|Arm:|U.u. d.nyas|Google|Cesium|kenar e.leme|Kalk.. a.ama|Uyar.:' | Select-Object -First 600 | ForEach-Object { Write-Host $_.Line } }
+          if ($log) { Select-String -LiteralPath $log.FullName -Pattern 'SMOKE|SMVLOAD|3D Tiles|Error|D3D|RHI|Active\]|Device 0|Fab haritas|GPS/EKF|Need Position|Arm:|U.u. d.nyas|Google|Cesium|kenar e.leme|Kalk.. a.ama|Uyar.:' | Select-Object -First 900 | ForEach-Object { Write-Host $_.Line } }
       - name: Artefakt
         if: always()
         uses: actions/upload-artifact@v4
