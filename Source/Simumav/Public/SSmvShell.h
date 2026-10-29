@@ -28,6 +28,8 @@ struct FSmvLoadView
 	double T0 = 0;
 	uint32 Seed = 0;
 	const FSmvLoadGate* Gate = nullptr;
+	/** arka planı altta uydu haritası çiziyor (gerçek dünya parkuru): opak taban / gök degradesi çizilmez, yalnız okunurluk karartması */
+	bool bSatBg = false;
 };
 
 class SIMUMAV_API SSmvShell : public SCompoundWidget

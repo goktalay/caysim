@@ -823,13 +823,13 @@ TSharedRef<SWidget> SSmvShell::Cycle(FString* Target, const TArray<FString>& Val
 
 TSharedRef<SWidget> SSmvShell::Chips(FString* Target, const TArray<FString>& Values, const TArray<FText>& Labels, const TArray<ESmvIcon>& Icons, TFunction<void()> OnPick, int32 PerRow)
 {
-	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
-	TSharedPtr<SHorizontalBox> Row;
+	// satıra sığmayan seçenek alt satıra geçer (dar kartlarda — hava durumu — düğmeler kartın dışına taşıyordu); PerRow yalnız üst sınır
+	(void)PerRow;
+	TSharedRef<SWrapBox> V = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(6.f, 6.f));
 	for (int32 i = 0; i < Values.Num(); ++i)
 	{
-		if (i % FMath::Max(1, PerRow) == 0) { Row = SNew(SHorizontalBox); V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Row.ToSharedRef()]; }
 		const FString Val = Values[i];
-		Row->AddSlot().AutoWidth().Padding(0, 0, 6, 0)
+		V->AddSlot()
 		[
 			SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12)
 			.Text(Labels.IsValidIndex(i) ? Labels[i] : FText::FromString(Val))
@@ -2994,7 +2994,9 @@ TSharedRef<SWidget> SSmvShell::Loading()
 				+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).Text(Tx(TEXT("load.fail.menu"))).OnClick([F]() { if (F.IsValid()) F->EndFlight(TEXT("abort")); })]
 			]
 		];
+	TSharedRef<SWidget> Sat = V->bSatBg ? SatThumb(Dr.Track.Lat, Dr.Track.Lon, 1600.f, 900.f, true) : SNullWidget::NullWidget;
 	return SNew(SOverlay)
+		+ SOverlay::Slot()[Sat]
 		+ SOverlay::Slot()[C]
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)[FailBox]
 		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(0, 40, 56, 0)[Cancel];
@@ -3016,6 +3018,8 @@ FSmvLoadView SSmvShell::MakeLoadView(const FSmvTrack& Track, const FString& Game
 	V.Tod = Track.TimeOfDay;
 	V.T0 = FPlatformTime::Seconds();
 	V.Seed = GetTypeHash(Track.WorldMode + Track.Name);
+	// gerçek dünya parkuru: önizleme görseli yok → konumun uydu haritası (SatThumb) arkada kayar ("en azından harita görünsün" — kullanıcı 2026-10-29)
+	V.bSatBg = !Fm && (Track.ParkurKind == TEXT("real") || Track.WorldMode == TEXT("real") || Track.WorldMode == TEXT("google3d")) && (Track.Lat != 0.0 || Track.Lon != 0.0);
 	return V;
 }
 
@@ -3030,8 +3034,14 @@ void SSmvShell::PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindo
 	const double T = FPlatformTime::Seconds() - T0;
 	const float K = FMath::Clamp(H / 900.f, 0.6f, 2.f);   // çözünürlük ölçeği
 	// ---- arka plan: opak taban + harita görseli (kaplayacak biçimde, Ken Burns yakınlaşması) ya da saate göre gök degradesi ----
-	DrBox(Out, L, G, FVector2D::ZeroVector, Sz, Hex(0x040811), nullptr);
-	if (Bg.IsValid() && Bg->ImageSize.X > 1 && Bg->ImageSize.Y > 1)
+	if (V.bSatBg)
+	{
+		// uydu haritası alttaki katmanda; metin ve aşama kartı okunsun diye hafif karartma
+		DrGradient(Out, L + 1, G, FVector2D::ZeroVector, Sz, { { 0.f, FLinearColor(0.f, 0.f, 0.02f, 0.25f) }, { 1.f, FLinearColor(0.f, 0.f, 0.02f, 0.55f) } }, true);
+	}
+	else DrBox(Out, L, G, FVector2D::ZeroVector, Sz, Hex(0x040811), nullptr);
+	if (V.bSatBg) {}
+	else if (Bg.IsValid() && Bg->ImageSize.X > 1 && Bg->ImageSize.Y > 1)
 	{
 		const float Ia = (float)(Bg->ImageSize.X / Bg->ImageSize.Y), Sa = W / FMath::Max(1.f, H);
 		float Uw = 1.f, Vh = 1.f;
