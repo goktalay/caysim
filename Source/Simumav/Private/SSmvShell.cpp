@@ -3025,6 +3025,8 @@ FSmvLoadView SSmvShell::MakeLoadView(const FSmvTrack& Track, const FString& Game
 
 void SSmvShell::PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindowElementList& Out, int32 L)
 {
+	// yükleme ekranı hep koyu (görsel + karartma): yazılar temadan bağımsız açık renk — açık temada Fg/Dim/Mute koyulaşıp okunmuyordu
+	const FLinearColor LFg(0.93f, 0.95f, 0.98f, 1.f), LDim(0.78f, 0.82f, 0.88f, 1.f), LMute(0.62f, 0.67f, 0.75f, 1.f);
 	static const TCHAR* TipKeys[] = { TEXT("tip.1"), TEXT("tip.2"), TEXT("tip.3"), TEXT("tip.4"), TEXT("tip.5"), TEXT("tip.6"), TEXT("tip.7"), TEXT("tip.8") };
 	const TSharedPtr<FSlateBrush>& Bg = V.Bg;
 	const FString& MapName = V.MapName; const FString& Mode = V.Mode; const FString& Sub = V.Sub; const FString& Tod = V.Tod;
@@ -3088,7 +3090,7 @@ void SSmvShell::PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindo
 	// ---- üst sol: marka + başlık ----
 	const float X0 = 72.f * K;
 	DrText(Out, L + 8, G, TEXT("SIMUMAV"), FVector2D(X0, 58.f * K), SmvUi::Font(FMath::RoundToInt(15 * K), "Black", 420), Accent(), -1);
-	DrText(Out, L + 8, G, SmvUpper(FSmvI18n::T(TEXT("loading.title")).ToString()), FVector2D(X0, 84.f * K), SmvUi::Font(FMath::RoundToInt(11 * K), "Bold", 220), Dim(), -1);
+	DrText(Out, L + 8, G, SmvUpper(FSmvI18n::T(TEXT("loading.title")).ToString()), FVector2D(X0, 84.f * K), SmvUi::Font(FMath::RoundToInt(11 * K), "Bold", 220), LDim, -1);
 	// ---- sol alt: oyun türü rozeti, harita adı, alt satır ----
 	const float Yb = H - 300.f * K;
 	{
@@ -3098,7 +3100,7 @@ void SSmvShell::PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindo
 		DrText(Out, L + 9, G, Mode, FVector2D(X0 + 12.f * K, Yb), Cf, Accent(), -1);
 	}
 	DrText(Out, L + 8, G, MapName, FVector2D(X0, Yb + 52.f * K), SmvUi::Font(FMath::RoundToInt(46 * K), "Black"), FLinearColor::White, -1);
-	DrText(Out, L + 8, G, Sub, FVector2D(X0, Yb + 100.f * K), SmvUi::Font(FMath::RoundToInt(15 * K), "Regular"), Fg().CopyWithNewOpacity(0.85f), -1);
+	DrText(Out, L + 8, G, Sub, FVector2D(X0, Yb + 100.f * K), SmvUi::Font(FMath::RoundToInt(15 * K), "Regular"), LFg.CopyWithNewOpacity(0.85f), -1);
 	// ---- aşamalar ----
 	const FSmvLoadGate* Gt = V.Gate;
 	const bool bGate = Gt && Gt->IsActive();
@@ -3127,23 +3129,23 @@ void SSmvShell::PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindo
 			}
 			else
 			{
-				DrArc(Out, L + 9, G, Ic, 8.f * K, 0.f, 360.f, Fg().CopyWithNewOpacity(0.18f), 2.f * K);
+				DrArc(Out, L + 9, G, Ic, 8.f * K, 0.f, 360.f, LFg.CopyWithNewOpacity(0.18f), 2.f * K);
 				if (St.Progress > 0.f || bCur) DrArc(Out, L + 10, G, Ic, 8.f * K, -90.f, -90.f + 360.f * FMath::Max(0.08f, St.Progress), Accent(), 2.5f * K);
 				if (bCur) { const float A = (float)FMath::Fmod(T * 300.0, 360.0); DrArc(Out, L + 10, G, Ic, 12.f * K, A, A + 70.f, Accent().CopyWithNewOpacity(0.5f), 1.5f * K); }
 			}
-			const FLinearColor Nc = St.bDone ? Fg() : bCur ? FLinearColor::White : Dim();
+			const FLinearColor Nc = St.bDone ? LFg : bCur ? FLinearColor::White : LDim;
 			DrText(Out, L + 9, G, FSmvI18n::T(FSmvLoadGate::StageKey((ESmvLoad)i)).ToString(), FVector2D(Px + 54.f * K, Y - 7.f * K), SmvUi::Font(FMath::RoundToInt(13 * K), bCur ? "Bold" : "Regular"), Nc, -1);
 			if (!St.Detail.IsEmpty() && (bCur || !St.bDone))
-				DrText(Out, L + 9, G, St.Detail, FVector2D(Px + 54.f * K, Y + 10.f * K), SmvUi::Font(FMath::RoundToInt(10 * K), "Regular"), Mute(), -1);
+				DrText(Out, L + 9, G, St.Detail, FVector2D(Px + 54.f * K, Y + 10.f * K), SmvUi::Font(FMath::RoundToInt(10 * K), "Regular"), LMute, -1);
 			const FString Pc = St.bDone ? (St.bTimeout ? FString(TEXT("—")) : FSmvI18n::Format(TEXT("load.secs"), { { TEXT("n"), FString::Printf(TEXT("%.1f"), St.DoneAt) } }).ToString()) : FString::Printf(TEXT("%%%d"), FMath::RoundToInt(St.Progress * 100.f));
-			DrText(Out, L + 9, G, Pc, FVector2D(Px + Pw - 22.f * K, Y), SmvUi::Font(FMath::RoundToInt(11 * K), "Bold"), St.bDone ? Mute() : Accent(), 1);
+			DrText(Out, L + 9, G, Pc, FVector2D(Px + Pw - 22.f * K, Y), SmvUi::Font(FMath::RoundToInt(11 * K), "Bold"), St.bDone ? LMute : Accent(), 1);
 			Y += Rh;
 		}
 	}
 	// ---- alt: ilerleme çubuğu + yüzde + şu anki aşama + süre ----
 	const float P = bGate ? Gt->Overall() : FMath::Clamp((float)(T / 30.0), 0.f, 0.9f);
 	const float By = H - 64.f * K, Bx = X0, Bw = W - X0 * 2.f, Bh = 6.f * K;
-	DrBox(Out, L + 8, G, FVector2D(Bx, By), FVector2D(Bw, Bh), Fg().CopyWithNewOpacity(0.12f), Round(3.f));
+	DrBox(Out, L + 8, G, FVector2D(Bx, By), FVector2D(Bw, Bh), LFg.CopyWithNewOpacity(0.12f), Round(3.f));
 	DrGradient(Out, L + 9, G, FVector2D(Bx, By), FVector2D(FMath::Max(Bh, Bw * P), Bh), { { 0.f, Accent2() }, { 1.f, Accent() } }, false);
 	{
 		const float Sx = Bx + Bw * P;
@@ -3159,11 +3161,11 @@ void SSmvShell::PaintLoad(const FSmvLoadView& V, const FGeometry& G, FSlateWindo
 	}
 	else Now = V.Status;
 	const int32 Dots = (int32)(T * 2.0) % 4;
-	DrText(Out, L + 9, G, Now + FString::ChrN(Dots, TEXT('.')), FVector2D(Bx, By - 22.f * K), SmvUi::Font(FMath::RoundToInt(13 * K), "Bold"), Fg(), -1);
-	DrText(Out, L + 9, G, FSmvI18n::Format(TEXT("load.secs"), { { TEXT("n"), FString::Printf(TEXT("%.0f"), bGate ? Gt->Elapsed() : T) } }).ToString(), FVector2D(Bx + Bw - 110.f * K, By - 20.f * K), SmvUi::Font(FMath::RoundToInt(11 * K), "Regular"), Mute(), 1);
+	DrText(Out, L + 9, G, Now + FString::ChrN(Dots, TEXT('.')), FVector2D(Bx, By - 22.f * K), SmvUi::Font(FMath::RoundToInt(13 * K), "Bold"), LFg, -1);
+	DrText(Out, L + 9, G, FSmvI18n::Format(TEXT("load.secs"), { { TEXT("n"), FString::Printf(TEXT("%.0f"), bGate ? Gt->Elapsed() : T) } }).ToString(), FVector2D(Bx + Bw - 110.f * K, By - 20.f * K), SmvUi::Font(FMath::RoundToInt(11 * K), "Regular"), LMute, 1);
 	// ipucu
 	const int32 Ti = (int32)(FPlatformTime::Seconds() / 7.0) % 8;
-	DrText(Out, L + 9, G, FSmvI18n::T(TipKeys[Ti]).ToString(), FVector2D(X0, Yb + 140.f * K), SmvUi::Font(FMath::RoundToInt(12 * K), "Regular"), Dim(), -1);
+	DrText(Out, L + 9, G, FSmvI18n::T(TipKeys[Ti]).ToString(), FVector2D(X0, Yb + 140.f * K), SmvUi::Font(FMath::RoundToInt(12 * K), "Regular"), LDim, -1);
 }
 
 TSharedRef<SWidget> SSmvShell::FlightPause()
