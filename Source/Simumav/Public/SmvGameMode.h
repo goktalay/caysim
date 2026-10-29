@@ -102,6 +102,10 @@ protected:
 	void SpawnCityStreetscape(double Cell, double Road);
 	bool bCityWindowsDone = false;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> Drone;
+	/** uçuş mini haritası yakalaması (açıkken kurulur) */
+	UPROPERTY() TObjectPtr<class ASmvMapCam> MapCam;
+	bool bMapWorldOff = false;
+	void UpdateMap(FSmvFlightUiState& U);
 	/** Oyun türü mantığı (yük bırakma / ilaçlama / tesis ve gemi savunma; SmvGameRulesActor) */
 	UPROPERTY() TObjectPtr<class ASmvGameRulesActor> Rules;
 	UPROPERTY() TArray<TObjectPtr<ASmvGateActor>> Gates;

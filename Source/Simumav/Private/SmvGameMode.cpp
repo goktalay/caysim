@@ -16,6 +16,9 @@
 #include "SmvMotorSynth.h"
 #include "SmvI18n.h"
 #include "SmvKitYard.h"
+#include "SmvMapCam.h"
+#include "Misc/App.h"
+#include "Engine/GameViewportClient.h"
 #include "SSmvShell.h"
 #include "SSmvFlightUi.h"
 #include "SmvMenuScene.h"
@@ -787,6 +790,9 @@ void ASmvGameMode::StopScene()
 	bJetHudTried = false;
 	if (FlightUiHost.IsValid() && GEngine && GEngine->GameViewport) GEngine->GameViewport->RemoveViewportWidgetContent(FlightUiHost.ToSharedRef());
 	FlightUiHost.Reset();
+	if (MapCam) { MapCam->Destroy(); MapCam = nullptr; }
+	if (bMapWorldOff && GEngine && GEngine->GameViewport) GEngine->GameViewport->bDisableWorldRendering = false;
+	bMapWorldOff = false;
 	FlightUi.Reset();
 	for (TObjectPtr<ASmvGateActor>& G : Gates) if (G) G->Destroy();
 	for (TObjectPtr<ASmvDroneActor>& G : Ghosts) if (G) G->Destroy();
@@ -2167,6 +2173,7 @@ void ASmvGameMode::UpdateHud()
 		U.Pip = PipRt;
 		U.PipLabel = ASmvPilotPawn::ModeLabel(ESmvCamMode::Gimbal);
 		UpdateSite(U);
+		UpdateMap(U);
 		if (Sock && Link() && Link()->LastExtra().WindSpd > 0.0) Sock->SetWind((float)Link()->LastExtra().WindSpd, (float)Link()->LastExtra().WindDir);
 		FlightUi->SetState(U);
 	}
@@ -3423,6 +3430,63 @@ void ASmvGameMode::CrashFx()
 		A->SetActorScale3D(FVector(Sz, Sz * FMath::FRandRange(0.5f, 1.5f), Sz * 0.4f));
 		Debris.Add(A);
 		DebrisVel.Add(FVector(FMath::FRandRange(-600.f, 600.f), FMath::FRandRange(-600.f, 600.f), FMath::FRandRange(200.f, 900.f)));
+	}
+}
+
+void ASmvGameMode::UpdateMap(FSmvFlightUiState& U)
+{
+	const bool bOn = FlightUi.IsValid() && FlightUi->IsMapOn() && Drone && !bPauseMenu;
+	const bool bBig = bOn && FlightUi->IsMapBig();
+	// büyük harita: ana görünüm çizilmez (simülasyon kaybolur; kamera küçük pencerede yakalanır)
+	if (bBig != bMapWorldOff)
+	{
+		bMapWorldOff = bBig;
+		if (GEngine && GEngine->GameViewport) GEngine->GameViewport->bDisableWorldRendering = bBig;
+	}
+	if (!bOn)
+	{
+		if (MapCam) { MapCam->Destroy(); MapCam = nullptr; }
+		return;
+	}
+	UWorld* W = GetWorld();
+	if (!MapCam && W)
+	{
+		FActorSpawnParameters P;
+		P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		MapCam = W->SpawnActor<ASmvMapCam>(ASmvMapCam::StaticClass(), FTransform::Identity, P);
+	}
+	if (!MapCam) return;
+	FVector VL = Drone->GetActorLocation(); FRotator VR = Drone->GetActorRotation(); float VF = 90.f;
+	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+		if (PC->PlayerCameraManager) { PC->PlayerCameraManager->GetCameraViewPoint(VL, VR); VF = PC->PlayerCameraManager->GetFOVAngle(); }
+	MapCam->Step(FApp::GetDeltaTime(), Drone->GetActorLocation(), FSmvUiPrefs::Get().MapRangeM, bBig, bBig, VL, VR, VF);
+	U.MapRt = MapCam->GetMapTarget();
+	U.ViewRt = bBig ? MapCam->GetViewTarget() : nullptr;
+	auto Mark = [this, &U](const FVector& Wp, float Hdg, int32 Kind, const FString& Label)
+	{
+		FSmvFlightUiState::FMapMark M;
+		if (!MapCam->Project(Wp, M.Uv)) return;
+		M.Hdg = Hdg; M.Kind = Kind; M.Label = Label;
+		U.MapMarks.Add(M);
+	};
+	// ev (kalkış noktası), rakipler / botlar, en son kendi dron (üstte çizilsin)
+	if (WorldSetup && (Req.Track.Lat != 0.0 || Req.Track.Lon != 0.0))
+		Mark(WorldSetup->GeoToUnreal(Req.Track.Lon, Req.Track.Lat, WorldSetup->MslToWorldHeight(Req.Track.Lat, Req.Track.Lon, GroundMsl)), 0.f, 2, TEXT("H"));
+	for (int32 i = 0; i < Ghosts.Num(); ++i)
+		if (Ghosts[i]) Mark(Ghosts[i]->GetActorLocation(), (float)Ghosts[i]->GetActorRotation().Yaw + 90.f, 1, FString::Printf(TEXT("P%d"), i + 2));
+	Mark(Drone->GetActorLocation(), Link() ? Link()->LastTele().Heading : (float)Drone->GetActorRotation().Yaw + 90.f, 0, FString());
+	// otopilottaki görev (Mission Planner ile yüklenen dahil): kısık çizgi
+	if (Link() && WorldSetup && Link()->Mission().Num())
+	{
+		const FCaySimTelemetry& T = Link()->LastTele();
+		const double HomeMsl = T.AltMsl - T.AltRel;
+		for (const FSmvMissionWp& Wp : Link()->Mission())
+		{
+			const double Msl = Wp.Frame == 0 ? (double)Wp.Alt : HomeMsl + Wp.Alt;
+			FVector2D Uv;
+			if (MapCam->Project(WorldSetup->GeoToUnreal(Wp.Lon, Wp.Lat, WorldSetup->MslToWorldHeight(Wp.Lat, Wp.Lon, Msl)), Uv)) U.MapPath.Add(Uv);
+		}
+		U.MapPathCur = Link()->MissionCurrent();
 	}
 }
 

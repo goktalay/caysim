@@ -554,6 +554,7 @@ bool USmvLocalFlightLink::OnTick(float /*Dt*/)
 			SendFrame(SmvMav::MSG_HEARTBEAT, P.data(), (int32)P.size());
 		}
 		if (W - LastStreamRefresh >= 3.0) { LastStreamRefresh = W; RequestStreams(false); if (!bHomeKnown) CommandLong(SmvMav::CMD_REQUEST_MESSAGE, 242.f); }
+		TickMission(W);
 		if (Session->WindGust > 0 && W - LastGust >= 1.0)
 		{
 			LastGust = W;
@@ -609,10 +610,41 @@ void USmvLocalFlightLink::RequestStreams(bool bFull)
 	for (const auto& X : Iv) CommandLong(SmvMav::CMD_SET_MESSAGE_INTERVAL, X.Id, X.Us);
 }
 
+void USmvLocalFlightLink::MissionRequestList()
+{
+	SmvMav::FWriter Wr; Wr.U8(TargetSys); Wr.U8(TargetComp); Wr.U8(0);
+	SendFrame(SmvMav::MSG_MISSION_REQUEST_LIST, Wr.B.data(), (int32)Wr.B.size());
+	MissionReqAt = FPlatformTime::Seconds();
+}
+
+void USmvLocalFlightLink::MissionRequestItem(int32 SeqNo)
+{
+	SmvMav::FWriter Wr; Wr.U16((uint16)SeqNo); Wr.U8(TargetSys); Wr.U8(TargetComp); Wr.U8(0);
+	SendFrame(SmvMav::MSG_MISSION_REQUEST_INT, Wr.B.data(), (int32)Wr.B.size());
+	MissionItemAt = FPlatformTime::Seconds();
+}
+
+void USmvLocalFlightLink::TickMission(double Wall)
+{
+	// indirme sürüyor: öğe 2 sn içinde gelmezse yeniden iste (3 deneme), sonra bırak (bir sonraki değişiklikte yeniden)
+	if (bMissionDl)
+	{
+		if (Wall - MissionItemAt > 2.0)
+		{
+			if (++MissionTries > 3) { bMissionDl = false; UE_LOG(LogSimumav, Warning, TEXT("Otopilot görevi indirilemedi (öğe %d)"), MissionNext); }
+			else MissionRequestItem(MissionNext);
+		}
+		return;
+	}
+	// bağlantı sonrası bir kez + görev değişince (MISSION_CURRENT toplamı); Mission Planner aktarımıyla çakışmasın diye sürekli yoklama yok
+	if (bMissionReq && Wall - MissionReqAt > 1.5) { bMissionReq = false; MissionRequestList(); }
+}
+
 void USmvLocalFlightLink::OnFirstHeartbeat()
 {
 	bHeartbeatSeen = true;
 	LastStreamRefresh = LastGcsHb = FPlatformTime::Seconds();
+	bMissionReq = true;   // otopilottaki görev (mini harita)
 	RequestStreams(true);
 	CommandLong(SmvMav::CMD_REQUEST_MESSAGE, 242.f);
 	for (int32 i = 1; i <= 16; ++i)
@@ -772,6 +804,57 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		{
 			bMotorCut = false;
 			EmitEvent(TEXT("Motor kesme reddedildi (DO_AUX_FUNCTION)."), 4);
+		}
+		break;
+	}
+	case SmvMav::MSG_MISSION_CURRENT:
+	{
+		SmvMav::FReader Rd(F.Payload);
+		MissionCur = Rd.U16();
+		const int32 Total = F.Payload.size() >= 4 ? (int32)Rd.U16() : -1;
+		// görev değişti (Mission Planner yükledi / temizledi): sayı farklıysa yeniden indir
+		if (Total >= 0 && Total != MissionTotalSeen) { MissionTotalSeen = Total; if (!bMissionDl) bMissionReq = true; }
+		break;
+	}
+	case SmvMav::MSG_MISSION_COUNT:
+	{
+		SmvMav::FReader Rd(F.Payload);
+		const int32 N = Rd.U16();
+		Rd.U8(); Rd.U8();
+		const uint8 Type = F.Payload.size() >= 5 ? Rd.U8() : 0;
+		if (Type != 0) break;
+		MissionWant = N;
+		MissionTmp.Reset();
+		if (N <= 0) { bMissionDl = false; MissionWps.Reset(); ++MissionVer; break; }
+		bMissionDl = true; MissionNext = 0; MissionTries = 0;
+		MissionRequestItem(0);
+		break;
+	}
+	case SmvMav::MSG_MISSION_ITEM_INT:
+	{
+		if (!bMissionDl) break;
+		SmvMav::FReader Rd(F.Payload);
+		FSmvMissionWp Wp;
+		Rd.F32(); Rd.F32(); Rd.F32(); Rd.F32();
+		const int32 X = Rd.I32(), Y = Rd.I32();
+		Wp.Alt = Rd.F32();
+		Wp.Seq = Rd.U16(); Wp.Cmd = Rd.U16();
+		Rd.U8(); Rd.U8();
+		Wp.Frame = Rd.U8();
+		if (Wp.Seq != MissionNext) break;   // yinelenen / sırasız öğe
+		Wp.Lat = X / 1e7; Wp.Lon = Y / 1e7;
+		MissionTmp.Add(Wp);
+		MissionNext = Wp.Seq + 1; MissionTries = 0;
+		if (MissionNext < MissionWant) MissionRequestItem(MissionNext);
+		else
+		{
+			// bitti: onay (MAV_MISSION_ACCEPTED) + yalnız konumlu noktalar (0 = ev; 0,0 konumlu komutlar çizilmez)
+			SmvMav::FWriter Wr; Wr.U8(TargetSys); Wr.U8(TargetComp); Wr.U8(0); Wr.U8(0);
+			SendFrame(SmvMav::MSG_MISSION_ACK, Wr.B.data(), (int32)Wr.B.size());
+			MissionWps.Reset();
+			for (const FSmvMissionWp& M : MissionTmp) if (M.Seq > 0 && (M.Lat != 0.0 || M.Lon != 0.0)) MissionWps.Add(M);
+			bMissionDl = false; ++MissionVer;
+			UE_LOG(LogSimumav, Log, TEXT("Otopilot görevi indirildi: %d öğe, %d konumlu nokta"), MissionWant, MissionWps.Num());
 		}
 		break;
 	}

@@ -46,6 +46,11 @@ void FSmvUiPrefs::Load()
 	GConfig->GetString(GSmvPrefsSection, TEXT("AlertLevel"), AlertLevel, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("ThermalPalette"), ThermalPalette, Ini);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
+	GConfig->GetBool(GSmvPrefsSection, TEXT("Map"), bMap, Ini);
+	for (TPair<const TCHAR*, float*> Kv : { TPair<const TCHAR*, float*>(TEXT("MapL"), &MapL), TPair<const TCHAR*, float*>(TEXT("MapT"), &MapT), TPair<const TCHAR*, float*>(TEXT("MapW"), &MapW),
+		TPair<const TCHAR*, float*>(TEXT("MapRangeM"), &MapRangeM), TPair<const TCHAR*, float*>(TEXT("ViewW"), &ViewW), TPair<const TCHAR*, float*>(TEXT("ViewR"), &ViewR), TPair<const TCHAR*, float*>(TEXT("ViewB"), &ViewB) })
+		GConfig->GetFloat(GSmvPrefsSection, Kv.Key, *Kv.Value, Ini);
+	MapRangeM = FMath::Clamp(MapRangeM, 80.f, 20000.f);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PanelR"), PanelR, Ini);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PanelT"), PanelT, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("PanelMin"), bPanelMin, Ini);
@@ -98,6 +103,10 @@ void FSmvUiPrefs::Save()
 	GConfig->SetString(GSmvPrefsSection, TEXT("AlertLevel"), *AlertLevel, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("ThermalPalette"), *ThermalPalette, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
+	GConfig->SetBool(GSmvPrefsSection, TEXT("Map"), bMap, Ini);
+	for (TPair<const TCHAR*, float> Kv : { TPair<const TCHAR*, float>(TEXT("MapL"), MapL), TPair<const TCHAR*, float>(TEXT("MapT"), MapT), TPair<const TCHAR*, float>(TEXT("MapW"), MapW),
+		TPair<const TCHAR*, float>(TEXT("MapRangeM"), MapRangeM), TPair<const TCHAR*, float>(TEXT("ViewW"), ViewW), TPair<const TCHAR*, float>(TEXT("ViewR"), ViewR), TPair<const TCHAR*, float>(TEXT("ViewB"), ViewB) })
+		GConfig->SetFloat(GSmvPrefsSection, Kv.Key, Kv.Value, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PanelR"), PanelR, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PanelT"), PanelT, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("PanelMin"), bPanelMin, Ini);

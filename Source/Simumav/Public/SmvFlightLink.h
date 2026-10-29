@@ -23,6 +23,9 @@ struct FSmvRangeScan
 	float ProxMaxM = 30.f;
 };
 
+/** Otopilot görev noktası (MISSION_ITEM_INT; mini harita) */
+struct FSmvMissionWp { double Lat = 0, Lon = 0; float Alt = 0; uint16 Cmd = 16; uint16 Seq = 0; uint8 Frame = 3; };
+
 UCLASS(Abstract)
 class SIMUMAV_API USmvFlightLink : public UObject
 {
@@ -51,6 +54,11 @@ public:
 	/** Fizik sensörleri otopilota iletilebiliyor mu (yalnız yerel SITL: MAVLink DISTANCE_SENSOR / OBSTACLE_DISTANCE). */
 	virtual bool AcceptsRangeSensors() const { return false; }
 	virtual void SendRangeSensors(const FSmvRangeScan& /*Scan*/) {}
+	/** Otopilotta yüklü görev (mini harita çizimi): konumlu noktalar sırayla; sürüm her yeni indirmede artar. Yoksa boş. */
+	virtual const TArray<FSmvMissionWp>& Mission() const { static const TArray<FSmvMissionWp> None; return None; }
+	virtual int32 MissionVersion() const { return 0; }
+	/** Şu anki görev noktası (MISSION_CURRENT; −1 bilinmiyor) */
+	virtual int32 MissionCurrent() const { return -1; }
 
 	const FSmvFlightInfo& Info() const { return FlightInfo; }
 	const FSmvFlightRequest& RequestData() const { return Req; }

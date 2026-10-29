@@ -31,6 +31,13 @@ namespace SmvMav
 		{ MSG_HOME_POSITION, 104, 60 },
 		{ MSG_EXTENDED_SYS_STATE, 130, 2 },
 		{ MSG_STATUSTEXT, 83, 54 },
+		// görev protokolü (common.xml; azami uzunluk MAVLink 2 uzantılarıyla: mission_id / opaque_id)
+		{ MSG_MISSION_CURRENT, 28, 18 },
+		{ MSG_MISSION_REQUEST_LIST, 132, 3 },
+		{ MSG_MISSION_COUNT, 221, 9 },
+		{ MSG_MISSION_ACK, 153, 8 },
+		{ MSG_MISSION_REQUEST_INT, 196, 5 },
+		{ MSG_MISSION_ITEM_INT, 38, 38 },
 		{ MSG_OBSTACLE_DISTANCE, 23, 167 },
 	};
 

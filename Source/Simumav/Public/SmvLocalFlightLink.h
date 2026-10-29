@@ -94,6 +94,19 @@ private:
 	void RequestStreams(bool bFull);
 	bool bStreamFallback = false;
 	double LastStreamRefresh = 0, LastGcsHb = 0, LastGust = 0;
+	// ---- görev indirme (MISSION_REQUEST_LIST → COUNT → REQUEST_INT / ITEM_INT … → ACK); bağlantıda ve görev değişince ----
+	TArray<FSmvMissionWp> MissionWps, MissionTmp;
+	int32 MissionVer = 0, MissionCur = -1, MissionTotalSeen = -1, MissionWant = 0, MissionNext = 0, MissionTries = 0;
+	bool bMissionDl = false, bMissionReq = false;
+	double MissionReqAt = 0, MissionItemAt = 0;
+	void MissionRequestList();
+	void MissionRequestItem(int32 Seq);
+	void TickMission(double Wall);
+public:
+	virtual const TArray<FSmvMissionWp>& Mission() const override { return MissionWps; }
+	virtual int32 MissionVersion() const override { return MissionVer; }
+	virtual int32 MissionCurrent() const override { return MissionCur; }
+private:
 	void ParamSet(const FString& Name, float Value, uint8 Type = 9);
 	void CommandLong(uint16 Cmd, float P1 = 0, float P2 = 0, float P3 = 0, float P4 = 0, float P5 = 0, float P6 = 0, float P7 = 0);
 	bool SetMode(const FString& Name);

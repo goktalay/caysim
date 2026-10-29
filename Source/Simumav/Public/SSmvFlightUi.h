@@ -36,6 +36,13 @@ struct FSmvFlightUiState
 	/** PiP (gimbal kamerası) render hedefi — sürüklenebilir / boyutlandırılabilir pencere */
 	class UTextureRenderTarget2D* Pip = nullptr;
 	FString PipLabel;
+	/** 3B mini harita (ASmvMapCam): görüntü, büyük kipte oyuncu kamera görünümü, işaretler (0..1 görüntü konumu) ve görev çizgisi */
+	class UTextureRenderTarget2D* MapRt = nullptr;
+	class UTextureRenderTarget2D* ViewRt = nullptr;
+	struct FMapMark { FVector2D Uv = FVector2D::ZeroVector; float Hdg = 0.f; int32 Kind = 0; FString Label; };   // Kind 0 dron, 1 rakip, 2 ev
+	TArray<FMapMark> MapMarks;
+	TArray<FVector2D> MapPath;
+	int32 MapPathCur = -1;
 	FString ModeKind = TEXT("copter");   // copter | plane | vtol | icept | rover
 	bool bTele = false, bFresh = false, bArmed = false, bMotorCut = false, bGcs = false, bHasHome = false, bPlane = false, bRover = false;
 	FString Mode;
@@ -110,6 +117,11 @@ public:
 	void ConfirmRadial();
 	void CloseRadial() { bModeMenu = false; }
 	void ToggleCockpit();
+	/** mini harita açık mı / büyük harita kipi (simülasyon görüntüsü gizli, kamera küçük pencerede) */
+	bool IsMapOn() const;
+	bool IsMapBig() const { return bMapBig; }
+	void ToggleMap();
+	void SetMapBig(bool bOn);
 	bool IsPanelOn() const { return bPanel; }
 	/** Tam ekran renk parlaması (çarpma vb.; ~0.9 sn'de söner) */
 	void Flash(const FLinearColor& C) { FlashC = C; FlashAt = FPlatformTime::Seconds(); }
@@ -147,6 +159,14 @@ private:
 	TSharedRef<SWidget> WindCard();
 	TSharedRef<SWidget> FpvBar();
 	TSharedRef<SWidget> PipWindow();
+	TSharedRef<SWidget> MapWindow();
+	TSharedRef<SWidget> MapBigView();
+	TSharedRef<SWidget> ViewWindow();
+	void PaintMapMarks(const FGeometry& G, FSlateWindowElementList& Out, int32 L, const FVector2D& Org, const FVector2D& Sz) const;
+	bool bMapBig = false;
+	int32 MapDragMode = 0, ViewDragMode = 0;
+	FVector2D MapDragAbs, MapStart, ViewDragAbs, ViewStart;
+	FSlateBrush MapBrush, ViewBrush;
 	TSharedRef<SWidget> ReplayBar();
 	TSharedRef<SWidget> RecChip();
 	/** Grafik ▾ açılır menüsü (web flightsim_gfx_ui): ön ayar, canlı FPS, kare hızı sınırı, köşe FPS sayacı */
