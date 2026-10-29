@@ -146,6 +146,8 @@ protected:
 	UPROPERTY() TObjectPtr<class UMediaTexture> BgTex;
 	UPROPERTY() TObjectPtr<class UFileMediaSource> BgSrc;
 	void StartMenuVideo();
+	/** açılışta göl yansımalı zayıf kare yerine dağ manzarasından başla (21. sn) */
+	UFUNCTION() void HandleMenuVideoOpened(FString Url);
 	UPROPERTY() TMap<FString, FSmvSpinSet> Spins;
 	UPROPERTY() TObjectPtr<AActor> SpinSubject;
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> SpinFig;

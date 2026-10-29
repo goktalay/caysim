@@ -167,7 +167,9 @@ try {
 
 	# ---------------- c) VaultCache UE paketleri ----------------
 	if (Test-Path -LiteralPath $Vault) {
-		foreach ($v in (Get-ChildItem -LiteralPath $Vault -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' })) {
+		foreach ($v in (Get-ChildItem -LiteralPath $Vault -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'FabLibrary' -and $_.Name -notmatch '^CitySample_' })) {
+			# CitySample_<surum>: Epic'in tam ornek projesi (paket degil; ~100 GB) - icerigi projeye alinmaz. 'City' klasoru Modern City
+			# paketinin /Game/City'siyle cakisiyor ve onun yerine geciyordu (2026-10-29)
 			$dc = Join-Path $v.FullName 'data\Content'
 			if (Test-Path -LiteralPath $dc) {
 				Bilgi "VaultCache paketi: $($v.Name)"

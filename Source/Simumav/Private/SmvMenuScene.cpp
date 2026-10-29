@@ -189,9 +189,15 @@ void ASmvMenuScene::StartMenuVideo()
 	BgTex->UpdateResource();
 	BgSrc = NewObject<UFileMediaSource>(this, TEXT("SmvMenuVideoSrc"));
 	BgSrc->SetFilePath(Path);
+	BgPlayer->OnMediaOpened.AddDynamic(this, &ASmvMenuScene::HandleMenuVideoOpened);
 	const bool bOk = BgPlayer->OpenSource(BgSrc);
 	UE_LOG(LogSimumav, Log, TEXT("Menü videosu: %s %s"), *Path, bOk ? TEXT("açılıyor") : TEXT("AÇILAMADI — canlı sahne"));
 	if (!bOk) { BgPlayer = nullptr; BgTex = nullptr; BgSrc = nullptr; }
+}
+
+void ASmvMenuScene::HandleMenuVideoOpened(FString Url)
+{
+	if (BgPlayer && BgPlayer->SupportsSeeking()) BgPlayer->Seek(FTimespan::FromSeconds(21.0));
 }
 
 UTexture* ASmvMenuScene::GetMenuVideo() const { return IsMenuVideoPlaying() ? BgTex.Get() : nullptr; }
@@ -1045,7 +1051,8 @@ void ASmvMenuScene::TickScenery()
 	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	// Fab haritası "havada ada" ise çevresine arazi diski + uzak dağlar (uçuştakiyle aynı: ASmvScenery::BuildSurround)
 	const FSmvMapDef* Def = bFabMap ? FSmvMapRegistry::Find(MapKey) : nullptr;
-	if (Def && Def->FenceM >= 0.0) FSmvScenery::HideOutsideSite(MenuLevels(), 3000.0);
+	// yalnız küçük sahalar (çit < 10 m: Yıkık İnşaat, Askerî Üs, Rafineri); büyük açık haritalarda (Karakol, Adalar) arazinin kendisi oyun alanı
+	if (Def && Def->FenceM >= 0.0 && Def->FenceM < 10.0) FSmvScenery::HideOutsideSite(MenuLevels(), 3000.0);
 	if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
 	{
 		if (ASmvScenery* Sc = W->SpawnActor<ASmvScenery>(ASmvScenery::StaticClass(), FTransform::Identity, Sp))
