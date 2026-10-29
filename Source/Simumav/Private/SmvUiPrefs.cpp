@@ -48,7 +48,7 @@ void FSmvUiPrefs::Load()
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("Map"), bMap, Ini);
 	for (TPair<const TCHAR*, float*> Kv : { TPair<const TCHAR*, float*>(TEXT("MapL"), &MapL), TPair<const TCHAR*, float*>(TEXT("MapT"), &MapT), TPair<const TCHAR*, float*>(TEXT("MapW"), &MapW),
-		TPair<const TCHAR*, float*>(TEXT("MapRangeM"), &MapRangeM), TPair<const TCHAR*, float*>(TEXT("ViewW"), &ViewW), TPair<const TCHAR*, float*>(TEXT("ViewR"), &ViewR), TPair<const TCHAR*, float*>(TEXT("ViewB"), &ViewB) })
+		TPair<const TCHAR*, float*>(TEXT("MapRangeM"), &MapRangeM), TPair<const TCHAR*, float*>(TEXT("MapYaw"), &MapYaw), TPair<const TCHAR*, float*>(TEXT("MapTilt"), &MapTilt), TPair<const TCHAR*, float*>(TEXT("ViewW"), &ViewW), TPair<const TCHAR*, float*>(TEXT("ViewR"), &ViewR), TPair<const TCHAR*, float*>(TEXT("ViewB"), &ViewB) })
 		GConfig->GetFloat(GSmvPrefsSection, Kv.Key, *Kv.Value, Ini);
 	MapRangeM = FMath::Clamp(MapRangeM, 80.f, 20000.f);
 	GConfig->GetFloat(GSmvPrefsSection, TEXT("PanelR"), PanelR, Ini);
@@ -105,7 +105,7 @@ void FSmvUiPrefs::Save()
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PipW"), PipW, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("Map"), bMap, Ini);
 	for (TPair<const TCHAR*, float> Kv : { TPair<const TCHAR*, float>(TEXT("MapL"), MapL), TPair<const TCHAR*, float>(TEXT("MapT"), MapT), TPair<const TCHAR*, float>(TEXT("MapW"), MapW),
-		TPair<const TCHAR*, float>(TEXT("MapRangeM"), MapRangeM), TPair<const TCHAR*, float>(TEXT("ViewW"), ViewW), TPair<const TCHAR*, float>(TEXT("ViewR"), ViewR), TPair<const TCHAR*, float>(TEXT("ViewB"), ViewB) })
+		TPair<const TCHAR*, float>(TEXT("MapRangeM"), MapRangeM), TPair<const TCHAR*, float>(TEXT("MapYaw"), MapYaw), TPair<const TCHAR*, float>(TEXT("MapTilt"), MapTilt), TPair<const TCHAR*, float>(TEXT("ViewW"), ViewW), TPair<const TCHAR*, float>(TEXT("ViewR"), ViewR), TPair<const TCHAR*, float>(TEXT("ViewB"), ViewB) })
 		GConfig->SetFloat(GSmvPrefsSection, Kv.Key, Kv.Value, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PanelR"), PanelR, Ini);
 	GConfig->SetFloat(GSmvPrefsSection, TEXT("PanelT"), PanelT, Ini);

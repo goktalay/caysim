@@ -1129,6 +1129,19 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	{
 		// yalnız istemci tarafı (görüntü kipi / uyarı özeti oyun katmanında tutulur)
 	}
+	else if (Name == TEXT("goto"))
+	{
+		// haritadan "koordinata git": MAV_CMD_DO_REPOSITION (COMMAND_INT, kare GLOBAL_RELATIVE_ALT_INT); param2 bit 1 → kendiliğinden GUIDED
+		// (Copter ve Plane). Yalnız oyuncu komutu — otomatik güdüm yok.
+		const double Lat = SmvJson::Num(P, TEXT("lat")), Lon = SmvJson::Num(P, TEXT("lon"));
+		const float AltRel = (float)SmvJson::Num(P, TEXT("alt"), Tele.AltRel);
+		SmvMav::FWriter Wr;
+		Wr.F32(-1.f); Wr.F32(1.f); Wr.F32(0.f); Wr.F32(NAN);
+		Wr.I32((int32)FMath::RoundToInt(Lat * 1e7)); Wr.I32((int32)FMath::RoundToInt(Lon * 1e7)); Wr.F32(AltRel);
+		Wr.U16(192); Wr.U8(TargetSys); Wr.U8(TargetComp); Wr.U8(6); Wr.U8(0); Wr.U8(0);
+		SendFrame(SmvMav::MSG_COMMAND_INT, Wr.B.data(), (int32)Wr.B.size());
+		EmitEvent(FString::Printf(TEXT("Konuma git: %.6f, %.6f · %.0f m"), Lat, Lon, AltRel), 6);
+	}
 	else if (Name == TEXT("yaw"))
 	{
 		// MAV_CMD_CONDITION_YAW (115): p1 hedef yön (°, kuzeyden saat yönü), p2 dönüş hızı (°/sn), p3 yön (0 en kısa), p4 0 = mutlak (GUIDED'da)

@@ -156,6 +156,8 @@ public:
 	/** çift tık (yerel piksel) / fare tekerleği (yukarı +) */
 	TFunction<void(const FGeometry&, const FVector2D&)> OnDouble;
 	TFunction<void(float)> OnWheel;
+	/** fare üzerinde gezinirken (yakalama yokken) yerel konum; ayrılınca (−1, −1) */
+	TFunction<void(const FVector2D&)> OnHover;
 
 	void Construct(const FArguments& A) { Size = A._Size; }
 
@@ -189,8 +191,15 @@ public:
 		return FReply::Handled();
 	}
 
+	virtual void OnMouseLeave(const FPointerEvent& E) override
+	{
+		SLeafWidget::OnMouseLeave(E);
+		if (OnHover) OnHover(FVector2D(-1, -1));
+	}
+
 	virtual FReply OnMouseMove(const FGeometry& G, const FPointerEvent& E) override
 	{
+		if (OnHover && !HasMouseCapture()) OnHover(FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition())));
 		if (!OnDrag || !HasMouseCapture()) return FReply::Unhandled();
 		OnDrag(G, FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition())), 1);
 		return FReply::Handled();
@@ -522,6 +531,11 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		.Padding(TAttribute<FMargin>::CreateLambda([]() { const FSmvUiPrefs& P = FSmvUiPrefs::Get(); return FMargin(P.MapL, P.MapT, 0.f, 0.f); }))
 		[
 			MapWindow()
+		]
+		// koordinata git paneli (Ctrl + sol tık haritada)
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 90.f, 0.f, 0.f)
+		[
+			GotoPanel()
 		]
 		// PiP penceresi (sürükle: taşı · sağ alt köşe: boyut)
 		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom)
@@ -1584,6 +1598,59 @@ TSharedRef<SWidget> SSmvFlightUi::FpvBar()
 
 bool SSmvFlightUi::IsMapOn() const { return FSmvUiPrefs::Get().bMap || bMapBig; }
 
+void SSmvFlightUi::SetGotoTarget(double Lat, double Lon, bool bOk)
+{
+	GotoLat = Lat; GotoLon = Lon; bGotoOk = bOk; bGoto = true;
+	GotoAlt = FMath::Max(5.f, (float)FMath::RoundToInt(St.AltRel > 1.f ? St.AltRel : 30.f));
+}
+
+TSharedRef<SWidget> SSmvFlightUi::GotoPanel()
+{
+	using namespace SmvFuiTheme;
+	auto Tx = [](const TCHAR* K) { return TAttribute<FText>::CreateLambda([K]() { return FSmvI18n::T(K); }); };
+	auto Step = [this](float D) { return Btn(FText::FromString(FString::Printf(TEXT("%+.0f"), D)), [this, D]() { GotoAlt = FMath::Clamp(GotoAlt + D, 2.f, 3000.f); }, []() { return FLinearColor(1, 1, 1, 0.08f); }); };
+	return SNew(SBox)
+		.Visibility_Lambda([this]() { return bGoto && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })
+		.WidthOverride(380.f)
+		[
+			SNew(SBorder).BorderImage(&CardBrush).BorderBackgroundColor(FLinearColor(0.03f, 0.05f, 0.1f, 0.94f)).Padding(FMargin(16.f, 12.f))
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(Tx(TEXT("map.goto_title"))).Font(Font(13, true)).ColorAndOpacity(Accent)]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0, 6, 0, 0)
+				[
+					SNew(STextBlock).Font(Mono(10)).ColorAndOpacity(Txt)
+					.Text_Lambda([this]() { return bGotoOk ? FText::FromString(FString::Printf(TEXT("%.6f, %.6f"), GotoLat, GotoLon)) : FSmvI18n::T(TEXT("map.goto_nohit")); })
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0, 10, 0, 0)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)[SNew(STextBlock).Text(Tx(TEXT("map.goto_alt"))).Font(Font(11)).ColorAndOpacity(Dim)]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)[Step(-10.f)]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Step(-1.f)]
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+					[
+						SNew(SBox).WidthOverride(64.f).HAlign(HAlign_Center)[SNew(STextBlock).Font(Mono(13)).ColorAndOpacity(FLinearColor::White).Text_Lambda([this]() { return FText::FromString(FString::Printf(TEXT("%.0f m"), GotoAlt)); })]
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)[Step(1.f)]
+					+ SHorizontalBox::Slot().AutoWidth()[Step(10.f)]
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0, 12, 0, 0)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
+					[
+						SNew(SBox).Visibility_Lambda([this]() { return bGotoOk ? EVisibility::Visible : EVisibility::Collapsed; })
+						[
+							Btn(Tx(TEXT("map.goto_go")), [this]() { Act(TEXT("Goto"), FString::Printf(TEXT("%.7f,%.7f,%.1f"), GotoLat, GotoLon, GotoAlt)); bGoto = false; }, []() { return SmvGt::C(0x16a34a); })
+						]
+					]
+					+ SHorizontalBox::Slot().AutoWidth()[Btn(Tx(TEXT("common.cancel")), [this]() { bGoto = false; }, []() { return FLinearColor(1, 1, 1, 0.08f); })]
+				]
+			]
+		];
+}
+
 void SSmvFlightUi::ToggleMap()
 {
 	FSmvUiPrefs& P = FSmvUiPrefs::Get();
@@ -1598,7 +1665,7 @@ void SSmvFlightUi::SetMapBig(bool bOn)
 	if (bOn) { FSmvUiPrefs::Get().bMap = true; FSmvUiPrefs::Get().Save(); }
 }
 
-void SSmvFlightUi::PaintMapMarks(const FGeometry& G, FSlateWindowElementList& Out, int32 L, const FVector2D& Org, const FVector2D& Sz) const
+void SSmvFlightUi::PaintMapMarks(const FGeometry& G, FSlateWindowElementList& Out, int32 L, const FVector2D& Org, const FVector2D& Sz, const FVector2D& Hover) const
 {
 	using namespace SmvFuiDraw;
 	using namespace SmvFuiTheme;
@@ -1625,8 +1692,16 @@ void SSmvFlightUi::PaintMapMarks(const FGeometry& G, FSlateWindowElementList& Ou
 			DrText(Out, L + 3, G, M.Label, C + FVector2D(0, -1), Mono(8), FLinearColor(0.3f, 1.f, 0.6f, 1.f), 0);
 			continue;
 		}
-		// yön oku (ekranda yukarı = kuzey)
-		const float A = FMath::DegreesToRadians(M.Hdg);
+		// irtifa: dronun altındaki zemine dikey çizgi + zemin noktası
+		if (M.Kind == 0 && M.bGround)
+		{
+			const FVector2D Gc = At(M.GroundUv);
+			DrSeg(Out, L + 1, G, Gc, C, FLinearColor(0, 0, 0, 0.55f), 3.5f);
+			DrSeg(Out, L + 2, G, Gc, C, Accent.CopyWithNewOpacity(0.85f), 1.5f);
+			DrArc(Out, L + 2, G, Gc, 3.5f, 0.f, 360.f, Accent.CopyWithNewOpacity(0.85f), 1.5f);
+		}
+		// yön oku (ekranda yukarı = haritanın yukarısı; harita döndürülmüşse oklar da)
+		const float A = FMath::DegreesToRadians(M.Hdg - St.MapYawDeg);
 		const float Sc = M.Kind == 0 ? 11.f : 8.f;
 		const FLinearColor Col = M.Kind == 0 ? Accent : FLinearColor(1.f, 0.55f, 0.2f, 1.f);
 		auto R = [A, Sc, &C](float X, float Y) { return C + DrRot(FVector2D(X * Sc, Y * Sc), A); };
@@ -1634,6 +1709,18 @@ void SSmvFlightUi::PaintMapMarks(const FGeometry& G, FSlateWindowElementList& Ou
 		DrPoly(Out, L + 2, G, Tri, FLinearColor(0, 0, 0, 0.7f), 4.f);
 		DrPoly(Out, L + 3, G, Tri, Col, 2.f);
 		if (!M.Label.IsEmpty()) DrText(Out, L + 3, G, M.Label, C + FVector2D(12, -14), Mono(8), Col, -1);
+		// fare dron ikonunun üzerindeyse temel telemetri etiketi
+		if (M.Kind == 0 && Hover.X >= 0 && FVector2D::Distance(Hover, C) < 18.0)
+		{
+			const TArray<FString> Ln = {
+				FString::Printf(TEXT("%s · %s"), *St.Title, *St.Mode),
+				FString::Printf(TEXT("ALT %.0f m · MSL %.0f m"), St.AltRel, St.AltMsl),
+				FString::Printf(TEXT("GS %.1f m/s · VS %+.1f"), St.Gs, St.Climb),
+				FString::Printf(TEXT("HDG %03.0f° · BAT %s"), St.Heading, St.BattPct >= 0 ? *FString::Printf(TEXT("%.0f%%"), St.BattPct) : TEXT("—")) };
+			const FVector2D Bp = C + FVector2D(16, 10), Bs(196, 14.f * Ln.Num() + 10);
+			DrRect(Out, L + 6, G, Bp, Bs, FLinearColor(0.02f, 0.04f, 0.08f, 0.9f), &CardBrush);
+			for (int32 i = 0; i < Ln.Num(); ++i) DrText(Out, L + 7, G, Ln[i], Bp + FVector2D(8, 12 + 14 * i), Mono(8), i == 0 ? Accent : Txt, -1);
+		}
 	}
 }
 
@@ -1653,7 +1740,7 @@ TSharedRef<SWidget> SSmvFlightUi::MapWindow()
 			// görüntü 4:3 (640×480); pencere 4:3 — tam sığar
 			MapBrush.SetUVRegion(FBox2f(FVector2f(0.f, 0.f), FVector2f(1.f, 1.f)));
 			FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &MapBrush, ESlateDrawEffect::None, FLinearColor::White);
-			PaintMapMarks(G, Out, L + 2, FVector2D::ZeroVector, Sz);
+			PaintMapMarks(G, Out, L + 2, FVector2D::ZeroVector, Sz, MapHover);
 		}
 		DrText(Out, L + 6, G, FSmvI18n::T(TEXT("map.title")).ToString(), FVector2D(8, 12), Mono(9), FLinearColor(0.6f, 0.9f, 1.f, 1.f), -1);
 		DrText(Out, L + 6, G, FString::Printf(TEXT("%.0f m"), FSmvUiPrefs::Get().MapRangeM * 2.f), FVector2D(Sz.X - 8, 12), Mono(8), Dim, 1);
@@ -1670,6 +1757,12 @@ TSharedRef<SWidget> SSmvFlightUi::MapWindow()
 		if (Phase == 0)
 		{
 			const FVector2D Sz = FVector2D(G.GetLocalSize());
+			if (FSlateApplication::Get().GetModifierKeys().IsControlDown())
+			{
+				// Ctrl + sol tık: koordinata git
+				ClickUv = FVector2D(P.X / FMath::Max(1.0, Sz.X), P.Y / FMath::Max(1.0, Sz.Y)); bClickPending = true; MapDragMode = 0;
+				return;
+			}
 			MapDragMode = (P.X > Sz.X - 26.0 && P.Y > Sz.Y - 26.0) ? 2 : 1;
 			MapDragAbs = Abs;
 			MapStart = MapDragMode == 2 ? FVector2D(Pr.MapW, 0) : FVector2D(Pr.MapL, Pr.MapT);
@@ -1681,6 +1774,7 @@ TSharedRef<SWidget> SSmvFlightUi::MapWindow()
 		if (Phase == 2) { MapDragMode = 0; Pr.Save(); }
 	};
 	Box->OnDouble = [this](const FGeometry&, const FVector2D&) { SetMapBig(true); };
+	Box->OnHover = [this](const FVector2D& P) { MapHover = P; };
 	Box->OnWheel = [](float Dl) { FSmvUiPrefs& P = FSmvUiPrefs::Get(); P.MapRangeM = FMath::Clamp(P.MapRangeM * (Dl > 0 ? 0.8f : 1.25f), 80.f, 20000.f); };
 	return SNew(SBox)
 		.Visibility_Lambda([this]() { return FSmvUiPrefs::Get().bMap && !bMapBig && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })
@@ -1710,12 +1804,44 @@ TSharedRef<SWidget> SSmvFlightUi::MapBigView()
 		FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &MapBrush, ESlateDrawEffect::None, FLinearColor::White);
 		// görüntü uzayı (0..1) → ekran: kırpılmış bölgeye göre
 		const FVector2D Full(Sz.X / (U1.X - U0.X), Sz.Y / (U1.Y - U0.Y));
-		PaintMapMarks(G, Out, L + 2, FVector2D(-U0.X * Full.X, -U0.Y * Full.Y), Full);
+		BigU0 = FVector2D(U0.X, U0.Y); BigU1 = FVector2D(U1.X, U1.Y);
+		PaintMapMarks(G, Out, L + 2, FVector2D(-U0.X * Full.X, -U0.Y * Full.Y), Full, BigHover);
 		DrText(Out, L + 6, G, FSmvI18n::T(TEXT("map.big_hint")).ToString(), FVector2D(Sz.X * 0.5f, Sz.Y - 70.f), Mono(9), FLinearColor(1, 1, 1, 0.7f), 0);
-		DrText(Out, L + 6, G, FString::Printf(TEXT("N  ·  %.0f m"), FSmvUiPrefs::Get().MapRangeM * 2.f), FVector2D(Sz.X * 0.5f, 20.f), Mono(10), FLinearColor(1, 1, 1, 0.85f), 0);
+		DrText(Out, L + 6, G, FString::Printf(TEXT("%.0f m  ·  %.0f°"), FSmvUiPrefs::Get().MapRangeM * 2.f, FSmvUiPrefs::Get().MapTilt), FVector2D(Sz.X * 0.5f, 20.f), Mono(10), FLinearColor(1, 1, 1, 0.85f), 0);
+		// kuzey oku (harita döndürülünce döner)
+		{
+			const FVector2D Nc(Sz.X - 60.f, 60.f);
+			const float A = FMath::DegreesToRadians(-St.MapYawDeg);
+			DrArc(Out, L + 6, G, Nc, 22.f, 0.f, 360.f, FLinearColor(1, 1, 1, 0.35f), 1.5f);
+			DrSeg(Out, L + 7, G, Nc, Nc + DrRot(FVector2D(0, -18), A), FLinearColor(1.f, 0.35f, 0.3f, 1.f), 3.f);
+			DrText(Out, L + 7, G, TEXT("N"), Nc + DrRot(FVector2D(0, -32), A), Mono(9), FLinearColor(1, 1, 1, 0.9f), 0);
+		}
 	};
 	Box->OnDouble = [this](const FGeometry&, const FVector2D&) { SetMapBig(false); };
 	Box->OnWheel = [](float Dl) { FSmvUiPrefs& P = FSmvUiPrefs::Get(); P.MapRangeM = FMath::Clamp(P.MapRangeM * (Dl > 0 ? 0.8f : 1.25f), 80.f, 20000.f); };
+	Box->OnHover = [this](const FVector2D& P) { BigHover = P; };
+	// sürükle: 3B döndür (yatay) ve eğ (dikey) · Ctrl + sol tık: koordinata git
+	Box->OnDrag = [this](const FGeometry& G, const FVector2D& P, int32 Phase)
+	{
+		FSmvUiPrefs& Pr = FSmvUiPrefs::Get();
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		if (Phase == 0)
+		{
+			if (FSlateApplication::Get().GetModifierKeys().IsControlDown())
+			{
+				const FVector2D N(P.X / FMath::Max(1.0, Sz.X), P.Y / FMath::Max(1.0, Sz.Y));
+				ClickUv = BigU0 + N * (BigU1 - BigU0); bClickPending = true; MapDragMode = 0;
+				return;
+			}
+			MapDragMode = 3; MapDragAbs = P; MapStart = FVector2D(Pr.MapYaw, Pr.MapTilt);
+			return;
+		}
+		if (MapDragMode != 3) return;
+		const FVector2D D = P - MapDragAbs;
+		Pr.MapYaw = FMath::Fmod((float)(MapStart.X - D.X * 0.25) + 360.f, 360.f);
+		Pr.MapTilt = FMath::Clamp((float)(MapStart.Y + D.Y * 0.2), 15.f, 89.f);
+		if (Phase == 2) { MapDragMode = 0; Pr.Save(); }
+	};
 	return SNew(SBox)
 		.Visibility_Lambda([this]() { return bMapBig && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })
 		[

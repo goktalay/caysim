@@ -53,7 +53,7 @@ void ASmvMapCam::EnsureTargets(bool bBig)
 	Aspect = (float)W / (float)H;
 }
 
-void ASmvMapCam::Step(float Dt, const FVector& Target, float RangeM, bool bBig, bool bView, const FVector& ViewLoc, const FRotator& ViewRot, float ViewFov)
+void ASmvMapCam::Step(float Dt, const FVector& Target, float RangeM, bool bBig, bool bView, const FVector& ViewLoc, const FRotator& ViewRot, float ViewFov, float YawDeg, float TiltDeg)
 {
 	EnsureTargets(bBig);
 	const double Now = FPlatformTime::Seconds();
@@ -62,12 +62,14 @@ void ASmvMapCam::Step(float Dt, const FVector& Target, float RangeM, bool bBig, 
 	if (!bInit || FVector::Dist(SmoothTarget, Target) > 200000.0) { SmoothTarget = Target; SmoothRange = RangeM; bInit = true; }
 	SmoothTarget = FMath::Lerp(SmoothTarget, Target, (double)K);
 	SmoothRange = FMath::Lerp(SmoothRange, RangeM, K);
-	// kuzey yukarı: kamera hedefin güneyinde (+Y), kuzeye (−Y) bakar; uzaklık görünen yarı genişliği verir
+	SmoothYaw = SmoothYaw + FMath::FindDeltaAngleDegrees(SmoothYaw, YawDeg) * K;
+	SmoothTilt = FMath::Lerp(SmoothTilt, FMath::Clamp(TiltDeg, 15.f, 89.f), K);
+	// varsayılan kuzey yukarı (yaw 0: kamera hedefin güneyinde, kuzeye −Y bakar); fareyle döndürülür / eğilir; uzaklık görünen yarı genişliği verir
 	const float Half = FMath::Tan(FMath::DegreesToRadians(CamFov * 0.5f));
 	const double D = SmoothRange * 100.0 / Half;
-	const double Tr = FMath::DegreesToRadians((double)GSmvMapTilt);
-	CamLoc = SmoothTarget + FVector(0.0, D * FMath::Cos(Tr), D * FMath::Sin(Tr));
-	CamRot = FRotator(-GSmvMapTilt, -90.f, 0.f);
+	CamRot = FRotator(-SmoothTilt, -90.f + SmoothYaw, 0.f);
+	CamLoc = SmoothTarget - CamRot.Vector() * D;
+	(void)GSmvMapTilt;
 	const double Every = bBig ? 1.0 / 30.0 : 1.0 / 12.0;
 	if (Now - MapAt >= Every || bBig != bBigNow)
 	{
@@ -83,6 +85,14 @@ void ASmvMapCam::Step(float Dt, const FVector& Target, float RangeM, bool bBig, 
 		ViewCap->SetWorldLocationAndRotation(ViewLoc, ViewRot);
 		ViewCap->CaptureScene();
 	}
+}
+
+void ASmvMapCam::Deproject(const FVector2D& Uv, FVector& OutOrigin, FVector& OutDir) const
+{
+	const double Half = FMath::Tan(FMath::DegreesToRadians((double)CamFov * 0.5));
+	const double Y = (Uv.X - 0.5) * 2.0 * Half, Z = -(Uv.Y - 0.5) * 2.0 * Half / Aspect;
+	OutOrigin = CamLoc;
+	OutDir = CamRot.RotateVector(FVector(1.0, Y, Z)).GetSafeNormal();
 }
 
 bool ASmvMapCam::Project(const FVector& World, FVector2D& OutUv) const

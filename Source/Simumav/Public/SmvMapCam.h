@@ -21,13 +21,16 @@ public:
 
 	/** Her kare: Target dronun konumu; RangeM görünen yarı genişlik (m); bBig büyük harita (yüksek çözünürlük, sık yakalama);
 	 *  bView kamera penceresi (ViewLoc / ViewRot: oyuncu kamerası). */
-	void Step(float Dt, const FVector& Target, float RangeM, bool bBig, bool bView, const FVector& ViewLoc, const FRotator& ViewRot, float ViewFov);
+	void Step(float Dt, const FVector& Target, float RangeM, bool bBig, bool bView, const FVector& ViewLoc, const FRotator& ViewRot, float ViewFov, float YawDeg = 0.f, float TiltDeg = 58.f);
+	/** görüntü konumundan (0..1) dünya ışını (Ctrl + tık: koordinata git) */
+	void Deproject(const FVector2D& Uv, FVector& OutOrigin, FVector& OutDir) const;
 	UTextureRenderTarget2D* GetMapTarget() const { return MapRt; }
 	UTextureRenderTarget2D* GetViewTarget() const { return ViewRt; }
 	/** Dünya konumu → harita görüntüsünde (0..1, 0..1); kamera arkasındaysa false */
 	bool Project(const FVector& World, FVector2D& OutUv) const;
 	/** Haritada yukarısı kuzey; ekranda 0 derece = yukarı */
-	float NorthUpYaw() const { return 0.f; }
+	/** ekranda yukarısı: kuzeyden bu kadar saat yönünde (fareyle döndürme) */
+	float NorthUpYaw() const { return SmoothYaw; }
 
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
@@ -43,6 +46,6 @@ private:
 	double MapAt = 0, ViewAt = 0;
 	FVector SmoothTarget = FVector::ZeroVector;
 	bool bInit = false, bBigNow = false;
-	float SmoothRange = 600.f;
+	float SmoothRange = 600.f, SmoothYaw = 0.f, SmoothTilt = 58.f;
 	void EnsureTargets(bool bBig);
 };

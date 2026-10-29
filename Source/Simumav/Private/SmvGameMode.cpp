@@ -1028,6 +1028,16 @@ void ASmvGameMode::UiAction(const FString& Name, const FString& Arg)
 		return;
 	}
 	if (Name == TEXT("IntroBeep")) { if (Tones) Tones->Blip(Arg == TEXT("go") ? 4 : 3); return; }
+	if (Name == TEXT("Goto"))
+	{
+		// haritadan koordinata git (oyuncu komutu): "enlem,boylam,irtifa"
+		TArray<FString> Pt; Arg.ParseIntoArray(Pt, TEXT(","));
+		if (Pt.Num() < 3) return;
+		TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+		P->SetNumberField(TEXT("lat"), FCString::Atod(*Pt[0])); P->SetNumberField(TEXT("lon"), FCString::Atod(*Pt[1])); P->SetNumberField(TEXT("alt"), FCString::Atod(*Pt[2]));
+		Command(TEXT("goto"), P);
+		return;
+	}
 	if (Name == TEXT("CamCycle")) { if (ASmvPilotPawn* P = GetPilot()) P->CycleMode(); return; }
 	HandleAction(FName(*Name));
 }
@@ -3467,7 +3477,24 @@ void ASmvGameMode::UpdateMap(FSmvFlightUiState& U)
 	FVector VL = Drone->GetActorLocation(); FRotator VR = Drone->GetActorRotation(); float VF = 90.f;
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		if (PC->PlayerCameraManager) { PC->PlayerCameraManager->GetCameraViewPoint(VL, VR); VF = PC->PlayerCameraManager->GetFOVAngle(); }
-	MapCam->Step(FApp::GetDeltaTime(), Drone->GetActorLocation(), FSmvUiPrefs::Get().MapRangeM, bBig, bBig, VL, VR, VF);
+	MapCam->Step(FApp::GetDeltaTime(), Drone->GetActorLocation(), FSmvUiPrefs::Get().MapRangeM, bBig, bBig, VL, VR, VF, FSmvUiPrefs::Get().MapYaw, FSmvUiPrefs::Get().MapTilt);
+	U.MapYawDeg = MapCam->NorthUpYaw();
+	// Ctrl + sol tık: tıklanan noktanın zemini (ışın) → enlem / boylam → "koordinata git" paneli
+	{
+		FVector2D Cu;
+		if (FlightUi->TakeMapClick(Cu))
+		{
+			FVector O, D;
+			MapCam->Deproject(Cu, O, D);
+			FHitResult H;
+			FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvMapClick), true);
+			Q.AddIgnoredActor(Drone);
+			const bool bHit = W && W->LineTraceSingleByChannel(H, O, O + D * 5.0e7, ECC_Visibility, Q);
+			double La = 0, Lo = 0, Hm = 0;
+			if (bHit && WorldSetup) WorldSetup->UnrealToGeo(H.ImpactPoint, Lo, La, Hm);
+			FlightUi->SetGotoTarget(La, Lo, bHit && WorldSetup);
+		}
+	}
 	U.MapRt = MapCam->GetMapTarget();
 	U.ViewRt = bBig ? MapCam->GetViewTarget() : nullptr;
 	auto Mark = [this, &U](const FVector& Wp, float Hdg, int32 Kind, const FString& Label)
@@ -3483,6 +3510,18 @@ void ASmvGameMode::UpdateMap(FSmvFlightUiState& U)
 	for (int32 i = 0; i < Ghosts.Num(); ++i)
 		if (Ghosts[i]) Mark(Ghosts[i]->GetActorLocation(), (float)Ghosts[i]->GetActorRotation().Yaw + 90.f, 1, FString::Printf(TEXT("P%d"), i + 2));
 	Mark(Drone->GetActorLocation(), Link() ? Link()->LastTele().Heading : (float)Drone->GetActorRotation().Yaw + 90.f, 0, FString());
+	// irtifa çizgisi: dronun altındaki zemin noktası (aşağı ışın; bulunamazsa göreli irtifa kadar aşağı)
+	if (U.MapMarks.Num() && U.MapMarks.Last().Kind == 0 && W)
+	{
+		const FVector Dl = Drone->GetActorLocation();
+		FHitResult H;
+		FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvMapAlt), true);
+		Q.AddIgnoredActor(Drone);
+		const FVector Gp = W->LineTraceSingleByChannel(H, Dl, Dl - FVector(0, 0, 500000.0), ECC_Visibility, Q) ? H.ImpactPoint
+			: Dl - FVector(0, 0, FMath::Max(0.0, Link() ? (double)Link()->LastTele().AltRel : 0.0) * 100.0);
+		FVector2D Gu;
+		if (MapCam->Project(Gp, Gu)) { U.MapMarks.Last().GroundUv = Gu; U.MapMarks.Last().bGround = true; }
+	}
 	// otopilottaki görev (Mission Planner ile yüklenen dahil): kısık çizgi
 	if (Link() && WorldSetup && Link()->Mission().Num())
 	{

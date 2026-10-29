@@ -39,7 +39,9 @@ struct FSmvFlightUiState
 	/** 3B mini harita (ASmvMapCam): görüntü, büyük kipte oyuncu kamera görünümü, işaretler (0..1 görüntü konumu) ve görev çizgisi */
 	class UTextureRenderTarget2D* MapRt = nullptr;
 	class UTextureRenderTarget2D* ViewRt = nullptr;
-	struct FMapMark { FVector2D Uv = FVector2D::ZeroVector; float Hdg = 0.f; int32 Kind = 0; FString Label; };   // Kind 0 dron, 1 rakip, 2 ev
+	struct FMapMark { FVector2D Uv = FVector2D::ZeroVector; float Hdg = 0.f; int32 Kind = 0; FString Label; FVector2D GroundUv = FVector2D::ZeroVector; bool bGround = false; };   // Kind 0 dron, 1 rakip, 2 ev
+	/** harita yukarısının kuzeyden açısı (fareyle döndürme; yön okları buna göre) */
+	float MapYawDeg = 0.f;
 	TArray<FMapMark> MapMarks;
 	TArray<FVector2D> MapPath;
 	int32 MapPathCur = -1;
@@ -122,6 +124,9 @@ public:
 	bool IsMapBig() const { return bMapBig; }
 	void ToggleMap();
 	void SetMapBig(bool bOn);
+	/** Ctrl + sol tık (harita): bekleyen tık görüntü konumu (0..1); GameMode alır, ışınla zemini bulup SetGotoTarget çağırır */
+	bool TakeMapClick(FVector2D& OutUv) { if (!bClickPending) return false; bClickPending = false; OutUv = ClickUv; return true; }
+	void SetGotoTarget(double Lat, double Lon, bool bOk);
 	bool IsPanelOn() const { return bPanel; }
 	/** Tam ekran renk parlaması (çarpma vb.; ~0.9 sn'de söner) */
 	void Flash(const FLinearColor& C) { FlashC = C; FlashAt = FPlatformTime::Seconds(); }
@@ -162,8 +167,15 @@ private:
 	TSharedRef<SWidget> MapWindow();
 	TSharedRef<SWidget> MapBigView();
 	TSharedRef<SWidget> ViewWindow();
-	void PaintMapMarks(const FGeometry& G, FSlateWindowElementList& Out, int32 L, const FVector2D& Org, const FVector2D& Sz) const;
+	void PaintMapMarks(const FGeometry& G, FSlateWindowElementList& Out, int32 L, const FVector2D& Org, const FVector2D& Sz, const FVector2D& Hover) const;
 	bool bMapBig = false;
+	bool bClickPending = false, bGoto = false, bGotoOk = false;
+	FVector2D ClickUv = FVector2D::ZeroVector;
+	double GotoLat = 0, GotoLon = 0;
+	float GotoAlt = 30.f;
+	/** fare haritanın üzerinde (yerel piksel) — dron ikonuna gelince telemetri etiketi */
+	FVector2D MapHover = FVector2D(-1, -1), BigHover = FVector2D(-1, -1), BigU0 = FVector2D::ZeroVector, BigU1 = FVector2D(1, 1);
+	TSharedRef<SWidget> GotoPanel();
 	int32 MapDragMode = 0, ViewDragMode = 0;
 	FVector2D MapDragAbs, MapStart, ViewDragAbs, ViewStart;
 	FSlateBrush MapBrush, ViewBrush;

@@ -46,7 +46,7 @@ struct SIMUMAV_API FSmvUiPrefs
 	/** Uçuş mini haritası: açık mı, sol / üst kenara uzaklık, genişlik (4:3), görünen yarı genişlik (m; tekerlekle yakınlaştır)
 	 *  ve büyük harita kipinde kamera penceresi (genişlik 16:9, sağ / alt kenar) */
 	bool bMap = false;
-	float MapL = 16.f, MapT = 150.f, MapW = 320.f, MapRangeM = 600.f;
+	float MapL = 16.f, MapT = 150.f, MapW = 320.f, MapRangeM = 600.f, MapYaw = 0.f, MapTilt = 58.f;
 	float ViewW = 384.f, ViewR = 360.f, ViewB = 96.f;
 	/** Dron kartı (web harekât paneli): sağ/üst kenara uzaklık, küçültülmüş mü, katlı bölümler (virgüllü) */
 	float PanelR = 12.f, PanelT = 56.f;
