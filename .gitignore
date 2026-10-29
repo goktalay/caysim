@@ -3,7 +3,11 @@ Binaries/
 DerivedDataCache/
 Intermediate/
 Saved/
-Build/
+Build/*
+# oyun ikonu (paketleme exe kaynağı) depoda
+!Build/Windows/
+Build/Windows/*
+!Build/Windows/Application.ico
 .vs/
 .vscode/
 .idea/
