@@ -668,7 +668,7 @@ void SSmvShell::OpenPilotMenu()
 	{
 		// simge sabit genişlikli sütunda, metin sola dayalı (Icon()+Text() düzeninde simgeler metin uzunluğuna göre kayıyordu)
 		const FLinearColor Ic = bDanger ? Danger() : Accent();
-		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Ghost).LeftAlign(true).MinWidth(300.f)
+		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Ghost).LeftAlign(true).MinWidth(350.f)
 			.Accent(Ic)
 			.OnClick([this, Fn]() { CloseOverlay(); if (Fn) Fn(); })
 			.Extra()
@@ -722,7 +722,7 @@ void SSmvShell::OpenPilotMenu()
 		.HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(FMargin(0.f, 84.f, 44.f, 0.f))
 		.OnMouseButtonDown_Lambda([this](const FGeometry&, const FPointerEvent&) { CloseOverlay(); return FReply::Handled(); })
 		[
-			SNew(SBox).WidthOverride(340.f)
+			SNew(SBox).WidthOverride(390.f)
 			.RenderTransform_Lambda([At]()
 			{
 				const float K = ReducedMotion() ? 1.f : FMath::Clamp((float)(FPlatformTime::Seconds() - At) * 6.f, 0.f, 1.f);
