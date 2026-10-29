@@ -1245,35 +1245,50 @@ TSharedRef<SWidget> SSmvShell::Welcome()
 
 TSharedRef<SWidget> SSmvShell::Login()
 {
+	// kart 560 px: alanlar tam genişlik, ana düğme tam genişlik, ikincil düğmeler yan yana eşit, misafir en altta (öğeler kartın dışına taşıyordu)
 	TWeakObjectPtr<USmvFlow> F = Flow;
 	SSmvShell* Self = this;
 	USmvGameInstance* GI = GameMode.IsValid() ? USmvGameInstance::GetSmv(GameMode.Get()) : nullptr;
-	TSharedRef<SWidget> Email = TextEdit(&LoginEmail, false, Tx(TEXT("login.email")), 420.f);
+	const float W = 496.f;
+	auto OpenWeb = [GI, Self]() { if (GI) if (USmvSteamSubsystem* St = GI->GetSubsystem<USmvSteamSubsystem>()) St->OpenUrl(Self->Client()->RegisterUrl()); };
+	TSharedRef<SWidget> Email = TextEdit(&LoginEmail, false, Tx(TEXT("login.email")), W);
 	TSharedRef<SVerticalBox> B = SNew(SVerticalBox);
-	B->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("login.intro")), 12, "Regular", Dim())];
+	B->AddSlot().AutoHeight()[SNew(SBox).WidthOverride(W)[SmvUi::Text(Tx(TEXT("login.intro")), 12, "Regular", Dim())]];
 	B->AddSlot().AutoHeight().Padding(0, 18, 0, 6)[SmvUi::Text(Tx(TEXT("login.email")), 11, "Bold", Dim())];
 	B->AddSlot().AutoHeight()[Email];
 	B->AddSlot().AutoHeight().Padding(0, 12, 0, 6)[SmvUi::Text(Tx(TEXT("login.password")), 11, "Bold", Dim())];
-	B->AddSlot().AutoHeight()[TextEdit(&LoginPassword, true, Tx(TEXT("login.password")), 420.f)];
-	B->AddSlot().AutoHeight().Padding(0, 10)
+	B->AddSlot().AutoHeight()[TextEdit(&LoginPassword, true, Tx(TEXT("login.password")), W)];
+	B->AddSlot().AutoHeight().Padding(0, 10, 0, 4)
 	[
-		SNew(STextBlock).Font(Font(12)).ColorAndOpacity(Danger()).AutoWrapText(true)
-		.Text_Lambda([F]() { return FText::FromString(F.IsValid() ? (F->bLoginBusy ? FSmvI18n::T(TEXT("login.busy")).ToString() : F->LoginError) : FString()); })
+		SNew(SBox).WidthOverride(W)
+		[
+			SNew(STextBlock).Font(Font(12)).ColorAndOpacity(Danger()).AutoWrapText(true)
+			.Text_Lambda([F]() { return FText::FromString(F.IsValid() ? (F->bLoginBusy ? FSmvI18n::T(TEXT("login.busy")).ToString() : F->LoginError) : FString()); })
+		]
 	];
-	B->AddSlot().AutoHeight()
+	B->AddSlot().AutoHeight().Padding(0, 6, 0, 0)
 	[
-		SNew(SHorizontalBox)
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 10, 0)[Btn(Tx(TEXT("login.submit")), [F, Self]() { if (F.IsValid()) { F->Login(Self->LoginEmail, Self->LoginPassword); Self->LoginPassword.Empty(); } }, true,
-			TAttribute<bool>::CreateLambda([F]() { return F.IsValid() && !F->bLoginBusy; }), ESmvIcon::Check)]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 10, 0)[Btn(Tx(TEXT("login.register")), [GI, Self]()
-		{
-			if (GI) if (USmvSteamSubsystem* St = GI->GetSubsystem<USmvSteamSubsystem>()) St->OpenUrl(Self->Client()->RegisterUrl());
-		}, false, true, ESmvIcon::Globe)]
-		+ SHorizontalBox::Slot().AutoWidth()[Btn(Tx(TEXT("welcome.guest")), [F]() { if (F.IsValid()) F->ContinueAsGuest(); }, false, true, ESmvIcon::Play)]
+		SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Check).MinWidth(W).Text(Tx(TEXT("pilotmenu.login")))
+		.IsEnabled_Lambda([F]() { return F.IsValid() && !F->bLoginBusy; })
+		.OnClick([F, Self]() { if (F.IsValid()) { F->Login(Self->LoginEmail, Self->LoginPassword); Self->LoginPassword.Empty(); } })
 	];
-	B->AddSlot().AutoHeight().Padding(0, 16, 0, 0)[SmvUi::Text(Tx(TEXT("login.privacy")), 10, "Regular", Mute())];
+	B->AddSlot().AutoHeight().Padding(0, 10, 0, 0)
+	[
+		SNew(SBox).WidthOverride(W)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 5, 0)[SNew(SSmvButton).Kind(ESmvBtn::Normal).Icon(ESmvIcon::Plus).Text(Tx(TEXT("login.create"))).OnClick(OpenWeb)]
+			+ SHorizontalBox::Slot().FillWidth(1.f).Padding(5, 0, 0, 0)[SNew(SSmvButton).Kind(ESmvBtn::Normal).Icon(ESmvIcon::Globe).Text(Tx(TEXT("login.forgot"))).OnClick(OpenWeb)]
+		]
+	];
+	B->AddSlot().AutoHeight().Padding(0, 14, 0, 0)[SNew(SBox).HeightOverride(1.f).WidthOverride(W)[SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(Edge())]];
+	B->AddSlot().AutoHeight().Padding(0, 12, 0, 0).HAlign(HAlign_Center)
+	[
+		SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Play).Text(Tx(TEXT("welcome.guest"))).OnClick([F]() { if (F.IsValid()) F->ContinueAsGuest(); })
+	];
+	B->AddSlot().AutoHeight().Padding(0, 12, 0, 0)[SNew(SBox).WidthOverride(W)[SmvUi::Text(Tx(TEXT("login.privacy")), 10, "Regular", Mute())]];
 	DefaultFocus = Email;
-	return Page(Tx(TEXT("login.title")), Tx(TEXT("login.sub")), ESmvIcon::User, SNew(SBox).HAlign(HAlign_Center).Padding(FMargin(0, 20))[SNew(SBox).WidthOverride(620.f)[Glass(B, FMargin(32.f, 28.f))]]);
+	return Page(Tx(TEXT("login.title")), Tx(TEXT("login.sub")), ESmvIcon::User, SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(FMargin(0, 20))[SNew(SBox).WidthOverride(560.f)[Glass(B, FMargin(32.f, 28.f))]]);
 }
 
 TSharedRef<SWidget> SSmvShell::Account()

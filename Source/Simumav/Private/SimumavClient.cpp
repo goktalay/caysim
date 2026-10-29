@@ -18,6 +18,8 @@ FString USimumavClient::ResolveUrl(const FString& P) const
 	if (P.StartsWith(TEXT("http://")) || P.StartsWith(TEXT("https://"))) return P;
 	FString Base = ApiBase;
 	Base.RemoveFromEnd(TEXT("/"));
+	// ayar bozuksa (ör. ini'de "//" kırpılıp "https:" kalmış) varsayılan sunucu
+	if (!Base.Contains(TEXT("://")) || Base.Len() < 12) Base = TEXT("https://simumav.com");
 	return Base + (P.StartsWith(TEXT("/")) ? P : TEXT("/") + P);
 }
 
@@ -33,7 +35,7 @@ TMap<FString, FString> USimumavClient::WsHeaders() const
 {
 	TMap<FString, FString> H;
 	if (!SessionCookie.IsEmpty()) H.Add(TEXT("Cookie"), TEXT("smsid=") + SessionCookie);
-	H.Add(TEXT("Origin"), OriginHeader);
+	H.Add(TEXT("Origin"), OriginHeader.Contains(TEXT("://")) ? OriginHeader : FString(TEXT("https://simumav.com")));
 	H.Add(TEXT("User-Agent"), FString::Printf(TEXT("Simumav/%s (Steam; Unreal Engine)"), ClientVersion()));
 	return H;
 }
@@ -109,7 +111,7 @@ void USimumavClient::Request(const FString& Verb, const FString& UrlOrPath, cons
 	{
 		if (!SessionCookie.IsEmpty()) Req->SetHeader(TEXT("Cookie"), TEXT("smsid=") + SessionCookie);
 		// sunucu CSRF denetimi (auth.py): yazma isteklerinde izinli Origin
-		if (Verb != TEXT("GET")) Req->SetHeader(TEXT("Origin"), OriginHeader);
+		if (Verb != TEXT("GET")) Req->SetHeader(TEXT("Origin"), OriginHeader.Contains(TEXT("://")) ? OriginHeader : FString(TEXT("https://simumav.com")));
 	}
 	for (const TPair<FString, FString>& H : Extra) Req->SetHeader(H.Key, H.Value);
 	if (Body.IsValid())

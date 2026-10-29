@@ -22,6 +22,8 @@ _T = {
  "hangar2.new": ("Neu", "Nouveau", "Nuevo", "Новый", "جديد"),
  "hangar2.actions": ("Aktionen", "Actions", "Acciones", "Действия", "الإجراءات"),
  "bar.map": ("Karte", "Carte", "Mapa", "Карта", "الخريطة"),
+ "login.create": ("Konto erstellen", "Créer un compte", "Crear cuenta", "Создать аккаунт", "إنشاء حساب"),
+ "login.forgot": ("Passwort vergessen", "Mot de passe oublié", "Olvidé mi contraseña", "Забыли пароль", "نسيت كلمة المرور"),
  "launch.ramp_az": ("Rampenrichtung (°)", "Cap de la rampe (°)", "Rumbo de la rampa (°)", "Курс рампы (°)", "اتجاه المنصة (°)"),
  "launch.ramp_az_auto": ("Pistenrichtung", "Cap de piste", "Rumbo de pista", "Курс полосы", "اتجاه المدرج"),
  "launch.hand_speed": ("Wurfgeschwindigkeit", "Vitesse de lancer", "Velocidad de lanzamiento", "Скорость броска", "سرعة الرمي"),
