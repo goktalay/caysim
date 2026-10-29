@@ -666,9 +666,23 @@ void SSmvShell::OpenPilotMenu()
 	TSharedPtr<SWidget> First;
 	auto Item = [this, &Items, &First](const FText& L, ESmvIcon I, TFunction<void()> Fn, bool bDanger = false)
 	{
-		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(bDanger ? ESmvBtn::Ghost : ESmvBtn::Ghost).LeftAlign(true).MinWidth(300.f).Icon(I).FontSize(13).Text(L)
-			.Accent(bDanger ? Danger() : Accent())
-			.OnClick([this, Fn]() { CloseOverlay(); if (Fn) Fn(); });
+		// simge sabit genişlikli sütunda, metin sola dayalı (Icon()+Text() düzeninde simgeler metin uzunluğuna göre kayıyordu)
+		const FLinearColor Ic = bDanger ? Danger() : Accent();
+		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Ghost).LeftAlign(true).MinWidth(300.f)
+			.Accent(Ic)
+			.OnClick([this, Fn]() { CloseOverlay(); if (Fn) Fn(); })
+			.Extra()
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0, 12, 0)
+				[
+					SNew(SBox).WidthOverride(22.f).HeightOverride(22.f).HAlign(HAlign_Center).VAlign(VAlign_Center)[Icon(I, 16.f, Ic)]
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).HAlign(HAlign_Left)
+				[
+					SmvUi::Text(L, 13, "Bold", bDanger ? Danger() : Fg(), false)
+				]
+			];
 		if (!First.IsValid()) First = B;
 		Items->AddSlot().AutoHeight().Padding(0, 0, 0, 4)[B];
 	};
@@ -722,7 +736,7 @@ void SSmvShell::OpenPilotMenu()
 					+ SVerticalBox::Slot().AutoHeight()
 					[
 						SNew(SHorizontalBox)
-						+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 12, 0)[Portrait(P ? &P->Avatar : nullptr, 54.f)]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 12, 0)[AvatarThumb(P ? &P->Avatar : nullptr, 54.f)]
 						+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 						[
 							SNew(SVerticalBox)
@@ -3303,7 +3317,7 @@ TSharedRef<SWidget> SSmvShell::FriendsScreen()
 			SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Card()).Padding(FMargin(12.f, 8.f))
 			[
 				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 12, 0)[SNew(SBox).WidthOverride(40.f).HeightOverride(44.f)[Portrait(&Fr.Avatar, 40.f)]]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 12, 0)[AvatarThumb(&Fr.Avatar, 40.f)]
 				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 				[
 					SNew(SVerticalBox)

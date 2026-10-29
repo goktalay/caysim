@@ -1099,14 +1099,17 @@ void SSmvButton::Construct(const FArguments& A)
 		if (IconId != ESmvIcon::None || A._Extra.Widget != SNullWidget::NullWidget)
 		{
 			const bool bTextEmpty = A._Text.Get().IsEmpty() && !A._Text.IsBound();
-			if (A._LeftAlign) Hb->AddSlot().FillWidth(1.f).VAlign(VAlign_Center).Padding(0, 0, bTextEmpty ? 0.f : 10.f, 0)[IconW];
-			else Hb->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, bTextEmpty ? 0.f : 10.f, 0)[IconW];
+			// sola hizalı: özel içerik (Extra) satırı doldurur; yalnız simgeyse simge sabit genişlikte, metin sola dayalı kalan alanı doldurur
+			// (simge alanı doldurunca metin sağa itiliyor, simgeler satırdan satıra kayıyordu — pilot menüsü, kullanıcı 2026-10-29)
+			const bool bFillIcon = A._LeftAlign && A._Extra.Widget != SNullWidget::NullWidget;
+			if (bFillIcon) Hb->AddSlot().FillWidth(1.f).VAlign(VAlign_Center).Padding(0, 0, bTextEmpty ? 0.f : 10.f, 0)[IconW];
+			else Hb->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, bTextEmpty ? 0.f : 10.f, 0)
+				[A._LeftAlign ? TSharedRef<SWidget>(SNew(SBox).WidthOverride(24.f).HAlign(HAlign_Center).VAlign(VAlign_Center)[IconW]) : IconW];
 		}
-		Hb->AddSlot().AutoWidth().VAlign(VAlign_Center)
-		[
-			SNew(STextBlock).Text(A._Text).Font(Font(Fs, "Bold", 40)).ColorAndOpacity(TextCol)
-			.Visibility_Lambda([Tx = A._Text]() { return Tx.Get().IsEmpty() ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
-		];
+		TSharedRef<SWidget> TextW = SNew(STextBlock).Text(A._Text).Font(Font(Fs, "Bold", 40)).ColorAndOpacity(TextCol)
+			.Visibility_Lambda([Tx = A._Text]() { return Tx.Get().IsEmpty() ? EVisibility::Collapsed : EVisibility::HitTestInvisible; });
+		if (A._LeftAlign) Hb->AddSlot().FillWidth(1.f).VAlign(VAlign_Center).HAlign(HAlign_Left)[TextW];
+		else Hb->AddSlot().AutoWidth().VAlign(VAlign_Center)[TextW];
 		Inner = Hb;
 	}
 	const FMargin Pad = Kind == ESmvBtn::Hero ? FMargin(30.f, 26.f) : bTile ? FMargin(20.f, 18.f) : FMargin(18.f, 10.f);

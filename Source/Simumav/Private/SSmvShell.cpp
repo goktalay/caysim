@@ -1428,7 +1428,7 @@ TSharedRef<SWidget> SSmvShell::Menu()
 			+ SVerticalBox::Slot().AutoHeight()
 			[
 				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 14, 0)[Portrait(Pl ? &Pl->Avatar : nullptr, 86.f)]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 14, 0)[AvatarThumb(Pl ? &Pl->Avatar : nullptr, 86.f)]
 				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 				[
 					SNew(SVerticalBox)
