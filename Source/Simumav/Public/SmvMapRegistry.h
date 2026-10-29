@@ -52,6 +52,8 @@ struct SIMUMAV_API FSmvMapDef
 	double FenceM = -1.0;
 	/** Parça paketi klasörü (/Game/...): haritanın içine paket ağlarından tesis sahası dizilir (FSmvKitYard; hazır haritası boş paketler) */
 	const TCHAR* KitDir = nullptr;
+	/** Lumen yazılım izleme (donanımsal ışın izleme bu haritada GPU zaman aşımı veriyordu: Modern Şehir — duman 40968524118) */
+	bool bLumenSoft = false;
 };
 
 struct SIMUMAV_API FSmvMapRegistry
@@ -62,4 +64,6 @@ struct SIMUMAV_API FSmvMapRegistry
 	/** Kodla kurulan şehir: bina ağlarının klasörleri ve City Sample bina seviyeleri (pakette olanlar kullanılır). */
 	static TArrayView<const TCHAR* const> CityMeshDirs();
 	static TArrayView<const TCHAR* const> CityTowerLevels();
+	/** Haritanın GPU profilini uygula (Lumen donanımsal / yazılım izleme); nullptr → varsayılan */
+	static void ApplyGpuProfile(const FSmvMapDef* Def);
 };

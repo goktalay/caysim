@@ -1296,12 +1296,14 @@ void ASmvMenuScene::LoadMenuMap(const FString& Want)
 	if (Pick)
 	{
 		bool bOk = false;
+		FSmvMapRegistry::ApplyGpuProfile(FSmvMapRegistry::Find(Pick->Key));
 		MenuLevel = ULevelStreamingDynamic::LoadLevelInstance(W, Pick->Level, FVector::ZeroVector, FRotator::ZeroRotator, bOk);
 		bFabMap = bOk && MenuLevel;
 		if (bFabMap) MapKey = Pick->Key;
 		FabStartE = Pick->StartE; FabStartN = Pick->StartN;
 		UE_LOG(LogSimumav, Log, TEXT("Menü sahnesi Fab haritası: %s (%s)"), *Pick->Level, bFabMap ? TEXT("yükleniyor") : TEXT("yüklenemedi"));
 	}
+	if (!Pick) FSmvMapRegistry::ApplyGpuProfile(nullptr);
 	if (!bFabMap && WorldSetup)
 	{
 		Terrain = W->SpawnActor<ASmvProcTerrain>();

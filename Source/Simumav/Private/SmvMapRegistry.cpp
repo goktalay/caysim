@@ -1,4 +1,5 @@
 #include "SmvMapRegistry.h"
+#include "HAL/IConsoleManager.h"
 
 // ===========================================================================================================================
 // UÇUŞ HARİTALARI KAYIT TABLOSU
@@ -21,8 +22,8 @@ namespace
 		{ TEXT("pist"),    TEXT("fabmap.racing"),   TEXT("fabmap.racing.desc"),   TEXT("Simumav/MapPreviews/pist.png"),     TEXT("/Game/CityRacing/Maps/CityRacingMainMap"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("CityRacing"), nullptr, 40.9517, 29.4050, 130.0, false },   // İstanbul Tuzla, İstanbul Park yarış pisti yöresi
 		{ TEXT("kosk"),    TEXT("fabmap.pavilion"), TEXT("fabmap.pavilion.desc"), TEXT("Simumav/MapPreviews/kosk.png"),     TEXT("/Game/SeyeonjeongPavilion/Level/Demo"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("SeyeonjeongPavilion"), nullptr, 40.7440, 30.3000, 70.0, false },   // Sakarya Sapanca Gölü kuzey kıyısı
 		{ TEXT("karakol"), TEXT("fabmap.outpost"),  TEXT("fabmap.outpost.desc"),  TEXT("Simumav/MapPreviews/karakol.png"),  TEXT("/Game/OutpostandBunker/Maps/Map_Bunker_01;/Game/OutpostandBunker/Maps/Map_Shrubland_01"), ESmvMapKind::Level, 0, 0, 0, true, TEXT("OutpostandBunker"), nullptr, 39.5800, 32.1500, 880.0, false, 20.0 },   // Ankara Polatlı bozkırı; FreshCan Military Outpost & Bunker (4 × 4 km çalılık arazi), saha çitli
-		{ TEXT("modernsehir"), TEXT("fabmap.moderncity"), TEXT("fabmap.moderncity.desc"), TEXT("Simumav/MapPreviews/modernsehir.png"), TEXT("/Game/City/Scene/Scene;/Game/City/Scene/Overview"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("City"), nullptr, 41.1100, 29.0200, 120.0, false, 10.0 },   // İstanbul Maslak; Modern 3D City Environment (10 blok + yol ağı + araçlar), saha çitli
-		{ TEXT("adalar"),  TEXT("fabmap.islands"),  TEXT("fabmap.islands.desc"),  TEXT("Simumav/MapPreviews/adalar.png"),   TEXT("/Game/IslandsInTheOcean/Maps/Islands_in_the_ocean"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("IslandsInTheOcean"), nullptr, 39.8300, 26.0500, 10.0, false, 50.0 },   // Çanakkale Bozcaada açıkları; F.S.S. Islands in the Ocean (16 × 16 km açık dünya: şehir, havalimanı, köprüler), saha çiti 50 m
+		{ TEXT("modernsehir"), TEXT("fabmap.moderncity"), TEXT("fabmap.moderncity.desc"), TEXT("Simumav/MapPreviews/modernsehir.png"), TEXT("/Game/City/Scene/Scene;/Game/City/Scene/Overview"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("City"), nullptr, 41.1100, 29.0200, 120.0, false, 10.0, nullptr, true },   // İstanbul Maslak; Modern 3D City Environment (10 blok + yol ağı + araçlar), saha çitli
+		{ TEXT("adalar"),  TEXT("fabmap.islands"),  TEXT("fabmap.islands.desc"),  TEXT("Simumav/MapPreviews/adalar.png"),   TEXT("/Game/IslandsInTheOcean/Maps/Islands_in_the_ocean"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("IslandsInTheOcean"), nullptr, 39.8300, 26.0500, 10.0, false, 50.0, nullptr, true },   // Çanakkale Bozcaada açıkları; F.S.S. Islands in the Ocean (16 × 16 km açık dünya: şehir, havalimanı, köprüler), saha çiti 50 m
 		// </HARITA-TABLOSU>
 	};
 
@@ -67,4 +68,19 @@ TArrayView<const TCHAR* const> FSmvMapRegistry::CityMeshDirs()
 TArrayView<const TCHAR* const> FSmvMapRegistry::CityTowerLevels()
 {
 	return TArrayView<const TCHAR* const>(GSmvCityTowers, UE_ARRAY_COUNT(GSmvCityTowers));
+}
+
+void FSmvMapRegistry::ApplyGpuProfile(const FSmvMapDef* Def)
+{
+	IConsoleVariable* Hw = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Lumen.HardwareRayTracing"));
+	if (!Hw) return;
+	// ilk çağrıdaki değer taban (güvenli grafik kipi zaten 0 yapmışsa öyle kalır)
+	static int32 Base = -1;
+	if (Base < 0) Base = Hw->GetInt();
+	const int32 Want = (Def && Def->bLumenSoft) ? 0 : Base;
+	if (Hw->GetInt() != Want)
+	{
+		Hw->Set(Want, ECVF_SetByCode);
+		UE_LOG(LogTemp, Log, TEXT("Harita GPU profili (%s): Lumen %s izleme"), Def ? Def->Key : TEXT("-"), Want ? TEXT("donanımsal") : TEXT("yazılım"));
+	}
 }

@@ -332,6 +332,7 @@ void ASmvGameMode::BuildScene()
 	// Fab haritası gerçek bir bölgenin içine yerleştirilir (kayıt tablosu demiri): çevre Google Photorealistic 3D Tiles (ya da World Terrain +
 	// Bing uydu), harita alanı karolardan kırpılır, kenar yükseklikleri eşlenir (TickLoadGate → AlignRealRim). Ayarlar → Görüntü → Gerçek dünya.
 	const FSmvMapDef* FabDef = FSmvFabContent::IsFabWorld(Req.Track.WorldMode) ? FSmvMapRegistry::Find(Req.Track.WorldMode.Mid(4)) : nullptr;
+	FSmvMapRegistry::ApplyGpuProfile(FabDef);   // ağır haritalarda Lumen yazılım izleme
 	const FString RealPref = FSmvUiPrefs::Get().RealWorld;
 	bRealSurround = false; bRimPending = false; bRimDone = false;
 	if (FabDef && FabDef->Lat != 0.0 && bCesiumOk && RealPref != TEXT("off") && RealPref != TEXT("offline"))
