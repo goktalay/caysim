@@ -40,6 +40,12 @@ ASmvMapCam::ASmvMapCam()
 	MapCap->ShowFlags.SetFog(false);
 	MapCap->ShowFlags.SetVolumetricFog(false);
 	MapCap->ShowFlags.SetCloud(false);
+	// harita = yüzeyin ham rengi (taban rengi; ışık / pozlama / saat / hava etkisi yok): son renk yakalamasında harita tamamen SİYAH
+	// çıkıyordu (alacakaranlık + yağmurda ve uzaktan bakışta göz uyumu / bulut katmanı). Saydam katman (yağmur, bulut kartları) çizilmez.
+	MapCap->CaptureSource = ESceneCaptureSource::SCS_BaseColor;
+	MapCap->ShowFlags.SetTranslucency(false);
+	MapCap->ShowFlags.SetParticles(false);
+	MapCap->ShowFlags.SetAtmosphere(false);
 }
 
 void ASmvMapCam::EnsureTargets(bool bBig)
