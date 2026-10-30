@@ -16,7 +16,7 @@ namespace
 		// <HARITA-TABLOSU>
 		{ TEXT("orman"),   TEXT("fabmap.forest"),   TEXT("fabmap.forest.desc"),   TEXT("Simumav/MapPreviews/orman.png"),    TEXT("/Game/Brushify/Maps/Forest/Forest"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Brushify"), nullptr, 41.2000, 32.4000, 157.0, false },   // Karabük Yenice ormanları, Filyos vadisi (çevre sırtları ~+230 m — haritanın tepe halkasıyla uyumlu)
 		{ TEXT("yikik"),   TEXT("fabmap.ruined"),   TEXT("fabmap.ruined.desc"),   TEXT("Simumav/MapPreviews/yikik.png"),    TEXT("/Game/Ruined_Construction/Levels/Master_Level/P_Ruined_Construction"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("Ruined_Construction"), TEXT("Desert"), 39.9650, 32.5800, 795.0, false, 3.0 },   // Ankara batı yakası, Etimesgut–Sincan sanayi kuşağı
-		{ TEXT("sehir"),   TEXT("fabmap.city"),     TEXT("fabmap.city.desc"),     TEXT("Simumav/MapPreviews/sehir.png"),    TEXT(""), ESmvMapKind::ProcCity, 0, 0, 0, false, TEXT("EuropeanBuildings_Asset;CitySampleBuildings"), nullptr, 41.0369, 28.9850, 80.0, false },   // İstanbul Taksim Meydanı (Google 3B: gerçek şehir — İstanbul'da tam fotogerçekçi 3B kapsama; Ankara Kızılay'da karolar düz / 2,5B görünüyordu)
+		// "sehir" (kodla kurulan şehir blokları) kaldırıldı — şehre benzemiyordu (kullanıcı, 2026-10-30); eski kayıtlar "modernsehir"e yönlenir (Find)
 		{ TEXT("rafineri"), TEXT("fabmap.refinery"), TEXT("fabmap.refinery.desc"), TEXT("Simumav/MapPreviews/rafineri.png"), TEXT("/Game/PostRefinery/Maps/Showcase;/Game/PostRefinery/Maps/PackedActorsShowcase"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("PostRefinery"), TEXT("Desert"), 40.7650, 29.7750, 39.0, false, 3.0 },   // Kocaeli Körfez kıyısı, İzmit rafinerisi yanı. KK Design Post Apocalyptic Refinery (hazır harita; KitBash3D Refineries'in haritası boştu — kullanıcı 2026-10-28 satın aldı), saha çitli
 		{ TEXT("askeri"),  TEXT("fabmap.military"), TEXT("fabmap.military.desc"), TEXT("Simumav/MapPreviews/askeri.png"),   TEXT("/Game/US_Military/Levels/Showreel_Scene;/Game/US_Military/Levels/Overview"), ESmvMapKind::Level, 0, 0, 0, true, TEXT("US_Military"), TEXT("Desert"), 37.7300, 33.5500, 995.0, false, 3.0 },   // Konya Karapınar bozkırı (düz step / yarı çöl)
 		{ TEXT("pist"),    TEXT("fabmap.racing"),   TEXT("fabmap.racing.desc"),   TEXT("Simumav/MapPreviews/pist.png"),     TEXT("/Game/CityRacing/Maps/CityRacingMainMap"), ESmvMapKind::Level, 0, 0, 0, false, TEXT("CityRacing"), nullptr, 40.9517, 29.4050, 130.0, false },   // İstanbul Tuzla, İstanbul Park yarış pisti yöresi
@@ -54,8 +54,10 @@ TArrayView<const FSmvMapDef> FSmvMapRegistry::All()
 	return TArrayView<const FSmvMapDef>(GSmvMaps, UE_ARRAY_COUNT(GSmvMaps));
 }
 
-const FSmvMapDef* FSmvMapRegistry::Find(const FString& Key)
+const FSmvMapDef* FSmvMapRegistry::Find(const FString& InKey)
 {
+	// eski "Şehir" (kodla kurulan) parkuru → Modern Şehir (Fab haritası)
+	const FString Key = InKey == TEXT("sehir") ? FString(TEXT("modernsehir")) : InKey;
 	for (const FSmvMapDef& D : All()) if (Key == D.Key) return &D;
 	return nullptr;
 }

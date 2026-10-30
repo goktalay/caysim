@@ -205,7 +205,8 @@ const TArray<FSmvFabMap>& FSmvFabContent::Maps()
 const FSmvFabMap* FSmvFabContent::FindMap(const FString& WorldMode)
 {
 	if (!IsFabWorld(WorldMode)) return nullptr;
-	const FString Key = WorldMode.Mid(4);
+	FString Key = WorldMode.Mid(4);
+	if (Key == TEXT("sehir")) Key = TEXT("modernsehir");   // eski kodla kurulan şehir → Modern Şehir
 	// kalıcı dizi (Maps() her çağrıda yeniden kurulur; işaretçi onu göstermemeli)
 	for (const FSmvFabMap& M : AllMaps()) if (M.bAvailable && M.Key == Key) return &M;
 	return nullptr;
