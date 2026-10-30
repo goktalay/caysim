@@ -16,6 +16,10 @@ on:
         description: "Dosya adi deseni"
         type: string
         default: "Simumav*.log"
+      derin:
+        description: "Alt klasorlerde de ara (derinlik; 0 = yalniz klasor)"
+        type: string
+        default: "0"
       azami:
         description: "En cok satir"
         type: string
@@ -36,9 +40,13 @@ jobs:
           DESEN: ${{ inputs.desen }}
           AZAMI: ${{ inputs.azami }}
           DOSYA: ${{ inputs.dosya }}
+          DERIN: ${{ inputs.derin }}
         run: |
           $ErrorActionPreference = 'Continue'
-          $f = Get-ChildItem -LiteralPath $env:KLASOR -Filter $env:DOSYA -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $d = [int]$env:DERIN
+          $hep = if ($d -gt 0) { Get-ChildItem -Path $env:KLASOR -Filter $env:DOSYA -File -Recurse -Depth $d -Force -ErrorAction SilentlyContinue } else { Get-ChildItem -LiteralPath $env:KLASOR -Filter $env:DOSYA -File -ErrorAction SilentlyContinue }
+          $hep | Sort-Object LastWriteTime -Descending | Select-Object -First 15 | ForEach-Object { Write-Host ("BULUNAN " + $_.FullName + "  " + $_.Length + "  " + $_.LastWriteTime) }
+          $f = $hep | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           Get-ChildItem -LiteralPath $env:KLASOR -Filter '*.log' -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("  " + $_.Name + "  " + $_.Length + "  " + $_.LastWriteTime) }
           if (-not $f) { Write-Host "Gunluk yok: $env:KLASOR"; exit 0 }
           Write-Host ("Dosya: " + $f.FullName + "  " + $f.Length + " bayt  " + $f.LastWriteTime)
