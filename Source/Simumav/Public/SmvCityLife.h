@@ -89,6 +89,8 @@ private:
 		TArray<FQuat> WheelRef;
 		FVector LocalOff = FVector::ZeroVector;   // ağ merkezini şerit noktasına getiren ofset (ölçekli, aktör yönünde)
 		float YawFix = 0.f;
+		/** tekerlek dingili (model uzayı): burun ±X ise Y, ±Y ise X */
+		FVector Axle = FVector::RightVector;
 	};
 	struct FWalker
 	{

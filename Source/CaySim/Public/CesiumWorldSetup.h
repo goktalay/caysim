@@ -69,6 +69,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CAYSIM|Dünya") float GetLoadProgress() const { return LoadProgress; }
 	/** Derlemede Cesium for Unreal var mı (CAYSIM_WITH_CESIUM) */
 	static bool CesiumCompiled();
+	/** Ek kamera (ör. uçuş haritası sahne yakalaması): Cesium karo seçimi bu görüş için de yapılır — yoksa yalnız oyuncu kamerasının
+	 *  gördüğü karolar yüklenir, harita penceresi siyah / yavaş dolar. Id<0 → eklenir; döndürülen kimlik saklanır. */
+	static int32 UpsertExtraCamera(const UObject* Ctx, int32 Id, const FVector2D& Size, const FVector& Loc, const FRotator& Rot, double FovDeg);
+	static void RemoveExtraCamera(const UObject* Ctx, int32 Id);
 	/** Etkin 3D Tiles kaynağının kısa adı (günlük / arayüz): google3d | ion_terrain | flat */
 	FString SourceName() const;
 	/** Yer ofsetini sabitle (otomatik ölçüm kapalı): MSL → elipsoid farkı (m). Fab haritası gerçek dünyaya oturtulurken. */

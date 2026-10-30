@@ -30,6 +30,7 @@ void FSmvUiPrefs::Load()
 	GConfig->GetBool(GSmvPrefsSection, TEXT("MenuScene"), bMenuScene, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("Preview3d"), bPreview3d, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("Season"), Season, Ini);
+	GConfig->GetArray(GSmvPrefsSection, TEXT("SavedLocs"), SavedLocs, Ini);
 	GConfig->GetString(GSmvPrefsSection, TEXT("SensPreset"), SensPreset, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("LinkRP"), bLinkRP, Ini);
 	GConfig->GetBool(GSmvPrefsSection, TEXT("GpwsSpeech"), bGpwsSpeech, Ini);
@@ -92,6 +93,7 @@ void FSmvUiPrefs::Save()
 	GConfig->SetBool(GSmvPrefsSection, TEXT("MenuScene"), bMenuScene, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("Preview3d"), bPreview3d, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("Season"), *Season, Ini);
+	GConfig->SetArray(GSmvPrefsSection, TEXT("SavedLocs"), SavedLocs, Ini);
 	GConfig->SetString(GSmvPrefsSection, TEXT("SensPreset"), *SensPreset, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("LinkRP"), bLinkRP, Ini);
 	GConfig->SetBool(GSmvPrefsSection, TEXT("GpwsSpeech"), bGpwsSpeech, Ini);

@@ -2974,6 +2974,8 @@ TSharedRef<SWidget> SSmvShell::FlyCats()
 
 TSharedRef<SWidget> SSmvShell::FlyTracks()
 {
+	if (bLocPick && !Flow->Draft.Track.IsReal()) return LocPicker();
+	bLocPick = false;
 	USmvDataService* D = Data();
 	TWeakObjectPtr<USmvFlow> F = Flow;
 	SSmvShell* Self = this;
@@ -3043,7 +3045,10 @@ TSharedRef<SWidget> SSmvShell::FlyTracks()
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Chips(&T.Weather, { TEXT("clear"), TEXT("cloudy"), TEXT("rain"), TEXT("fog"), TEXT("snow") },
 					{ Tx(TEXT("weather.clear")), Tx(TEXT("weather.cloudy")), Tx(TEXT("weather.rain")), Tx(TEXT("weather.fog")), Tx(TEXT("weather.snow")) },
 					{ ESmvIcon::Sun, ESmvIcon::Cloud, ESmvIcon::Rain, ESmvIcon::Fog, ESmvIcon::Snow }, nullptr, 5)], FMargin(16.f, 10.f), 0.85f)
-		];	if (USmvFlow::NeedsRegion(T)) V->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[SNew(SBox).WidthOverride(620.f).HAlign(HAlign_Left)[RegionCard(&Flow->Draft.Track, true)]];
+		];
+		// sanal dünya / parkur: uçuştan önce konum (SITL ev konumu, harita koordinatları) — kayıtlı konumlardan seçilebilir
+		if (!T.IsReal()) V->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[LocCard()];
+		if (USmvFlow::NeedsRegion(T)) V->AddSlot().AutoHeight().Padding(0, 10, 0, 0)[SNew(SBox).WidthOverride(620.f).HAlign(HAlign_Left)[RegionCard(&Flow->Draft.Track, true)]];
 	}
 	return V;
 }
@@ -3528,4 +3533,145 @@ TSharedRef<SWidget> SSmvShell::FriendsScreen()
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top).Padding(0, 0, 18, 0)[SNew(SBox).WidthOverride(640.f)[SNew(SScrollBox) + SScrollBox::Slot()[Glass(L, FMargin(20.f), 0.9f)]]]
 		+ SHorizontalBox::Slot().FillWidth(1.f)
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top)[SNew(SBox).WidthOverride(400.f)[Glass(Rv, FMargin(20.f), 0.9f)]]);
+}
+
+// ---------------------------------------------------------------------------
+// uçuş akışı → konum (sanal dünya / parkur; kullanıcı 2026-10-30): oyuna girmeden koordinat seçimi + kayıtlı koordinatlar
+// ---------------------------------------------------------------------------
+
+namespace
+{
+	bool YhParseLoc(const FString& S, FString& Name, double& La, double& Lo)
+	{
+		TArray<FString> P; S.ParseIntoArray(P, TEXT("|"), false);
+		if (P.Num() < 3) return false;
+		Name = P[0]; La = FCString::Atod(*P[1]); Lo = FCString::Atod(*P[2]);
+		return FMath::Abs(La) <= 90.0 && FMath::Abs(Lo) <= 180.0;
+	}
+}
+
+TSharedRef<SWidget> SSmvShell::LocCard()
+{
+	SSmvShell* Self = this;
+	FSmvTrack& T = Flow->Draft.Track;
+	TSharedRef<SHorizontalBox> Saved = SNew(SHorizontalBox);
+	int32 Ns = 0;
+	for (const FString& L : FSmvUiPrefs::Get().SavedLocs)
+	{
+		FString Nm; double La = 0, Lo = 0;
+		if (!YhParseLoc(L, Nm, La, Lo) || Ns >= 6) continue;
+		const bool bOn = FMath::Abs(T.Lat - La) < 1e-6 && FMath::Abs(T.Lon - Lo) < 1e-6;
+		Saved->AddSlot().AutoWidth().Padding(0, 0, 6, 0)
+		[
+			SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12).Icon(ESmvIcon::Map).Selected(bOn).Text(FText::FromString(Nm.Left(22)))
+			.OnClick([Self, La, Lo]() { Self->Flow->Draft.Track.Lat = La; Self->Flow->Draft.Track.Lon = Lo; Self->Refresh(); })
+		];
+		++Ns;
+	}
+	return Glass(SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)[Icon(ESmvIcon::Globe, 18.f, Hex(0x38bdf8))]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 14, 0)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(Tx(TEXT("loc.title")), 12, "Bold", Fg(), false)]
+			+ SVerticalBox::Slot().AutoHeight()[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%.5f, %.5f"), T.Lat, T.Lon)), 11, "Mono", Dim(), false)]
+		]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 14, 0)
+		[
+			SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Map).Text(Tx(TEXT("loc.pick")))
+			.OnClick([Self]() { Self->bLocPick = true; Self->LocName.Empty(); Self->Refresh(); })
+		]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Ns ? StaticCastSharedRef<SWidget>(Saved) : StaticCastSharedRef<SWidget>(SmvUi::Text(Tx(TEXT("loc.none")), 11, "Regular", Mute(), false))],
+		FMargin(16.f, 10.f), 0.85f);
+}
+
+TSharedRef<SWidget> SSmvShell::LocPicker()
+{
+	SSmvShell* Self = this;
+	FSmvTrack& T = Flow->Draft.Track;
+	TSharedRef<SWidget> Search = SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(0, 0, 8, 0)[TextEdit(&RealQuery, false, Tx(TEXT("map.search_ph")), 320.f)]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Globe).Text(Tx(TEXT("map.search")))
+			.OnClick([Self]()
+			{
+				TWeakPtr<SSmvShell> Wk = StaticCastSharedRef<SSmvShell>(Self->AsShared());
+				SSmvTileMap::Search(Self->RealQuery, [Wk](bool bOk, double La, double Lo, const FString& Name)
+				{
+					TSharedPtr<SSmvShell> S = Wk.Pin();
+					if (!S.IsValid() || !S->Flow.IsValid()) return;
+					if (!bOk) { S->Toast(FSmvI18n::T(TEXT("map.not_found")).ToString(), 4); return; }
+					S->Flow->Draft.Track.Lat = La; S->Flow->Draft.Track.Lon = Lo;
+					if (S->LocName.IsEmpty()) S->LocName = Name.Left(32);
+					if (S->LocMap.IsValid()) S->LocMap->CenterOn(La, Lo, 15);
+					S->Toast(Name.Left(90), 6);
+				});
+			})];
+	// kayıtlı konumlar: seç / sil
+	TSharedRef<SVerticalBox> List = SNew(SVerticalBox);
+	const TArray<FString> Locs = FSmvUiPrefs::Get().SavedLocs;
+	for (int32 i = 0; i < Locs.Num(); ++i)
+	{
+		FString Nm; double La = 0, Lo = 0;
+		if (!YhParseLoc(Locs[i], Nm, La, Lo)) continue;
+		const FString Raw = Locs[i];
+		List->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 6, 0)
+			[
+				SNew(SSmvButton).Kind(ESmvBtn::Ghost).LeftAlign(true).Icon(ESmvIcon::Map).Selected(FMath::Abs(T.Lat - La) < 1e-6 && FMath::Abs(T.Lon - Lo) < 1e-6)
+				.Text(FText::FromString(FString::Printf(TEXT("%s   %.4f, %.4f"), *Nm.Left(28), La, Lo)))
+				.OnClick([Self, La, Lo]() { Self->Flow->Draft.Track.Lat = La; Self->Flow->Draft.Track.Lon = Lo; if (Self->LocMap.IsValid()) Self->LocMap->CenterOn(La, Lo, 15); Self->Refresh(); })
+			]
+			+ SHorizontalBox::Slot().AutoWidth()
+			[
+				SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Trash).OnClick([Self, Raw]() { FSmvUiPrefs::Get().SavedLocs.Remove(Raw); FSmvUiPrefs::Get().Save(); Self->Refresh(); })
+			]
+		];
+	}
+	if (Locs.Num() == 0) List->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("loc.none")), 11, "Regular", Mute())];
+	TSharedRef<SVerticalBox> Side = SNew(SVerticalBox);
+	Side->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("loc.title")), Hex(0x38bdf8))];
+	Side->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[SmvUi::Text(Tx(TEXT("loc.hint")), 11, "Regular", Dim())];
+	Side->AddSlot().AutoHeight().Padding(0, 0, 0, 10)
+	[
+		SmvUi::Text(TAttribute<FText>::CreateLambda([Self]() { return Self->Flow.IsValid() ? FText::FromString(FString::Printf(TEXT("%.5f, %.5f"), Self->Flow->Draft.Track.Lat, Self->Flow->Draft.Track.Lon)) : FText::GetEmpty(); }), 14, "Mono", Fg(), false)
+	];
+	Side->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("loc.name")), TextEdit(&LocName, false, Tx(TEXT("loc.name_ph")), 220.f))];
+	Side->AddSlot().AutoHeight().Padding(0, 8, 0, 14).HAlign(HAlign_Left)
+	[
+		SNew(SSmvButton).Icon(ESmvIcon::Save).Text(Tx(TEXT("loc.save"))).OnClick([Self]()
+		{
+			const FSmvTrack& Tr = Self->Flow->Draft.Track;
+			FString Nm = Self->LocName.TrimStartAndEnd().Replace(TEXT("|"), TEXT(" ")).Left(32);
+			if (Nm.IsEmpty()) Nm = FString::Printf(TEXT("%.4f, %.4f"), Tr.Lat, Tr.Lon);
+			TArray<FString>& L = FSmvUiPrefs::Get().SavedLocs;
+			L.RemoveAll([&Nm](const FString& X) { return X.StartsWith(Nm + TEXT("|")); });
+			L.Insert(FString::Printf(TEXT("%s|%.6f|%.6f"), *Nm, Tr.Lat, Tr.Lon), 0);
+			if (L.Num() > 24) L.SetNum(24);
+			FSmvUiPrefs::Get().Save();
+			Self->Toast(FSmvI18n::T(TEXT("loc.saved")).ToString(), 6);
+			Self->Refresh();
+		})
+	];
+	Side->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("loc.saved_list")), Accent())];
+	Side->AddSlot().AutoHeight()[SNew(SBox).MaxDesiredHeight(260.f)[SNew(SScrollBox) + SScrollBox::Slot()[List]]];
+	Side->AddSlot().AutoHeight().Padding(0, 14, 0, 0).HAlign(HAlign_Right)
+	[
+		SNew(SSmvButton).Kind(ESmvBtn::Primary).Icon(ESmvIcon::Check).Text(Tx(TEXT("loc.done"))).OnClick([Self]() { Self->bLocPick = false; Self->Refresh(); })
+	];
+	return SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top).Padding(0, 0, 18, 0)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)[SNew(SBox).WidthOverride(860.f)[Search]]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(SBorder).BorderImage(GlassCard()).Padding(4.f)
+				[
+					SAssignNew(LocMap, SSmvTileMap).Size(FVector2D(860.f, 500.f)).Lat(&T.Lat).Lon(&T.Lon).RadiusM(&T.RadiusM)
+				]
+			]
+		]
+		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Top)[Glass(Side, FMargin(20.f), 0.9f)];
 }

@@ -278,17 +278,28 @@ UMeshComponent* ASmvCityLife::MakeCar(USkeletalMesh* Model, FCar& C)
 	const FReferenceSkeleton& Ref = Model->GetRefSkeleton();
 	const TArray<FTransform>& Local = Ref.GetRefBonePose();
 	TArray<FTransform> Cs; Cs.SetNum(Ref.GetNum());
-	double HeadX = 0; int32 NHead = 0;
+	double HeadX = 0, HeadY = 0; int32 NHead = 0;
 	for (int32 i = 0; i < Ref.GetNum(); ++i)
 	{
 		const int32 Pi = Ref.GetParentIndex(i);
 		Cs[i] = Pi >= 0 ? Local[i] * Cs[Pi] : Local[i];
 		const FString N = Ref.GetBoneName(i).ToString();
 		if (N.StartsWith(TEXT("Wheel"))) { C.Wheels.Add(Ref.GetBoneName(i)); C.WheelRef.Add(Cs[i].GetRotation()); C.WheelR = FMath::Max(25.0, Cs[i].GetLocation().Z); }
-		if (N.Contains(TEXT("Headlight")) || N.Contains(TEXT("RegPlateF"))) { HeadX += Cs[i].GetLocation().X; ++NHead; }
+		const bool bFront = N.Contains(TEXT("Headlight")) || N.Contains(TEXT("RegPlateF")) || N.Contains(TEXT("Front")) || N.EndsWith(TEXT("_FL")) || N.EndsWith(TEXT("_FR"))
+			|| N.Contains(TEXT("Wheel_F")) || N.Contains(TEXT("WheelF"));
+		if (bFront) { HeadX += Cs[i].GetLocation().X; HeadY += Cs[i].GetLocation().Y; ++NHead; }
 	}
-	C.YawFix = (NHead > 0 && HeadX / NHead < 0.0) ? 180.f : 0.f;
 	const FBoxSphereBounds B = Model->GetBounds();
+	// burun yönü: ön kemiklerin (far / ön plaka / ön tekerlek) ortalaması → +X'e çevrilir. Eskiden yalnız ±X varsayılıyordu;
+	// burnu ±Y'de olan modeller yolda YAN YAN gidiyordu (kullanıcı, 2026-10-30). Ön kemik yoksa uzun eksen (Y uzunsa 90°)
+	const bool bLongY = B.BoxExtent.Y > B.BoxExtent.X * 1.15;
+	double Hx = NHead ? HeadX / NHead - B.Origin.X : 0.0, Hy = NHead ? HeadY / NHead - B.Origin.Y : 0.0;
+	// ön kemikler gövde ortasından uzun eksen boyunca ayrılır: kısa eksendeki sapma (sol/sağ far) yok sayılır
+	if (bLongY) Hx = 0.0; else if (B.BoxExtent.X > B.BoxExtent.Y * 1.15) Hy = 0.0;
+	if (NHead > 0 && FVector2D(Hx, Hy).Size() > 5.0) C.YawFix = (float)-FMath::RadiansToDegrees(FMath::Atan2(Hy, Hx));
+	else C.YawFix = bLongY ? -90.f : 0.f;
+	C.Axle = FMath::Abs(FMath::Sin(FMath::DegreesToRadians(C.YawFix))) > 0.7f ? FVector::ForwardVector * (C.YawFix < 0.f ? -1.0 : 1.0) : FVector::RightVector * (FMath::Abs(C.YawFix) > 90.f ? -1.0 : 1.0);
+	UE_LOG(LogSimumav, Log, TEXT("Şehir aracı %s: yön düzeltmesi %.0f° (ön kemik %d, kutu %.0f×%.0f)"), *Model->GetName(), C.YawFix, NHead, B.BoxExtent.X, B.BoxExtent.Y);
 	C.LenCm = FMath::Max(B.BoxExtent.X, B.BoxExtent.Y) * 2.0;
 	C.LocalOff = FVector(-B.Origin.X, -B.Origin.Y, -(B.Origin.Z - B.BoxExtent.Z) + 4.0);
 	CarComps.Add(P);
@@ -772,7 +783,7 @@ void ASmvCityLife::Tick(float Dt)
 			if (UPoseableMeshComponent* P = Cast<UPoseableMeshComponent>(CarComps[i]))
 				if (P->WasRecentlyRendered(0.5f))
 					for (int32 w = 0; w < C.Wheels.Num(); ++w)
-						P->SetBoneRotationByName(C.Wheels[w], (FQuat(FVector::RightVector, -C.WheelPhase) * C.WheelRef[w]).Rotator(), EBoneSpaces::ComponentSpace);
+						P->SetBoneRotationByName(C.Wheels[w], (FQuat(C.Axle, -C.WheelPhase) * C.WheelRef[w]).Rotator(), EBoneSpaces::ComponentSpace);
 		}
 	}
 	// City Sample tanısı: 6 sn sonra ilk yayaların çizilip çizilmediği

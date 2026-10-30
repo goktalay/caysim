@@ -28,6 +28,8 @@
 
 #if CAYSIM_WITH_CESIUM
 #include "CesiumGeoreference.h"
+#include "CesiumCameraManager.h"
+#include "CesiumCamera.h"
 #include "Cesium3DTileset.h"
 #include "CesiumSunSky.h"
 #include "CesiumCreditSystem.h"
@@ -832,4 +834,25 @@ bool ACaySimWorldSetup::SampleGroundHeight(double Lat, double Lon, double& OutHe
 		return true;
 	}
 	return false;
+}
+
+int32 ACaySimWorldSetup::UpsertExtraCamera(const UObject* Ctx, int32 Id, const FVector2D& Size, const FVector& Loc, const FRotator& Rot, double FovDeg)
+{
+#if CAYSIM_WITH_CESIUM
+	ACesiumCameraManager* M = Ctx ? ACesiumCameraManager::GetDefaultCameraManager(Ctx) : nullptr;
+	if (!M) return -1;
+	const FCesiumCamera C(Size, Loc, Rot, FovDeg);
+	if (Id >= 0 && M->UpdateCamera(Id, C)) return Id;
+	return M->AddCamera(C);
+#else
+	return -1;
+#endif
+}
+
+void ACaySimWorldSetup::RemoveExtraCamera(const UObject* Ctx, int32 Id)
+{
+#if CAYSIM_WITH_CESIUM
+	if (Id < 0 || !Ctx) return;
+	if (ACesiumCameraManager* M = ACesiumCameraManager::GetDefaultCameraManager(Ctx)) M->RemoveCamera(Id);
+#endif
 }

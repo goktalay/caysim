@@ -2,6 +2,7 @@
 #include "SmvMapCam.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "CesiumWorldSetup.h"
 
 namespace
 {
@@ -11,7 +12,8 @@ namespace
 
 ASmvMapCam::ASmvMapCam()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.TickInterval = 0.5f;
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(Root);
 	for (TObjectPtr<USceneCaptureComponent2D>* C : { &MapCap, &ViewCap })
@@ -26,6 +28,15 @@ ASmvMapCam::ASmvMapCam()
 	}
 	MapCap->FOVAngle = CamFov;
 	// harita: sis ve hacimsel bulut yok (yukarıdan net görünüm); otomatik pozlama kapalı değil — gündüz / gece sahneyle aynı
+	// pozlama: yakalama seyrek (1/12 sn) ve kendi göz uyumu geçmişiyle başlıyordu → harita SİYAH açılıp yavaş yavaş aydınlanıyordu
+	// (kullanıcı, 2026-10-30): durum kalıcı + uyum anında
+	for (USceneCaptureComponent2D* C : { MapCap.Get(), ViewCap.Get() })
+	{
+		C->bAlwaysPersistRenderingState = true;
+		C->PostProcessSettings.bOverride_AutoExposureSpeedUp = true;   C->PostProcessSettings.AutoExposureSpeedUp = 40.f;
+		C->PostProcessSettings.bOverride_AutoExposureSpeedDown = true; C->PostProcessSettings.AutoExposureSpeedDown = 40.f;
+		C->PostProcessBlendWeight = 1.f;
+	}
 	MapCap->ShowFlags.SetFog(false);
 	MapCap->ShowFlags.SetVolumetricFog(false);
 	MapCap->ShowFlags.SetCloud(false);
@@ -57,6 +68,7 @@ void ASmvMapCam::Step(float Dt, const FVector& Target, float RangeM, bool bBig, 
 {
 	EnsureTargets(bBig);
 	const double Now = FPlatformTime::Seconds();
+	StepAt = Now;
 	// hedef ve yakınlık yumuşak izlenir (titreşimsiz); büyük sıçramada (sıfırlama / ışınlanma) doğrudan
 	const float K = 1.f - FMath::Exp(-FMath::Clamp(Dt, 0.f, 0.1f) * 6.f);
 	if (!bInit || FVector::Dist(SmoothTarget, Target) > 200000.0) { SmoothTarget = Target; SmoothRange = RangeM; bInit = true; }
@@ -77,6 +89,8 @@ void ASmvMapCam::Step(float Dt, const FVector& Target, float RangeM, bool bBig, 
 		MapCap->FOVAngle = CamFov;
 		MapCap->SetWorldLocationAndRotation(CamLoc, CamRot);
 		MapCap->CaptureScene();
+		// Cesium: harita görüşündeki karolar da yüklensin (yalnız oyuncu kamerası değil)
+		CesiumCamId = ACaySimWorldSetup::UpsertExtraCamera(this, CesiumCamId, FVector2D(MapRt->SizeX, MapRt->SizeY), CamLoc, CamRot, CamFov);
 	}
 	if (bView && Now - ViewAt >= 1.0 / 24.0)
 	{
@@ -103,4 +117,17 @@ bool ASmvMapCam::Project(const FVector& World, FVector2D& OutUv) const
 	OutUv.X = 0.5 + (L.Y / L.X) / (2.0 * Half);
 	OutUv.Y = 0.5 - (L.Z / L.X) / (2.0 * Half) * Aspect;
 	return true;
+}
+
+void ASmvMapCam::Tick(float Dt)
+{
+	Super::Tick(Dt);
+	if (CesiumCamId >= 0 && FPlatformTime::Seconds() - StepAt > 1.0) { ACaySimWorldSetup::RemoveExtraCamera(this, CesiumCamId); CesiumCamId = -1; }
+}
+
+void ASmvMapCam::EndPlay(const EEndPlayReason::Type Why)
+{
+	ACaySimWorldSetup::RemoveExtraCamera(this, CesiumCamId);
+	CesiumCamId = -1;
+	Super::EndPlay(Why);
 }

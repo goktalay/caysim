@@ -78,6 +78,8 @@ struct SIMUMAV_API FSmvUiPrefs
 	static bool GetMeasured(const FString& DroneId, double& KmPerL, double& W);
 	/** Bayram / mevsim teması: auto | off */
 	FString Season = TEXT("auto");
+	/** Sanal dünya / parkur uçuşları için kayıtlı konumlar: "ad|enlem|boylam" (uçuş akışı → Konum) */
+	TArray<FString> SavedLocs;
 	/** Bayram ülkesi (2 harf; boş = otomatik) */
 	FString HolidayCountry;
 	/** Tuş atamaları: "kb.<Eylem>" / "pad.<Eylem>" → FKey adı */

@@ -31,6 +31,8 @@ public:
 	/** Haritada yukarısı kuzey; ekranda 0 derece = yukarı */
 	/** ekranda yukarısı: kuzeyden bu kadar saat yönünde (fareyle döndürme) */
 	float NorthUpYaw() const { return SmoothYaw; }
+	virtual void Tick(float Dt) override;
+	virtual void EndPlay(const EEndPlayReason::Type Why) override;
 
 protected:
 	UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
@@ -48,4 +50,7 @@ private:
 	bool bInit = false, bBigNow = false;
 	float SmoothRange = 600.f, SmoothYaw = 0.f, SmoothTilt = 58.f;
 	void EnsureTargets(bool bBig);
+	/** Cesium karo seçimine eklenen harita kamerası (-1 yok); harita kapanınca 1 sn sonra çıkarılır */
+	int32 CesiumCamId = -1;
+	double StepAt = 0;
 };

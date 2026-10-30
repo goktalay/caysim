@@ -335,6 +335,12 @@ private:
 	int32 FlyPrevStep = 0;
 	/** Gerçek dünya sihirbazı: adres arama metni */
 	FString RealQuery;
+	/** Uçuş akışı → parkur: sanal dünyada konum seçici açık; kayıt adı; seçici haritası */
+	bool bLocPick = false;
+	FString LocName;
+	TSharedPtr<class SSmvTileMap> LocMap;
+	TSharedRef<SWidget> LocCard();
+	TSharedRef<SWidget> LocPicker();
 	/** Uçuş akışı / ilerleme ekranı yardımcıları (SSmvShellYol.cpp) */
 	TSharedRef<SWidget> FlyDrones();
 	TSharedRef<SWidget> FlyCats();
