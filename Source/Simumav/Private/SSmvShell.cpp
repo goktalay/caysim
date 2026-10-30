@@ -824,13 +824,15 @@ TSharedRef<SWidget> SSmvShell::Cycle(FString* Target, const TArray<FString>& Val
 
 TSharedRef<SWidget> SSmvShell::Chips(FString* Target, const TArray<FString>& Values, const TArray<FText>& Labels, const TArray<ESmvIcon>& Icons, TFunction<void()> OnPick, int32 PerRow)
 {
-	// satıra sığmayan seçenek alt satıra geçer (dar kartlarda — hava durumu — düğmeler kartın dışına taşıyordu); PerRow yalnız üst sınır
-	(void)PerRow;
-	TSharedRef<SWrapBox> V = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(6.f, 6.f));
+	// sabit satırlar (PerRow): sarmalı kutu (SWrapBox) ayar satırlarının dar/otomatik genişlikli sütununda her seçeneği ayrı satıra kırıyordu
+	// — Ayarlar ekranı okunmaz hale gelmişti (kullanıcı, 2026-10-30); dar kartlar PerRow ile bölünür
+	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
+	TSharedPtr<SHorizontalBox> Line;
 	for (int32 i = 0; i < Values.Num(); ++i)
 	{
+		if (i % FMath::Max(1, PerRow) == 0) { Line = SNew(SHorizontalBox); V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Line.ToSharedRef()]; }
 		const FString Val = Values[i];
-		V->AddSlot()
+		Line->AddSlot().AutoWidth().Padding(0, 0, 6, 0)
 		[
 			SNew(SSmvButton).Kind(ESmvBtn::Ghost).FontSize(12)
 			.Text(Labels.IsValidIndex(i) ? Labels[i] : FText::FromString(Val))
@@ -2665,11 +2667,11 @@ TSharedRef<SWidget> SSmvShell::WizEnv()
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("wiz.env_time")), Warn())];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 12)[Chips(&T.TimeOfDay, { TEXT("day"), TEXT("dusk"), TEXT("night") }, { Tx(TEXT("time.day")), Tx(TEXT("time.dusk")), Tx(TEXT("time.night")) },
-		{ ESmvIcon::Sun, ESmvIcon::Sunset, ESmvIcon::Moon })];
+		{ ESmvIcon::Sun, ESmvIcon::Sunset, ESmvIcon::Moon }, nullptr, 3)];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("wiz.env_weather")), Accent())];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 12)[Chips(&T.Weather, { TEXT("clear"), TEXT("cloudy"), TEXT("rain"), TEXT("fog"), TEXT("snow") },
 		{ Tx(TEXT("weather.clear")), Tx(TEXT("weather.cloudy")), Tx(TEXT("weather.rain")), Tx(TEXT("weather.fog")), Tx(TEXT("weather.snow")) },
-		{ ESmvIcon::Sun, ESmvIcon::Cloud, ESmvIcon::Rain, ESmvIcon::Fog, ESmvIcon::Snow })];
+		{ ESmvIcon::Sun, ESmvIcon::Cloud, ESmvIcon::Rain, ESmvIcon::Fog, ESmvIcon::Snow }, nullptr, 3)];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Section(Tx(TEXT("wiz.env_wind")), Accent3())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.wind")), Slider(&T.WindMs, 0, 30, 0.5, Ms))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.wind_dir")), Slider(&T.WindDir, 0, 355, 5, Deg))];
