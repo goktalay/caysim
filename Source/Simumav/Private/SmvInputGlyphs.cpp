@@ -46,12 +46,18 @@ namespace
 	/** Son kullanılan cihaz kazanır: Slate'e gelen tüm olayları görür, hiçbirini tüketmez */
 	class FSmvGlyphInputProc : public IInputProcessor
 	{
+		TMap<FName, float> LastAxis;
 	public:
 		virtual void Tick(const float, FSlateApplication&, TSharedRef<ICursor>) override {}
 		virtual bool HandleKeyDownEvent(FSlateApplication&, const FKeyEvent& E) override { SmvNoteDevice(E.GetKey().IsGamepadKey(), E.GetInputDeviceId()); return false; }
 		virtual bool HandleAnalogInputEvent(FSlateApplication&, const FAnalogInputEvent& E) override
 		{
-			if (E.GetKey().IsGamepadKey() && FMath::Abs(E.GetAnalogValue()) > 0.4f) SmvNoteDevice(true, E.GetInputDeviceId());
+			// mutlak değer değil DEĞİŞİM: RC kumanda / gaz ekseni sabit uçta dururken sürekli olay gönderir → "gamepad etkin" fare ile
+			// sürekli yer değiştirip odak halkası yanıp sönüyordu (hover titremesi + mavi çerçeve, 2026-10-30)
+			if (!E.GetKey().IsGamepadKey()) return false;
+			const float V = E.GetAnalogValue();
+			float& Last = LastAxis.FindOrAdd(E.GetKey().GetFName(), V);
+			if (FMath::Abs(V - Last) > 0.35f) { Last = V; SmvNoteDevice(true, E.GetInputDeviceId()); }
 			return false;
 		}
 		virtual bool HandleMouseMoveEvent(FSlateApplication&, const FPointerEvent& E) override

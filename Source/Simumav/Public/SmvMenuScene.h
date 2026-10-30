@@ -72,6 +72,7 @@ public:
 	 *  Fly kalkış alanında alçak kahraman açısı · Tour harita içinden kamera turu (karşılaşma parkuru önizlemesi) */
 	enum class EStation : uint8 { Menu, Hangar, Crew, Parkur, Fly, Tour };
 	void SetStation(EStation S);
+	static bool IsShowStation(EStation S);
 	EStation GetStation() const { return Station; }
 	/** Vitrin aracı (gerçek dünyada kalkış alanında; Lumen ışığı, gölge, hava) — donanım (eklenti parçaları, çıkartma, desen) dahil */
 	void SetShowcase(const FSmvDrone& D);
@@ -130,6 +131,8 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<AActor>> SkyActors;
 	/** Fab haritası çevresi (havada ada görünmesin; kayıt tablosu Surround) ve gökte uzak trafik (yalnız görsel) */
 	UPROPERTY() TArray<TObjectPtr<AActor>> SceneryActors;
+	/** alçak sis kümeleri: vitrin istasyonlarında (hangar / mürettebat / uçuş) gizli — dron dumanlı/soluk görünüyordu */
+	UPROPERTY() TArray<TObjectPtr<AActor>> FogBanks;
 	bool bSceneryDone = false;
 	void TickScenery();
 	UPROPERTY() TObjectPtr<ACameraActor> Cam;

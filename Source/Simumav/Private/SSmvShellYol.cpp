@@ -1715,6 +1715,22 @@ namespace
 		if (!T.World.Biome.IsEmpty()) return T.World.Biome;
 		return T.World.BuildingCount > 100 ? FString(TEXT("city")) : T.World.MountainCount >= 5 ? FString(TEXT("mountain")) : FString(TEXT("forest"));
 	}
+	/** Biyom kartı görseli: gerçek oyun içi kare (benzer Fab haritasının duman testi karesi); yoksa çizim */
+	TSharedRef<SWidget> YhBiomePic(const FString& B, uint32 Seed, float W, float H)
+	{
+		const TArray<const TCHAR*> Keys = B == TEXT("city") ? TArray<const TCHAR*>{ TEXT("modernsehir"), TEXT("sehir") }
+			: B == TEXT("mountain") ? TArray<const TCHAR*>{ TEXT("karakol"), TEXT("kosk") } : TArray<const TCHAR*>{ TEXT("orman") };
+		const FSlateBrush* Img = nullptr;
+		for (const TCHAR* Key : Keys)
+		{
+			const FSmvFabMap* M = FSmvFabContent::FindMap(Key);
+			if (!M) M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Key);
+			if (M && M->PreviewFile.EndsWith(TEXT(".jpg"))) Img = YhMapPreview(*M);
+			if (Img) break;
+		}
+		if (Img) return SNew(SBox).WidthOverride(W).HeightOverride(H)[SNew(SImage).Image(Img)];
+		return YhBiomeArt(B, Seed, W, H, false);
+	}
 }
 
 TSharedRef<SWidget> SSmvShell::ParkurHub()
@@ -1737,7 +1753,7 @@ TSharedRef<SWidget> SSmvShell::ParkurHub()
 			if (const FSlateBrush* B = YhRtBrush(YhBrushes, Rt, FVector2D(640, 360)))
 				EncPic = SNew(SBox).WidthOverride(CW).HeightOverride(CH)[SNew(SImage).Image(B)];
 	// 2) Özel: canlı prosedürel dünya (orman + dağ + su; 3B önizleme yakalaması yavaş yörüngede)
-	TSharedRef<SWidget> CusPic = YhBiomeArt(TEXT("forest"), 11u, CW, CH, true, true);
+	TSharedRef<SWidget> CusPic = YhBiomePic(TEXT("forest"), 11u, CW, CH);
 	if (bLive3d)
 	{
 		if (!bHubWorld)
@@ -1799,7 +1815,7 @@ TSharedRef<SWidget> SSmvShell::ParkurHub()
 			];
 		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Hex(Cd.Col)).MinWidth(CW + 40.f).IntroDelay(0.08f * i)
 			.Text(Tx(Cd.Title)).SubText(i == 0 ? Tx(Cd.Sub) : FSmvI18n::Format(Cd.Sub, { { TEXT("n"), FString::FromInt(Cd.N) } }))
-			.OnClick([F, Cat]() { if (!F.IsValid()) return; F->ParkurCat = Cat; F->SetScreen(ESmvScreen::ParkurList); })
+			.OnClick([this, F, Cat]() { if (!F.IsValid()) return; ParkurBiome.Empty(); F->ParkurCat = Cat; F->SetScreen(ESmvScreen::ParkurList); })
 			.Extra()[SNew(SBox).WidthOverride(CW).HeightOverride(CH)[Pic]];
 		if (i == 0) DefaultFocus = B;
 		Hb->AddSlot().AutoWidth().Padding(0, 0, 16, 0)[B];
@@ -1941,18 +1957,59 @@ TSharedRef<SWidget> SSmvShell::ParkurList()
 		return YhPage(Tx(TEXT("parkur.enc")), Tx(TEXT("parkur.enc_sub")),
 			SNew(SScrollBox).ScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll) + SScrollBox::Slot().Padding(0, 6, 0, 0)[Wrap]);
 	}
-	// ---- Özel / Gerçek Dünya: kayıtlı parkurlar + "+ Yeni" ----
+	// ---- Özel / Gerçek Dünya: kayıtlı parkurlar + "+ Yeni" (altta sağda) ----
 	const bool bReal = Cat == TEXT("real");
+	// Özel: önce biyom (Orman / Şehir / Dağlık); içine girince o biyomla üretilmiş parkurlar
+	if (!bReal && ParkurBiome.IsEmpty())
+	{
+		struct FB { const TCHAR* Id; const TCHAR* Title; const TCHAR* Desc; };
+		static const FB Bs[] = { { TEXT("forest"), TEXT("biome.forest"), TEXT("biome.forest_d") }, { TEXT("city"), TEXT("biome.city"), TEXT("biome.city_d") }, { TEXT("mountain"), TEXT("biome.mountain"), TEXT("biome.mountain_d") } };
+		TSharedRef<SHorizontalBox> Hb = SNew(SHorizontalBox);
+		int32 i = 0;
+		for (const FB& X : Bs)
+		{
+			const FString Id = X.Id;
+			int32 Cnt = 0;
+			for (const FSmvTrack& Tr : D->Tracks()) if (Tr.IsCustom() && YhBiomeOf(Tr) == Id) ++Cnt;
+			TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Hex(YhBiomeColor(Id))).MinWidth(400.f).IntroDelay(0.06f * i++)
+				.Text(Tx(X.Title)).SubText(Tx(X.Desc))
+				.OnClick([Self, Id]() { Self->ParkurBiome = Id; Self->Refresh(); })
+				.Extra()
+				[
+					SNew(SBox).WidthOverride(366.f).HeightOverride(206.f)
+					[
+						SNew(SOverlay)
+						+ SOverlay::Slot()[SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Hex(0x0b1222, 0.9f)).Padding(0.f)[YhBiomePic(Id, 77u + (uint32)i, 366.f, 206.f)]]
+						+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(10.f)
+						[
+							SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(Hex(0x0b1222, 0.85f)).Padding(FMargin(7.f))[Icon(YhBiomeIcon(Id), 22.f, Hex(YhBiomeColor(Id)))]
+						]
+						+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(8.f)
+						[
+							SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(Hex(0x0b1222, 0.85f)).Padding(FMargin(8.f, 3.f))
+							[
+								SmvUi::Text(FSmvI18n::Format(TEXT("parkur.count"), { { TEXT("n"), FString::FromInt(Cnt) } }), 10, "Bold", Fg(), false)
+							]
+						]
+					]
+				];
+			if (i == 1) DefaultFocus = B;
+			Hb->AddSlot().AutoWidth().Padding(0, 0, 16, 0)[B];
+		}
+		return YhPage(Tx(TEXT("parkur.custom")), Tx(TEXT("parkur.biome_pick")),
+			SNew(SBox).VAlign(VAlign_Center).HAlign(HAlign_Center)[Hb]);
+	}
 	TSharedRef<SWrapBox> Wrap = SNew(SWrapBox).PreferredSize(1500.f).UseAllottedSize(true);
 	int32 N = 0;
 	for (const FSmvTrack& X : D->Tracks())
 	{
 		if (bReal ? !X.IsReal() : !X.IsCustom()) continue;
+		if (!bReal && YhBiomeOf(X) != ParkurBiome) continue;
 		const FSmvTrack Copy = X;
 		TSharedRef<SWidget> Pic = SNullWidget::NullWidget;
 		const FString Bi = YhBiomeOf(X);
 		if (bReal) Pic = SatThumb(X.Lat, X.Lon, 296.f, 166.f, false);
-		else Pic = YhBiomeArt(Bi, (uint32)X.World.Seed, 296.f, 166.f, false);
+		else Pic = YhBiomePic(Bi, (uint32)X.World.Seed, 296.f, 166.f);
 		const FString Info = bReal
 			? FString::Printf(TEXT("%.4f, %.4f · %.1f km · %s"), X.Lat, X.Lon, X.RadiusM * 2.0 / 1000.0, *FSmvI18n::T(FString(TEXT("weather.")) + X.Weather).ToString())
 			: FString::Printf(TEXT("%s · %s · %s"), *FSmvI18n::T(FString(TEXT("biome.")) + Bi).ToString(), *FSmvI18n::T(FString(TEXT("time.")) + X.TimeOfDay).ToString(), *FSmvI18n::T(FString(TEXT("weather.")) + X.Weather).ToString());
@@ -1982,7 +2039,7 @@ TSharedRef<SWidget> SSmvShell::ParkurList()
 			T.Name = FSmvI18n::T(bReal ? TEXT("parkur.real_new_name") : TEXT("parkur.custom_new_name")).ToString();
 			T.World.Seed = FMath::RandRange(1, 999999);
 			if (bReal) { T.ParkurKind = TEXT("real"); T.WorldMode = TEXT("real"); T.RadiusM = 1000; T.Lat = 41.0082; T.Lon = 28.9784; Self->RwStep = 0; Self->RealQuery.Empty(); }
-			else { YhApplyBiome(T, TEXT("forest")); T.GroundMsl = 0; Self->PwStep = 0; }
+			else { YhApplyBiome(T, Self->ParkurBiome.IsEmpty() ? FString(TEXT("forest")) : Self->ParkurBiome); T.GroundMsl = 0; Self->PwStep = Self->ParkurBiome.IsEmpty() ? 0 : 1; }
 			Self->NewTrack = T;
 			if (F.IsValid()) F->SetScreen(bReal ? ESmvScreen::RealWizard : ESmvScreen::ParkurWizard);
 		});
@@ -1998,8 +2055,12 @@ TSharedRef<SWidget> SSmvShell::ParkurList()
 				FMargin(26.f), 0.88f)
 		];
 	}
-	return YhPage(Tx(bReal ? TEXT("parkur.real") : TEXT("parkur.custom")), Tx(bReal ? TEXT("parkur.real_sub") : TEXT("parkur.custom_sub")),
-		SNew(SScrollBox).ScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll) + SScrollBox::Slot().Padding(0, 6, 0, 0)[Wrap], nullptr, NewB);
+	TSharedRef<SWidget> Body = SNew(SVerticalBox)
+		+ SVerticalBox::Slot().FillHeight(1.f)[SNew(SScrollBox).ScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll) + SScrollBox::Slot().Padding(0, 6, 0, 0)[Wrap]]
+		+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right).Padding(0, 10, 14, 0)[NewB];
+	if (bReal) return YhPage(Tx(TEXT("parkur.real")), Tx(TEXT("parkur.real_sub")), Body);
+	return YhPage(FSmvI18n::Format(TEXT("parkur.custom_of"), { { TEXT("b"), FSmvI18n::T(FString(TEXT("biome.")) + ParkurBiome).ToString() } }), Tx(TEXT("parkur.custom_sub")), Body,
+		[Self]() { Self->ParkurBiome.Empty(); Self->Refresh(); });
 }
 
 TSharedRef<SWidget> SSmvShell::EnvEditor(FSmvTrack& T)
@@ -2051,7 +2112,7 @@ TSharedRef<SWidget> SSmvShell::ParkurWizard()
 					SNew(SBox).WidthOverride(296.f).HeightOverride(170.f)
 					[
 						SNew(SOverlay)
-						+ SOverlay::Slot()[SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Hex(0x0b1222, 0.9f)).Padding(0.f)[YhBiomeArt(Id, 77u + (uint32)i, 296.f, 170.f, true)]]
+						+ SOverlay::Slot()[SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Hex(0x0b1222, 0.9f)).Padding(0.f)[YhBiomePic(Id, 77u + (uint32)i, 296.f, 170.f)]]
 						+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(10.f)
 						[
 							SNew(SBorder).BorderImage(Round(10.f)).BorderBackgroundColor(Hex(0x0b1222, 0.85f)).Padding(FMargin(7.f))[Icon(YhBiomeIcon(Id), 22.f, Hex(YhBiomeColor(Id)))]
@@ -2113,7 +2174,7 @@ TSharedRef<SWidget> SSmvShell::ParkurWizard()
 			];
 		}
 		// sağ: canlı 3B dünya önizlemesi (parametre değişince 0,6 sn sonra yeniden kurulur)
-		TSharedRef<SWidget> Prev = YhBiomeArt(Bi, (uint32)W.Seed, 560.f, 350.f, true);
+		TSharedRef<SWidget> Prev = YhBiomePic(Bi, (uint32)W.Seed, 560.f, 350.f);
 		if (Scene() && FSmvUiPrefs::Get().bPreview3d && Scene()->GetPreviewTarget())
 		{
 			PreviewBrush.SetResourceObject(Scene()->GetPreviewTarget());
@@ -2151,7 +2212,7 @@ TSharedRef<SWidget> SSmvShell::ParkurWizard()
 			Self->Data()->SaveTrack(Tr, FSmvDone::CreateLambda([Self, F](bool bOk, const FString& Msg)
 			{
 				Self->Toast(bOk ? FSmvI18n::T(TEXT("parkur.saved")).ToString() : Msg, bOk ? 6 : 3);
-				if (bOk && F.IsValid()) { F->ParkurCat = TEXT("custom"); F->ResetTo(ESmvScreen::ParkurList, ESmvScreen::Tracks); }
+				if (bOk && F.IsValid()) { Self->ParkurBiome = YhBiomeOf(Self->NewTrack); F->ParkurCat = TEXT("custom"); F->ResetTo(ESmvScreen::ParkurList, ESmvScreen::Tracks); }
 			}));
 		});
 	if (!DefaultFocus.IsValid()) DefaultFocus = Next;
@@ -2893,8 +2954,8 @@ TSharedRef<SWidget> SSmvShell::FlyCats()
 		const FC& C = Cs[i];
 		if (i > 0 && C.N == 0) continue;   // yalnız daha önce oluşturulmuş kategoriler
 		const FString Cat = C.Cat;
-		TSharedRef<SWidget> Pic = i == 0 ? YhBiomeArt(TEXT("mountain"), 5u, 300.f, 170.f, true)
-			: i == 1 ? YhBiomeArt(TEXT("forest"), 9u, 300.f, 170.f, true) : SatThumb(41.0082, 28.9784, 300.f, 170.f, true);
+		TSharedRef<SWidget> Pic = i == 0 ? YhBiomePic(TEXT("mountain"), 5u, 300.f, 170.f)
+			: i == 1 ? YhBiomePic(TEXT("forest"), 9u, 300.f, 170.f) : SatThumb(41.0082, 28.9784, 300.f, 170.f, true);
 		if (i == 0)
 		{
 			TArray<const FSlateBrush*> Shots;
@@ -2953,7 +3014,7 @@ TSharedRef<SWidget> SSmvShell::FlyTracks()
 			if (bReal ? !X.IsReal() : !X.IsCustom()) continue;
 			const FSmvTrack Tr = X;
 			const FString Bi = YhBiomeOf(X);
-			TSharedRef<SWidget> Pic = bReal ? SatThumb(X.Lat, X.Lon, 268.f, 150.f, false) : YhBiomeArt(Bi, (uint32)X.World.Seed, 268.f, 150.f, false);
+			TSharedRef<SWidget> Pic = bReal ? SatThumb(X.Lat, X.Lon, 268.f, 150.f, false) : YhBiomePic(Bi, (uint32)X.World.Seed, 268.f, 150.f);
 			const FString Sub = bReal ? FString::Printf(TEXT("%.1f km · %s"), X.RadiusM * 2.0 / 1000.0, *FSmvI18n::T(FString(TEXT("weather.")) + X.Weather).ToString())
 				: FString::Printf(TEXT("%s · %s"), *FSmvI18n::T(FString(TEXT("biome.")) + Bi).ToString(), *FSmvI18n::T(FString(TEXT("weather.")) + X.Weather).ToString());
 			Add(FText::FromString(X.Name), FText::FromString(Sub), Pic, Flow->Draft.Track.Id == X.Id, bReal ? Hex(0x38bdf8) : Hex(YhBiomeColor(Bi)), [Self, F, Tr]()

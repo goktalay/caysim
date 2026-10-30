@@ -1159,7 +1159,8 @@ int32 SSmvButton::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSla
 	const float R = bTile ? 18.f : 12.f;
 	const double T = Now();
 	FLinearColor Fill = FMath::Lerp(Card(), CardHover(), HoverA);
-	FLinearColor Ring = FMath::Lerp(Edge(), AccentCol.CopyWithNewOpacity(0.45f), HoverA);
+	// seçili / üzerine gelinen düğmede renkli (mavi) çerçeve yok — yalnız ince nötr kenar (kullanıcı, 2026-10-30)
+	FLinearColor Ring = FMath::Lerp(Edge(), Edge() * 1.6f, HoverA);
 	switch (Kind)
 	{
 	case ESmvBtn::Primary: Fill = FMath::Lerp(AccentCol * 0.62f, AccentCol * 0.85f, HoverA).CopyWithNewOpacity(0.95f); Ring = AccentCol.CopyWithNewOpacity(0.9f); break;
@@ -1206,7 +1207,6 @@ int32 SSmvButton::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSla
 	}
 	DrRoundRect(Out, L + 3, G, FVector2D(0.5f, 0.5f), Sz - FVector2D(1, 1), R, Ring, Kind == ESmvBtn::Hero ? 1.6f : 1.f);
 	if (bSel && !bTile) DrBox(Out, L + 3, G, FVector2D(0, Sz.Y * 0.2f), FVector2D(3.f, Sz.Y * 0.6f), AccentCol, Round(1.5f));
-	if (bTile && Kind == ESmvBtn::Tile) DrBox(Out, L + 3, G, FVector2D(R, Sz.Y - 3.f), FVector2D((Sz.X - 2 * R) * (0.25f + 0.75f * HoverA), 2.f), AccentCol.CopyWithNewOpacity(0.5f + 0.5f * HoverA), Round(1.f));
 	// odak halkası: yalnız gamepad / klavye ile gezinirken (fare kullanımında görünmez)
 	if (FocusA > 0.02f && PadActive())
 	{

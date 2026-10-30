@@ -312,6 +312,8 @@ private:
 	FString HwParamName, HwParamValue;
 	double HwMaxSpeed = -1, HwMaxAlt = -1;
 	int32 PwStep = 0;
+	/** Özel Parkurlar: seçili biyom (boş = önce Orman / Şehir / Dağlık seçimi) */
+	FString ParkurBiome;
 	int32 RwStep = 0;
 	int32 CwStep = 0;
 	FSmvPilot NewPilot;

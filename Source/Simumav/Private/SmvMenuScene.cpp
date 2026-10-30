@@ -348,7 +348,7 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	for (TObjectPtr<AActor>& X : SkyActors) if (X) X->Destroy();
 	SkyActors.Reset();
 	for (TObjectPtr<AActor>& X : SceneryActors) if (X) X->Destroy();
-	SceneryActors.Reset();
+	SceneryActors.Reset(); FogBanks.Reset();
 	DropMenuLevels();
 	if (Preview) Preview->Destroy();
 	if (PilotPrev) PilotPrev->Destroy();
@@ -1080,7 +1080,7 @@ void ASmvMenuScene::TickScenery()
 			for (const auto& Sp2 : Spots)
 			{
 				const FVector At = EnuToWorld(Sp2[0], Sp2[1], 6.0);
-				if (AActor* Fg = W->SpawnActor<AActor>(FogC, FTransform(FRotator(0.0, 70.0 * k++, 0.0), At, FVector(Sc)), Sp)) SceneryActors.Add(Fg);
+				if (AActor* Fg = W->SpawnActor<AActor>(FogC, FTransform(FRotator(0.0, 70.0 * k++, 0.0), At, FVector(Sc)), Sp)) { SceneryActors.Add(Fg); FogBanks.Add(Fg); Fg->SetActorHiddenInGame(IsShowStation(Station)); }
 			}
 		}
 	}
@@ -1277,7 +1277,7 @@ void ASmvMenuScene::LoadMenuMap(const FString& Want)
 	if (!W) return;
 	DropMenuLevels();
 	for (TObjectPtr<AActor>& X : SceneryActors) if (X) X->Destroy();
-	SceneryActors.Reset();
+	SceneryActors.Reset(); FogBanks.Reset();
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
 	bSceneryDone = false;
 	bFabMap = false;
@@ -1418,6 +1418,8 @@ bool ASmvMenuScene::IsMapReady() const
 	return MenuLevel && MenuLevel->IsLevelVisible() && MenuLevel->GetLoadedLevel() != nullptr;
 }
 
+bool ASmvMenuScene::IsShowStation(EStation S) { return S == EStation::Hangar || S == EStation::Fly || S == EStation::Crew; }
+
 void ASmvMenuScene::SetStation(EStation S)
 {
 	if (S == Station) return;
@@ -1425,6 +1427,7 @@ void ASmvMenuScene::SetStation(EStation S)
 	StationAt = FPlatformTime::Seconds();
 	if (Showcase) Showcase->SetActorHiddenInGame(!(S == EStation::Hangar || S == EStation::Fly));
 	if (ShowPilot) ShowPilot->SetActorHiddenInGame(S != EStation::Crew);
+	for (const TObjectPtr<AActor>& Fg : FogBanks) if (Fg) Fg->SetActorHiddenInGame(IsShowStation(S));
 }
 
 void ASmvMenuScene::ClearShowcaseSpot()
@@ -1606,7 +1609,7 @@ void ASmvMenuScene::SettleShowcase()
 		const FVector Side = FVector::CrossProduct(FVector::UpVector, ToCam);
 		const double D = FMath::Max(150.0, (double)E.Size() * 2.2);
 		const FVector Kp = O + ToCam * D + Side * D * 0.45 + FVector(0, 0, D * 0.7), Fp = O - ToCam * D * 0.3 - Side * D + FVector(0, 0, D * 0.3);
-		const float Base = SmvCfg(TEXT("ShowcaseLight"), 9000.f);
+		const float Base = SmvCfg(TEXT("ShowcaseLight"), 5000.f);   // 9000'de beyaz gövdeler patlıyordu (soluk, dumanlı görünüm)
 		auto K = [](const FVector& A, const FVector& B) { const float Dd = (float)FVector::Dist(A, B) / 171.f; return FMath::Clamp(Dd * Dd, 0.3f, 400.f); };
 		ShowLights[0]->SetWorldLocation(Kp); ShowLights[0]->SetIntensity(Base * K(O, Kp)); ShowLights[0]->SetAttenuationRadius((float)D * 4.f);
 		ShowLights[1]->SetWorldLocation(Fp); ShowLights[1]->SetIntensity(Base * 0.4f * K(O, Fp)); ShowLights[1]->SetAttenuationRadius((float)D * 4.f);
