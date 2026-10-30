@@ -1595,6 +1595,9 @@ void ASmvMenuScene::SettleShowcase()
 			Lt->SetIntensityUnits(ELightUnits::Candelas);
 			Lt->SetCastShadows(false);
 			Lt->SetLightingChannels(false, false, true);
+			// hacimsel sis ışık kanalını dinlemez: güçlü vitrin ışığı sisi parlatıp tüm görüntüyü beyaz pusla kaplıyordu (dronlar dumanlı)
+			Lt->SetVolumetricScatteringIntensity(0.f);
+			Lt->bAffectTranslucentLighting = false;
 			Lt->SetLightColor(i == 0 ? FLinearColor(1.f, 0.97f, 0.92f) : FLinearColor(0.75f, 0.85f, 1.f));
 			Lt->RegisterComponent();
 			ShowLights.Add(Lt);
