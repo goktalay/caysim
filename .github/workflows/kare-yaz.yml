@@ -1,0 +1,59 @@
+# Simumav - son duman testinin ekran karelerini kucultup base64 olarak is ciktisina yazar (artefakt kullanmaz - depolama kotasindan bagimsiz)
+name: kare-yaz
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: "Paket yapilandirmasi"
+        type: string
+        default: "Development"
+      desen:
+        description: "Dosya adi suzgeci (regex)"
+        type: string
+        default: "map_"
+      genislik:
+        description: "Azami genislik (px)"
+        type: string
+        default: "1280"
+
+jobs:
+  yaz:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Kareler
+        env:
+          CFG: ${{ inputs.config }}
+          DESEN: ${{ inputs.desen }}
+          GEN: ${{ inputs.genislik }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Add-Type -AssemblyName System.Drawing
+          $base = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
+          $saved = Join-Path $base 'Simumav\Saved'
+          if ($env:CFG -eq 'Shipping') { $saved = Join-Path $env:LOCALAPPDATA 'Simumav\Saved' }
+          $shots = Join-Path $saved 'Screenshots'
+          Write-Host ("Klasor: " + $shots)
+          $enc = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
+          $ep = New-Object System.Drawing.Imaging.EncoderParameters(1)
+          $ep.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality, [long]85)
+          Get-ChildItem -LiteralPath $shots -Recurse -File -Include *.png,*.jpg -ErrorAction SilentlyContinue | Where-Object { $_.Name -match $env:DESEN } | Sort-Object Name | ForEach-Object {
+            $img = [System.Drawing.Image]::FromFile($_.FullName)
+            $w = [Math]::Min([int]$env:GEN, $img.Width); $h = [int]($img.Height * $w / $img.Width)
+            $bmp = New-Object System.Drawing.Bitmap($w, $h)
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $g.DrawImage($img, 0, 0, $w, $h)
+            $ms = New-Object System.IO.MemoryStream
+            $bmp.Save($ms, $enc, $ep)
+            $b64 = [Convert]::ToBase64String($ms.ToArray())
+            Write-Host ("KARE+ " + $_.BaseName + " " + $b64.Length)
+            for ($i = 0; $i -lt $b64.Length; $i += 3000) { Write-Host ("KARE: " + $b64.Substring($i, [Math]::Min(3000, $b64.Length - $i))) }
+            Write-Host ("KARE- " + $_.BaseName)
+            $g.Dispose(); $bmp.Dispose(); $img.Dispose(); $ms.Dispose()
+          }

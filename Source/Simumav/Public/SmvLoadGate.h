@@ -27,12 +27,12 @@ class SIMUMAV_API FSmvLoadGate
 public:
 	/** Kapıyı başlat (Label: günlük etiketi; ucus | tur | menu). Kullanılmayan aşamalar baştan tamam sayılır. */
 	void Begin(const FString& InLabel, std::initializer_list<ESmvLoad> Used);
-	void Clear() { bActive = false; }
+	void Clear() { bActive = false; bFailed = false; FailText.Reset(); FailStage = ESmvLoad::Num; }
 	bool IsActive() const { return bActive; }
 	bool IsDone() const;
 	/** Kapı başarısız: bu aşama tamamlanamadı (ör. harita / zemin yüklenemedi) — uçuşa GİRİLMEZ; yükleme ekranı neden + Yeniden dene / Menü gösterir */
 	void Fail(ESmvLoad S, const FString& Reason);
-	bool IsFailed() const { return bFailed; }
+	bool IsFailed() const { return bActive && bFailed; }
 	const FString& FailReason() const { return FailText; }
 	ESmvLoad FailedStage() const { return FailStage; }
 	/** Aşamayı güncelle: ilerleme 0..1, hazır mı (StableNeed kare üst üste hazır kalınca tamam), ayrıntı metni.
