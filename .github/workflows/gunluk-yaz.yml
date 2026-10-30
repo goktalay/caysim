@@ -12,6 +12,10 @@ on:
         description: "Suzgec (regex)"
         type: string
         default: "Error|Warning"
+      dosya:
+        description: "Dosya adi deseni"
+        type: string
+        default: "Simumav*.log"
       azami:
         description: "En cok satir"
         type: string
@@ -31,9 +35,11 @@ jobs:
           KLASOR: ${{ inputs.klasor }}
           DESEN: ${{ inputs.desen }}
           AZAMI: ${{ inputs.azami }}
+          DOSYA: ${{ inputs.dosya }}
         run: |
           $ErrorActionPreference = 'Continue'
-          $f = Get-ChildItem -LiteralPath $env:KLASOR -Filter 'Simumav*.log' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $f = Get-ChildItem -LiteralPath $env:KLASOR -Filter $env:DOSYA -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          Get-ChildItem -LiteralPath $env:KLASOR -Filter '*.log' -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ("  " + $_.Name + "  " + $_.Length + "  " + $_.LastWriteTime) }
           if (-not $f) { Write-Host "Gunluk yok: $env:KLASOR"; exit 0 }
           Write-Host ("Dosya: " + $f.FullName + "  " + $f.Length + " bayt  " + $f.LastWriteTime)
           Select-String -LiteralPath $f.FullName -Pattern $env:DESEN -Encoding UTF8 | Select-Object -First ([int]$env:AZAMI) | ForEach-Object { Write-Host $_.Line }
