@@ -3,6 +3,8 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "CesiumWorldSetup.h"
+#include "EngineUtils.h"
+#include "SimumavModule.h"
 
 namespace
 {
@@ -93,6 +95,23 @@ void ASmvMapCam::Step(float Dt, const FVector& Target, float RangeM, bool bBig, 
 	{
 		MapAt = Now; bBigNow = bBig;
 		MapCap->FOVAngle = CamFov;
+		// gök / hava sistemi (Ultra Dynamic Sky / Weather: gök kubbesi, bulut katmanı, yağmur örtüsü) haritayı tek renkli bir yüzeyle
+		// kaplıyordu (~2 km yüksekten bakış bulut katmanının üstünde kalır) → yakalamada gizli; 5 sn'de bir yenilenir (sonradan doğanlar)
+		if (Now - HideAt > 5.0 && GetWorld())
+		{
+			HideAt = Now;
+			int32 N = 0;
+			for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+			{
+				const FString Cn = It->GetClass()->GetName();
+				if (Cn.Contains(TEXT("Ultra_Dynamic")) || Cn.Contains(TEXT("UltraDynamic")) || Cn.Contains(TEXT("Sky_Sphere")) || Cn.Contains(TEXT("SkySphere"))
+					|| Cn.Contains(TEXT("Weather")) || Cn.Contains(TEXT("Cloud")) || Cn.Contains(TEXT("FogBank")) || Cn.Contains(TEXT("Rain")))
+				{
+					if (!MapCap->HiddenActors.Contains(*It)) { MapCap->HiddenActors.Add(*It); ++N; }
+				}
+			}
+			if (N) UE_LOG(LogSimumav, Log, TEXT("Uçuş haritası: %d gök / hava aktörü yakalamada gizlendi"), N);
+		}
 		MapCap->SetWorldLocationAndRotation(CamLoc, CamRot);
 		MapCap->CaptureScene();
 		// Cesium: harita görüşündeki karolar da yüklensin (yalnız oyuncu kamerası değil)
