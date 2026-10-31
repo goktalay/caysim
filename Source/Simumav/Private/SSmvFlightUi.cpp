@@ -1739,7 +1739,7 @@ TSharedRef<SWidget> SSmvFlightUi::MapWindow()
 			if (MapBrush.GetResourceObject() != St.MapRt) { MapBrush.SetResourceObject(St.MapRt); MapBrush.ImageSize = FVector2D(St.MapRt->SizeX, St.MapRt->SizeY); }
 			// görüntü 4:3 (640×480); pencere 4:3 — tam sığar
 			MapBrush.SetUVRegion(FBox2f(FVector2f(0.f, 0.f), FVector2f(1.f, 1.f)));
-			FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &MapBrush, ESlateDrawEffect::None, FLinearColor::White);
+			FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &MapBrush, ESlateDrawEffect::IgnoreTextureAlpha, FLinearColor::White);
 			PaintMapMarks(G, Out, L + 2, FVector2D::ZeroVector, Sz, MapHover);
 		}
 		DrText(Out, L + 6, G, FSmvI18n::T(TEXT("map.title")).ToString(), FVector2D(8, 12), Mono(9), FLinearColor(0.6f, 0.9f, 1.f, 1.f), -1);
@@ -1801,7 +1801,7 @@ TSharedRef<SWidget> SSmvFlightUi::MapBigView()
 		FVector2f U0(0.f, 0.f), U1(1.f, 1.f);
 		if (Sa > Ia) { const float H = Ia / Sa; U0.Y = 0.5f - H * 0.5f; U1.Y = 0.5f + H * 0.5f; } else { const float W = Sa / Ia; U0.X = 0.5f - W * 0.5f; U1.X = 0.5f + W * 0.5f; }
 		MapBrush.SetUVRegion(FBox2f(U0, U1));
-		FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &MapBrush, ESlateDrawEffect::None, FLinearColor::White);
+		FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &MapBrush, ESlateDrawEffect::IgnoreTextureAlpha, FLinearColor::White);
 		// görüntü uzayı (0..1) → ekran: kırpılmış bölgeye göre
 		const FVector2D Full(Sz.X / (U1.X - U0.X), Sz.Y / (U1.Y - U0.Y));
 		BigU0 = FVector2D(U0.X, U0.Y); BigU1 = FVector2D(U1.X, U1.Y);
@@ -1862,7 +1862,7 @@ TSharedRef<SWidget> SSmvFlightUi::ViewWindow()
 		if (St.ViewRt)
 		{
 			if (ViewBrush.GetResourceObject() != St.ViewRt) { ViewBrush.SetResourceObject(St.ViewRt); ViewBrush.ImageSize = FVector2D(St.ViewRt->SizeX, St.ViewRt->SizeY); }
-			FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &ViewBrush, ESlateDrawEffect::None, FLinearColor::White);
+			FSlateDrawElement::MakeBox(Out, L + 1, G.ToPaintGeometry(FVector2f(Sz), FSlateLayoutTransform()), &ViewBrush, ESlateDrawEffect::IgnoreTextureAlpha, FLinearColor::White);
 		}
 		DrText(Out, L + 2, G, FSmvI18n::T(TEXT("map.cam")).ToString() + TEXT(" · ") + St.CamLabel, FVector2D(8, 12), Mono(9), FLinearColor(0.4f, 1.f, 0.5f, 1.f), -1);
 		const FVector2D C = Sz - FVector2D(4, 4);

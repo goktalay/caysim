@@ -42,9 +42,8 @@ ASmvMapCam::ASmvMapCam()
 	MapCap->ShowFlags.SetFog(false);
 	MapCap->ShowFlags.SetVolumetricFog(false);
 	MapCap->ShowFlags.SetCloud(false);
-	// harita = yüzeyin ham rengi (taban rengi; ışık / pozlama / saat / hava etkisi yok): son renk yakalamasında harita tamamen SİYAH
-	// çıkıyordu (alacakaranlık + yağmurda ve uzaktan bakışta göz uyumu / bulut katmanı). Saydam katman (yağmur, bulut kartları) çizilmez.
-	MapCap->CaptureSource = ESceneCaptureSource::SCS_BaseColor;
+	// saydam katman (yağmur, bulut kartları) çizilmez. Not: taban rengi (SCS_BaseColor) yakalaması alfa 0 yazıyordu → Slate'te görüntü
+	// tamamen saydam, harita boş görünüyordu; son renk + kalıcı durum (göz uyumu) yeterli
 	MapCap->ShowFlags.SetTranslucency(false);
 	MapCap->ShowFlags.SetParticles(false);
 	MapCap->ShowFlags.SetAtmosphere(false);
