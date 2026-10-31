@@ -70,6 +70,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "GameFramework/PlayerStart.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Components/PointLightComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Engine/StaticMesh.h"
@@ -808,6 +809,8 @@ void ASmvGameMode::StopScene()
 	if (Decor) { Decor->Destroy(); Decor = nullptr; }
 	for (TObjectPtr<AActor>& Db : Debris) if (Db) Db->Destroy();
 	Debris.Reset(); DebrisVel.Reset();
+	for (FBoom& B : Booms) if (AActor* A = B.A.Get()) A->Destroy();
+	Booms.Reset(); bDroneVelInit = false;
 	if (Terrain) { Terrain->Destroy(); Terrain = nullptr; }
 	if (RegionWorld) { RegionWorld->Destroy(); RegionWorld = nullptr; }
 	bRegionWorld = false;
@@ -934,7 +937,7 @@ void ASmvGameMode::HandleMessage(const TSharedPtr<FJsonObject>& M)
 	if (T == TEXT("crash"))
 	{
 		bCrashed = true;
-		CrashFx();
+		CrashFx(SmvJson::Num(M, TEXT("speed")));
 		PushEvent(FString::Printf(TEXT("ÇARPIŞMA: %s, %.1f m/s"), *SmvJson::Str(M, TEXT("reason")), SmvJson::Num(M, TEXT("speed"))), 2);
 		if (Gpws) { SmvCore::FGpwsInput I; I.T = Link() ? Link()->LastTele().Tbm / 1000.0 : 0; I.bCrashed = true; Gpws->Step(I); }
 		return;
@@ -1238,6 +1241,18 @@ void ASmvGameMode::Tick(float Dt)
 	if (Flow.IsValid() && Flow->GetScreen() == ESmvScreen::Loading) TickLoadGate();
 	TickPhysics(Dt);
 	TickDebris(Dt);
+	TickBooms();
+	if (Drone)
+	{
+		// sıfırla: çarpışma durumu temizlenince enkaz kalkar (parçalar yerine, poz yeniden telemetriden)
+		if (!bCrashed && Drone->IsWrecked()) { Drone->EndWreck(); bDroneVelInit = false; }
+		if (!Drone->IsWrecked() && Dt > 1e-4f)
+		{
+			const FVector P = Drone->GetActorLocation();
+			if (bDroneVelInit) DroneVelCm = FMath::Lerp(DroneVelCm, (P - DronePrevLoc) / Dt, 0.35);
+			DronePrevLoc = P; bDroneVelInit = true;
+		}
+	}
 	TickFence();
 	TickCityWindows();
 	TickCreditsPlacement();
@@ -3416,23 +3431,31 @@ void ASmvGameMode::UpdateFpv(const FCaySimTelemetry& T, double Now)
 // çarpma efekti: darbe sesi, ekran parlaması, kamera sarsıntısı, enkaz parçaları
 // ---------------------------------------------------------------------------
 
-void ASmvGameMode::CrashFx()
+void ASmvGameMode::CrashFx(double SpeedMs)
 {
 	if (Tones) Tones->Sfx(19);
 	if (FlightUi.IsValid()) FlightUi->Flash(FLinearColor(1.f, 0.55f, 0.3f, 0.75f));
 	if (ASmvPilotPawn* P = GetPilot()) P->Shake(60.f, 0.8f);
 	if (!Drone || !GetWorld()) return;
+	// enkaz: gövde telemetriyi bırakır (süzülmez), savrulup düşer; uçak / VTOL / önleyicide kanatlar kopar
+	const FString Ty = Req.Drone.Type;
+	const bool bWing = Ty == TEXT("plane") || Ty == TEXT("vtol") || Ty == TEXT("interceptor");
+	const double Sp = SpeedMs > 0.0 ? SpeedMs : DroneVelCm.Size() / 100.0;
+	Drone->BeginWreck(DroneVelCm, (float)Sp, bWing);
+	// hızlı çarpma: patlama (uçaklarda 14 m/s, dronlarda 18 m/s üstü)
+	if (Sp >= (bWing ? 14.0 : 18.0)) Explosion(Drone->GetActorLocation(), Sp);
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (!Cube) return;
 	const FVector C = Drone->GetActorLocation();
 	const double AltRel = Link() ? Link()->LastTele().AltRel : 0.0;
 	DebrisGroundZ = C.Z - FMath::Max(0.0, AltRel) * 100.0;
 	DebrisUntil = FPlatformTime::Seconds() + 8.0;
-	for (int32 i = 0; i < 12; ++i)
+	const int32 NDeb = Sp >= 14.0 ? 26 : 12;
+	for (int32 i = 0; i < NDeb; ++i)
 	{
-		FActorSpawnParameters Sp;
-		Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		AStaticMeshActor* A = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(FRotator(FMath::FRandRange(0.f, 360.f), FMath::FRandRange(0.f, 360.f), 0.f), C), Sp);
+		FActorSpawnParameters SpP;
+		SpP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* A = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(FRotator(FMath::FRandRange(0.f, 360.f), FMath::FRandRange(0.f, 360.f), 0.f), C), SpP);
 		if (!A || !A->GetStaticMeshComponent()) continue;
 		A->SetMobility(EComponentMobility::Movable);
 		A->GetStaticMeshComponent()->SetStaticMesh(Cube);
@@ -3440,7 +3463,8 @@ void ASmvGameMode::CrashFx()
 		const float Sz = FMath::FRandRange(0.04f, 0.16f);
 		A->SetActorScale3D(FVector(Sz, Sz * FMath::FRandRange(0.5f, 1.5f), Sz * 0.4f));
 		Debris.Add(A);
-		DebrisVel.Add(FVector(FMath::FRandRange(-600.f, 600.f), FMath::FRandRange(-600.f, 600.f), FMath::FRandRange(200.f, 900.f)));
+		const float Kv = Sp >= 14.0 ? 1.8f : 1.f;
+		DebrisVel.Add(DroneVelCm * 0.15 + FVector(FMath::FRandRange(-600.f, 600.f) * Kv, FMath::FRandRange(-600.f, 600.f) * Kv, FMath::FRandRange(200.f, 900.f) * Kv));
 	}
 }
 
@@ -3683,4 +3707,102 @@ void ASmvGameMode::ConfirmUi(const FText& Title, const FText& Body, const FText&
 {
 	if (Shell.IsValid()) Shell->Confirm(Title, Body, Yes, bDanger, MoveTemp(OnYes));
 	else if (OnYes) OnYes();
+}
+
+// ---------------------------------------------------------------------------
+// patlama: ateş topu + ışık parlaması + duman (yalnız görsel)
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::Explosion(const FVector& At, double SpeedMs)
+{
+	UWorld* W = GetWorld();
+	if (!W) return;
+	UStaticMesh* Sph = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	UMaterialInterface* Glow = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Simumav/Materials/M_SmvGlow.M_SmvGlow"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	if (!Sph) return;
+	const double Now = FPlatformTime::Seconds();
+	const float K = FMath::Clamp((float)SpeedMs / 25.f, 0.6f, 2.f);   // hız → büyüklük
+	auto Spawn = [&](const FVector& P, UMaterialInterface* M, const FLinearColor& Col, float Glw, const FVector& Vel, double Life, float S0, float S1, int32 Kind) -> AStaticMeshActor*
+	{
+		FActorSpawnParameters Sp; Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* A = W->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform(P), Sp);
+		if (!A || !A->GetStaticMeshComponent()) return nullptr;
+		A->SetMobility(EComponentMobility::Movable);
+		UStaticMeshComponent* C = A->GetStaticMeshComponent();
+		C->SetStaticMesh(Sph);
+		C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		C->SetCastShadow(Kind == 1);
+		UMaterialInstanceDynamic* D = M ? UMaterialInstanceDynamic::Create(M, A) : nullptr;
+		if (D) { D->SetVectorParameterValue(TEXT("Color"), Col); D->SetScalarParameterValue(TEXT("Glow"), Glw); C->SetMaterial(0, D); }
+		A->SetActorScale3D(FVector(S0));
+		FBoom B; B.A = A; B.Mid = D; B.Vel = Vel; B.Born = Now; B.Life = Life; B.S0 = S0; B.S1 = S1; B.Kind = Kind;
+		Booms.Add(B);
+		return A;
+	};
+	// ateş topu: 7 parlayan küre, hızla büyüyüp söner (0,9 sn)
+	for (int32 i = 0; i < 7; ++i)
+	{
+		const FVector O = FMath::VRand() * FMath::FRandRange(20.f, 120.f) * K;
+		const FLinearColor Col = FMath::Lerp(FLinearColor(1.f, 0.85f, 0.35f), FLinearColor(1.f, 0.3f, 0.05f), FMath::FRand());
+		Spawn(At + O, Glow ? Glow : Basic, Col, 40.f, O * 2.0 + FVector(0, 0, 150), FMath::FRandRange(0.6f, 1.0f), 0.3f * K, FMath::FRandRange(2.2f, 3.6f) * K, 0);
+	}
+	// duman: 9 koyu küre, yavaş büyüyüp yükselir (6 sn)
+	for (int32 i = 0; i < 9; ++i)
+	{
+		const FVector O = FMath::VRand() * FMath::FRandRange(30.f, 140.f) * K; 
+		const float G = FMath::FRandRange(0.06f, 0.16f);
+		Spawn(At + O + FVector(0, 0, 60), Basic, FLinearColor(G, G, G), 0.f, FVector(FMath::FRandRange(-40.f, 40.f), FMath::FRandRange(-40.f, 40.f), FMath::FRandRange(120.f, 260.f)), FMath::FRandRange(4.5f, 7.f), 0.6f * K, FMath::FRandRange(3.f, 5.f) * K, 1);
+	}
+	// ışık parlaması (0,6 sn)
+	FActorSpawnParameters Sp; Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	if (AActor* La = W->SpawnActor<AActor>(AActor::StaticClass(), FTransform(At), Sp))
+	{
+		UPointLightComponent* L = NewObject<UPointLightComponent>(La);
+		La->SetRootComponent(L);
+		L->SetMobility(EComponentMobility::Movable);
+		L->SetWorldLocation(At);
+		L->SetIntensityUnits(ELightUnits::Candelas);
+		L->SetIntensity(200000.f * K);
+		L->SetAttenuationRadius(6000.f * K);
+		L->SetLightColor(FLinearColor(1.f, 0.6f, 0.25f));
+		L->SetCastShadows(false);
+		L->RegisterComponent();
+		FBoom B; B.A = La; B.Light = L; B.Born = Now; B.Life = 0.6; B.Kind = 2;
+		Booms.Add(B);
+	}
+	if (Tones) Tones->Sfx(19);
+	if (ASmvPilotPawn* P = GetPilot()) P->Shake(120.f, 1.4f);
+	if (FlightUi.IsValid()) FlightUi->Flash(FLinearColor(1.f, 0.7f, 0.35f, 0.9f));
+	SMV_KLOG(TEXT("Patlama: %.1f m/s"), SpeedMs);
+}
+
+void ASmvGameMode::TickBooms()
+{
+	if (Booms.Num() == 0) return;
+	const double Now = FPlatformTime::Seconds();
+	const float Dt = FMath::Clamp((float)FApp::GetDeltaTime(), 0.f, 0.05f);
+	for (int32 i = Booms.Num() - 1; i >= 0; --i)
+	{
+		FBoom& B = Booms[i];
+		AActor* A = B.A.Get();
+		const float U = (float)FMath::Clamp((Now - B.Born) / FMath::Max(0.05, B.Life), 0.0, 1.0);
+		if (!A || U >= 1.f) { if (A) A->Destroy(); Booms.RemoveAtSwap(i); continue; }
+		if (B.Kind == 2)
+		{
+			if (UPointLightComponent* L = B.Light.Get()) L->SetIntensity(L->Intensity * FMath::Max(0.f, 1.f - Dt * 6.f));
+			continue;
+		}
+		const float E = 1.f - FMath::Pow(1.f - U, 3.f);          // ease-out büyüme
+		A->SetActorScale3D(FVector(FMath::Lerp(B.S0, B.S1, E)));
+		B.Vel *= FMath::Max(0.f, 1.f - Dt * (B.Kind == 0 ? 3.f : 0.4f));
+		A->AddActorWorldOffset(B.Vel * Dt);
+		if (UMaterialInstanceDynamic* D = B.Mid.Get())
+		{
+			if (B.Kind == 0) D->SetScalarParameterValue(TEXT("Glow"), 40.f * (1.f - U) * (1.f - U));
+			else D->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.12f, 0.12f, 0.12f) * (1.f - U * 0.3f));
+		}
+		// duman sonunda incelir: son %30'da küçülerek kaybolur
+		if (B.Kind == 1 && U > 0.7f) A->SetActorScale3D(FVector(FMath::Lerp(B.S1, 0.05f, (U - 0.7f) / 0.3f)));
+	}
 }

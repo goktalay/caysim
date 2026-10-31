@@ -345,6 +345,7 @@ bool ASmvDroneActor::PlaceFabBody(USceneComponent* C, const FBoxSphereBounds& B,
 void ASmvDroneActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bWreck) { TickWreck(DeltaSeconds); return; }
 	if (bGlbBody && GlbBody)
 	{
 		const FCaySimTelemetry& Tg = GetLatestTelemetry();
@@ -1131,4 +1132,100 @@ void ASmvProcTerrain::Build(const FSmvTrack& Track, double GroundMsl, AActor* Ge
 		const float S = (float)(Half * W.Water * 2.0);
 		WaterPlane->SetRelativeScale3D(FVector(S, S, 0.01f));
 	}
+}
+
+// ---------------------------------------------------------------------------
+// çarpışma enkazı: telemetriden kopuş, savrulma + düşüş, kanat parçalarının kopması
+// ---------------------------------------------------------------------------
+
+bool ASmvDroneActor::WreckGround(const FVector& P, double& OutZ) const
+{
+	UWorld* W = GetWorld();
+	if (!W) return false;
+	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvWreckGround), true, this);
+	if (GltfActor) Q.AddIgnoredActor(GltfActor);
+	FHitResult H;
+	if (!W->LineTraceSingleByChannel(H, P + FVector(0, 0, 300.0), P - FVector(0, 0, 200000.0), ECC_Visibility, Q)) return false;
+	OutZ = H.ImpactPoint.Z;
+	return true;
+}
+
+void ASmvDroneActor::BeginWreck(const FVector& VelCmS, float SpeedMs, bool bBreakWings)
+{
+	if (bWreck) return;
+	bWreck = true; bWreckRest = false;
+	SetPoseFrozen(true);
+	WreckStart = GetActorTransform();
+	// çarpma enerjinin çoğunu alır: kalan hız %25 + hafif yukarı savrulma; hızlı çarpmada daha çok takla
+	const double Sp = FMath::Max(1.0, (double)SpeedMs);
+	WreckVel = VelCmS * 0.25 + FVector(0, 0, FMath::Min(Sp * 12.0, 400.0));
+	const float Tum = FMath::Clamp((float)Sp * 9.f, 40.f, 540.f);
+	WreckSpin = FRotator(FMath::FRandRange(-Tum, Tum), FMath::FRandRange(-Tum, Tum) * 0.5f, FMath::FRandRange(-Tum, Tum));
+	WreckParts.Reset();
+	if (!bBreakWings) return;
+	// kanat parçaları: gövde ekseninden yana uzak duran ağ bileşenleri (kanat, kanatçık, flap, uç dümen) kopar
+	TArray<UPrimitiveComponent*> Prims;
+	TArray<AActor*> Owners = { this };
+	if (GltfActor) Owners.Add(GltfActor);
+	for (AActor* A : Owners) { TInlineComponentArray<UPrimitiveComponent*> Pc(A); for (UPrimitiveComponent* C : Pc) if (C && C->IsVisible() && C->IsA<UMeshComponent>()) Prims.Add(C); }
+	const FTransform Inv = GetActorTransform();
+	double Half = 0;
+	for (UPrimitiveComponent* C : Prims) Half = FMath::Max(Half, FMath::Abs(Inv.InverseTransformPosition(C->Bounds.Origin).Y) + C->Bounds.BoxExtent.Size() * 0.3);
+	int32 N = 0;
+	for (UPrimitiveComponent* C : Prims)
+	{
+		const FVector Lp = Inv.InverseTransformPosition(C->Bounds.Origin);
+		const FString Nm = C->GetName().ToLower();
+		const bool bWingName = Nm.Contains(TEXT("wing")) || Nm.Contains(TEXT("aileron")) || Nm.Contains(TEXT("flap")) || Nm.Contains(TEXT("elevon")) || Nm.Contains(TEXT("kanat"));
+		if (!(bWingName || (Half > 20.0 && FMath::Abs(Lp.Y) > Half * 0.42))) continue;
+		if (C == GetRootComponent() || C->GetAttachParent() == nullptr) continue;
+		FWreckPart P;
+		P.C = C; P.Parent = C->GetAttachParent(); P.Socket = C->GetAttachSocketName(); P.Rel = C->GetRelativeTransform();
+		const FVector Side = GetActorRightVector() * (Lp.Y >= 0 ? 1.0 : -1.0);
+		P.Vel = WreckVel + Side * FMath::FRandRange(150.f, 350.f + (float)Sp * 15.f) + FVector(0, 0, FMath::FRandRange(100.f, 400.f));
+		P.Spin = FRotator(FMath::FRandRange(-400.f, 400.f), FMath::FRandRange(-400.f, 400.f), FMath::FRandRange(-400.f, 400.f));
+		C->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+		WreckParts.Add(P);
+		++N;
+	}
+	UE_LOG(LogSimumav, Log, TEXT("Enkaz: %.1f m/s, %d kanat parçası koptu (%d ağ bileşeni)"), SpeedMs, N, Prims.Num());
+}
+
+void ASmvDroneActor::TickWreck(float Dt)
+{
+	Dt = FMath::Clamp(Dt, 0.f, 0.05f);
+	auto Step = [this, Dt](USceneComponent* C, FVector& Vel, FRotator& Spin, bool& bRest, double HalfH)
+	{
+		if (!C || bRest) return;
+		Vel.Z -= 981.0 * Dt;
+		Vel *= FMath::Max(0.0, 1.0 - 0.15 * Dt);    // hava sürtünmesi (taşıma yok: süzülmez)
+		FVector P = C->GetComponentLocation() + Vel * Dt;
+		double Gz;
+		if (WreckGround(P, Gz) && P.Z - HalfH < Gz)
+		{
+			P.Z = Gz + HalfH;
+			if (FMath::Abs(Vel.Z) > 250.0) { Vel.Z = -Vel.Z * 0.3; Vel.X *= 0.5; Vel.Y *= 0.5; Spin *= 0.5; }
+			else { Vel = FVector::ZeroVector; Spin = FRotator::ZeroRotator; bRest = true; }
+		}
+		C->SetWorldLocationAndRotation(P, (C->GetComponentQuat() * (Spin * Dt).Quaternion()));
+	};
+	Step(GetRootComponent(), WreckVel, WreckSpin, bWreckRest, 15.0);
+	for (FWreckPart& P : WreckParts) Step(P.C.Get(), P.Vel, P.Spin, P.bRest, 3.0);
+}
+
+void ASmvDroneActor::EndWreck()
+{
+	if (!bWreck) return;
+	for (FWreckPart& P : WreckParts)
+	{
+		if (USceneComponent* C = P.C.Get())
+		{
+			if (USceneComponent* Par = P.Parent.Get()) C->AttachToComponent(Par, FAttachmentTransformRules::KeepRelativeTransform, P.Socket);
+			C->SetRelativeTransform(P.Rel);
+		}
+	}
+	WreckParts.Reset();
+	SetActorTransform(WreckStart);
+	bWreck = false; bWreckRest = false;
+	SetPoseFrozen(false);
 }

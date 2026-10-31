@@ -125,6 +125,9 @@ protected:
 	 *  taban sınıfın yer kesişimi düzeltmesi (zemin yüksekliği örneği) atlanır. EnuRot: yerel ENU → Unreal; WorldRot: gövde yönelimi. */
 	virtual bool ResolveRenderLocation(const FCaySimPose& /*Pose*/, const FQuat& /*EnuRot*/, const FQuat& /*WorldRot*/, FVector& /*InOutLoc*/) { return false; }
 	void SetOnGroundState(bool bOn) { bOnGround = bOn; }
+	/** Enkaz: telemetriden poz uygulanmaz (çarpışmadan sonra gövde SITL'in süzülen uçağını izlemez; alt sınıf kendisi taşır) */
+	void SetPoseFrozen(bool bOn) { bPoseFrozen = bOn; }
+	bool IsPoseFrozen() const { return bPoseFrozen; }
 	/** Son görsel düzeltme (alt sınıf: fırlatma rampası / araç tavanı / el — yalnız görüntü, fizik ve telemetri değişmez). */
 	virtual void AdjustRenderPose(FVector& /*InOutLoc*/, FQuat& /*InOutRot*/) {}
 
@@ -139,6 +142,7 @@ private:
 	TWeakObjectPtr<AActor> GeoActor;
 	ICaySimGeoTransform* Geo = nullptr;
 	bool bOnGround = true;
+	bool bPoseFrozen = false;
 	float PropPhase = 0.f;
 
 	void ApplyPose(const FCaySimPose& Pose);

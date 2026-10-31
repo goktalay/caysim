@@ -68,6 +68,12 @@ public:
 	bool IsChuteDeployed() const { return bChuteOut; }
 	/** Fırlatma düzeneği görsel düzeltmesi (rampa kızağı / araç tavanı / pilotun eli): dünya ofseti (cm) + burun yukarı (°). Yalnız görüntü. */
 	void SetLaunchVisual(const FVector& OffsetCm, float PitchUpDeg) { LaunchOff = OffsetCm; LaunchPitch = PitchUpDeg; }
+	/** Çarpışma enkazı (kullanıcı 2026-10-30): gövde telemetriyi bırakır (SITL'in süzülen uçağı izlenmez), çarpma hızının küçük bir
+	 *  kısmıyla savrulup yerçekimiyle düşer, yerde seker ve durur; uçak / VTOL'de kanat parçaları kopar (ayrı ağ bileşenleri gövdeden
+	 *  ayrılıp kendi hızlarıyla uçar). Sıfırla (bCrashed temizlenince) EndWreck parçaları yerine takar. VelCmS: çarpma anındaki hız. */
+	void BeginWreck(const FVector& VelCmS, float SpeedMs, bool bBreakWings);
+	void EndWreck();
+	bool IsWrecked() const { return bWreck; }
 	/** Görsel düzeltmeden önceki (fizikle çözülmüş) konum */
 	FVector GetRawRenderLoc() const { return bRawValid ? RawLoc : GetActorLocation(); }
 
@@ -114,6 +120,16 @@ protected:
 
 private:
 	bool bChuteOut = false;
+	// ---- enkaz ----
+	bool bWreck = false, bWreckRest = false;
+	FVector WreckVel = FVector::ZeroVector;
+	FRotator WreckSpin = FRotator::ZeroRotator;
+	FTransform WreckStart;
+	struct FWreckPart { TWeakObjectPtr<USceneComponent> C; TWeakObjectPtr<USceneComponent> Parent; FName Socket; FTransform Rel; FVector Vel; FRotator Spin; bool bRest = false; };
+	TArray<FWreckPart> WreckParts;
+	void TickWreck(float Dt);
+	/** aşağı ışın: zemin yüksekliği (kendini ve kopan parçaları yok sayar) */
+	bool WreckGround(const FVector& P, double& OutZ) const;
 	void ClearDress();
 	UStaticMeshComponent* AddDress(UStaticMesh* M, const FVector& PosM, const FVector& ScaleM, const FRotator& Rot, const FLinearColor& Color, float Rough = 0.5f, float Metal = 0.1f);
 	FString SmvType = TEXT("multirotor");

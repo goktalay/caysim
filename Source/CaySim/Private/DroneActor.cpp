@@ -328,6 +328,7 @@ double ACaySimDroneActor::NowSeconds() const
 void ACaySimDroneActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bPoseFrozen) return;
 	if (!Buffer.IsEmpty())
 	{
 		ApplyPose(Buffer.Sample(NowSeconds()));

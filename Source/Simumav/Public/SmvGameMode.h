@@ -171,7 +171,15 @@ private:
 	UPROPERTY() TArray<TObjectPtr<AActor>> Debris;
 	TArray<FVector> DebrisVel;
 	double DebrisGroundZ = 0, DebrisUntil = 0;
-	void CrashFx();
+	void CrashFx(double SpeedMs = 0.0);
+	/** hızlı çarpma: ateş topu (parlayan küreler) + ışık parlaması + yükselen duman (Fab varlığı gerektirmez) */
+	void Explosion(const FVector& At, double SpeedMs);
+	struct FBoom { TWeakObjectPtr<AActor> A; TWeakObjectPtr<class UMaterialInstanceDynamic> Mid; TWeakObjectPtr<class UPointLightComponent> Light; FVector Vel; double Born = 0, Life = 1; float S0 = 1, S1 = 2; int32 Kind = 0; };
+	TArray<FBoom> Booms;
+	void TickBooms();
+	/** dron hızı (cm/sn; çarpma anı savrulması için, enkaz değilken her kare) */
+	FVector DronePrevLoc = FVector::ZeroVector, DroneVelCm = FVector::ZeroVector;
+	bool bDroneVelInit = false;
 	UPROPERTY() TObjectPtr<class ASmvSiteActor> Site;
 	UPROPERTY() TObjectPtr<class ASmvWindSock> Sock;
 	UPROPERTY() TObjectPtr<class ASmvHolidayDecor> Decor;
