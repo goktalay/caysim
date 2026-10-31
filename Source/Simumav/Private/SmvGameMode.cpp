@@ -71,6 +71,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/PointLightComponent.h"
+#include "Components/LocalLightComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Engine/StaticMesh.h"
@@ -2755,6 +2756,23 @@ void ASmvGameMode::PlaceFabLevels()
 		const FBox ClipB = bFabSelfContained ? Box + BigBox : (LandBox.IsValid && LandBox.GetSize().X > 20000.0 && LandBox.GetSize().Y > 20000.0 ? LandBox : Box);
 		FabPlacedBox = ClipB.ShiftBy(Off);
 		bRimPending = true;
+	}
+	// gündüz: haritanın kendi yerel lambaları (trafik ışığı, sokak lambası, vitrin) gece için ayarlı — bulutlu gündüzde sokağı yeşile /
+	// turuncuya boyuyordu (Modern Şehir duman testi). Gündüz / altın saatte %12'ye kısılır.
+	if (Req.Track.TimeOfDay == TEXT("day") || Req.Track.TimeOfDay == TEXT("golden"))
+	{
+		int32 Nl = 0;
+		for (ULevel* Lv : Levels)
+		{
+			if (!Lv) continue;
+			for (AActor* A : Lv->Actors)
+			{
+				if (!A) continue;
+				TInlineComponentArray<ULocalLightComponent*> Ls(A);
+				for (ULocalLightComponent* L : Ls) if (L && L->Intensity > 0.f) { L->SetIntensity(L->Intensity * 0.12f); ++Nl; }
+			}
+		}
+		if (Nl) SMV_KLOG(TEXT("Gündüz: haritanın %d yerel lambası kısıldı (%s)"), Nl, *FabMapKey);
 	}
 	// "havada ada" haritaları (kayıt tablosu Surround biyomu; gerçek dünya yoksa): çevreye Hyper malzemeli arazi diski + kaya/çalı + uzak dağlar
 	else if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())

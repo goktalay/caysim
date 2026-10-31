@@ -45,6 +45,9 @@ ASmvMapCam::ASmvMapCam()
 	// saydam katman (yağmur, bulut kartları) çizilmez. Not: taban rengi (SCS_BaseColor) yakalaması alfa 0 yazıyordu → Slate'te görüntü
 	// tamamen saydam, harita boş görünüyordu; son renk + kalıcı durum (göz uyumu) yeterli
 	MapCap->ShowFlags.SetTranslucency(false);
+	// harita her saatte okunur olsun: alacakaranlık / yağmurda yukarıdan bakış neredeyse siyahtı → pozlama +2,5 EV
+	MapCap->PostProcessSettings.bOverride_AutoExposureBias = true;
+	MapCap->PostProcessSettings.AutoExposureBias = 2.5f;
 	MapCap->ShowFlags.SetParticles(false);
 	MapCap->ShowFlags.SetAtmosphere(false);
 }
