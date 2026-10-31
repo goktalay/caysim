@@ -114,6 +114,17 @@ void ASmvMapCam::Step(float Dt, const FVector& Target, float RangeM, bool bBig, 
 		}
 		MapCap->SetWorldLocationAndRotation(CamLoc, CamRot);
 		MapCap->CaptureScene();
+		if (Now - DiagAt > 10.0 && GetWorld())
+		{
+			// tanı (duman günlüğü): kamera konumu, hedef, bakış ışınının çarptığı yüzey
+			DiagAt = Now;
+			FHitResult H;
+			const bool bHit = GetWorld()->LineTraceSingleByChannel(H, CamLoc, CamLoc + CamRot.Vector() * 2000000.0, ECC_Visibility);
+			SMV_KLOG(TEXT("SMOKE harita kamerası: kamera (%.0f, %.0f, %.0f) hedef (%.0f, %.0f, %.0f) D %.0f m, FOV %.0f, RT %dx%d, kayıtlı %d görünür %d, ışın %s %.0f m (%s)"),
+				CamLoc.X, CamLoc.Y, CamLoc.Z, SmoothTarget.X, SmoothTarget.Y, SmoothTarget.Z, FVector::Dist(CamLoc, SmoothTarget) / 100.0, CamFov,
+				MapRt ? MapRt->SizeX : 0, MapRt ? MapRt->SizeY : 0, MapCap->IsRegistered() ? 1 : 0, MapCap->IsVisible() ? 1 : 0,
+				bHit ? TEXT("çarptı") : TEXT("boş"), bHit ? H.Distance / 100.0 : 0.0, bHit && H.GetActor() ? *H.GetActor()->GetName() : TEXT("-"));
+		}
 		// Cesium: harita görüşündeki karolar da yüklensin (yalnız oyuncu kamerası değil)
 		CesiumCamId = ACaySimWorldSetup::UpsertExtraCamera(this, CesiumCamId, FVector2D(MapRt->SizeX, MapRt->SizeY), CamLoc, CamRot, CamFov);
 	}

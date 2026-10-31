@@ -62,6 +62,8 @@ private:
 	TSharedPtr<SBox> BackdropBox;
 	/** ana menü arka plan videosu (ASmvMenuScene::GetMenuVideo); oynarken dünya çizimi kapalı */
 	FSlateBrush MenuVideoBrush;
+	/** fırçanın gösterdiği video dokusu (menü sahnesi kapanınca GC; boyamada geçerlilik denetimi — Askeri Üs yüklemesinde çökme) */
+	TWeakObjectPtr<UTexture> MenuVideoTex;
 	bool bMenuVideoOn = false;
 	/** -SmvRecordMenu: menü sinematiği sabit adımlı kare kaydı (menu-video.yml) */
 	void TickRecordMenu();

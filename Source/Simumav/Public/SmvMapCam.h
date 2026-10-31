@@ -52,5 +52,5 @@ private:
 	void EnsureTargets(bool bBig);
 	/** Cesium karo seçimine eklenen harita kamerası (-1 yok); harita kapanınca 1 sn sonra çıkarılır */
 	int32 CesiumCamId = -1;
-	double StepAt = 0, HideAt = -100.0;
+	double StepAt = 0, HideAt = -100.0, DiagAt = -100.0;
 };

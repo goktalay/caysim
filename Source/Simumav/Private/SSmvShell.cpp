@@ -321,7 +321,7 @@ void SSmvShell::Construct(const FArguments& InArgs)
 		// ana menü: önceden kaydedilmiş sinematik video (canlı dünya bu sırada çizilmez)
 		+ SOverlay::Slot()
 		[
-			SNew(SScaleBox).Stretch(EStretch::ScaleToFill).Visibility_Lambda([this]() { return bMenuVideoOn ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+			SNew(SScaleBox).Stretch(EStretch::ScaleToFill).Visibility_Lambda([this]() { return bMenuVideoOn && MenuVideoTex.IsValid() ? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
 			[
 				SNew(SImage).Image(&MenuVideoBrush)
 			]
@@ -582,7 +582,10 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 			MenuVideoBrush.DrawAs = ESlateBrushDrawType::Image;
 			MenuVideoBrush.SetResourceObject(Vt);
 			MenuVideoBrush.ImageSize = FVector2D(1920, 1080);
+			MenuVideoTex = Vt;
 		}
+		// video yok (uçuş / menü dışı / sahne kapandı): fırça boşaltılır — çöp toplanan dokuyu boyamak IndexToObject denetiminde çöküyordu
+		if (!Vt && MenuVideoBrush.GetResourceObject()) { MenuVideoBrush.SetResourceObject(nullptr); MenuVideoTex.Reset(); }
 		const bool bOn = Vt != nullptr;
 		if (bOn != bMenuVideoOn)
 		{
