@@ -187,7 +187,6 @@ void ASmvMenuScene::MissionPlay(const TArray<FVector>& LatLonAlt, float SpeedMs)
 		MissionDrone = W->SpawnActor<ASmvDroneActor>(ASmvDroneActor::StaticClass(), FTransform::Identity, Sp);
 		if (MissionDrone)
 		{
-			MissionDrone->SetPoseFrozen(true);
 			MissionDrone->ConfigureVisual(TEXT("plane"), TEXT("smv:caymaz"), FLinearColor(0.9f, 0.9f, 0.92f));
 			if (USmvGameInstance* GI = USmvGameInstance::GetSmv(this))
 			{

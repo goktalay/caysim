@@ -1055,14 +1055,14 @@ TSharedRef<SWidget> SSmvShell::HangarV2()
 		for (const FString& K : Keys)
 		{
 			const double V = Ed.Params[K];
-			const double* D = Cmd ? Cmd->Defaults.Find(K) : nullptr;
-			if (D && FMath::IsNearlyEqual(*D, V, 1e-6)) continue;
+			const double* Dv = Cmd ? Cmd->Defaults.Find(K) : nullptr;
+			if (Dv && FMath::IsNearlyEqual(*Dv, V, 1e-6)) continue;
 			++Nc;
 			Pl->AddSlot().AutoHeight().Padding(0, 1)
 			[
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot().FillWidth(1.f)[SmvUi::Text(FText::FromString(K), 11, "Mono", Fg(), false)]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0, 0, 0)[SmvUi::Text(FText::FromString(FString::SanitizeFloat(V, 0) + (D ? FString::Printf(TEXT("   (%s)"), *FString::SanitizeFloat(*D, 0)) : FString())), 11, "Mono", D ? Accent() : Accent3(), false)]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0, 0, 0)[SmvUi::Text(FText::FromString(FString::SanitizeFloat(V, 0) + (Dv ? FString::Printf(TEXT("   (%s)"), *FString::SanitizeFloat(*Dv, 0)) : FString())), 11, "Mono", Dv ? Accent() : Accent3(), false)]
 			];
 		}
 		Info->AddSlot().AutoHeight().Padding(0, 12, 0, 2)[Section(FSmvI18n::Format(TEXT("hangar2.changed_n"), { { TEXT("n"), FString::FromInt(Nc) } }), Accent())];
