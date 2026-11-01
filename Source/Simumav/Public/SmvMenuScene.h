@@ -72,6 +72,25 @@ public:
 	 *  Fly kalkış alanında alçak kahraman açısı · Tour harita içinden kamera turu (karşılaşma parkuru önizlemesi) */
 	enum class EStation : uint8 { Menu, Hangar, Crew, Parkur, Fly, Tour };
 	void SetStation(EStation S);
+	// ---- görev düzenleyici kipi (kullanıcı 2026-11-01; SmvMenuMission.cpp) ----
+	/** Menü haritası / araçları gizlenir, görev evinde gerçek dünya (Google 3B ya da Cesium World Terrain) kurulur; kamera fareyle döner */
+	void EnterMissionMode(double Lat, double Lon);
+	void ExitMissionMode();
+	bool IsMissionMode() const { return bMission; }
+	/** yörünge: derece, derece, yakınlık çarpanı (>1 uzak), ekran pikseli kaydırma; Focus: hedef nokta + uzaklık */
+	void MissionOrbit(float DYaw, float DPitch, float Zoom, const FVector2D& PanPx);
+	void MissionFocus(double Lat, double Lon, float DistM);
+	/** coğrafi nokta (irtifa eve göre) → görüntü pikseli; bGround: o noktanın zemini */
+	bool MissionProject(double Lat, double Lon, double AltRel, bool bGround, FVector2D& OutPx) const;
+	/** görüntü pikseli → zemindeki enlem / boylam (ışın) */
+	bool MissionPick(const FVector2D& Px, double& OutLat, double& OutLon) const;
+	/** dünya kaynağı adı ve karo yüklemesi */
+	FString MissionWorldInfo() const;
+	/** oynatma: CAYMAZ görev yolunda (enlem, boylam, eve göre irtifa) uçar */
+	void MissionPlay(const TArray<FVector>& LatLonAlt, float SpeedMs);
+	void MissionStop();
+	bool IsMissionPlaying() const { return bMissionPlay; }
+	float MissionPlayProgress() const { return MissionPlayU; }
 	static bool IsShowStation(EStation S);
 	EStation GetStation() const { return Station; }
 	/** Vitrin aracı (gerçek dünyada kalkış alanında; Lumen ışığı, gölge, hava) — donanım (eklenti parçaları, çıkartma, desen) dahil */
@@ -169,7 +188,26 @@ protected:
 	UPROPERTY() TObjectPtr<UTextureRenderTarget2D> CardRT;
 	UPROPERTY() TObjectPtr<ASmvPilotFigure> ShowPilot;
 
+	UPROPERTY() TObjectPtr<ACaySimWorldSetup> MissionWorld;
+	UPROPERTY() TObjectPtr<ASmvDroneActor> MissionDrone;
+
 private:
+	// ---- görev kipi ----
+	bool bMission = false, bMissionPlay = false;
+	double MLat = 0, MLon = 0, MHomeGw = 0;      // ev zemini (dünya yüksekliği, m)
+	bool bMHomeGw = false;
+	double MHomeAt = 0;
+	FVector MTarget = FVector::ZeroVector;
+	float MYaw = 200.f, MPitch = -48.f, MDist = 1500.f;
+	TArray<FVector> MPath;                          // oynatma yolu (enlem, boylam, irtifa)
+	TArray<double> MPathCum;
+	float MPlaySpeed = 12.f, MissionPlayU = 0.f;
+	double MPlayT0 = 0;
+	mutable TMap<int64, double> MGroundCache;
+	double MGroundAt(double Lat, double Lon) const;
+	void TickMission(float Dt);
+	FVector MWorld(double Lat, double Lon, double AltRel) const;
+
 	FSmvLoadGate Gate;
 	int32 GateCount = 0;
 	double GAtmosT0 = 0, GWarmT0 = 0, GStreamT0 = 0;

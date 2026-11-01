@@ -122,6 +122,19 @@ private:
 	TSharedRef<SWidget> Crew();
 	TSharedRef<SWidget> Tracks();
 	TSharedRef<SWidget> Missions();
+	// ---- Görevler v2 (SSmvMissions.cpp): liste + 3B önizleme + özet, sihirbaz, tam ekran Cesium düzenleyici ----
+	TSharedPtr<struct FSmvMissionEdit> MEd;
+	bool bMLegacy = false;
+	void MEdLoad(const FSmvMission& M);
+	FString MEdSave() const;
+	TSharedRef<SWidget> MissionOverlay(bool bEditor);
+	TSharedRef<SWidget> MissionsLegacy();
+	TSharedRef<SWidget> MissionWizard();
+	TSharedRef<SWidget> MissionEditor();
+	TSharedRef<SWidget> MPointDialog();
+	void MOpenPointDlg(int32 Index);
+	void MTogglePlay();
+	FVector2D MissionHome() const;
 	TSharedRef<SWidget> Wizard();
 	TSharedRef<SWidget> Loading();
 	/** Tam ekran yükleme ekranı çizimi (Loading ve harita turu katmanı ortak) */

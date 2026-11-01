@@ -746,6 +746,7 @@ int32 SSmvCanvas::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FSla
 
 FReply SSmvCanvas::OnMouseButtonDown(const FGeometry& G, const FPointerEvent& E)
 {
+	if (OnPointer) { OnPointer(G, E, FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition())), 0); return FReply::Handled().CaptureMouse(SharedThis(this)); }
 	if (!OnDrag) return FReply::Unhandled();
 	OnDrag(G, FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition())), 0);
 	return FReply::Handled().CaptureMouse(SharedThis(this));
@@ -755,6 +756,7 @@ FReply SSmvCanvas::OnMouseMove(const FGeometry& G, const FPointerEvent& E)
 {
 	const FVector2D P = FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition()));
 	if (OnHover) OnHover(P);
+	if (OnPointer && HasMouseCapture()) { OnPointer(G, E, P, 1); return FReply::Handled(); }
 	if (!OnDrag || !HasMouseCapture()) return FReply::Unhandled();
 	OnDrag(G, P, 1);
 	return FReply::Handled();
@@ -762,6 +764,7 @@ FReply SSmvCanvas::OnMouseMove(const FGeometry& G, const FPointerEvent& E)
 
 FReply SSmvCanvas::OnMouseButtonUp(const FGeometry& G, const FPointerEvent& E)
 {
+	if (OnPointer && HasMouseCapture()) { OnPointer(G, E, FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition())), 2); return FReply::Handled().ReleaseMouseCapture(); }
 	if (!OnDrag || !HasMouseCapture()) return FReply::Unhandled();
 	OnDrag(G, FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition())), 2);
 	return FReply::Handled().ReleaseMouseCapture();
@@ -770,6 +773,13 @@ FReply SSmvCanvas::OnMouseButtonUp(const FGeometry& G, const FPointerEvent& E)
 void SSmvCanvas::OnMouseCaptureLost(const FCaptureLostEvent& E)
 {
 	if (OnDrag) OnDrag(FGeometry(), FVector2D::ZeroVector, 2);
+}
+
+FReply SSmvCanvas::OnMouseWheel(const FGeometry& G, const FPointerEvent& E)
+{
+	if (!OnWheel) return FReply::Unhandled();
+	OnWheel(FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition())), E.GetWheelDelta());
+	return FReply::Handled();
 }
 
 // ---------------------------------------------------------------------------

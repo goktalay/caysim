@@ -45,7 +45,11 @@ enum class ESmvScreen : uint8
 	/** Pilot menüsü → Arkadaşlarım (birlikte uçulanlar + davetler) */
 	Friends,
 	/** Pilot menüsü → Özelleştir (etkin pilotun görünümü) */
-	Customize
+	Customize,
+	/** Görevler → Yeni görev sihirbazı (ad + tür: koridor / ilaçlama / spiral / serbest) */
+	MissionWizard,
+	/** Görevler → tam ekran Cesium görev düzenleyici */
+	MissionEditor
 };
 
 /** Yarış sonu sırası (uçuş özeti podyumu) */

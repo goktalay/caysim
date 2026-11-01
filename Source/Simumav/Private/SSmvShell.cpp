@@ -573,7 +573,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 	if (!Flow->StartupNotice.IsEmpty() && BootFinished()) { Toast(Flow->StartupNotice, 4); Flow->StartupNotice.Reset(); }
 	const bool bPause = GameMode.IsValid() && GameMode->IsPausedMenu();
 	const ESmvScreen Cur = Flow->GetScreen();
-	if (BackdropBox.IsValid()) BackdropBox->SetVisibility(Cur == ESmvScreen::Flight ? EVisibility::Collapsed : EVisibility::HitTestInvisible);
+	if (BackdropBox.IsValid()) BackdropBox->SetVisibility((Cur == ESmvScreen::Flight || Cur == ESmvScreen::Missions || Cur == ESmvScreen::MissionWizard || Cur == ESmvScreen::MissionEditor) ? EVisibility::Collapsed : EVisibility::HitTestInvisible);
 	{
 		ASmvMenuScene* Sc = Scene();
 		UTexture* Vt = (Sc && Cur == ESmvScreen::Menu && !bPause) ? Sc->GetMenuVideo() : nullptr;
@@ -1143,6 +1143,8 @@ TSharedRef<SWidget> SSmvShell::BuildScreen(ESmvScreen S)
 	case ESmvScreen::Friends: return FriendsScreen();
 	case ESmvScreen::Customize: return Crew();
 	case ESmvScreen::Missions: return Missions();
+	case ESmvScreen::MissionWizard: return MissionWizard();
+	case ESmvScreen::MissionEditor: return MissionEditor();
 	case ESmvScreen::Wizard: return Wizard();
 	case ESmvScreen::Loading: return Loading();
 	case ESmvScreen::Flight: return FlightPause();
@@ -2356,7 +2358,7 @@ TSharedRef<SWidget> SSmvShell::MissionMap(float Wd, float Ht)
 	return SNew(SBox).WidthOverride(Wd).HeightOverride(Ht)[C];
 }
 
-TSharedRef<SWidget> SSmvShell::Missions()
+TSharedRef<SWidget> SSmvShell::MissionsLegacy()
 {
 	USmvDataService* D = Data();
 	if (!D) return SNullWidget::NullWidget;

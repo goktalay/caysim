@@ -150,6 +150,10 @@ public:
 	/** Faz 0 bas, 1 sürükle, 2 bırak */
 	TFunction<void(const FGeometry&, const FVector2D&, int32)> OnDrag;
 	TFunction<void(const FVector2D&)> OnHover;
+	/** ayrıntılı işaretçi (tuş bilgili; OnDrag yerine): faz 0 bas, 1 sürükle, 2 bırak; konum yerel */
+	TFunction<void(const FGeometry&, const FPointerEvent&, const FVector2D&, int32)> OnPointer;
+	/** fare tekerleği (yerel konum, adım) */
+	TFunction<void(const FVector2D&, float)> OnWheel;
 	int32 LayersUsed = 24;
 
 	void Construct(const FArguments& A) { Size = A._Size; }
@@ -161,6 +165,7 @@ public:
 	virtual FReply OnMouseMove(const FGeometry& G, const FPointerEvent& E) override;
 	virtual FReply OnMouseButtonUp(const FGeometry& G, const FPointerEvent& E) override;
 	virtual void OnMouseCaptureLost(const FCaptureLostEvent& E) override;
+	virtual FReply OnMouseWheel(const FGeometry& G, const FPointerEvent& E) override;
 
 private:
 	FVector2D Size = FVector2D(100, 100);

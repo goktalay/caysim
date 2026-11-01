@@ -362,6 +362,9 @@ void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 	if (WorldPrev) WorldPrev->Destroy();
 	if (Cam) Cam->Destroy();
 	if (Terrain) Terrain->Destroy();
+	if (MissionWorld) { MissionWorld->Destroy(); MissionWorld = nullptr; }
+	if (MissionDrone) { MissionDrone->Destroy(); MissionDrone = nullptr; }
+	bMission = false; bMissionPlay = false;
 	if (WorldSetup) WorldSetup->Destroy();
 	Flyer = nullptr; Preview = nullptr; Cam = nullptr; Terrain = nullptr; WorldSetup = nullptr;
 	Super::EndPlay(Reason);
@@ -536,6 +539,8 @@ void ASmvMenuScene::Tick(float Dt)
 	Super::Tick(Dt);
 	// sahne saati kare süresinden birikir (duvar saati + Dt'li kamera yumuşatması takılmalarda sarsıntı veriyordu)
 	SceneT += FMath::Clamp((double)Dt, 0.0, 0.1);
+	// görev düzenleyici kipi: menü kamerası / araçları yerine görev dünyası yörüngesi (SmvMenuMission.cpp)
+	if (bMission) { TickMission(Dt); TickSpin(); return; }
 	const double T = SceneT;
 	if (bLive && Flyer && Cam)
 	{

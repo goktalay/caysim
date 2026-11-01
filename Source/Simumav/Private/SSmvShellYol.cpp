@@ -383,6 +383,7 @@ bool SSmvShell::IsSceneScreen(ESmvScreen S)
 	case ESmvScreen::Menu: case ESmvScreen::Welcome: case ESmvScreen::Hangar: case ESmvScreen::HangarWizard: case ESmvScreen::Crew: case ESmvScreen::CrewWizard:
 	case ESmvScreen::Customize: case ESmvScreen::Tracks: case ESmvScreen::ParkurList: case ESmvScreen::ParkurWizard: case ESmvScreen::RealWizard:
 	case ESmvScreen::FlyFlow: case ESmvScreen::FlyMode: case ESmvScreen::Progress: case ESmvScreen::Friends:
+	case ESmvScreen::Missions: case ESmvScreen::MissionWizard: case ESmvScreen::MissionEditor:
 		return true;
 	default:
 		return false;
@@ -394,6 +395,16 @@ void SSmvShell::UpdateStation()
 	ASmvMenuScene* S = Scene();
 	if (!S || !S->IsLive() || !Flow.IsValid()) return;
 	using EStation = ASmvMenuScene::EStation;
+	// görev ekranları: menü sahnesi görev kipinde (görevin evinde gerçek dünya; SmvMenuMission.cpp)
+	const bool bMis = Built == ESmvScreen::Missions || Built == ESmvScreen::MissionWizard || Built == ESmvScreen::MissionEditor;
+	if (bMis && !(Built == ESmvScreen::Missions && bMLegacy))
+	{
+		const FVector2D H = MissionHome();
+		S->EnterMissionMode(H.X, H.Y);
+		return;
+	}
+	if (S->IsMissionMode()) S->ExitMissionMode();
+	if (!bMis) bMLegacy = false;
 	EStation St = EStation::Menu;
 	switch (Built)
 	{
