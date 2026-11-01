@@ -95,6 +95,8 @@ struct FSmvFlightUiState
 	double FlightS = 0;
 	bool bHideGauges = false;       // FPV / gimbal HUD açıkken kadranlar gizli (web)
 	bool bMenuOpen = false;         // duraklatma menüsü açık: alt bant ve kumanda gizli
+	/** ekran ortasında kalıcı uyarı (ör. uçuş kartı yeniden başlıyor); boşsa gizli */
+	FString CenterNotice;
 };
 
 class SIMUMAV_API SSmvFlightUi : public SCompoundWidget

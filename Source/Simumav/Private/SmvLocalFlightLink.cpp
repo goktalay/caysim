@@ -128,6 +128,19 @@ bool USmvLocalFlightLink::LaunchSitl(bool bClean)
 	}
 	IFileManager& FM = IFileManager::Get();
 	FM.MakeDirectory(*WorkDir, true);
+	// kalıcı dron klasörü: araç kimliği (ikili + tip + çeşit) değişmediyse eeprom ve betikler KORUNUR; değiştiyse (dron başka gövdeye
+	// çevrildi) eski çerçevenin parametreleri yeni araca uymaz → temizlenir
+	if (bPersistentDir)
+	{
+		const FString Kimlik = FString::Printf(TEXT("%s|%s|%s|%s"), UTF8_TO_TCHAR(BinA.c_str()), UTF8_TO_TCHAR(Session->SitlType.c_str()), UTF8_TO_TCHAR(Session->Vehicle.c_str()), UTF8_TO_TCHAR(Session->Airframe.c_str()));
+		const FString KFile = FPaths::Combine(WorkDir, TEXT("smv_kimlik.txt"));
+		FString Old;
+		const bool bSame = FFileHelper::LoadFileToString(Old, *KFile) && Old.TrimStartAndEnd() == Kimlik;
+		bClean = !bSame;
+		if (!bSame && FPaths::FileExists(FPaths::Combine(WorkDir, TEXT("eeprom.bin")))) EmitEvent(TEXT("Dron gövdesi değişti — SITL hafızası (parametreler) yeni araç için sıfırlandı"), 4);
+		FFileHelper::SaveStringToFile(Kimlik, *KFile);
+		if (bSame) EmitEvent(TEXT("Dronun kayıtlı SITL hafızası yüklendi (önceki uçuşlardaki tüm parametreler ve Lua betikleri)"), 6);
+	}
 	if (bClean)
 	{
 		// temiz oturum: eeprom.bin + Lua script dizinleri silinir (drone_sitl._baslat_port)
@@ -176,6 +189,17 @@ bool USmvLocalFlightLink::LaunchSitl(bool bClean)
 		const FString ScrDir = FPaths::Combine(WorkDir, TEXT("scripts"));
 		FM.MakeDirectory(*ScrDir, true);
 		FFileHelper::SaveStringToFile(SessionScript, *FPaths::Combine(ScrDir, TEXT("simumav.lua")), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+	}
+	else FM.Delete(*FPaths::Combine(WorkDir, TEXT("scripts"), TEXT("simumav.lua")), false, true, true);   // hangarda düzenleyici boşaltıldı
+	// hangardan / Mission Planner'dan yüklenmiş başka betik varsa betik motoru açık kalsın
+	{
+		TArray<FString> Lua;
+		FM.FindFiles(Lua, *FPaths::Combine(WorkDir, TEXT("scripts"), TEXT("*.lua")), true, false);
+		if (Lua.Num() && Text.find("SCR_ENABLE") == std::string::npos)
+		{
+			Text += "SCR_ENABLE 1\n";
+			FFileHelper::SaveStringToFile(FString(UTF8_TO_TCHAR(Text.c_str())), *Parm, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
+		}
 	}
 	// çeşidin çerçeve / kanat JSON'u: --model "<çerçeve>:<ad>.json" GÖRELİ yolla okunur (süreç çalışma dizini = WorkDir)
 	std::string JName, JText;
@@ -402,7 +426,11 @@ void USmvLocalFlightLink::Start(const FSmvFlightRequest& Request)
 		OnStarted.Broadcast(false);
 		return;
 	}
-	WorkDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Simumav"), TEXT("SitlRun"), FString::FromInt(BasePort)));
+	Session->BasePort = BasePort;   // SITL --base-port bağlantı portuyla aynı (önceden hep 15670 gidiyordu)
+	// kayıtlı dron: kalıcı klasör (eeprom + betikler korunur); kimliksiz / misafir taslak: port klasörü, her uçuşta temiz
+	const FString PDir = DroneDir(Req.Drone.Id);
+	bPersistentDir = !PDir.IsEmpty();
+	WorkDir = bPersistentDir ? PDir : FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Simumav"), TEXT("SitlRun"), FString::FromInt(BasePort)));
 	FlightInfo = FSmvFlightInfo();
 	FlightInfo.FlightId = FString::Printf(TEXT("l-%s"), *FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(12).ToLower());
 	FlightInfo.SimId = FString::FromInt(BasePort);
@@ -642,6 +670,14 @@ void USmvLocalFlightLink::TickMission(double Wall)
 
 void USmvLocalFlightLink::OnFirstHeartbeat()
 {
+	if (bRebooting)
+	{
+		bRebooting = false;
+		TSharedRef<FJsonObject> M = SmvMsg(TEXT("reboot"));
+		M->SetStringField(TEXT("phase"), TEXT("done"));
+		EmitMessage(M);
+		EmitEvent(TEXT("Uçuş kartı yeniden başladı"), 6);
+	}
 	bHeartbeatSeen = true;
 	LastStreamRefresh = LastGcsHb = FPlatformTime::Seconds();
 	bMissionReq = true;   // otopilottaki görev (mini harita)
@@ -995,6 +1031,11 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	const FString Rid = NextRid();
 	auto Fail = [this, &Rid, &Name](const FString& E) { EmitResult(Rid, Name, false, E); return Rid; };
 	if (Name == TEXT("reset")) { BeginReset(); EmitResult(Rid, Name, true); return Rid; }
+	if (Name == TEXT("reboot"))
+	{
+		if (Tele.bArmed) return Fail(TEXT("motorlar çalışırken uçuş kartı yeniden başlatılamaz (önce DISARM)"));
+		BeginReboot(false); EmitResult(Rid, Name, true); return Rid;
+	}
 	if (!Tcp || !bHeartbeatSeen) return Fail(TEXT("SITL hazır değil"));
 	const std::string Type = Session->SitlType;
 	// konum tahmini hazır değilken kalkış / konum isteyen kipte ARM: kuyruğa alınır (TickPosReady hazır olunca yürütür)
@@ -1460,12 +1501,28 @@ void USmvLocalFlightLink::PumpMp()
 		if (!MpLocked.IsValid() || !MpLocked->CompareEndpoints(*From)) MpLocked = From;
 		MpLastRx = W;
 		if (!bGcsConnected) { bGcsConnected = true; EmitEvent(FString::Printf(TEXT("Mission Planner bağlandı: %s"), *From->ToString(true)), 6); }
-		SendRaw(Buf, Read);
-		// yan dinleme: PARAM_SET → Sıfırla sonrası yeniden yazılacaklar
-		SmvMav::FFrame F;
-		for (int32 i = 0; i < Read; ++i)
+		// yan dinleme: PARAM_SET (kalıcı parametreler) ve uçuş kartı yeniden başlatma (COMMAND_LONG 246, param1 = 1)
+		TArray<SmvMav::FFrame> Frames;
 		{
-			if (!MpParser->Push(Buf[i], F) || F.MsgId != SmvMav::MSG_PARAM_SET) continue;
+			SmvMav::FFrame F0;
+			for (int32 i = 0; i < Read; ++i) if (MpParser->Push(Buf[i], F0)) Frames.Add(F0);
+		}
+		bool bReboot = false;
+		for (const SmvMav::FFrame& F : Frames)
+		{
+			if (F.MsgId != SmvMav::MSG_COMMAND_LONG) continue;
+			SmvMav::FReader R(F.Payload);
+			const float P1 = R.F32();
+			for (int32 k = 0; k < 6; ++k) R.F32();
+			if (R.U16() == 246 && FMath::RoundToInt(P1) == 1) bReboot = true;
+		}
+		// motorlar çalışıyorsa SITL kendisi reddeder (ArduPilot davranışı) → olduğu gibi iletilir; değilse yeniden başlatmayı biz yürütürüz
+		// (Windows SITL'de kendi kendini yeniden başlatma süreci düşürüyordu → "SITL süreci kapandı" ve uçuş biterdi)
+		if (bReboot && !Tele.bArmed) { SendMpAck(246, 0); BeginReboot(true); continue; }
+		SendRaw(Buf, Read);
+		for (const SmvMav::FFrame& F : Frames)
+		{
+			if (F.MsgId != SmvMav::MSG_PARAM_SET) continue;
 			SmvMav::FReader R(F.Payload);
 			const float V = R.F32(); R.U8(); R.U8();
 			const FString Id = UTF8_TO_TCHAR(R.Chars(16).c_str());
@@ -1483,4 +1540,44 @@ void USmvLocalFlightLink::PumpMp()
 		MpLocked.Reset();
 		EmitEvent(TEXT("Mission Planner sessiz (30 sn) — kilit kaldırıldı."), 5);
 	}
+}
+
+FString USmvLocalFlightLink::DroneDir(const FString& DroneId)
+{
+	FString Id = DroneId.TrimStartAndEnd();
+	if (Id.IsEmpty()) return FString();
+	for (TCHAR& C : Id) if (!FChar::IsAlnum(C) && C != TEXT('-') && C != TEXT('_')) C = TEXT('_');
+	return FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Simumav"), TEXT("Drones"), Id.Left(64)));
+}
+
+TArray<FString> USmvLocalFlightLink::DroneScripts(const FString& DroneId)
+{
+	TArray<FString> Out;
+	const FString D = DroneDir(DroneId);
+	if (!D.IsEmpty()) IFileManager::Get().FindFiles(Out, *FPaths::Combine(D, TEXT("scripts"), TEXT("*.lua")), true, false);
+	Out.Sort();
+	return Out;
+}
+
+void USmvLocalFlightLink::SendMpAck(uint16 Cmd, uint8 Result)
+{
+	if (!Udp || !(MpLocked.IsValid() || MpAddr.IsValid())) return;
+	SmvMav::FWriter W;
+	W.U16(Cmd); W.U8(Result);
+	const std::vector<uint8_t> Fr = SmvMav::EncodeV2(SmvMav::MSG_COMMAND_ACK, W.B, MpAckSeq++, (uint8_t)(Session ? Session->SysId : 1), 1);
+	int32 Sent = 0;
+	Udp->SendTo(Fr.data(), (int32)Fr.size(), Sent, MpLocked.IsValid() ? *MpLocked : *MpAddr);
+}
+
+void USmvLocalFlightLink::BeginReboot(bool bFromMp)
+{
+	if (bRebooting) return;
+	bRebooting = true;
+	TSharedRef<FJsonObject> M = SmvMsg(TEXT("reboot"));
+	M->SetStringField(TEXT("phase"), TEXT("wait"));
+	M->SetStringField(TEXT("source"), bFromMp ? TEXT("mp") : TEXT("panel"));
+	EmitMessage(M);
+	EmitEvent(bFromMp ? TEXT("Mission Planner uçuş kartını yeniden başlatıyor — yeniden başlama bekleniyor (parametreler ve betikler korunur)")
+		: TEXT("Uçuş kartı yeniden başlatılıyor — yeniden başlama bekleniyor (parametreler ve betikler korunur)"), 4);
+	BeginReset();
 }

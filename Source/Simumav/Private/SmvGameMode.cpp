@@ -947,6 +947,18 @@ void ASmvGameMode::HandleMessage(const TSharedPtr<FJsonObject>& M)
 		return;
 	}
 	if (T == TEXT("warn")) { PushEvent(SmvJson::Str(M, TEXT("text")), 2); return; }
+	if (T == TEXT("reboot"))
+	{
+		// uçuş kartı yeniden başlatma: bekleme uyarısı; bitince oturum sürer (SITL ev konumunda, parametreler / betikler korunmuş)
+		bRebootWait = SmvJson::Str(M, TEXT("phase")) == TEXT("wait");
+		if (bRebootWait)
+		{
+			bCrashed = false;
+			if (Drone && Drone->GetContactSolver()) Drone->GetContactSolver()->Reset();
+		}
+		else HandleToast(FSmvI18n::T(TEXT("flight.reboot_done")).ToString(), 6);
+		return;
+	}
 	if (T == TEXT("servo_trigger") && SmvJson::Str(M, TEXT("phase")) == TEXT("fired"))
 	{
 		bCrashed = true;
@@ -2200,6 +2212,7 @@ void ASmvGameMode::UpdateHud()
 		U.bRcDevice = Set.InputDevice == TEXT("rc");
 		U.FlightS = FPlatformTime::Seconds() - SceneT0;
 		U.bMenuOpen = bPauseMenu;
+		U.CenterNotice = bRebootWait ? FSmvI18n::T(TEXT("flight.reboot_wait")).ToString() : FString();
 		U.Pip = PipRt;
 		U.PipLabel = ASmvPilotPawn::ModeLabel(ESmvCamMode::Gimbal);
 		UpdateSite(U);

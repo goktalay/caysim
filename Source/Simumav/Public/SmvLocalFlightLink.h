@@ -57,6 +57,11 @@ public:
 	/** İkililer kurulu mu (yoksa arayüz "Bulutta uç" önerir). */
 	static bool SitlAvailable(FString* OutDir = nullptr);
 	static FString SitlDir();
+	/** Kayıtlı dronun kalıcı SITL klasörü (eeprom.bin = tüm parametreler, scripts/ = Lua betikleri): uçuşlar arasında SİLİNMEZ
+	 *  (kullanıcı 2026-11-01: değişen parametreler ve yüklenen betikler sonraki uçuşta gelsin). Kimliksiz dron → boş. */
+	static FString DroneDir(const FString& DroneId);
+	/** Dronun yüklü Lua betikleri (scripts/*.lua; hangar listesi) */
+	static TArray<FString> DroneScripts(const FString& DroneId);
 
 private:
 	// ---- süreç ----
@@ -64,6 +69,8 @@ private:
 	void* PipeRead = nullptr;
 	void* PipeWrite = nullptr;
 	FString WorkDir;
+	/** WorkDir dron başına kalıcı mı (eeprom korunur) */
+	bool bPersistentDir = false;
 	int32 BasePort = 0;
 	double ProcStartedAt = 0;
 	FString ProcLogTail;
@@ -149,6 +156,13 @@ public:
 private:
 	bool bAfterReset = false;
 	bool bResetting = false;
+	/** Uçuş kartı yeniden başlatma (Mission Planner MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN 246 ya da panel "Yeniden başlat"): SITL eeprom +
+	 *  betikler korunarak yeniden açılır; ilk heartbeat'te "yeniden başladı" (GameMode ekranda uyarı gösterir) */
+	bool bRebooting = false;
+	void BeginReboot(bool bFromMp);
+	/** Mission Planner'a COMMAND_ACK (yanıtı biz verdiğimiz komutlar için) */
+	void SendMpAck(uint16 Cmd, uint8 Result);
+	uint8 MpAckSeq = 0;
 	FString LaunchPhase;     // armed | launch | released
 	double LaunchT0 = 0;
 	bool bMotorCut = false;

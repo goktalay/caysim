@@ -532,6 +532,16 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		[
 			MapWindow()
 		]
+		// ortada kalıcı uyarı (uçuş kartı yeniden başlıyor — Mission Planner / panel)
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+		[
+			SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(FLinearColor(0.02f, 0.04f, 0.08f, 0.88f)).Padding(FMargin(28.f, 18.f))
+			.Visibility_Lambda([this]() { return St.CenterNotice.IsEmpty() ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
+			[
+				SNew(STextBlock).Font(SmvGt::Sans(16, true)).ColorAndOpacity(FLinearColor(1.f, 0.82f, 0.3f)).Justification(ETextJustify::Center)
+				.Text_Lambda([this]() { return FText::FromString(St.CenterNotice); })
+			]
+		]
 		// koordinata git paneli (Ctrl + sol tık haritada)
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 90.f, 0.f, 0.f)
 		[
@@ -2442,6 +2452,7 @@ TSharedRef<SWidget> SSmvFlightUi::GtPanel()
 		GtCell(TEXT("cancel"), Tx(TEXT("pn.c_cancel")), [this]() { Act(TEXT("Mode"), St.bPlane ? TEXT("LOITER") : TEXT("LOITER")); }, true) });
 	Grup(TEXT("pn.g_sim"));
 	Row3({ GtCell(TEXT("reset"), Tx(TEXT("pn.c_reset")), [this]() { if (GM.IsValid()) GM->ConfirmUi(FSmvI18n::T(TEXT("pn.c_reset")), FSmvI18n::T(TEXT("flight.reset_confirm")), FSmvI18n::T(TEXT("pn.c_reset")), true, [this]() { if (GM.IsValid()) GM->Command(TEXT("reset")); }); }),
+		GtCell(TEXT("reset"), Tx(TEXT("pn.c_reboot")), [this]() { if (GM.IsValid()) GM->ConfirmUi(FSmvI18n::T(TEXT("pn.c_reboot")), FSmvI18n::T(TEXT("flight.reboot_confirm")), FSmvI18n::T(TEXT("pn.c_reboot")), false, [this]() { if (GM.IsValid()) GM->Command(TEXT("reboot")); }); }),
 		GtCell(TEXT("layout"), Tx(TEXT("pn.c_layout")), []() { FSmvUiPrefs& P = FSmvUiPrefs::Get(); P.PanelR = 12.f; P.PanelT = 56.f; P.PipR = 16.f; P.PipB = 80.f; P.PipW = 384.f; P.bPanelMin = false; P.Save(); }) });
 	// simülasyon hızı
 	{
