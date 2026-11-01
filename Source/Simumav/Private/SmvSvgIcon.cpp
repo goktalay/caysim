@@ -205,7 +205,6 @@ namespace SmvSvg
 		{ TEXT("resume"), TEXT("<path d=\"M5 5v14l8-7z\" fill=\"currentColor\"/><path d=\"M15 5v14\" stroke-width=\"2.4\"/>") },
 		{ TEXT("cancel"), TEXT("<path d=\"M6 6l12 12M18 6 6 18\"/>") },
 		{ TEXT("reset"), TEXT("<path d=\"M4 12a8 8 0 1 0 2.3-5.7\"/><path d=\"M4 4v5h5\"/>") },
-		{ TEXT("upload"), TEXT("<path d=\"M12 16V4\"/><path d=\"M7 9l5-5 5 5\"/><path d=\"M4 20h16\"/>") },
 		{ TEXT("layout"), TEXT("<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"1.6\"/><path d=\"M3 10h18M9 10v10M15 10v10\"/>") },
 		{ TEXT("up"), TEXT("<path d=\"M6 15l6-6 6 6\"/>") },
 		{ TEXT("down"), TEXT("<path d=\"M6 9l6 6 6-6\"/>") },
