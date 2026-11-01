@@ -65,6 +65,8 @@ public:
 	FString Summary() const { return BuildSummary; }
 	/** Gece / alacakaranlık: seyir ışıklarına küçük, gölgesiz nokta ışıklar eklenir (gündüz yalnız parlayan küreler). Atmosfer kurulumu ayarlar. */
 	static void SetNightLighting(bool bOn) { bNightLighting = bOn; }
+	/** seyir ışığı kürelerinin parlaklık çarpanı: menü vitrini yakın plan (hangar) 0,25 — yakından ışık taşması gövdeyi beyaz bir pusla örtüyordu */
+	static void SetGlowScale(float S) { GlowScale = S; }
 
 private:
 	enum class EKind : uint8 { Spinner, Surface, Wheel, Steer, Light, Static };
@@ -99,6 +101,7 @@ private:
 	float RotorSpool = 0.f;   // helikopter rotor devri 0..1
 	double TimeS = 0;
 	static bool bNightLighting;
+	static float GlowScale;
 
 	FPart& AddPart(const FString& Name, EKind Kind);
 	void FinishSpinners();

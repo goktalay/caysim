@@ -1,4 +1,5 @@
 #include "SmvMenuScene.h"
+#include "SmvGlbBody.h"
 #include "SimumavModule.h"
 #include "SmvWorldActors.h"
 #include "SmvGameInstance.h"
@@ -1540,6 +1541,7 @@ void ASmvMenuScene::SetShowcase(const FSmvDrone& D)
 		ShowOrbit = 0.f;
 		PlayLanding();
 	}
+	USmvGlbBody::SetGlowScale(0.25f);
 	Showcase->ConfigureVisual(D.Type, D.ModelKey, Col);
 	Showcase->SetActorHiddenInGame(!(Station == EStation::Hangar || Station == EStation::Fly));
 	if (USmvMotorSynth* M = Showcase->GetMotor()) M->Stop();

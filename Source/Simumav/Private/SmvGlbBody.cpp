@@ -87,6 +87,7 @@ namespace
 }
 
 bool USmvGlbBody::bNightLighting = false;
+float USmvGlbBody::GlowScale = 1.f;
 
 USmvGlbBody::USmvGlbBody()
 {
@@ -437,7 +438,7 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 		{
 			UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Glow, this);
 			D->SetVectorParameterValue(TEXT("Color"), Parts[Pi].LightColor);
-			D->SetScalarParameterValue(TEXT("Glow"), bNightLighting ? 1.6f : 3.f);   // alacakaranlıkta 6 bloom ile gövdeyi renkli boyuyordu
+			D->SetScalarParameterValue(TEXT("Glow"), (bNightLighting ? 1.6f : 3.f) * GlowScale);   // alacakaranlıkta 6 bloom ile gövdeyi renkli boyuyordu
 			Mids.Add(D);
 			Mat = D;
 		}
@@ -526,7 +527,7 @@ void USmvGlbBody::AddNavLight(const FString& Name, const FVector& PosCm, const F
 		{
 			UMaterialInstanceDynamic* Dm = UMaterialInstanceDynamic::Create(G, this);
 			Dm->SetVectorParameterValue(TEXT("Color"), Color);
-			Dm->SetScalarParameterValue(TEXT("Glow"), bNightLighting ? 1.6f : 3.f);
+			Dm->SetScalarParameterValue(TEXT("Glow"), (bNightLighting ? 1.6f : 3.f) * GlowScale);
 			S->SetMaterial(0, Dm);
 			Mids.Add(Dm);
 		}

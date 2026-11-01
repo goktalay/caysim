@@ -71,6 +71,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/PointLightComponent.h"
+#include "SmvGlbBody.h"
 #include "Components/LocalLightComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/ConfigCacheIni.h"
@@ -428,6 +429,7 @@ void ASmvGameMode::BuildScene()
 	Drone = W->SpawnActor<ASmvDroneActor>();
 	Drone->SetGeoTransformActor(WorldSetup);
 	Drone->Setup(S, nullptr);
+	USmvGlbBody::SetGlowScale(1.f);
 	Drone->ConfigureVisual(Req.Drone.Type, Req.Drone.ModelKey, SmvColor(Req.Drone.Color));
 	// gerçek çarpışma: gövde şekli her karede SITL pozuna süpürülür (SmvPhysics); hayalet/hedef dronlarda kapalı
 	Drone->EnablePhysicsContact(true);
@@ -2777,6 +2779,23 @@ void ASmvGameMode::PlaceFabLevels()
 		}
 		if (Nl) SMV_KLOG(TEXT("Gündüz: haritanın %d yerel lambası kısıldı (%s)"), Nl, *FabMapKey);
 	}
+	// tanı (duman): kalkış noktasının 150 m çevresindeki ışıklar (renk / şiddet / yarıçap) — şehirde yolu yeşile boyayan kaynak
+	if (FParse::Param(FCommandLine::Get(), TEXT("SmvSmoke")))
+	{
+		int32 Nd = 0;
+		for (TObjectIterator<ULightComponent> It; It; ++It)
+		{
+			ULightComponent* L = *It;
+			if (!L || L->GetWorld() != W || !L->IsVisible() || Nd >= 25) continue;
+			const FVector P = L->GetComponentLocation();
+			if (FVector2D(P.X, P.Y).Size() > 15000.0) continue;
+			const FLinearColor C = L->GetLightColor();
+			SMV_KLOG(TEXT("SMOKE ışık: %s / %s (%s) %.0f m, renk %.2f %.2f %.2f, şiddet %.1f, yarıçap %.0f m"), L->GetOwner() ? *L->GetOwner()->GetName() : TEXT("-"), *L->GetName(),
+				*L->GetClass()->GetName(), FVector2D(P.X, P.Y).Size() / 100.0, C.R, C.G, C.B, L->Intensity,
+				L->IsA<ULocalLightComponent>() ? Cast<ULocalLightComponent>(L)->AttenuationRadius / 100.f : -1.f);
+			++Nd;
+		}
+	}
 	// "havada ada" haritaları (kayıt tablosu Surround biyomu; gerçek dünya yoksa): çevreye Hyper malzemeli arazi diski + kaya/çalı + uzak dağlar
 	else if (Def && Def->Surround && *Def->Surround && FSmvScenery::Enabled())
 	{
@@ -3827,4 +3846,16 @@ void ASmvGameMode::TickBooms()
 		// duman sonunda incelir: son %30'da küçülerek kaybolur
 		if (B.Kind == 1 && U > 0.7f) A->SetActorScale3D(FVector(FMath::Lerp(B.S1, 0.05f, (U - 0.7f) / 0.3f)));
 	}
+}
+
+void ASmvGameMode::SmokeCrash(double SpeedMs)
+{
+	TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+	P->SetStringField(TEXT("kind"), TEXT("obstacle"));
+	P->SetNumberField(TEXT("speed"), SpeedMs);
+	P->SetBoolField(TEXT("physics"), true);
+	P->SetStringField(TEXT("class"), TEXT("hard"));
+	P->SetStringField(TEXT("object"), TEXT("smoke"));
+	SMV_KLOG(TEXT("SMOKE crashfx: %.1f m/s (dron hızı %.1f m/s, %s)"), SpeedMs, DroneVelCm.Size() / 100.0, *Req.Drone.Type);
+	Command(TEXT("crash"), P);
 }

@@ -5093,6 +5093,8 @@ void SSmvShell::TickSmoke()
 		// BÖLGE HARİTASI (SmvRegion): Taksim çevrimdışı paketi (arazi + OSM) indirilir + Google 3B denetimi; paketle uçuş — binaya çarpma ve 120 m görünüm
 		{ TEXT("region"), TEXT("day"), TEXT("clear"), TEXT("f15"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("building") },
 		{ TEXT("region"), TEXT("golden"), TEXT("clear"), TEXT("f16"), false, TEXT("vtol"), nullptr, nullptr, nullptr, 120.f },
+		// çarpışma görselleri: sabit kanat 120 m'de 28 m/s çarpmış sayılır → enkaz (süzülmez), kanat kopması, patlama (_boom0..2)
+		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f17"), false, TEXT("plane"), nullptr, nullptr, TEXT("ramp"), 120.f, TEXT("fx") },
 	};
 	const int32 NFl = UE_ARRAY_COUNT(Fls);
 	// yalnız seçilen uçuşlar (-SmvSmokeOnly)
@@ -5277,7 +5279,12 @@ void SSmvShell::TickSmoke()
 	case 55: SMV_KLOG(TEXT("SMOKE high2 %s alt=%.0f"), Fx.Code, Alt); Shot(Base + TEXT("_high2")); SmokeAt = Now + 0.8; SmokeSub = 56; return;
 	case 56: if (GameMode.IsValid()) GameMode->SmokeCam(1); SmokeAt = Now + 3.0; SmokeSub = 57; return;
 	case 57: Shot(Base + TEXT("_hfpv")); SmokeAt = Now + 0.8; SmokeSub = 58; return;
-	case 58: if (GameMode.IsValid()) GameMode->SmokeCam(0); SmokeAt = Now + 1.0; SmokeSub = 11; return;
+	case 58: if (GameMode.IsValid()) GameMode->SmokeCam(0); SmokeAt = Now + 1.0; SmokeSub = (Fx.Ram && FCString::Strcmp(Fx.Ram, TEXT("fx")) == 0) ? 70 : 11; return;
+	// çarpışma görselleri (f17): tetikle → 0,15 sn ateş topu (_boom0), 0,8 sn (_boom1), 4 sn enkaz yerde (_boom2)
+	case 70: if (GameMode.IsValid()) GameMode->SmokeCrash(28.0); SmokeAt = Now + 0.15; SmokeSub = 71; return;
+	case 71: Shot(Base + TEXT("_boom0")); SmokeAt = Now + 0.65; SmokeSub = 72; return;
+	case 72: Shot(Base + TEXT("_boom1")); SmokeAt = Now + 3.2; SmokeSub = 73; return;
+	case 73: Shot(Base + TEXT("_boom2")); SmokeAt = Now + 0.8; SmokeSub = 11; return;
 	case 4:
 		if (Alt < 8.5f && Now < SmokeDeadline) { SmokeAt = Now + 1.0; return; }
 		SMV_KLOG(TEXT("SMOKE hover alt=%.1f armed=%d pos_ready=%d"), Alt, bArmed ? 1 : 0, Ready);

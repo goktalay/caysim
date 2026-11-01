@@ -221,6 +221,8 @@ public:
 		bool SmokePanelOpen() const;
 		/** Duman testi — bilerek çarpma: çevrede (72 yön, 8–400 m) Prefer türündeki (building | terrain | boş = her şey) en yakın yüzeyi bulur,
 		 *  araç burnunu ona çevirir (GUIDED CONDITION_YAW). OutDesc: hedef aktör / tür / uzaklık. */
+		/** duman testi: çarpışmayı doğrudan tetikler (fizik çarpışması gibi; enkaz + kanat kopması + patlama kareleri) */
+		void SmokeCrash(double SpeedMs);
 		bool SmokeRamBegin(const FString& Prefer, FString& OutDesc);
 		/** Çarpma koşusu: kaçınma kapalı (AVOID_ENABLE 0), ALT_HOLD, RC ileri yunuslama (sabit kanatta doğrudan hedefe dalış GUIDED değil — yalnız çok rotor). */
 		void SmokeRamGo();
