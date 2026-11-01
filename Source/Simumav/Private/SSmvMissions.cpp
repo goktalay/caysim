@@ -757,3 +757,21 @@ FVector2D SSmvShell::MissionHome() const
 {
 	return MEd.IsValid() ? FVector2D(MEd->HomeLat, MEd->HomeLon) : FVector2D(41.0082, 28.9784);
 }
+
+void SSmvShell::PickMission(TFunction<void(const FSmvMission&)> OnPick)
+{
+	USmvDataService* D = Data();
+	if (!D) return;
+	TArray<FChoice> Items;
+	for (const FSmvMission& M : D->Missions())
+	{
+		FChoice C;
+		C.Label = FText::FromString(FString::Printf(TEXT("%s  ·  %s"), *M.Name, *FSmvI18n::T(FString(TEXT("mission.")) + M.Kind).ToString()));
+		C.Icon = MKindIcon(M.Kind);
+		const FSmvMission Copy = M;
+		C.Fn = [OnPick, Copy]() { if (OnPick) OnPick(Copy); };
+		Items.Add(C);
+	}
+	if (Items.Num() == 0) { Toast(FSmvI18n::T(TEXT("mis.none_saved")).ToString(), 4); return; }
+	OpenChoice(FSmvI18n::T(TEXT("pn.c_upload")), FSmvI18n::T(TEXT("mis.pick_body")), Items);
+}

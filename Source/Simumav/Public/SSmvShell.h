@@ -366,6 +366,8 @@ private:
 	TSharedRef<SWidget> EnvEditor(FSmvTrack& T);
 	void OpenTrackChoice(const FSmvTrack& T);
 public:
+	/** Uçuşta "Görev yükle": kayıtlı görevlerden seçim (OnPick seçilen görevle çağrılır) */
+	void PickMission(TFunction<void(const FSmvMission&)> OnPick);
 	/** Bu ekranın arkasında canlı 3B sahne tam görünür mü (sinematik arka plan; düz degrade yok) */
 	static bool IsSceneScreen(ESmvScreen S);
 	/** Bayram / mevsim teması (tarih tabanlı TR takvimi; yoksa boş) */

@@ -210,6 +210,9 @@ public:
 	void EndFlightUi() { if (Flow.IsValid()) Flow->EndFlight(TEXT("user")); }
 	/** Uçuşta onay diyaloğu (kabuk katmanı) */
 	void ConfirmUi(const FText& Title, const FText& Body, const FText& Yes, bool bDanger, TFunction<void()> OnYes);
+	/** dron paneli "Görev yükle": kayıtlı görev seçilir, rotası (route.points) otopilota yüklenir; görev başka yerde çizildiyse kalkış noktasına taşınır */
+	void UploadMissionUi();
+	void UploadMission(const struct FSmvMission& M);
 	bool IsRecording() const;
 	double RecSeconds() const;
 	/** Duman testi: bağlantı var mı + irtifa (AGL m), ARM, konum hazırlığı (−1/0/1) */

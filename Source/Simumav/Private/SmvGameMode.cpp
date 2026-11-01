@@ -1,4 +1,7 @@
 #include "SmvGameMode.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Dom/JsonObject.h"
 #include "SmvLaunchRig.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "SmvGameRulesActor.h"
@@ -3871,4 +3874,63 @@ void ASmvGameMode::SmokeCrash(double SpeedMs)
 	P->SetStringField(TEXT("object"), TEXT("smoke"));
 	SMV_KLOG(TEXT("SMOKE crashfx: %.1f m/s (dron hızı %.1f m/s, %s)"), SpeedMs, DroneVelCm.Size() / 100.0, *Req.Drone.Type);
 	Command(TEXT("crash"), P);
+}
+
+// ---------------------------------------------------------------------------
+// görev yükleme (dron paneli)
+// ---------------------------------------------------------------------------
+
+void ASmvGameMode::UploadMissionUi()
+{
+	if (!Shell.IsValid()) return;
+	TWeakObjectPtr<ASmvGameMode> W(this);
+	Shell->PickMission([W](const FSmvMission& M) { if (W.IsValid()) W->UploadMission(M); });
+}
+
+void ASmvGameMode::UploadMission(const FSmvMission& M)
+{
+	USmvFlightLink* L = Link();
+	if (!L) return;
+	TSharedPtr<FJsonObject> O;
+	const TSharedRef<TJsonReader<>> R = TJsonReaderFactory<>::Create(M.PlanJson);
+	const TSharedPtr<FJsonObject>* Ro = nullptr;
+	const TArray<TSharedPtr<FJsonValue>>* Pts = nullptr;
+	if (!FJsonSerializer::Deserialize(R, O) || !O.IsValid() || !O->TryGetObjectField(TEXT("route"), Ro) || !(*Ro)->TryGetArrayField(TEXT("points"), Pts) || Pts->Num() == 0)
+	{
+		HandleToast(FSmvI18n::T(TEXT("mis.no_route")).ToString(), 3);
+		return;
+	}
+	// görevin evi (v2 "home"; yoksa ilk konumlu öğe) → dronun evi: 1,5 km'den uzaksa tüm rota kaydırılır (yerel ENU farkı)
+	double MLa = 0, MLo = 0;
+	const TSharedPtr<FJsonObject>* H;
+	if (O->TryGetObjectField(TEXT("home"), H)) { MLa = (*H)->GetNumberField(TEXT("lat")); MLo = (*H)->GetNumberField(TEXT("lon")); }
+	else for (const TSharedPtr<FJsonValue>& V : *Pts) { const TSharedPtr<FJsonObject> P = V->AsObject(); if (P.IsValid() && SmvJson::Num(P, TEXT("lat")) != 0.0) { MLa = SmvJson::Num(P, TEXT("lat")); MLo = SmvJson::Num(P, TEXT("lon")); break; } }
+	const FCaySimTelemetry& T = L->LastTele();
+	const double VLa = T.bHasHome ? T.HomeLat : (T.Lat != 0.0 ? T.Lat : Req.Track.Lat), VLo = T.bHasHome ? T.HomeLon : (T.Lon != 0.0 ? T.Lon : Req.Track.Lon);
+	const double CosM = FMath::Cos(FMath::DegreesToRadians(MLa)), CosV = FMath::Cos(FMath::DegreesToRadians(VLa));
+	const double Dist = FVector2D((VLo - MLo) * 111320.0 * CosM, (VLa - MLa) * 110574.0).Size();
+	const bool bShift = MLa != 0.0 && Dist > 1500.0;
+	TArray<TSharedPtr<FJsonValue>> Items;
+	for (const TSharedPtr<FJsonValue>& V : *Pts)
+	{
+		const TSharedPtr<FJsonObject> P = V->AsObject();
+		if (!P.IsValid()) continue;
+		TSharedRef<FJsonObject> Q = MakeShared<FJsonObject>(*P);   // alanlar korunur (cmd, frame, p1..p4)
+		double La = SmvJson::Num(P, TEXT("lat")), Lo = SmvJson::Num(P, TEXT("lon"));
+		if (bShift && (La != 0.0 || Lo != 0.0))
+		{
+			// görev evine göre doğu / kuzey metre → dronun evine
+			const double E = (Lo - MLo) * 111320.0 * CosM, N = (La - MLa) * 110574.0;
+			La = VLa + N / 110574.0; Lo = VLo + E / (111320.0 * FMath::Max(1e-6, CosV));
+		}
+		// kalkış (22) evde
+		if ((int32)SmvJson::Num(P, TEXT("cmd"), 16) == 22) { La = VLa; Lo = VLo; }
+		Q->SetNumberField(TEXT("lat"), La); Q->SetNumberField(TEXT("lon"), Lo);
+		Items.Add(MakeShared<FJsonValueObject>(Q));
+	}
+	TSharedPtr<FJsonObject> Pp = MakeShared<FJsonObject>();
+	Pp->SetArrayField(TEXT("items"), Items);
+	Pp->SetStringField(TEXT("name"), M.Name);
+	Command(TEXT("mission_upload"), Pp);
+	if (bShift) PushEvent(FSmvI18n::Format(TEXT("mis.shifted"), { { TEXT("d"), FString::Printf(TEXT("%.1f"), Dist / 1000.0) } }).ToString(), 4);
 }

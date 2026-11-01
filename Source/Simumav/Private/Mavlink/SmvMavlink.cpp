@@ -33,6 +33,7 @@ namespace SmvMav
 		{ MSG_STATUSTEXT, 83, 54 },
 		// görev protokolü (common.xml; azami uzunluk MAVLink 2 uzantılarıyla: mission_id / opaque_id)
 		{ MSG_MISSION_CURRENT, 28, 18 },
+		{ MSG_MISSION_REQUEST, 230, 5 },
 		{ MSG_MISSION_REQUEST_LIST, 132, 3 },
 		{ MSG_MISSION_COUNT, 221, 9 },
 		{ MSG_MISSION_ACK, 153, 8 },

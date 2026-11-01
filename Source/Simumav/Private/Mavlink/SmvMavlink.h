@@ -40,6 +40,7 @@ namespace SmvMav
 		MSG_STATUSTEXT = 253,
 		// görev protokolü (mini harita: otopilottaki görevi okur — Mission Planner yüklemeleri dahil)
 		MSG_MISSION_CURRENT = 42,
+		MSG_MISSION_REQUEST = 40,
 		MSG_MISSION_REQUEST_LIST = 43,
 		MSG_MISSION_COUNT = 44,
 		MSG_MISSION_ACK = 47,

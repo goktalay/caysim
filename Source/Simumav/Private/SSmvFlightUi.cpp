@@ -2449,7 +2449,8 @@ TSharedRef<SWidget> SSmvFlightUi::GtPanel()
 		GtCell(TEXT("pause"), Tx(TEXT("pn.c_pause")), [this]() { Act(TEXT("Mode"), St.bPlane ? TEXT("LOITER") : TEXT("BRAKE")); }) });
 	Grup(TEXT("pn.g_route"));
 	Row3({ GtCell(TEXT("play"), Tx(TEXT("pn.c_start")), [this]() { Act(TEXT("Mode"), TEXT("AUTO")); }), GtCell(TEXT("resume"), Tx(TEXT("pn.c_resume")), [this]() { Act(TEXT("Mode"), TEXT("AUTO")); }),
-		GtCell(TEXT("cancel"), Tx(TEXT("pn.c_cancel")), [this]() { Act(TEXT("Mode"), St.bPlane ? TEXT("LOITER") : TEXT("LOITER")); }, true) });
+		GtCell(TEXT("cancel"), Tx(TEXT("pn.c_cancel")), [this]() { Act(TEXT("Mode"), St.bPlane ? TEXT("LOITER") : TEXT("LOITER")); }, true),
+		GtCell(TEXT("upload"), Tx(TEXT("pn.c_upload")), [this]() { if (GM.IsValid()) GM->UploadMissionUi(); }) });
 	Grup(TEXT("pn.g_sim"));
 	Row3({ GtCell(TEXT("reset"), Tx(TEXT("pn.c_reset")), [this]() { if (GM.IsValid()) GM->ConfirmUi(FSmvI18n::T(TEXT("pn.c_reset")), FSmvI18n::T(TEXT("flight.reset_confirm")), FSmvI18n::T(TEXT("pn.c_reset")), true, [this]() { if (GM.IsValid()) GM->Command(TEXT("reset")); }); }),
 		GtCell(TEXT("reset"), Tx(TEXT("pn.c_reboot")), [this]() { if (GM.IsValid()) GM->ConfirmUi(FSmvI18n::T(TEXT("pn.c_reboot")), FSmvI18n::T(TEXT("flight.reboot_confirm")), FSmvI18n::T(TEXT("pn.c_reboot")), false, [this]() { if (GM.IsValid()) GM->Command(TEXT("reboot")); }); }),

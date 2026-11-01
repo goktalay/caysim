@@ -109,6 +109,15 @@ private:
 	void MissionRequestList();
 	void MissionRequestItem(int32 Seq);
 	void TickMission(double Wall);
+	/** görev yükleme (panel "Görev yükle"): MISSION_COUNT → MISSION_REQUEST(_INT) → MISSION_ITEM_INT → MISSION_ACK */
+	struct FUpItem { int32 Cmd = 16; int32 Frame = 3; double Lat = 0, Lon = 0, Alt = 0; float P1 = 0, P2 = 0, P3 = 0, P4 = 0; };
+	TArray<FUpItem> UpItems;
+	bool bUploading = false;
+	double UpAt = 0;
+	int32 UpTries = 0;
+	FString UpName;
+	void SendUpCount();
+	void SendUpItem(int32 Seq);
 public:
 	virtual const TArray<FSmvMissionWp>& Mission() const override { return MissionWps; }
 	virtual int32 MissionVersion() const override { return MissionVer; }

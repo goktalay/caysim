@@ -652,8 +652,35 @@ void USmvLocalFlightLink::MissionRequestItem(int32 SeqNo)
 	MissionItemAt = FPlatformTime::Seconds();
 }
 
+void USmvLocalFlightLink::SendUpCount()
+{
+	SmvMav::FWriter Wr; Wr.U16((uint16)UpItems.Num()); Wr.U8(TargetSys); Wr.U8(TargetComp); Wr.U8(0);
+	SendFrame(SmvMav::MSG_MISSION_COUNT, Wr.B.data(), (int32)Wr.B.size());
+	UpAt = FPlatformTime::Seconds();
+}
+
+void USmvLocalFlightLink::SendUpItem(int32 Seq)
+{
+	if (!UpItems.IsValidIndex(Seq)) return;
+	const FUpItem& I = UpItems[Seq];
+	SmvMav::FWriter Wr;
+	Wr.F32(I.P1); Wr.F32(I.P2); Wr.F32(I.P3); Wr.F32(I.P4);
+	Wr.I32((int32)FMath::RoundToDouble(I.Lat * 1e7)); Wr.I32((int32)FMath::RoundToDouble(I.Lon * 1e7)); Wr.F32((float)I.Alt);
+	Wr.U16((uint16)Seq); Wr.U16((uint16)I.Cmd); Wr.U8(TargetSys); Wr.U8(TargetComp);
+	Wr.U8((uint8)I.Frame); Wr.U8(Seq == 0 ? 1 : 0); Wr.U8(1); Wr.U8(0);
+	SendFrame(SmvMav::MSG_MISSION_ITEM_INT, Wr.B.data(), (int32)Wr.B.size());
+	UpAt = FPlatformTime::Seconds();
+}
+
 void USmvLocalFlightLink::TickMission(double Wall)
 {
+	// görev yükleme: 3 sn istek gelmezse sayıyı yeniden gönder (3 deneme)
+	if (bUploading && Wall - UpAt > 3.0)
+	{
+		if (++UpTries > 3) { bUploading = false; EmitEvent(TEXT("Görev yüklenemedi: otopilot yanıt vermedi"), 3); }
+		else SendUpCount();
+		return;
+	}
 	// indirme sürüyor: öğe 2 sn içinde gelmezse yeniden iste (3 deneme), sonra bırak (bir sonraki değişiklikte yeniden)
 	if (bMissionDl)
 	{
@@ -852,6 +879,31 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 		if (Total >= 0 && Total != MissionTotalSeen) { MissionTotalSeen = Total; if (!bMissionDl) bMissionReq = true; }
 		break;
 	}
+	case SmvMav::MSG_MISSION_REQUEST_INT:
+	case SmvMav::MSG_MISSION_REQUEST:
+	{
+		if (!bUploading) break;
+		SmvMav::FReader Rd(F.Payload);
+		const int32 Seq = Rd.U16();
+		UpTries = 0;
+		SendUpItem(Seq);
+		break;
+	}
+	case SmvMav::MSG_MISSION_ACK:
+	{
+		if (!bUploading) break;
+		SmvMav::FReader Rd(F.Payload);
+		Rd.U8(); Rd.U8();
+		const uint8 Res = Rd.U8();
+		bUploading = false;
+		if (Res == 0)
+		{
+			EmitEvent(FString::Printf(TEXT("Görev yüklendi: %s (%d öğe) — AUTO kipinde uçar"), *UpName, UpItems.Num() - 1), 6);
+			bMissionReq = true; MissionReqAt = 0;   // haritada çizilsin
+		}
+		else EmitEvent(FString::Printf(TEXT("Görev reddedildi (MAV_MISSION_RESULT %d)"), Res), 3);
+		break;
+	}
 	case SmvMav::MSG_MISSION_COUNT:
 	{
 		SmvMav::FReader Rd(F.Payload);
@@ -1031,6 +1083,34 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	const FString Rid = NextRid();
 	auto Fail = [this, &Rid, &Name](const FString& E) { EmitResult(Rid, Name, false, E); return Rid; };
 	if (Name == TEXT("reset")) { BeginReset(); EmitResult(Rid, Name, true); return Rid; }
+	if (Name == TEXT("mission_upload"))
+	{
+		if (!Tcp || !bHeartbeatSeen) return Fail(TEXT("SITL hazır değil"));
+		if (Tele.bArmed && Tele.Mode == TEXT("AUTO")) return Fail(TEXT("AUTO kipinde uçarken görev değiştirilemez"));
+		const TArray<TSharedPtr<FJsonValue>>* A = nullptr;
+		if (!P.IsValid() || !P->TryGetArrayField(TEXT("items"), A) || A->Num() == 0) return Fail(TEXT("görev boş"));
+		UpItems.Reset();
+		// 0 = ev (ArduPilot kendi evini yazar)
+		FUpItem H; H.Cmd = 16; H.Frame = 0; H.Lat = Tele.bHasHome ? Tele.HomeLat : Tele.Lat; H.Lon = Tele.bHasHome ? Tele.HomeLon : Tele.Lon; H.Alt = 0;
+		UpItems.Add(H);
+		for (const TSharedPtr<FJsonValue>& V : *A)
+		{
+			const TSharedPtr<FJsonObject> O = V->AsObject();
+			if (!O.IsValid()) continue;
+			FUpItem I;
+			I.Cmd = (int32)SmvJson::Num(O, TEXT("cmd"), 16);
+			I.Frame = (int32)SmvJson::Num(O, TEXT("frame"), 3);
+			I.Lat = SmvJson::Num(O, TEXT("lat")); I.Lon = SmvJson::Num(O, TEXT("lon")); I.Alt = SmvJson::Num(O, TEXT("alt_rel"));
+			I.P1 = (float)SmvJson::Num(O, TEXT("p1")); I.P2 = (float)SmvJson::Num(O, TEXT("p2")); I.P3 = (float)SmvJson::Num(O, TEXT("p3")); I.P4 = (float)SmvJson::Num(O, TEXT("p4"));
+			UpItems.Add(I);
+		}
+		UpName = SmvJson::Str(P, TEXT("name"));
+		bUploading = true; UpTries = 0;
+		SendUpCount();
+		EmitEvent(FString::Printf(TEXT("Görev yükleniyor: %s (%d öğe)"), *UpName, UpItems.Num() - 1), 6);
+		EmitResult(Rid, Name, true);
+		return Rid;
+	}
 	if (Name == TEXT("reboot"))
 	{
 		if (Tele.bArmed) return Fail(TEXT("motorlar çalışırken uçuş kartı yeniden başlatılamaz (önce DISARM)"));
