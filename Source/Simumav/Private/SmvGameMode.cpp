@@ -258,6 +258,7 @@ void ASmvGameMode::BuildScene()
 	Req = Flow->Draft;
 	bScene = true;
 	bCrashed = false;
+	MapMaxRangeM = 5000.f;
 	bSmokeRam = false;
 	bPauseMenu = false;
 	bHasLastPos = false;
@@ -2729,6 +2730,8 @@ void ASmvGameMode::PlaceFabLevels()
 	}
 	const FVector Off(-Start.X, -Start.Y, -Zg);
 	for (ULevel* L : Levels) L->ApplyWorldOffset(Off, false);
+	// uçuş haritası kapsamı: harita kutusunun biraz ötesi (gerçek dünya çevresi varsa daha geniş); 16 km'de harita ortada leke, çevresi siyahtı
+	if (Box.IsValid) MapMaxRangeM = FMath::Clamp((float)(FMath::Max(Box.GetSize().X, Box.GetSize().Y) / 100.0 * 0.65), 300.f, 6000.f) * (bRealSurround ? 2.f : 1.f);
 	if (Drone && Drone->GetContactSolver()) Drone->GetContactSolver()->Reset();   // harita kaydı: dron yeni geometriye ışınlanır (olay yok)
 	SMV_KLOG(TEXT("Fab haritası yerleştirildi (%s): %d seviye, kutu %s, kalkış (%.0f, %.0f, %.0f) — %s; %d gök/ışık aktörü kaldırıldı; fizik kalkış araması %d aday eledi (son: %s)"),
 		*FabMapKey, Levels.Num(), *Box.GetSize().ToString(), Start.X, Start.Y, Zg, *How, Drop.Num(), Rejected, LastWhy.IsEmpty() ? TEXT("-") : *LastWhy);
@@ -3520,6 +3523,7 @@ void ASmvGameMode::UpdateMap(FSmvFlightUiState& U)
 	FVector VL = Drone->GetActorLocation(); FRotator VR = Drone->GetActorRotation(); float VF = 90.f;
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		if (PC->PlayerCameraManager) { PC->PlayerCameraManager->GetCameraViewPoint(VL, VR); VF = PC->PlayerCameraManager->GetFOVAngle(); }
+	FSmvUiPrefs::Get().MapRangeM = FMath::Min(FSmvUiPrefs::Get().MapRangeM, MapMaxRangeM);
 	MapCam->Step(FApp::GetDeltaTime(), Drone->GetActorLocation(), FSmvUiPrefs::Get().MapRangeM, bBig, bBig, VL, VR, VF, FSmvUiPrefs::Get().MapYaw, FSmvUiPrefs::Get().MapTilt);
 	U.MapYawDeg = MapCam->NorthUpYaw();
 	// Ctrl + sol tık: tıklanan noktanın zemini (ışın) → enlem / boylam → "koordinata git" paneli

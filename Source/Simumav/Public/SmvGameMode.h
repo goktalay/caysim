@@ -180,6 +180,8 @@ private:
 	/** dron hızı (cm/sn; çarpma anı savrulması için, enkaz değilken her kare) */
 	FVector DronePrevLoc = FVector::ZeroVector, DroneVelCm = FVector::ZeroVector;
 	bool bDroneVelInit = false;
+	/** uçuş haritasının en geniş yarı kapsamı (m): Fab haritasında harita kutusuna göre (dışı boş / siyah), gerçek dünyada karo erimi */
+	float MapMaxRangeM = 5000.f;
 	UPROPERTY() TObjectPtr<class ASmvSiteActor> Site;
 	UPROPERTY() TObjectPtr<class ASmvWindSock> Sock;
 	UPROPERTY() TObjectPtr<class ASmvHolidayDecor> Decor;
