@@ -195,6 +195,24 @@ namespace
 		return false;
 	}
 
+	/** Lua betiği seç (Windows ortak iletişim kutusu) */
+	bool YhPickLua(FString& Out)
+	{
+#if PLATFORM_WINDOWS
+		TCHAR Buf[1024] = { 0 };
+		OPENFILENAMEW Ofn;
+		FMemory::Memzero(&Ofn, sizeof(Ofn));
+		Ofn.lStructSize = sizeof(Ofn);
+		Ofn.hwndOwner = nullptr;
+		Ofn.lpstrFilter = TEXT("Lua\0*.lua\0\0");
+		Ofn.lpstrFile = Buf;
+		Ofn.nMaxFile = 1024;
+		Ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+		if (GetOpenFileNameW(&Ofn)) { Out = FString(Buf); return true; }
+#endif
+		return false;
+	}
+
 	/** Seçilen PNG profil klasörüne kopyalanır (Saved/Simumav/Decals/<guid>.png); dönüş: yeni yol */
 	FString YhImportDecal(const FString& Src)
 	{
@@ -1017,6 +1035,75 @@ TSharedRef<SWidget> SSmvShell::HangarV2()
 	}
 	Line(ESmvIcon::Gear, Tx(TEXT("hw.params")), FSmvI18n::Format(TEXT("hangar2.params_n"), { { TEXT("n"), FString::FromInt(Ed.Params.Num()) } }).ToString());
 	Line(ESmvIcon::Book, Tx(TEXT("hw.script")), Ed.Script.IsEmpty() ? FSmvI18n::T(TEXT("hangar2.none")).ToString() : FSmvI18n::Format(TEXT("hangar2.script_lines"), { { TEXT("n"), FString::FromInt(Ed.Script.Len() > 0 ? 1 + Ed.Script.Replace(TEXT("\r"), TEXT("")).Len() - Ed.Script.Replace(TEXT("\r"), TEXT("")).Replace(TEXT("\n"), TEXT("")).Len() : 0) } }).ToString());
+	// değişen parametreler (katalog varsayılanından farklı ya da sonradan eklenen; uçuşta Mission Planner'dan değiştirilenler dahil)
+	{
+		const FSmvCatalogModel* Cmd = USmvDataService::FindModel(Ed.ModelKey);
+		TArray<FString> Keys; Ed.Params.GetKeys(Keys); Keys.Sort();
+		TSharedRef<SVerticalBox> Pl = SNew(SVerticalBox);
+		int32 Nc = 0;
+		for (const FString& K : Keys)
+		{
+			const double V = Ed.Params[K];
+			const double* D = Cmd ? Cmd->Defaults.Find(K) : nullptr;
+			if (D && FMath::IsNearlyEqual(*D, V, 1e-6)) continue;
+			++Nc;
+			Pl->AddSlot().AutoHeight().Padding(0, 1)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(1.f)[SmvUi::Text(FText::FromString(K), 11, "Mono", Fg(), false)]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0, 0, 0)[SmvUi::Text(FText::FromString(FString::SanitizeFloat(V, 0) + (D ? FString::Printf(TEXT("   (%s)"), *FString::SanitizeFloat(*D, 0)) : FString())), 11, "Mono", D ? Accent() : Accent3(), false)]
+			];
+		}
+		Info->AddSlot().AutoHeight().Padding(0, 12, 0, 2)[Section(FSmvI18n::Format(TEXT("hangar2.changed_n"), { { TEXT("n"), FString::FromInt(Nc) } }), Accent())];
+		if (Nc == 0) Info->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("hangar2.changed_none")), 10, "Regular", Mute())];
+		else Info->AddSlot().AutoHeight()[SNew(SBox).MaxDesiredHeight(140.f)[SNew(SScrollBox) + SScrollBox::Slot()[Pl]]];
+	}
+	// Lua betikleri: dronun kalıcı SITL klasöründe (scripts/*.lua) — her uçuşta yüklü gelir
+	{
+		Info->AddSlot().AutoHeight().Padding(0, 12, 0, 2)[Section(Tx(TEXT("hangar2.lua")), Accent3())];
+		const TArray<FString> Lua = USmvLocalFlightLink::DroneScripts(Ed.Id);
+		const FString Id = Ed.Id;
+		for (const FString& L : Lua)
+		{
+			Info->AddSlot().AutoHeight().Padding(0, 1)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)[Icon(ESmvIcon::Book, 14.f, Accent3())]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(FText::FromString(L), 11, "Mono", Fg(), false)]
+				+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Trash).OnClick([Self, Id, L]()
+				{
+					IFileManager::Get().Delete(*FPaths::Combine(USmvLocalFlightLink::DroneDir(Id), TEXT("scripts"), L), false, true, true);
+					if (L == TEXT("simumav.lua")) { Self->EditDrone.Script.Empty(); Self->Data()->SaveDrone(Self->EditDrone, FSmvDone()); }
+					Self->Refresh();
+				})]
+			];
+		}
+		if (Lua.Num() == 0 && !Ed.Script.IsEmpty()) Info->AddSlot().AutoHeight()[SmvUi::Text(FText::FromString(TEXT("simumav.lua")), 11, "Mono", Fg(), false)];
+		else if (Lua.Num() == 0) Info->AddSlot().AutoHeight()[SmvUi::Text(Tx(TEXT("hangar2.lua_none")), 10, "Regular", Mute())];
+		Info->AddSlot().AutoHeight().Padding(0, 6, 0, 0)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[SNew(SSmvButton).Icon(ESmvIcon::Plus).Text(Tx(TEXT("hangar2.lua_add"))).IsEnabled(!Id.IsEmpty())
+				.OnClick([Self, Id]()
+				{
+					FString Src;
+					if (!YhPickLua(Src)) return;
+					const FString Dir = FPaths::Combine(USmvLocalFlightLink::DroneDir(Id), TEXT("scripts"));
+					IFileManager::Get().MakeDirectory(*Dir, true);
+					const FString Dst = FPaths::Combine(Dir, FPaths::GetCleanFilename(Src));
+					const bool bOk = IFileManager::Get().Copy(*Dst, *Src) == COPY_OK;
+					Self->Toast(bOk ? FSmvI18n::Format(TEXT("hangar2.lua_added"), { { TEXT("f"), FPaths::GetCleanFilename(Src) } }).ToString() : FSmvI18n::T(TEXT("hangar2.lua_fail")).ToString(), bOk ? 6 : 3);
+					Self->Refresh();
+				})]
+			+ SHorizontalBox::Slot().AutoWidth()[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Replay).Text(Tx(TEXT("hangar2.mem_reset"))).IsEnabled(!Id.IsEmpty())
+				.OnClick([Self, Id]()
+				{
+					// SITL hafızası (eeprom) silinir: sonraki uçuş hangar parametreleriyle temiz başlar; betikler kalır
+					IFileManager::Get().Delete(*FPaths::Combine(USmvLocalFlightLink::DroneDir(Id), TEXT("eeprom.bin")), false, true, true);
+					Self->Toast(FSmvI18n::T(TEXT("hangar2.mem_reset_done")).ToString(), 6);
+				})]
+		];
+	}
 	Info->AddSlot().AutoHeight().Padding(0, 14, 0, 0)[SmvUi::Text(Tx(TEXT("hangar2.mp_hint")), 10, "Regular", Mute())];
 	Info->AddSlot().AutoHeight().Padding(0, 14, 0, 0)
 	[
