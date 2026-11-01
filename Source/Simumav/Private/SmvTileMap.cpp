@@ -265,13 +265,22 @@ void SSmvTileMap::PaintImagery(FSlateWindowElementList& Out, int32 L, const FGeo
 	if (Mpp <= 0 || !ToScr) return;
 	// karonun 1 pikseli ≈ ekranın 1 pikseli olacak yakınlaştırma
 	const double Base = 156543.03392 * FMath::Cos(FMath::DegreesToRadians(CLat));
-	const int32 Z = FMath::Clamp(FMath::RoundToInt(FMath::Log2(Base / Mpp)), 3, 19);
+	int32 Z = FMath::Clamp(FMath::RoundToInt(FMath::Log2(Base / Mpp)), 3, 19);
 	const FVector2D Sz = FVector2D(G.GetLocalSize());
-	const FVector2D C = Project(CLat, CLon, Z);
-	const double Span = FMath::Max(Sz.X, Sz.Y) * Mpp / (Base / (1 << Z)) * 0.75 + 256.0;   // karo pikseli cinsinden yarı genişlik
-	const int32 Tx0 = FMath::FloorToInt((C.X - Span) / 256.0), Tx1 = FMath::FloorToInt((C.X + Span) / 256.0);
-	const int32 Ty0 = FMath::FloorToInt((C.Y - Span) / 256.0), Ty1 = FMath::FloorToInt((C.Y + Span) / 256.0);
-	if ((Tx1 - Tx0 + 1) * (Ty1 - Ty0 + 1) > 64) return;
+	// büyük alan (tam ekran yükleme arka planı 1600×900+): karo sayısı sınırı aşınca HİÇ çizilmiyordu (gerçek dünya yükleme ekranı boştu)
+	// → sınıra sığana dek bir alt yakınlaştırmaya inilir (karolar büyütülerek çizilir); yarı genişlik eksen başına
+	FVector2D C; double SpanX = 0, SpanY = 0;
+	int32 Tx0 = 0, Tx1 = 0, Ty0 = 0, Ty1 = 0;
+	for (;;)
+	{
+		C = Project(CLat, CLon, Z);
+		const double Px = Mpp / (Base / (1 << Z));   // ekran pikseli başına karo pikseli
+		SpanX = Sz.X * 0.5 * Px + 256.0; SpanY = Sz.Y * 0.5 * Px + 256.0;
+		Tx0 = FMath::FloorToInt((C.X - SpanX) / 256.0); Tx1 = FMath::FloorToInt((C.X + SpanX) / 256.0);
+		Ty0 = FMath::FloorToInt((C.Y - SpanY) / 256.0); Ty1 = FMath::FloorToInt((C.Y + SpanY) / 256.0);
+		if ((Tx1 - Tx0 + 1) * (Ty1 - Ty0 + 1) <= 96 || Z <= 3) break;
+		--Z;
+	}
 	for (int32 ty = Ty0; ty <= Ty1; ++ty)
 		for (int32 tx = Tx0; tx <= Tx1; ++tx)
 		{
