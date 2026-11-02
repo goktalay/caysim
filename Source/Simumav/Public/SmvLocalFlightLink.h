@@ -117,7 +117,7 @@ private:
 	int32 UpTries = 0;
 	FString UpName;
 	void SendUpCount();
-	void SendUpItem(int32 Seq);
+	void SendUpItem(int32 ItemSeq);
 public:
 	virtual const TArray<FSmvMissionWp>& Mission() const override { return MissionWps; }
 	virtual int32 MissionVersion() const override { return MissionVer; }

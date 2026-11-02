@@ -659,15 +659,15 @@ void USmvLocalFlightLink::SendUpCount()
 	UpAt = FPlatformTime::Seconds();
 }
 
-void USmvLocalFlightLink::SendUpItem(int32 Seq)
+void USmvLocalFlightLink::SendUpItem(int32 ItemSeq)
 {
-	if (!UpItems.IsValidIndex(Seq)) return;
-	const FUpItem& I = UpItems[Seq];
+	if (!UpItems.IsValidIndex(ItemSeq)) return;
+	const FUpItem& I = UpItems[ItemSeq];
 	SmvMav::FWriter Wr;
 	Wr.F32(I.P1); Wr.F32(I.P2); Wr.F32(I.P3); Wr.F32(I.P4);
 	Wr.I32((int32)FMath::RoundToDouble(I.Lat * 1e7)); Wr.I32((int32)FMath::RoundToDouble(I.Lon * 1e7)); Wr.F32((float)I.Alt);
-	Wr.U16((uint16)Seq); Wr.U16((uint16)I.Cmd); Wr.U8(TargetSys); Wr.U8(TargetComp);
-	Wr.U8((uint8)I.Frame); Wr.U8(Seq == 0 ? 1 : 0); Wr.U8(1); Wr.U8(0);
+	Wr.U16((uint16)ItemSeq); Wr.U16((uint16)I.Cmd); Wr.U8(TargetSys); Wr.U8(TargetComp);
+	Wr.U8((uint8)I.Frame); Wr.U8(ItemSeq == 0 ? 1 : 0); Wr.U8(1); Wr.U8(0);
 	SendFrame(SmvMav::MSG_MISSION_ITEM_INT, Wr.B.data(), (int32)Wr.B.size());
 	UpAt = FPlatformTime::Seconds();
 }
@@ -884,9 +884,9 @@ void USmvLocalFlightLink::HandleFrame(const SmvMav::FFrame& F)
 	{
 		if (!bUploading) break;
 		SmvMav::FReader Rd(F.Payload);
-		const int32 Seq = Rd.U16();
+		const int32 ReqSeq = Rd.U16();
 		UpTries = 0;
-		SendUpItem(Seq);
+		SendUpItem(ReqSeq);
 		break;
 	}
 	case SmvMav::MSG_MISSION_ACK:
