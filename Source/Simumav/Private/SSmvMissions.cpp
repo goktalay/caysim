@@ -26,6 +26,8 @@
 #include "Widgets/SViewport.h"
 #include "Styling/CoreStyle.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Fonts/FontMeasure.h"
+#include "Rendering/SlateRenderer.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "HAL/FileManager.h"
@@ -274,13 +276,26 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 			return true;
 		};
 		const FSlateFontInfo Fl = Font(10, "Bold");
-		const FLinearColor Yel(1.f, 0.86f, 0.25f, 0.62f), Blu(0.35f, 0.7f, 1.f, 0.5f), Lab(1.f, 1.f, 1.f, 0.92f);
+		// uydu görüntüsü üzerinde okunurluk: çizgilerin altına koyu hale, etiketlerin arkasına koyu zemin
+		auto Seg = [&Out, &G](int32 Ly, const FVector2D& A, const FVector2D& B, const FLinearColor& Col, float W)
+		{
+			DrSeg(Out, Ly, G, A, B, FLinearColor(0.f, 0.f, 0.f, 0.55f), W + 2.5f);
+			DrSeg(Out, Ly + 1, G, A, B, Col, W);
+		};
+		auto Lbl = [&Out, &G](int32 Ly, const FString& T, const FVector2D& P, const FSlateFontInfo& F, const FLinearColor& Col, int32 Align)
+		{
+			const FVector2D Ms = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(T, F);
+			const float X0 = Align == 0 ? (float)(P.X - Ms.X * 0.5) : Align > 0 ? (float)(P.X - Ms.X) : (float)P.X;
+			DrBox(Out, Ly, G, FVector2D(X0 - 5.f, P.Y - Ms.Y * 0.5f - 2.f), FVector2D(Ms.X + 10.f, Ms.Y + 4.f), FLinearColor(0.02f, 0.04f, 0.08f, 0.72f), Round(6.f));
+			DrText(Out, Ly + 1, G, T, P, F, Col, Align);
+		};
+		const FLinearColor Yel(1.f, 0.86f, 0.25f, 0.8f), Blu(0.4f, 0.75f, 1.f, 0.75f), Lab(1.f, 1.f, 1.f, 0.95f);
 		// koridor / ilaçlama kenarı (zeminde)
 		if (E.Res.Outline.size() >= 3)
 		{
 			TArray<FVector2D> Ol;
 			for (const auto& P : E.Res.Outline) { FVector2D Q; if (Proj(P.first, P.second, 0, true, Q)) Ol.Add(Q); }
-			if (Ol.Num() >= 3) { const FVector2D First = Ol[0]; Ol.Add(First); DrLine(Out, L + 1, G, Ol, FLinearColor(0.2f, 0.95f, 0.8f, 0.55f), 2.f); }
+			if (Ol.Num() >= 3) { const FVector2D First = Ol[0]; Ol.Add(First); DrLine(Out, L + 1, G, Ol, FLinearColor(0.f, 0.f, 0.f, 0.5f), 4.5f); DrLine(Out, L + 2, G, Ol, FLinearColor(0.2f, 0.95f, 0.8f, 0.85f), 2.f); }
 		}
 		// rota: konumlu öğeler (kalkış evde)
 		struct FN { double La, Lo, Alt; int Cmd; };
@@ -298,18 +313,18 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 			// zeminden dik silik mavi çizgi + yükseklik
 			if (bA && bG && (i % Every == 0 || i == Ns.Num() - 1))
 			{
-				DrSeg(Out, L + 2, G, Gd, A, Blu, 1.5f);
-				if (FVector2D::Distance(Gd, A) > 26.f) DrText(Out, L + 6, G, FString::Printf(TEXT("%.0f m"), N.Alt), (Gd + A) * 0.5 + FVector2D(6, 0), Font(9, "Bold"), FLinearColor(0.6f, 0.85f, 1.f, 0.95f), -1);
+				Seg(L + 2, Gd, A, Blu, 1.5f);
+				if (FVector2D::Distance(Gd, A) > 26.f) Lbl(L + 6, FString::Printf(TEXT("%.0f m"), N.Alt), (Gd + A) * 0.5 + FVector2D(8, 0), Font(9, "Bold"), FLinearColor(0.65f, 0.88f, 1.f, 1.f), -1);
 			}
 			// noktalar arası silik sarı çizgi + mesafe
 			if (bA && bPrev)
 			{
-				DrSeg(Out, L + 3, G, Prev, A, Yel, 2.f);
+				Seg(L + 3, Prev, A, Yel, 2.f);
 				if (i > 0 && (!bDense || i % Every == 0) && FVector2D::Distance(Prev, A) > 60.f)
 				{
 					const FN& P0 = Ns[i - 1];
 					const double D = SmvCore::DistM(P0.La, P0.Lo, N.La, N.Lo);
-					if (D > 0.5) DrText(Out, L + 6, G, MDist(D), (Prev + A) * 0.5 + FVector2D(0, -10), Fl, Lab, 0);
+					if (D > 0.5) Lbl(L + 8, MDist(D), (Prev + A) * 0.5 + FVector2D(0, -12), Fl, Lab, 0);
 				}
 			}
 			if (bA) { DrBox(Out, L + 4, G, A - FVector2D(3, 3), FVector2D(6, 6), FLinearColor(1.f, 0.86f, 0.25f, 0.9f), Circle()); Prev = A; bPrev = true; }
