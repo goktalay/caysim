@@ -107,6 +107,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium") int64 CesiumTerrainAssetId = 1;
 	/** Bing Maps Aerial imagery varlık kimliği (ion). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium") int64 CesiumImageryAssetId = 2;
+	/** Cesium OSM Buildings (ion 96188): arazi + uydu kipinde 3B binalar (çarpışmalı); 0 = kapalı */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) int64 CesiumBuildingsAssetId = 96188;
 	/** Google Photorealistic 3D Tiles ion varlık kimliği (ion hesabı üzerinden; HEPGO anahtarı gerekmez). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) int64 GoogleIonAssetId = 2275207;
 	/** Google 3B bu sürede hiç karo yüklemezse World Terrain + Bing'e düşülür (sn). */
@@ -116,7 +118,7 @@ public:
 	/** Google 3B karolarında fizik ağı — binalar gerçekten çarpışır (kapalıyken çarpışma yalnız gizli World Terrain'den: binaların içinden geçilirdi) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) bool bGooglePhysics = true;
 	/** 3D Tiles ekran-uzayı hata sınırı (küçük = daha ayrıntılı). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double TilesScreenSpaceError = 12.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya|Cesium", Config) double TilesScreenSpaceError = 4.0;   // web Cesium 2; 12'de arazi + uydu bulanık / birbirine girmiş görünüyordu
 	/** Geoid ayrımı (MSL → WGS84 elipsoid) m; Türkiye için ≈ 30–40 m. Ev irtifası ile 3D Tiles yüzeyi arası farktan kalkışta otomatik düzeltilir. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CAYSIM|Dünya") double GeoidOffsetM = 35.0;
 	/** Kalkışa dek yer ofseti otomatik ölçülsün (merkez ışını ile 3D Tiles yüzeyi). */
@@ -154,6 +156,7 @@ private:
 	TWeakObjectPtr<ACesiumGeoreference> Georeference;
 	TWeakObjectPtr<ACesium3DTileset> Terrain;
 	TWeakObjectPtr<ACesium3DTileset> GoogleTiles;
+	TWeakObjectPtr<ACesium3DTileset> Buildings;
 	TWeakObjectPtr<ACesiumSunSky> SunSky;
 	TWeakObjectPtr<AActor> ClipActor;
 	TWeakObjectPtr<ACesiumCreditSystem> CreditSys;

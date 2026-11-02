@@ -101,7 +101,7 @@ void ACaySimWorldSetup::BeginPlay()
 void ACaySimWorldSetup::EndPlay(const EEndPlayReason::Type Reason)
 {
 #if CAYSIM_WITH_CESIUM
-	for (TWeakObjectPtr<ACesium3DTileset>* P : { &Terrain, &GoogleTiles, &CollisionTiles })
+	for (TWeakObjectPtr<ACesium3DTileset>* P : { &Terrain, &GoogleTiles, &CollisionTiles, &Buildings })
 	{
 		if (P->IsValid()) (*P)->Destroy();
 		P->Reset();
@@ -367,10 +367,32 @@ void ACaySimWorldSetup::SetupCesiumIon()
 		Overlay->IonAssetID = CesiumImageryAssetId;
 		Overlay->IonAccessToken = CesiumIonToken;
 		Overlay->MaterialLayerKey = TEXT("Overlay0");
+		// uydu dokusu web Cesium kadar net: ekran-uzayı hatası 1 (varsayılan 2), doku 4096
+		Overlay->SetMaximumScreenSpaceError(1.0);
+		Overlay->SetMaximumTextureSize(4096);
+		Overlay->SetMaximumSimultaneousTileLoads(24);
 		Overlay->RegisterComponent();
 		Tiles->AddInstanceComponent(Overlay);
 		Overlay->Refresh();
 	}
+	// 3B binalar (Cesium OSM Buildings): web Cesium'daki haritada tanımlı binalar; çarpışmalı (drona engel)
+	if (!Buildings.IsValid() && CesiumBuildingsAssetId > 0)
+	{
+		if (ACesium3DTileset* Bt = SpawnTiles(Geo))
+		{
+			Buildings = Bt;
+			Bt->SetTilesetSource(ETilesetSource::FromCesiumIon);
+			Bt->SetIonAssetID(CesiumBuildingsAssetId);
+			Bt->SetIonAccessToken(CesiumIonToken);
+			Bt->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
+			Bt->ForbidHoles = true;
+			Bt->SetCreatePhysicsMeshes(true);
+			Bt->SetMaximumScreenSpaceError(16.0);
+			Bt->MaximumSimultaneousTileLoads = 12;
+			UE_LOG(LogCaySim, Log, TEXT("Cesium OSM 3B binalar (ion %lld) kuruluyor"), CesiumBuildingsAssetId);
+		}
+	}
+	if (Buildings.IsValid()) Buildings->SetActorHiddenInGame(false);
 	if (GoogleTiles.IsValid()) GoogleTiles->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
 	SourceT0 = FPlatformTime::Seconds();
@@ -626,6 +648,17 @@ bool ACaySimWorldSetup::ClipPolygon(const TArray<FVector>& UnrealPoints)
 	Ov->RegisterComponent();
 	T->AddInstanceComponent(Ov);
 	Ov->Refresh();
+	if (Buildings.IsValid() && Buildings.Get() != T)
+	{
+		UCesiumPolygonRasterOverlay* Ob = NewObject<UCesiumPolygonRasterOverlay>(Buildings.Get(), TEXT("SmvClipB"));
+		Ob->MaterialLayerKey = TEXT("Clipping");
+		Ob->Polygons.Add(TSoftObjectPtr<ACesiumCartographicPolygon>(Poly));
+		Ob->InvertSelection = false;
+		Ob->ExcludeSelectedTiles = true;
+		Ob->RegisterComponent();
+		Buildings->AddInstanceComponent(Ob);
+		Ob->Refresh();
+	}
 	UE_LOG(LogCaySim, Log, TEXT("3D Tiles kırpma çokgeni: %d nokta (%s)"), UnrealPoints.Num(), *SourceName());
 	return true;
 #else
