@@ -16,6 +16,8 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 
 namespace
 {
@@ -35,6 +37,8 @@ void ASmvMenuScene::EnterMissionMode(double Lat, double Lon)
 	if (!bMission)
 	{
 		bMission = true;
+		// harita okunurluğu: menünün gök sistemindeki sis / hacimsel sis / bulut 1–2 km'deki araziyi pusla örtüyordu
+		if (GEngine && GEngine->GameViewport) { FEngineShowFlags& Sf = GEngine->GameViewport->EngineShowFlags; Sf.SetFog(false); Sf.SetVolumetricFog(false); Sf.SetCloud(false); }
 		// menü sahnesi gizlenir (Fab haritası ve alt seviyeleri, süzülen araçlar, vitrin, çevre) — görev dünyası aynı orijinde kurulur
 		if (MenuLevel) MenuLevel->SetShouldBeVisible(false);
 		for (const TObjectPtr<ULevelStreamingDynamic>& L : MenuSubs) if (L) L->SetShouldBeVisible(false);
@@ -71,6 +75,7 @@ void ASmvMenuScene::ExitMissionMode()
 	if (MissionWorld) { MissionWorld->Destroy(); MissionWorld = nullptr; }
 	if (MissionDrone) { MissionDrone->Destroy(); MissionDrone = nullptr; }
 	bMission = false;
+	if (GEngine && GEngine->GameViewport) { FEngineShowFlags& Sf = GEngine->GameViewport->EngineShowFlags; Sf.SetFog(true); Sf.SetVolumetricFog(true); Sf.SetCloud(true); }
 	if (MenuLevel) MenuLevel->SetShouldBeVisible(true);
 	for (const TObjectPtr<ULevelStreamingDynamic>& L : MenuSubs) if (L) L->SetShouldBeVisible(true);
 	TArray<AActor*> Show = { Flyer, Terrain };
