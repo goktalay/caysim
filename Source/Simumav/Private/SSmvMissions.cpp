@@ -280,7 +280,7 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 		{
 			TArray<FVector2D> Ol;
 			for (const auto& P : E.Res.Outline) { FVector2D Q; if (Proj(P.first, P.second, 0, true, Q)) Ol.Add(Q); }
-			if (Ol.Num() >= 3) { Ol.Add(Ol[0]); DrLine(Out, L + 1, G, Ol, FLinearColor(0.2f, 0.95f, 0.8f, 0.55f), 2.f); }
+			if (Ol.Num() >= 3) { const FVector2D First = Ol[0]; Ol.Add(First); DrLine(Out, L + 1, G, Ol, FLinearColor(0.2f, 0.95f, 0.8f, 0.55f), 2.f); }
 		}
 		// rota: konumlu öğeler (kalkış evde)
 		struct FN { double La, Lo, Alt; int Cmd; };
