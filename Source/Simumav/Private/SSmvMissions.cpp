@@ -253,6 +253,25 @@ FString SSmvShell::MEdSave() const
 	return Out;
 }
 
+namespace
+{
+	/** görüntüde en yakın kullanıcı noktası (yerel konum; Max px içinde) */
+	int32 MNearest(ASmvMenuScene* Sc, const FSmvMissionEdit& E, const FGeometry& G, const FVector2D& P, float Max)
+	{
+		int32 Best = -1; float Bd = Max;
+		for (int32 i = 0; i < E.Pts.Num(); ++i)
+		{
+			const SmvCore::FMissionPoint& Q = E.Pts[i];
+			const double Alt = E.Kind == TEXT("free") ? Q.Alt : E.Kind == TEXT("corridor") ? E.Par.CorridorAlt : 0.0;
+			FVector2D Px;
+			if (!Sc->MissionProject(Q.Lat, Q.Lon, Alt, E.Kind == TEXT("spray"), Px)) continue;
+			const float D = (float)FVector2D::Distance(MToLocal(G, Px), P);
+			if (D < Bd) { Bd = D; Best = i; }
+		}
+		return Best;
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 3B çizim (görev dünyası üzerine izdüşüm)
 // ---------------------------------------------------------------------------
@@ -385,7 +404,9 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 		{
 			E.DownAt = P; E.LastAt = P; E.bMoved = false;
 			E.bRotating = bRight || Ev.IsShiftDown();
-			E.Drag = (bEditor && !E.bRotating) ? E.Hover : -1;
+			// basılan yerin altındaki nokta doğrudan tutulur (üzerinde gezinme durumuna bağlı değil)
+			E.Drag = (bEditor && !E.bRotating) ? MNearest(Sc, E, G, P, 18.f) : -1;
+			if (bRight && bEditor) E.Hover = MNearest(Sc, E, G, P, 18.f);
 			E.bPanning = !E.bRotating && E.Drag < 0;
 			return;
 		}
@@ -415,12 +436,7 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 			return;
 		}
 		E.bPanning = false;
-		if (WasDrag >= 0)
-		{
-			// serbest görevde noktaya tık: ayarlar penceresi
-			if (E.Kind == TEXT("free")) Self->MOpenPointDlg(WasDrag);
-			return;
-		}
+		if (WasDrag >= 0) return;   // noktaya tek tık: seçili kalır (düzenleme paneli çift tıkla)
 		double La, Lo;
 		if (!Sc->MissionPick(MToPx(G, P), La, Lo)) return;
 		if (E.bHomePick) { E.HomeLat = La; E.HomeLon = Lo; E.bHomePick = false; Self->Refresh(); return; }
@@ -431,6 +447,17 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 		if (E.Kind == TEXT("free")) { E.Pts.Add(Q); Self->MOpenPointDlg(E.Pts.Num() - 1); }
 		else { E.Pts.Add(Q); Self->Refresh(); }
 	};
+	if (bEditor)
+	{
+		// çift tık: noktanın düzenleme paneli (her görev türünde)
+		C->OnDouble = [Self](const FGeometry& G, const FVector2D& P)
+		{
+			ASmvMenuScene* Sc = Self->Scene();
+			if (!Sc || !Self->MEd.IsValid()) return;
+			const int32 I = MNearest(Sc, *Self->MEd, G, P, 22.f);
+			if (I >= 0) Self->MOpenPointDlg(I);
+		};
+	}
 	C->OnWheel = [Self](const FVector2D&, float Dl) { if (ASmvMenuScene* Sc = Self->Scene()) Sc->MissionOrbit(0.f, 0.f, Dl > 0 ? 0.85f : 1.18f, FVector2D::ZeroVector); };
 	return C;
 }
@@ -712,6 +739,14 @@ TSharedRef<SWidget> SSmvShell::MPointDialog()
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 8)[Title(FSmvI18n::Format(TEXT("mis.pt_title"), { { TEXT("n"), FString::FromInt(E.DlgIndex + 1) } }), 20)];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%.6f, %.6f"), Q.Lat, Q.Lon)), 11, "Mono", Dim(), false)];
+	if (E.Kind != TEXT("free"))
+	{
+		// koridor / ilaçlama noktası: konum (enlem / boylam) düzenlenir
+		V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("mis.use_lat")), Spin(&Q.Lat, -90.0, 90.0, 0.00001))];
+		V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("mis.use_lon")), Spin(&Q.Lon, -180.0, 180.0, 0.00001))];
+	}
+	else
+	{
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("mis.pt_speed")), Slider(&Q.Speed, 1, 40, 0.5, [](double X) { return FString::Printf(TEXT("%.1f m/s"), X); }))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("mis.pt_alt")), Slider(&Q.Alt, 5, 3000, 1, Mf))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("mis.pt_action")), Chips(&E.DraftAction, { TEXT("next"), TEXT("loiter"), TEXT("script") },
@@ -743,9 +778,11 @@ TSharedRef<SWidget> SSmvShell::MPointDialog()
 			];
 		}
 	}
+	}
 	V->AddSlot().AutoHeight().Padding(0, 14, 0, 0).HAlign(HAlign_Right)
 	[
 		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[SNew(SSmvButton).Kind(ESmvBtn::Ghost).Icon(ESmvIcon::Back).Text(Tx(TEXT("common.cancel"))).OnClick([Self]() { if (Self->MEd.IsValid()) { Self->MEd->bDlg = false; Self->Refresh(); } })]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[SNew(SSmvButton).Kind(ESmvBtn::Danger).Icon(ESmvIcon::Trash).Text(Tx(TEXT("common.delete"))).OnClick([Self]()
 		{
 			if (!Self->MEd.IsValid()) return;
@@ -758,6 +795,7 @@ TSharedRef<SWidget> SSmvShell::MPointDialog()
 			if (!Self->MEd.IsValid()) return;
 			FSmvMissionEdit& X = *Self->MEd;
 			SmvCore::FMissionPoint D = X.Draft;
+			if (X.Kind == TEXT("free"))
 			D.Action = X.DraftAction == TEXT("loiter") ? 1 : X.DraftAction == TEXT("script") ? 2 : 0;
 			D.Turns = X.DraftTurns;
 			D.Script = std::string(TCHAR_TO_UTF8(*X.DraftScript));
