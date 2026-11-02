@@ -5102,7 +5102,7 @@ void SSmvShell::TickSmoke()
 		{ TEXT("region"), TEXT("day"), TEXT("clear"), TEXT("f15"), false, TEXT("multirotor"), nullptr, nullptr, nullptr, 0.f, TEXT("building") },
 		{ TEXT("region"), TEXT("golden"), TEXT("clear"), TEXT("f16"), false, TEXT("vtol"), nullptr, nullptr, nullptr, 120.f },
 		// çarpışma görselleri: sabit kanat 120 m'de 28 m/s çarpmış sayılır → enkaz (süzülmez), kanat kopması, patlama (_boom0..2)
-		{ TEXT("askeri"), TEXT("day"), TEXT("clear"), TEXT("f17"), false, TEXT("plane"), nullptr, nullptr, TEXT("ramp"), 120.f, TEXT("fx") },
+		{ TEXT("proc"), TEXT("day"), TEXT("clear"), TEXT("f17"), false, TEXT("plane"), TEXT("smv:caymaz"), nullptr, TEXT("ramp"), 120.f, TEXT("fx") },   // çitsiz dünya (Askeri Üs çitinde uçuş bitiyordu); CAYMAZ
 	};
 	const int32 NFl = UE_ARRAY_COUNT(Fls);
 	// yalnız seçilen uçuşlar (-SmvSmokeOnly)
