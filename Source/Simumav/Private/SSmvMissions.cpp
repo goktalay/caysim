@@ -609,7 +609,7 @@ TSharedRef<SWidget> SSmvShell::MissionEditor()
 	auto Mf = [](double V) { return FString::Printf(TEXT("%.0f m"), V); };
 	auto Df = [](double V) { return FString::Printf(TEXT("%.0f°"), V); };
 	// üstte ortada yüzen başlık: Geri · görev adı + tür · Kaydet (en az 3 nokta; spiral noktasız)
-	TSharedRef<SWidget> Header = SNew(SBorder).BorderImage(Round(18.f)).BorderBackgroundColor(Hex(0x0b1222, 0.86f)).Padding(FMargin(14.f, 10.f))
+	TSharedRef<SWidget> Header = SNew(SBorder).BorderImage(Round(18.f)).BorderBackgroundColor(Card().CopyWithNewOpacity(0.94f)).Padding(FMargin(14.f, 10.f))
 	[
 		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 16, 0)
@@ -694,7 +694,7 @@ TSharedRef<SWidget> SSmvShell::MissionEditor()
 		]
 		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)[SmvUi::Text(Tx(TEXT("mis.mouse_help")), 10, "Regular", Mute())]
 	];
-	TSharedRef<SWidget> Footer = SNew(SBorder).BorderImage(Round(18.f)).BorderBackgroundColor(Hex(0x0b1222, 0.86f)).Padding(FMargin(18.f, 12.f))[Ft];
+	TSharedRef<SWidget> Footer = SNew(SBorder).BorderImage(Round(18.f)).BorderBackgroundColor(Card().CopyWithNewOpacity(0.94f)).Padding(FMargin(18.f, 12.f))[Ft];
 	TSharedRef<SOverlay> O = SNew(SOverlay)
 		+ SOverlay::Slot()[MissionOverlay(true)]
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0, 18, 0, 0)[Header]

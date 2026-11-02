@@ -356,6 +356,7 @@ void ACaySimWorldSetup::SetupCesiumIon()
 		Tiles->SetIonAssetID(CesiumTerrainAssetId);
 		Tiles->SetIonAccessToken(CesiumIonToken);
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
+		Tiles->ForbidHoles = true;   // ayrıntılı karo gelene dek kaba karo kalır (görev haritasında mavi delikler)
 		Tiles->SetCreatePhysicsMeshes(true);
 		Tiles->SetMaximumScreenSpaceError(TilesScreenSpaceError);
 		Tiles->ShowCreditsOnScreen = true;
@@ -405,6 +406,7 @@ void ACaySimWorldSetup::SetupGoogle(const FString& Key)
 		Tiles->SetTilesetSource(ETilesetSource::FromUrl);
 		Tiles->SetUrl(FString::Printf(TEXT("https://tile.googleapis.com/v1/3dtiles/root.json?key=%s"), *Key));
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
+		Tiles->ForbidHoles = true;   // ayrıntılı karo gelene dek kaba karo kalır (görev haritasında mavi delikler)
 		Tiles->SetCreatePhysicsMeshes(true);
 		Tiles->SetMaximumScreenSpaceError(8.0);
 		Tiles->ShowCreditsOnScreen = true; // Google atıf zorunluluğu
@@ -468,6 +470,7 @@ void ACaySimWorldSetup::SetupGoogleIon()
 		Tiles->SetIonAssetID(GoogleIonAssetId);
 		Tiles->SetIonAccessToken(CesiumIonToken);
 		Tiles->SetGeoreference(TSoftObjectPtr<ACesiumGeoreference>(Geo));
+		Tiles->ForbidHoles = true;   // ayrıntılı karo gelene dek kaba karo kalır (görev haritasında mavi delikler)
 		// fotogrametri karolarında fizik ağı pişirmesi işçi iş parçacıklarını kilitliyordu (190 karo "Loading-Worker"da takılı, %5–8):
 		// görüntü fiziksiz, çarpışma / yükseklik örneği gizli Cesium World Terrain'den (yalın arazi, hafif)
 		Tiles->SetCreatePhysicsMeshes(bGooglePhysics);
