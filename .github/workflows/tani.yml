@@ -1,0 +1,45 @@
+# Simumav - acilis tanisi: paketi 60 sn calistirir; pencere basligi, Uygulama Denetimi (CodeIntegrity) ve uygulama hata olaylari,
+# Saved klasoru dokumu (artefakt yok)
+name: tani
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        type: string
+        default: "Development"
+
+jobs:
+  tani:
+    if: github.repository_owner == 'goktalay'
+    runs-on: [self-hosted, windows, "${{ vars.RUNNER_LABEL || 'unreal' }}"]
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Tani
+        env:
+          CFG: ${{ inputs.config }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $base = Join-Path $env:GITHUB_WORKSPACE ("Paketler\" + $env:CFG + "\Windows")
+          $exe = Get-ChildItem $base -Filter *.exe -File | Select-Object -First 1
+          Write-Host ("Exe: " + $exe.FullName + "  " + $exe.Length + "  " + $exe.LastWriteTime)
+          $t0 = Get-Date
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList @('-RenderOffScreen','-ResX=1280','-ResY=720','-windowed','-log','-unattended') -PassThru
+          Start-Sleep -Seconds 60
+          $p.Refresh()
+          Write-Host ("Calisiyor: " + (-not $p.HasExited) + "  pencere: '" + $p.MainWindowTitle + "'")
+          Get-Process | Where-Object { $_.StartTime -gt $t0 -and $_.MainWindowTitle } | ForEach-Object { Write-Host ("Pencere: " + $_.ProcessName + " - " + $_.MainWindowTitle) }
+          Get-Process | Where-Object { $_.StartTime -gt $t0 } | ForEach-Object { Write-Host ("Surec: " + $_.ProcessName + " " + $_.Id) }
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Get-Process | Where-Object { $_.StartTime -gt $t0 -and ($_.ProcessName -like '*Crash*' -or $_.ProcessName -like '*Simumav*') } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Write-Host "--- CodeIntegrity (son 15 dk)"
+          Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-CodeIntegrity/Operational'; StartTime = $t0.AddMinutes(-1) } -MaxEvents 30 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ($_.Id.ToString() + " " + $_.TimeCreated + " " + ($_.Message -replace "`r|`n", ' ').Substring(0, [Math]::Min(300, $_.Message.Length))) }
+          Write-Host "--- Uygulama hatalari"
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Level = 2; StartTime = $t0.AddMinutes(-1) } -MaxEvents 20 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ($_.Id.ToString() + " " + $_.ProviderName + " " + ($_.Message -replace "`r|`n", ' ').Substring(0, [Math]::Min(400, $_.Message.Length))) }
+          Write-Host "--- Saved"
+          Get-ChildItem (Join-Path $base 'Simumav\Saved') -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -gt $t0 } | Select-Object -First 30 | ForEach-Object { Write-Host ($_.FullName + "  " + $_.Length) }
+          $log = Get-ChildItem (Join-Path $base 'Simumav\Saved\Logs') -Filter 'Simumav.log' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($log) { Get-Content $log.FullName -Tail 40 | ForEach-Object { Write-Host $_ } }
