@@ -134,6 +134,8 @@ private:
 	TSharedRef<SWidget> MPointDialog();
 	void MOpenPointDlg(int32 Index);
 	void MTogglePlay();
+	/** duman testi: örnek görev (0 ilaçlama, 1 koridor, 2 spiral, 3 ilaçlama + oynat) */
+	void SmokeMission(int32 Variant);
 	FVector2D MissionHome() const;
 	TSharedRef<SWidget> Wizard();
 	TSharedRef<SWidget> Loading();

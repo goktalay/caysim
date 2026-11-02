@@ -775,3 +775,32 @@ void SSmvShell::PickMission(TFunction<void(const FSmvMission&)> OnPick)
 	if (Items.Num() == 0) { Toast(FSmvI18n::T(TEXT("mis.none_saved")).ToString(), 4); return; }
 	OpenChoice(FSmvI18n::T(TEXT("pn.c_upload")), FSmvI18n::T(TEXT("mis.pick_body")), Items);
 }
+
+void SSmvShell::SmokeMission(int32 Variant)
+{
+	FSmvMission M;
+	M.Name = FString::Printf(TEXT("Duman görevi %d"), Variant);
+	M.Kind = Variant == 1 ? TEXT("corridor") : Variant == 2 ? TEXT("spiral") : TEXT("spray");
+	EditMission = M;
+	MEdLoad(M);
+	FSmvMissionEdit& E = *MEd;
+	E.HomeLat = 41.0082; E.HomeLon = 28.9784;   // İstanbul, Tarihi Yarımada (Google 3B)
+	auto Add = [&E](double Ex, double Nx, double Alt)
+	{
+		SmvCore::FMissionPoint Q;
+		SmvCore::ToGeo(E.HomeLat, E.HomeLon, Ex, Nx, Q.Lat, Q.Lon);
+		Q.Alt = Alt;
+		E.Pts.Add(Q);
+	};
+	if (Variant == 1) { Add(150, 350, 120); Add(500, 600, 120); Add(900, 450, 120); E.Par.CorridorWidth = 250; }
+	else if (Variant == 2) { E.Par.SpiralD0 = 80; E.Par.SpiralD1 = 500; E.Par.SpiralH0 = 30; E.Par.SpiralH1 = 160; }
+	else { Add(60, 60, 10); Add(260, 80, 10); Add(240, 230, 10); Add(70, 210, 10); E.Par.SprayStep = 5; E.Par.SprayAngle = 30; }
+	E.Rebuild();
+	if (ASmvMenuScene* Sc = Scene())
+	{
+		Sc->EnterMissionMode(E.HomeLat, E.HomeLon);
+		Sc->MissionFocus(E.HomeLat, E.HomeLon, Variant == 2 ? 1400.f : 1100.f);
+		if (Variant == 3) MTogglePlay(); else Sc->MissionStop();
+	}
+	SMV_KLOG(TEXT("SMOKE görev %d: %s, %d öğe, %.0f m, dünya %s"), Variant, *E.Kind, (int32)E.Res.Items.size(), E.Res.Summary.DistM, Scene() ? *Scene()->MissionWorldInfo() : TEXT("-"));
+}

@@ -4970,6 +4970,9 @@ void SSmvShell::TickSmoke()
 		{ ESmvScreen::Replay, -1, -1, -1, TEXT("15_replay"), 2.5f }, { ESmvScreen::Leaderboard, -1, -1, -1, TEXT("16_top10"), 2.5f }, { ESmvScreen::Account, -1, -1, -1, TEXT("17_account"), 2.5f },
 		{ ESmvScreen::Support, -1, -1, -1, TEXT("18_support"), 2.5f }, { ESmvScreen::FpvGallery, -1, -1, -1, TEXT("19_fpv"), 2.5f }, { ESmvScreen::Lobby, -1, -1, -1, TEXT("19_lobby"), 2.5f },
 		{ ESmvScreen::Missions, -1, -1, -1, TEXT("19_missions"), 2.5f }, { ESmvScreen::Wizard, 0, -1, -1, TEXT("19_wizard"), 3.f },
+		// görev düzenleyici (Cesium, İstanbul): ilaçlama / koridor / spiral + oynatma (karolar yüklenene dek bekler)
+		{ ESmvScreen::MissionEditor, 0, -1, -1, TEXT("19_mis_spray"), 30.f }, { ESmvScreen::MissionEditor, 1, -1, -1, TEXT("19_mis_corridor"), 12.f },
+		{ ESmvScreen::MissionEditor, 2, -1, -1, TEXT("19_mis_spiral"), 10.f }, { ESmvScreen::MissionEditor, 3, -1, -1, TEXT("19_mis_play"), 9.f },
 	};
 	const int32 NS = UE_ARRAY_COUNT(Steps);
 	const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / (bLang ? FString(TEXT("Screenshots/Smoke_")) + SmokeLang : FString(TEXT("Screenshots/Smoke"))));
@@ -5037,6 +5040,9 @@ void SSmvShell::TickSmoke()
 					NewTrack.Lat = 41.0082; NewTrack.Lon = 28.9784; NewTrack.RadiusM = 1000;
 				}
 				RwStep = S.Wiz;
+				break;
+			case ESmvScreen::MissionEditor:
+				SmokeMission(S.Wiz);
 				break;
 			case ESmvScreen::CrewWizard:
 				if (S.Wiz == 0) { NewPilot = FSmvPilot(); CwFirst = TEXT("Deniz"); CwLast = TEXT("Yılmaz"); }
