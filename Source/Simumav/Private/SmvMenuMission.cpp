@@ -278,3 +278,8 @@ void ASmvMenuScene::TickMission(float Dt)
 		MissionDrone->SetActorLocationAndRotation(P, Rd);
 	}
 }
+
+double ASmvMenuScene::MissionGroundRel(double Lat, double Lon) const
+{
+	return (MissionWorld && bMHomeGw) ? MGroundAt(Lat, Lon) - MHomeGw : 0.0;
+}

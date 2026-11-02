@@ -55,10 +55,23 @@ struct FSmvMissionEdit
 	SmvCore::FMissionPoint Draft;
 	FString DraftAction = TEXT("next"), DraftScript;
 	int32 DraftTurns = 1;
-	void Rebuild()
+	/** noktaların zemine göre yüksekliği (AGL; çizim etiketi) — Res.Items ile aynı sırada */
+	TArray<double> Agl;
+	/** Sc verilirse yükseklikler arazi izler: öğe irtifası (eve göre) = AGL + (noktanın zemini − ev zemini). Engebeli arazide
+	 *  (Ankara) eve göre sabit irtifa toprağın altında / çok üstünde kalıp tasarım kamerayla kayıyormuş gibi görünüyordu */
+	void Rebuild(class ASmvMenuScene* Sc = nullptr)
 	{
 		std::vector<SmvCore::FMissionPoint> P(Pts.GetData(), Pts.GetData() + Pts.Num());
 		Res = SmvCore::BuildMission(std::string(TCHAR_TO_UTF8(*Kind)), HomeLat, HomeLon, P, Par);
+		Agl.Reset();
+		double MaxAlt = 0;
+		for (SmvCore::FMissionItem& I : Res.Items)
+		{
+			Agl.Add(I.Alt);
+			if (Sc && I.bNav && I.Cmd != 22) I.Alt += Sc->MissionGroundRel(I.Lat, I.Lon);
+			if (I.bNav) MaxAlt = FMath::Max(MaxAlt, I.Alt);
+		}
+		Res.Summary.MaxAlt = FMath::Max(Res.Summary.MaxAlt, MaxAlt);
 	}
 	bool IsNewKind() const { return Kind == TEXT("corridor") || Kind == TEXT("spray") || Kind == TEXT("spiral") || Kind == TEXT("free"); }
 };
@@ -262,7 +275,7 @@ namespace
 		for (int32 i = 0; i < E.Pts.Num(); ++i)
 		{
 			const SmvCore::FMissionPoint& Q = E.Pts[i];
-			const double Alt = E.Kind == TEXT("free") ? Q.Alt : E.Kind == TEXT("corridor") ? E.Par.CorridorAlt : 0.0;
+			const double Alt = (E.Kind == TEXT("free") ? Q.Alt : E.Kind == TEXT("corridor") ? E.Par.CorridorAlt : 0.0) + Sc->MissionGroundRel(Q.Lat, Q.Lon);
 			FVector2D Px;
 			if (!Sc->MissionProject(Q.Lat, Q.Lon, Alt, E.Kind == TEXT("spray"), Px)) continue;
 			const float D = (float)FVector2D::Distance(MToLocal(G, Px), P);
@@ -286,7 +299,7 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 		ASmvMenuScene* Sc = Self->Scene();
 		if (!Sc || !Sc->IsMissionMode() || !Self->MEd.IsValid()) return;
 		FSmvMissionEdit& E = *Self->MEd;
-		E.Rebuild();
+		E.Rebuild(Sc);
 		auto Proj = [Sc, &G](double La, double Lo, double Alt, bool bGround, FVector2D& OutL)
 		{
 			FVector2D Px;
@@ -308,18 +321,24 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 			DrBox(Out, Ly, G, FVector2D(X0 - 5.f, P.Y - Ms.Y * 0.5f - 2.f), FVector2D(Ms.X + 10.f, Ms.Y + 4.f), FLinearColor(0.02f, 0.04f, 0.08f, 0.72f), Round(6.f));
 			DrText(Out, Ly + 1, G, T, P, F, Col, Align);
 		};
-		const FLinearColor Yel(1.f, 0.86f, 0.25f, 0.8f), Blu(0.4f, 0.75f, 1.f, 0.75f), Lab(1.f, 1.f, 1.f, 0.95f);
+		// renkler uydu görüntüsünde (sarımsı / yeşil arazi) ayrışsın: rota neon camgöbeği, yükseklik pembe, alan kenarı açık yeşil
+		const FLinearColor Yel(0.13f, 0.86f, 0.96f, 0.95f), Blu(1.f, 0.42f, 0.74f, 0.85f), Lab(1.f, 1.f, 1.f, 0.95f);
+		const bool bSweep = E.Kind == TEXT("spray");
 		// koridor / ilaçlama kenarı (zeminde)
 		if (E.Res.Outline.size() >= 3)
 		{
 			TArray<FVector2D> Ol;
 			for (const auto& P : E.Res.Outline) { FVector2D Q; if (Proj(P.first, P.second, 0, true, Q)) Ol.Add(Q); }
-			if (Ol.Num() >= 3) { const FVector2D First = Ol[0]; Ol.Add(First); DrLine(Out, L + 1, G, Ol, FLinearColor(0.f, 0.f, 0.f, 0.5f), 4.5f); DrLine(Out, L + 2, G, Ol, FLinearColor(0.2f, 0.95f, 0.8f, 0.85f), 2.f); }
+			if (Ol.Num() >= 3) { const FVector2D First = Ol[0]; Ol.Add(First); DrLine(Out, L + 1, G, Ol, FLinearColor(0.f, 0.f, 0.f, 0.5f), 4.5f); DrLine(Out, L + 2, G, Ol, FLinearColor(0.64f, 0.95f, 0.22f, 0.95f), 2.5f); }
 		}
 		// rota: konumlu öğeler (kalkış evde)
-		struct FN { double La, Lo, Alt; int Cmd; };
+		struct FN { double La, Lo, Alt, Agl; int Cmd; };
 		TArray<FN> Ns;
-		for (const SmvCore::FMissionItem& I : E.Res.Items) if (I.bNav) Ns.Add({ I.Cmd == 22 ? E.HomeLat : I.Lat, I.Cmd == 22 ? E.HomeLon : I.Lon, I.Alt, I.Cmd });
+		for (int32 k = 0; k < (int32)E.Res.Items.size(); ++k)
+		{
+			const SmvCore::FMissionItem& I = E.Res.Items[k];
+			if (I.bNav) Ns.Add({ I.Cmd == 22 ? E.HomeLat : I.Lat, I.Cmd == 22 ? E.HomeLon : I.Lon, I.Alt, E.Agl.IsValidIndex(k) ? E.Agl[k] : I.Alt, I.Cmd });
+		}
 		const bool bDense = Ns.Num() > 40;   // tarama / spiral: etiketler seyreltilir
 		const int32 Every = bDense ? FMath::Max(1, Ns.Num() / 14) : 1;
 		FVector2D Prev; bool bPrev = false;
@@ -333,20 +352,22 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 			if (bA && bG && (i % Every == 0 || i == Ns.Num() - 1))
 			{
 				Seg(L + 2, Gd, A, Blu, 1.5f);
-				if (FVector2D::Distance(Gd, A) > 26.f) Lbl(L + 6, FString::Printf(TEXT("%.0f m"), N.Alt), (Gd + A) * 0.5 + FVector2D(8, 0), Font(9, "Bold"), FLinearColor(0.65f, 0.88f, 1.f, 1.f), -1);
+				if (FVector2D::Distance(Gd, A) > 26.f) Lbl(L + 6, FString::Printf(TEXT("%.0f m"), N.Agl), (Gd + A) * 0.5 + FVector2D(8, 0), Font(9, "Bold"), FLinearColor(1.f, 0.72f, 0.88f, 1.f), -1);
 			}
 			// noktalar arası silik sarı çizgi + mesafe
 			if (bA && bPrev)
 			{
-				Seg(L + 3, Prev, A, Yel, 2.f);
-				if (i > 0 && (!bDense || i % Every == 0) && FVector2D::Distance(Prev, A) > 60.f)
+				// ilaçlama şeritleri ince ve etiketsiz (2–5 m aralıkla birleşip düz leke gibi görünüyordu); geçiş ayakları etiketli
+				const bool bStrip = bSweep && i > 1 && i < Ns.Num() - 1;
+				Seg(L + 3, Prev, A, Yel, bStrip ? 1.2f : 2.5f);
+				if (i > 0 && !bStrip && (!bDense || i % Every == 0 || bSweep) && FVector2D::Distance(Prev, A) > 60.f)
 				{
 					const FN& P0 = Ns[i - 1];
 					const double D = SmvCore::DistM(P0.La, P0.Lo, N.La, N.Lo);
 					if (D > 0.5) Lbl(L + 8, MDist(D), (Prev + A) * 0.5 + FVector2D(0, -12), Fl, Lab, 0);
 				}
 			}
-			if (bA) { DrBox(Out, L + 4, G, A - FVector2D(3, 3), FVector2D(6, 6), FLinearColor(1.f, 0.86f, 0.25f, 0.9f), Circle()); Prev = A; bPrev = true; }
+			if (bA) { if (!bSweep || i <= 1 || i == Ns.Num() - 1) DrBox(Out, L + 4, G, A - FVector2D(3, 3), FVector2D(6, 6), FLinearColor(0.13f, 0.86f, 0.96f, 1.f), Circle()); Prev = A; bPrev = true; }
 			else bPrev = false;
 		}
 		// ev (kalkış)
@@ -362,7 +383,7 @@ TSharedRef<SWidget> SSmvShell::MissionOverlay(bool bEditor)
 		for (int32 i = 0; i < E.Pts.Num(); ++i)
 		{
 			const SmvCore::FMissionPoint& Q = E.Pts[i];
-			const double Alt = E.Kind == TEXT("free") ? Q.Alt : E.Kind == TEXT("corridor") ? E.Par.CorridorAlt : E.Kind == TEXT("spray") ? 0.0 : Q.Alt;
+			const double Alt = (E.Kind == TEXT("free") ? Q.Alt : E.Kind == TEXT("corridor") ? E.Par.CorridorAlt : 0.0) + Sc->MissionGroundRel(Q.Lat, Q.Lon);
 			FVector2D P;
 			if (!Proj(Q.Lat, Q.Lon, Alt, E.Kind == TEXT("spray"), P)) continue;
 			const bool bH = (i == E.Hover || i == E.Drag) && bEditor;
@@ -577,7 +598,7 @@ void SSmvShell::MTogglePlay()
 	if (!Sc || !MEd.IsValid()) return;
 	if (Sc->IsMissionPlaying()) { Sc->MissionStop(); return; }
 	FSmvMissionEdit& E = *MEd;
-	E.Rebuild();
+	E.Rebuild(Sc);
 	TArray<FVector> Path;
 	Path.Add(FVector(E.HomeLat, E.HomeLon, 0.0));
 	for (const SmvCore::FMissionItem& I : E.Res.Items)
@@ -662,7 +683,7 @@ TSharedRef<SWidget> SSmvShell::MissionEditor()
 			{
 				if (!Self->MEd.IsValid()) return;
 				FSmvMissionEdit& X = *Self->MEd;
-				X.Rebuild();
+				X.Rebuild(Self->Scene());
 				FSmvMission M = Self->EditMission;
 				M.Id = X.Id; M.Name = X.Name.TrimStartAndEnd(); M.Kind = X.Kind; M.TrackId = X.TrackId;
 				M.PlanJson = Self->MEdSave();

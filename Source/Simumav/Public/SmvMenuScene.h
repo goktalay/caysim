@@ -84,6 +84,8 @@ public:
 	bool MissionProject(double Lat, double Lon, double AltRel, bool bGround, FVector2D& OutPx) const;
 	/** görüntü pikseli → zemindeki enlem / boylam (ışın) */
 	bool MissionPick(const FVector2D& Px, double& OutLat, double& OutLon) const;
+	/** noktanın zemini − ev zemini (m): yükseklikler noktanın kendi zeminine göre (AGL) — engebeli arazide tasarım kaymasın */
+	double MissionGroundRel(double Lat, double Lon) const;
 	/** dünya kaynağı adı ve karo yüklemesi */
 	FString MissionWorldInfo() const;
 	/** oynatma: CAYMAZ görev yolunda (enlem, boylam, eve göre irtifa) uçar */
