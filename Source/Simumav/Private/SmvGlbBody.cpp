@@ -133,7 +133,14 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 	const double Cy = FMath::Cos(Yaw), Sy = FMath::Sin(Yaw);
 	// glTF (dünya) → Unreal gövde çerçevesi (cm): Y ekseni etrafında ön döndürme, sonra (x, z, y)·100
 	auto ToUe = [Cy, Sy](const double G[3]) { const double X = G[0] * Cy + G[2] * Sy, Z = -G[0] * Sy + G[2] * Cy; return FVector(X * 100.0, Z * 100.0, G[1] * 100.0); };
-	auto ToUeDir = [Cy, Sy](const double G[3]) { const double X = G[0] * Cy + G[2] * Sy, Z = -G[0] * Sy + G[2] * Cy; return FVector(X, Z, G[1]).GetSafeNormal(); };
+	// yön (normal): düğüm ölçeği çok küçükse (CAYMAZ 6e-5) dönüştürülmüş normalin boyu GetSafeNormal eşiğinin (1e-8 kare) altında kalıp
+	// SIFIR oluyordu → gövde ışık almıyor, karanlık görünüyordu (kullanıcı, 2026-11-02). Boyuna bakılmadan birim vektöre çevrilir.
+	auto ToUeDir = [Cy, Sy](const double G[3])
+	{
+		const double X = G[0] * Cy + G[2] * Sy, Z = -G[0] * Sy + G[2] * Cy;
+		const double L = FMath::Sqrt(X * X + Z * Z + G[1] * G[1]);
+		return L > 1e-30 ? FVector(X / L, Z / L, G[1] / L) : FVector::UpVector;
+	};
 
 	// 1) düğüm → parça (en yakın adlı hareketli ata)
 	const int32 NN = (int32)M.Nodes.size();
