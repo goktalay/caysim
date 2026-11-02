@@ -209,26 +209,42 @@ bool USmvGlbBody::Build(const TArray<uint8>& Bytes, const FSmvGlbBuildOptions& O
 					const uint32 I0 = G.Idx[t], I1 = bMirror ? G.Idx[t + 1] : G.Idx[t + 2], I2 = bMirror ? G.Idx[t + 2] : G.Idx[t + 1];
 					const FVector Fn = FVector::CrossProduct(Pw[I1] - Pw[I0], Pw[I2] - Pw[I0]).GetSafeNormal();
 					const int32 B = S.V.Num();
-					for (const uint32 I : { I0, I1, I2 }) { S.V.Add(Pw[I]); S.N.Add(Fn); S.Uv.Add(Uv(I)); }
+					// üçgen Unreal'ın ön yüz sarımıyla (I0, I2, I1): eski sırada dış yüz ARKA yüz sayılıyor, çift yüzlü malzeme normali
+					// içe çeviriyordu → yukarı bakan yüzeyler karanlık (CAYMAZ). Normal (Fn) dışa bakar, değişmedi.
+					for (const uint32 I : { I0, I2, I1 }) { S.V.Add(Pw[I]); S.N.Add(Fn); S.Uv.Add(Uv(I)); }
 					S.T.Add(B); S.T.Add(B + 1); S.T.Add(B + 2);
 					++Tris;
 				}
 				continue;
 			}
 			const int32 Base = S.V.Num();
+			// normaller üçgen sırasından (alan ağırlıklı, yumuşatılmış) yeniden hesaplanır — düz gölgeli modellerle AYNI yön kuralı.
+			// Dosya normalleriyle CAYMAZ (çift yüzlü malzeme) her ışıkta karanlık görünüyordu; dosya normali yalnız yedek
+			TArray<FVector> Acc;
+			Acc.SetNumZeroed(Nv);
+			for (size_t t = 0; t + 2 < G.Idx.size(); t += 3)
+			{
+				const uint32 I0 = G.Idx[t], I1 = bMirror ? G.Idx[t + 1] : G.Idx[t + 2], I2 = bMirror ? G.Idx[t + 2] : G.Idx[t + 1];
+				if ((int32)FMath::Max3(I0, I1, I2) >= Nv) continue;
+				const FVector Fn = FVector::CrossProduct(Pw[I1] - Pw[I0], Pw[I2] - Pw[I0]);   // boy = 2 × alan
+				Acc[I0] += Fn; Acc[I1] += Fn; Acc[I2] += Fn;
+			}
 			for (int32 v = 0; v < Nv; ++v)
 			{
 				S.V.Add(Pw[v]);
-				double Dn[3];
-				SmvCore::FGlbModel::TransformDir(Nd.World, &G.Nrm[v * 3], Dn);
-				S.N.Add(ToUeDir(Dn));
+				FVector N = Acc[v];
+				const double L = N.Size();
+				if (L > 1e-12) N /= L;
+				else { double Dn[3]; SmvCore::FGlbModel::TransformDir(Nd.World, &G.Nrm[v * 3], Dn); N = ToUeDir(Dn); }
+				S.N.Add(N);
 				S.Uv.Add(Uv((uint32)v));
 			}
 			for (size_t t = 0; t + 2 < G.Idx.size(); t += 3)
 			{
 				const int32 A = Base + (int32)G.Idx[t], B = Base + (int32)G.Idx[t + 1], C = Base + (int32)G.Idx[t + 2];
-				if (bMirror) { S.T.Add(A); S.T.Add(B); S.T.Add(C); }
-				else { S.T.Add(A); S.T.Add(C); S.T.Add(B); }
+				// Unreal ön yüz sarımı (bkz. düz gölgeli yol): dış yüz ön yüz olur, normaller (dışa) değişmez
+				if (bMirror) { S.T.Add(A); S.T.Add(C); S.T.Add(B); }
+				else { S.T.Add(A); S.T.Add(B); S.T.Add(C); }
 				++Tris;
 			}
 		}
