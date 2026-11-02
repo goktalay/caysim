@@ -192,6 +192,8 @@ protected:
 
 	UPROPERTY() TObjectPtr<ACaySimWorldSetup> MissionWorld;
 	UPROPERTY() TObjectPtr<ASmvDroneActor> MissionDrone;
+	/** kalkış noktasında 3B direk (dünyada gerçek nesne: harita üstü çizimin hizası buna göre doğrulanır) */
+	UPROPERTY() TObjectPtr<class UStaticMeshComponent> MissionPin;
 
 private:
 	// ---- görev kipi ----

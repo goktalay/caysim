@@ -123,20 +123,21 @@ namespace
 		return OutVp.GetLocalSize().X > 1.f;
 	}
 
+	// görüntü pikseli ↔ tuval yerel konumu: ORANSAL (tuval tüm görüntüyü kaplar). Görüntü alanı geometrisi + DPI'a dayalı eski
+	// dönüşüm arayüz ölçeklendiğinde (pencere ≠ 1600×900 tasarım) kayıyordu → tasarım enlem / boylamda kayıyormuş gibi görünüyordu
 	FVector2D MToLocal(const FGeometry& G, const FVector2D& Px)
 	{
 		FGeometry Vp; FVector2D Vs;
 		if (!MViewport(Vp, Vs)) return Px;
-		const FVector2D Abs = FVector2D(Vp.LocalToAbsolute(FVector2f(Px * FVector2D(Vp.GetLocalSize()) / Vs)));
-		return FVector2D(G.AbsoluteToLocal(FVector2f(Abs)));
+		return Px / Vs * FVector2D(G.GetLocalSize());
 	}
 
 	FVector2D MToPx(const FGeometry& G, const FVector2D& Local)
 	{
 		FGeometry Vp; FVector2D Vs;
 		if (!MViewport(Vp, Vs)) return Local;
-		const FVector2D VpLocal = FVector2D(Vp.AbsoluteToLocal(G.LocalToAbsolute(FVector2f(Local))));
-		return VpLocal * Vs / FVector2D(Vp.GetLocalSize());
+		const FVector2D Sz = FVector2D(G.GetLocalSize());
+		return Local / FVector2D(FMath::Max(1.0, Sz.X), FMath::Max(1.0, Sz.Y)) * Vs;
 	}
 }
 
@@ -580,7 +581,6 @@ TSharedRef<SWidget> SSmvShell::Missions()
 			})
 		];
 	TSharedRef<SWidget> Body = SNew(SOverlay)
-		+ SOverlay::Slot()[MissionOverlay(false)]
 		+ SOverlay::Slot()
 		[
 			SNew(SHorizontalBox).Visibility(EVisibility::SelfHitTestInvisible)
@@ -589,7 +589,10 @@ TSharedRef<SWidget> SSmvShell::Missions()
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top)[SNew(SBox).WidthOverride(330.f)[Glass(Sum, FMargin(18.f), 0.9f)]]
 		]
 		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0, 0, 0, 6)[Buttons];
-	return YhPage(Tx(TEXT("menu.missions")), Tx(TEXT("mis.sub")), Body);
+	// çizim tuvali tüm görüntüyü kaplar (oransal izdüşüm); sayfa üstte
+	return SNew(SOverlay)
+		+ SOverlay::Slot()[MissionOverlay(false)]
+		+ SOverlay::Slot()[YhPage(Tx(TEXT("menu.missions")), Tx(TEXT("mis.sub")), Body)];
 }
 
 void SSmvShell::MTogglePlay()

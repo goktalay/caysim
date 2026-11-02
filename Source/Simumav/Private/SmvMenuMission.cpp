@@ -20,6 +20,8 @@
 #include "GameFramework/Info.h"
 #include "Engine/Light.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 
@@ -92,6 +94,7 @@ void ASmvMenuScene::ExitMissionMode()
 	if (MissionWorld) { MissionWorld->Destroy(); MissionWorld = nullptr; }
 	if (MissionDrone) { MissionDrone->Destroy(); MissionDrone = nullptr; }
 	bMission = false;
+	if (MissionPin) MissionPin->SetVisibility(false);
 	for (const TWeakObjectPtr<AActor>& A : MHidden) if (A.IsValid()) A->SetActorHiddenInGame(false);
 	MHidden.Reset();
 	if (GEngine && GEngine->GameViewport) { FEngineShowFlags& Sf = GEngine->GameViewport->EngineShowFlags; Sf.SetFog(true); Sf.SetVolumetricFog(true); Sf.SetCloud(true); }
@@ -246,6 +249,33 @@ void ASmvMenuScene::TickMission(float Dt)
 			if (bFirst) { MTarget = MissionWorld->GeoToUnreal(MLon, MLat, G); MGroundCache.Reset(); }
 		}
 		else if (!bMHomeGw) MHomeAt = Now - 1.0;   // tekrar dene
+	}
+	// kalkış direği: 2 m çaplı, 80 m yüksek parlak yeşil silindir (ev zemininde)
+	if (!MissionPin)
+	{
+		MissionPin = NewObject<UStaticMeshComponent>(this);
+		if (UStaticMesh* Cyl = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")))
+		{
+			MissionPin->SetStaticMesh(Cyl);
+			MissionPin->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			MissionPin->SetCastShadow(false);
+			if (UMaterialInterface* Gm = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Simumav/Materials/M_SmvGlow.M_SmvGlow"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				UMaterialInstanceDynamic* D = UMaterialInstanceDynamic::Create(Gm, this);
+				D->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.1f, 0.9f, 0.45f));
+				D->SetScalarParameterValue(TEXT("Glow"), 2.f);
+				MissionPin->SetMaterial(0, D);
+			}
+			MissionPin->SetupAttachment(GetRootComponent());
+			MissionPin->RegisterComponent();
+		}
+	}
+	if (MissionPin)
+	{
+		const double Hs = FMath::Clamp((double)MDist / 25.0, 20.0, 400.0);   // uzaktan da görünsün
+		MissionPin->SetVisibility(true);
+		MissionPin->SetWorldLocation(MWorld(MLat, MLon, Hs * 0.5));
+		MissionPin->SetWorldScale3D(FVector(Hs / 40.0, Hs / 40.0, Hs / 100.0 * 1.0));
 	}
 	// yörünge kamerası
 	const FRotator R(MPitch, MYaw, 0.f);

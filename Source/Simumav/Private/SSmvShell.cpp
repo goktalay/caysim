@@ -573,7 +573,7 @@ void SSmvShell::Tick(const FGeometry& G, const double Now, const float Dt)
 	if (!Flow->StartupNotice.IsEmpty() && BootFinished()) { Toast(Flow->StartupNotice, 4); Flow->StartupNotice.Reset(); }
 	const bool bPause = GameMode.IsValid() && GameMode->IsPausedMenu();
 	const ESmvScreen Cur = Flow->GetScreen();
-	if (BackdropBox.IsValid()) BackdropBox->SetVisibility((Cur == ESmvScreen::Flight || Cur == ESmvScreen::Missions || Cur == ESmvScreen::MissionWizard || Cur == ESmvScreen::MissionEditor) ? EVisibility::Collapsed : EVisibility::HitTestInvisible);
+	if (BackdropBox.IsValid()) BackdropBox->SetVisibility((Cur == ESmvScreen::Flight || Cur == ESmvScreen::MissionEditor) ? EVisibility::Collapsed : EVisibility::HitTestInvisible);
 	{
 		ASmvMenuScene* Sc = Scene();
 		UTexture* Vt = (Sc && Cur == ESmvScreen::Menu && !bPause) ? Sc->GetMenuVideo() : nullptr;
