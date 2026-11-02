@@ -3977,8 +3977,8 @@ TSharedRef<SWidget> SSmvShell::SetDisplay()
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.speedfx")), Chips(&GSpeedFxStr, { TEXT("0"), TEXT("1"), TEXT("2") }, { Tx(TEXT("set.speedfx_0")), Tx(TEXT("set.speedfx_1")), Tx(TEXT("set.speedfx_2")) }, {},
 		[]() { FSmvUiPrefs::Get().SpeedFx = FMath::Clamp(FCString::Atoi(*GSpeedFxStr), 0, 2); FSmvUiPrefs::Get().Save(); }))];
 	V->AddSlot().AutoHeight().Padding(0, 14, 0, 8)[Section(Tx(TEXT("settings.cesium")), Accent3())];
-	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.realworld")), Chips(&FSmvUiPrefs::Get().RealWorld, { TEXT("google3d"), TEXT("terrain"), TEXT("offline"), TEXT("off") },
-		{ Tx(TEXT("set.realworld_google")), Tx(TEXT("set.realworld_terrain")), Tx(TEXT("set.realworld_offline")), Tx(TEXT("set.realworld_off")) }, {}, []() { FSmvUiPrefs::Get().Save(); }))];
+	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("set.realworld")), Chips(&FSmvUiPrefs::Get().RealWorld, { TEXT("terrain"), TEXT("offline"), TEXT("off") },
+		{ Tx(TEXT("set.realworld_terrain")), Tx(TEXT("set.realworld_offline")), Tx(TEXT("set.realworld_off")) }, {}, []() { FSmvUiPrefs::Get().Save(); }))];
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[SmvUi::Text(Tx(TEXT("set.realworld_hint")), 10, "Regular", Mute())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("settings.cesium")), TextEdit(&S.CesiumToken, true, Tx(TEXT("settings.cesium_hint")), 360.f))];
 	return V;

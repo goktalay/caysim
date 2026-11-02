@@ -2444,7 +2444,7 @@ TSharedRef<SWidget> SSmvShell::RealWizard()
 	const TArray<FText> Steps = { Tx(TEXT("parkur.s_location")), Tx(TEXT("parkur.s_weather")), Tx(TEXT("parkur.s_name")) };
 	FSmvTrack& T = NewTrack;
 	T.ParkurKind = TEXT("real");
-	if (T.WorldMode != TEXT("google3d")) T.WorldMode = TEXT("real");
+	T.WorldMode = TEXT("real");   // Google 3B kaldırıldı (2026-11-02): gerçek dünya = Cesium arazisi + uydu
 	TSharedRef<SWidget> Body = SNullWidget::NullWidget;
 	if (RwStep == 0)
 	{
@@ -2469,8 +2469,7 @@ TSharedRef<SWidget> SSmvShell::RealWizard()
 		Side->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("parkur.s_location")), Hex(0x38bdf8))];
 		Side->AddSlot().AutoHeight().Padding(0, 0, 0, 10)[SmvUi::Text(Tx(TEXT("parkur.map_hint")), 11, "Regular", Dim())];
 		Side->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("parkur.max_dist")), Slider(&T.RadiusM, 250, 5000, 50, [](double V) { return FString::Printf(TEXT("%.2f km (Ø %.1f km)"), V / 1000.0, V * 2.0 / 1000.0); }))];
-		Side->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.world")), Chips(&T.WorldMode, { TEXT("real"), TEXT("google3d") }, { Tx(TEXT("world.real")), Tx(TEXT("world.google3d")) }, { ESmvIcon::Globe, ESmvIcon::Globe }, nullptr, 1))];
-		Side->AddSlot().AutoHeight().Padding(0, 10, 0, 0)
+				Side->AddSlot().AutoHeight().Padding(0, 10, 0, 0)
 		[
 			SmvUi::Text(TAttribute<FText>::CreateLambda([Self]() { return FText::FromString(FString::Printf(TEXT("%.5f, %.5f"), Self->NewTrack.Lat, Self->NewTrack.Lon)); }), 13, "Mono", Fg(), false)
 		];

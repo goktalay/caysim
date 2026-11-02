@@ -41,7 +41,8 @@ void FSmvUiPrefs::Load()
 	// eski varsayılanla kaydedilmiş "terrain" bir kez google3d'ye çekilir (kullanıcı sonra yine seçebilir)
 	int32 RwVer = 0;
 	GConfig->GetInt(GSmvPrefsSection, TEXT("RealWorldVer"), RwVer, Ini);
-	if (RwVer < 2 && RealWorld == TEXT("terrain")) RealWorld = TEXT("google3d");
+	// sürüm 3 (2026-11-02): Google 3B kaldırıldı (günlük kota) → google3d seçimi Cesium arazisine çekilir
+	if (RealWorld == TEXT("google3d")) RealWorld = TEXT("terrain");
 	GConfig->GetInt(GSmvPrefsSection, TEXT("SpeedFx"), SpeedFx, Ini);
 	SpeedFx = FMath::Clamp(SpeedFx, 0, 2);
 	GConfig->GetString(GSmvPrefsSection, TEXT("AlertLevel"), AlertLevel, Ini);

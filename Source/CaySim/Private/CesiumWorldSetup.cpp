@@ -130,6 +130,9 @@ void ACaySimWorldSetup::Build(const FCaySimSession& Session, UHepgoClient* Clien
 	bGroundOffsetMeasured = false;
 	LoadProgress = 0.f;
 	CenterGroundMsl = Center.bHasAlt ? Center.Alt : 0.0;
+	// tüm gerçek dünya Cesium World Terrain + uydu ile (kullanıcı 2026-11-02): Google Photorealistic 3D Tiles günlük "root" kotası
+	// (Map Tiles API) her dünya kurulumunda harcanıyor ve doluyordu (HTTP 429) → Google isteği arazi + uyduya çevrilir
+	if (Source == ECaySimWorldSource::GooglePhotoreal) Source = ECaySimWorldSource::CesiumIon;
 	ActiveSource = Source;
 	bLogTileStats = FParse::Param(FCommandLine::Get(), TEXT("CesiumStats"));
 #if CAYSIM_WITH_CESIUM
