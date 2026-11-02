@@ -39,7 +39,7 @@ void ASmvMenuScene::EnterMissionMode(double Lat, double Lon)
 	MissionStop();
 	MLat = Lat; MLon = Lon;
 	bMHomeGw = false; MHomeGw = 0; MHomeAt = 0;
-	MGroundCache.Reset();
+	MGroundCache.Reset(); MGroundPending.Reset(); ++MGroundGen; bMGroundReq = false;
 	if (!bMission)
 	{
 		bMission = true;
@@ -116,8 +116,10 @@ double ASmvMenuScene::MGroundAt(double Lat, double Lon) const
 	if (!MissionWorld) return 0.0;
 	const int64 K = SmvMKey(Lat, Lon);
 	if (const double* C = MGroundCache.Find(K)) return *C;
+	// en ayrıntılı arazi sorgusu kuyruğa (sonuç kalıcı; LOD değişince yükseklik değişmez — kayma / zıplama yok); o zamana dek ışın
+	MGroundPending.Add(K, FVector2D(Lon, Lat));
 	double G = 0.0;
-	if (MissionWorld->SampleGroundHeight(Lat, Lon, G)) { MGroundCache.Add(K, G); return G; }
+	if (MissionWorld->SampleGroundHeight(Lat, Lon, G)) return G;
 	return bMHomeGw ? MHomeGw : 0.0;
 }
 
@@ -236,13 +238,32 @@ void ASmvMenuScene::TickMission(float Dt)
 {
 	if (!MissionWorld || !Cam) return;
 	const double Now = FPlatformTime::Seconds();
-	if (Now - MGroundAtT > 1.5) { MGroundAtT = Now; MGroundCache.Reset(); }
+	// bekleyen noktaların en ayrıntılı yüksekliği (en çok 256'lık yığınlar; aynı anda tek istek)
+	if (!bMGroundReq && MGroundPending.Num() && MissionWorld->IsReady())
+	{
+		TArray<int64> Keys; TArray<FVector2D> Ll;
+		for (const TPair<int64, FVector2D>& Kv : MGroundPending) { Keys.Add(Kv.Key); Ll.Add(Kv.Value); if (Keys.Num() >= 256) break; }
+		for (int64 K : Keys) MGroundPending.Remove(K);
+		bMGroundReq = true;
+		const int32 Gen = MGroundGen;
+		TWeakObjectPtr<ASmvMenuScene> Wk(this);
+		MissionWorld->SampleGroundMostDetailed(Ll, [Wk, Keys, Gen](const TArray<double>& H, const TArray<bool>& Ok)
+		{
+			ASmvMenuScene* S = Wk.Get();
+			if (!S) return;
+			S->bMGroundReq = false;
+			if (Gen != S->MGroundGen) return;   // görev dünyası yeniden kuruldu
+			for (int32 i = 0; i < Keys.Num() && i < H.Num(); ++i) if (Ok.IsValidIndex(i) && Ok[i]) S->MGroundCache.Add(Keys[i], H[i]);
+		});
+	}
 	// ev zemini: karolar yüklendikçe ölçülür (ilk 30 sn her 1,5 sn)
 	if ((!bMHomeGw || Now - MHomeAt < 30.0) && Now - MHomeAt > 1.5)
 	{
 		if (MHomeAt == 0) MHomeAt = Now;
 		double G;
-		if (MissionWorld->SampleGroundHeight(MLat, MLon, G))
+		const double* Cm = MGroundCache.Find(SmvMKey(MLat, MLon));
+		if (!Cm) MGroundPending.Add(SmvMKey(MLat, MLon), FVector2D(MLon, MLat));
+		if (Cm ? (G = *Cm, true) : MissionWorld->SampleGroundHeight(MLat, MLon, G))
 		{
 			const bool bFirst = !bMHomeGw;
 			MHomeGw = G; bMHomeGw = true;

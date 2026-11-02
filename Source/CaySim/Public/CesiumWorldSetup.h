@@ -88,6 +88,9 @@ public:
 	/** Unreal XY noktalarında 3D Tiles yüzeyinin Unreal Z'si (Cesium SampleHeightMostDetailed; zaman uyumsuz, oyun iş parçacığında geri çağrı).
 	 *  Karolar görünmese / çarpışma ağı olmasa da çalışır. Cesium yoksa hemen boş döner. */
 	void SampleSurfaceZ(const TArray<FVector>& UnrealPoints, TFunction<void(const TArray<double>& UnrealZ, const TArray<bool>& bOk)> Done);
+	/** En ayrıntılı arazi yüksekliği (coğrafi; ekrandaki karo LOD'undan bağımsız — kamera hareketinde değişmez). LonLat: (boylam, enlem);
+	 *  sonuç GeoToUnreal'a verilecek yükseklik (elipsoid, m). Karo yoksa bOk false. */
+	void SampleGroundMostDetailed(const TArray<FVector2D>& LonLat, TFunction<void(const TArray<double>& HeightM, const TArray<bool>& bOk)> Done);
 	/** Etkin 3D Tiles aktörü (yoksa nullptr) */
 	AActor* GetTilesActor() const;
 

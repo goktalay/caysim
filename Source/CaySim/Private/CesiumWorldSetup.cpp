@@ -624,6 +624,25 @@ void ACaySimWorldSetup::SampleSurfaceZ(const TArray<FVector>& UnrealPoints, TFun
 #endif
 }
 
+void ACaySimWorldSetup::SampleGroundMostDetailed(const TArray<FVector2D>& LonLat, TFunction<void(const TArray<double>& HeightM, const TArray<bool>& bOk)> Done)
+{
+#if CAYSIM_WITH_CESIUM
+	ACesium3DTileset* T = CollisionTiles.IsValid() ? CollisionTiles.Get() : ActiveTiles();   // yalın arazi (bina çatısı değil)
+	if (!T || LonLat.Num() == 0) { Done(TArray<double>(), TArray<bool>()); return; }
+	TArray<FVector> Llh;
+	for (const FVector2D& P : LonLat) Llh.Add(FVector(P.X, P.Y, 0.0));
+	T->SampleHeightMostDetailed(Llh, FCesiumSampleHeightMostDetailedCallback::CreateLambda(
+		[Done](ACesium3DTileset*, const TArray<FCesiumSampleHeightResult>& R, const TArray<FString>&)
+		{
+			TArray<double> H; TArray<bool> Ok;
+			for (const FCesiumSampleHeightResult& X : R) { Ok.Add(X.SampleSuccess); H.Add(X.SampleSuccess ? X.LongitudeLatitudeHeight.Z : 0.0); }
+			Done(H, Ok);
+		}));
+#else
+	Done(TArray<double>(), TArray<bool>());
+#endif
+}
+
 bool ACaySimWorldSetup::ClipPolygon(const TArray<FVector>& UnrealPoints)
 {
 #if CAYSIM_WITH_CESIUM

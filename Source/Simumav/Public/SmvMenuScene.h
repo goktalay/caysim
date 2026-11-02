@@ -209,6 +209,10 @@ private:
 	double MPlayT0 = 0;
 	mutable TMap<int64, double> MGroundCache;
 	double MGroundAtT = 0;
+	/** en ayrıntılı yükseklik sorgusu bekleyen noktalar (anahtar → boylam, enlem) ve uçuştaki istek */
+	mutable TMap<int64, FVector2D> MGroundPending;
+	bool bMGroundReq = false;
+	int32 MGroundGen = 0;
 	TArray<TWeakObjectPtr<AActor>> MHidden;
 	double MGroundAt(double Lat, double Lon) const;
 	void TickMission(float Dt);
