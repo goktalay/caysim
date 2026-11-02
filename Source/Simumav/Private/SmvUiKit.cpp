@@ -69,12 +69,12 @@ namespace SmvUi
 #define SMV_THEMED(Name, Dark, Light_) const FLinearColor& Name() { static const FLinearColor D = Dark; static const FLinearColor L = Light_; return Light() ? L : D; }
 	SMV_THEMED(Bg, Hex(0x070b14), Hex(0xe9eef8))
 	SMV_THEMED(Bg2, Hex(0x0d1526), Hex(0xf4f7fd))
-	SMV_THEMED(Card, Hex(0x10182c, 0.78f), Hex(0xffffff, 0.80f))
+	SMV_THEMED(Card, Hex(0x10182c, 0.78f), Hex(0xffffff, 0.88f))
 	SMV_THEMED(CardHover, Hex(0x182440, 0.92f), Hex(0xffffff, 0.96f))
 	SMV_THEMED(Edge, Hex(0x8eaae6, 0.20f), Hex(0x283c78, 0.16f))
 	SMV_THEMED(Fg, Hex(0xe8eefb), Hex(0x0f1a33))
-	SMV_THEMED(Dim, Hex(0x9aa8c7), Hex(0x44547a))
-	SMV_THEMED(Mute, Hex(0x5f6c8a), Hex(0x8391b3))
+	SMV_THEMED(Dim, Hex(0x9aa8c7), Hex(0x2f3d5c))
+	SMV_THEMED(Mute, Hex(0x5f6c8a), Hex(0x55648a))
 	SMV_THEMED(Accent, Hex(0x38bdf8), Hex(0x0284c7))
 	SMV_THEMED(Accent2, Hex(0xa78bfa), Hex(0x7c3aed))
 	SMV_THEMED(Accent3, Hex(0x34d399), Hex(0x059669))
@@ -775,6 +775,13 @@ void SSmvCanvas::OnMouseCaptureLost(const FCaptureLostEvent& E)
 	if (OnDrag) OnDrag(FGeometry(), FVector2D::ZeroVector, 2);
 }
 
+FReply SSmvCanvas::OnMouseButtonDoubleClick(const FGeometry& G, const FPointerEvent& E)
+{
+	if (!OnDouble) return FReply::Unhandled();
+	OnDouble(G, FVector2D(G.AbsoluteToLocal(E.GetScreenSpacePosition())));
+	return FReply::Handled();
+}
+
 FReply SSmvCanvas::OnMouseWheel(const FGeometry& G, const FPointerEvent& E)
 {
 	if (!OnWheel) return FReply::Unhandled();
@@ -849,8 +856,11 @@ int32 SSmvBackdrop::OnPaint(const FPaintArgs& Args, const FGeometry& G, const FS
 	if (Cinematic.Get(false))
 	{
 		// sol yarı: kartların okunması için koyu degrade (sağ yarı sahneye açık); alt kenarda hafif kararma; birkaç sıcak ışık zerresi
-		DrGradient(Out, L, G, FVector2D::ZeroVector, FVector2D(W * 0.66f, H), { { 0.f, Hex(0x050a16, 0.78f) }, { 0.55f, Hex(0x050a16, 0.52f) }, { 1.f, FLinearColor(0, 0, 0, 0) } }, false);
-		DrGradient(Out, L, G, FVector2D(0, H * 0.78f), FVector2D(W, H * 0.22f), { { 0.f, FLinearColor(0, 0, 0, 0) }, { 1.f, FLinearColor(0, 0, 0, 0.45f) } }, true);
+		// açık tema: perde de açık (koyu perde üstünde açık temanın koyu yazıları okunmuyordu — kullanıcı 2026-11-02); üstte başlık bandı
+		const FLinearColor Sc = Light() ? Hex(0xf4f7fd) : Hex(0x050a16);
+		DrGradient(Out, L, G, FVector2D::ZeroVector, FVector2D(W * 0.66f, H), { { 0.f, Sc.CopyWithNewOpacity(Light() ? 0.82f : 0.78f) }, { 0.55f, Sc.CopyWithNewOpacity(Light() ? 0.58f : 0.52f) }, { 1.f, Sc.CopyWithNewOpacity(0.f) } }, false);
+		DrGradient(Out, L, G, FVector2D(0, H * 0.72f), FVector2D(W, H * 0.28f), { { 0.f, Sc.CopyWithNewOpacity(0.f) }, { 1.f, Sc.CopyWithNewOpacity(Light() ? 0.78f : 0.45f) } }, true);
+		DrGradient(Out, L, G, FVector2D::ZeroVector, FVector2D(W, H * 0.2f), { { 0.f, Sc.CopyWithNewOpacity(Light() ? 0.7f : 0.35f) }, { 1.f, Sc.CopyWithNewOpacity(0.f) } }, true);
 		for (int32 i = 0; i < 28; ++i)
 		{
 			const float x = W * (0.45f + 0.55f * SmvHash(i, 1));

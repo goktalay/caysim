@@ -16,6 +16,10 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "EngineUtils.h"
+#include "GameFramework/Info.h"
+#include "Engine/Light.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 
@@ -46,6 +50,19 @@ void ASmvMenuScene::EnterMissionMode(double Lat, double Lon)
 		for (const TObjectPtr<ASmvDroneActor>& X : Extras) Hide.Add(X);
 		for (const TObjectPtr<AActor>& X : SceneryActors) Hide.Add(X);
 		for (AActor* A : Hide) if (A) A->SetActorHiddenInGame(true);
+		// izin listesi dışındaki tüm görünür nesneler (Fab haritasının su yüzeyi / dekor / akış seviyeleri dahil) gizlenir:
+		// orman haritasının göl yüzeyi görev haritasında kamerayla dönen mavi bir dikdörtgen olarak kalıyordu
+		MHidden.Reset();
+		for (TActorIterator<AActor> It(W); It; ++It)
+		{
+			AActor* A = *It;
+			if (!A || A == this || A == Cam || A->IsHidden() || A->IsA<AInfo>() || A->IsA<ALight>() || A->IsA<APlayerController>()) continue;
+			if (A->GetClass()->GetName().StartsWith(TEXT("Cesium")) || SkyActors.Contains(A) || A == WorldSetup) continue;
+			TInlineComponentArray<UPrimitiveComponent*> Pc(A);
+			if (Pc.Num() == 0) continue;
+			A->SetActorHiddenInGame(true);
+			MHidden.Add(A);
+		}
 	}
 	FCaySimSession S;
 	S.Center.Lat = Lat; S.Center.Lon = Lon; S.Center.bHasAlt = false;
@@ -75,6 +92,8 @@ void ASmvMenuScene::ExitMissionMode()
 	if (MissionWorld) { MissionWorld->Destroy(); MissionWorld = nullptr; }
 	if (MissionDrone) { MissionDrone->Destroy(); MissionDrone = nullptr; }
 	bMission = false;
+	for (const TWeakObjectPtr<AActor>& A : MHidden) if (A.IsValid()) A->SetActorHiddenInGame(false);
+	MHidden.Reset();
 	if (GEngine && GEngine->GameViewport) { FEngineShowFlags& Sf = GEngine->GameViewport->EngineShowFlags; Sf.SetFog(true); Sf.SetVolumetricFog(true); Sf.SetCloud(true); }
 	if (MenuLevel) MenuLevel->SetShouldBeVisible(true);
 	for (const TObjectPtr<ULevelStreamingDynamic>& L : MenuSubs) if (L) L->SetShouldBeVisible(true);
@@ -214,6 +233,7 @@ void ASmvMenuScene::TickMission(float Dt)
 {
 	if (!MissionWorld || !Cam) return;
 	const double Now = FPlatformTime::Seconds();
+	if (Now - MGroundAtT > 1.5) { MGroundAtT = Now; MGroundCache.Reset(); }
 	// ev zemini: karolar yüklendikçe ölçülür (ilk 30 sn her 1,5 sn)
 	if ((!bMHomeGw || Now - MHomeAt < 30.0) && Now - MHomeAt > 1.5)
 	{

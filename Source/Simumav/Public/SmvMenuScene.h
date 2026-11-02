@@ -204,6 +204,8 @@ private:
 	float MPlaySpeed = 12.f, MissionPlayU = 0.f;
 	double MPlayT0 = 0;
 	mutable TMap<int64, double> MGroundCache;
+	double MGroundAtT = 0;
+	TArray<TWeakObjectPtr<AActor>> MHidden;
 	double MGroundAt(double Lat, double Lon) const;
 	void TickMission(float Dt);
 	FVector MWorld(double Lat, double Lon, double AltRel) const;

@@ -2169,10 +2169,10 @@ TSharedRef<SWidget> SSmvShell::EnvEditor(FSmvTrack& T)
 	TSharedRef<SVerticalBox> V = SNew(SVerticalBox);
 	V->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("parkur.s_weather")), Warn())];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.time")), Chips(&T.TimeOfDay, { TEXT("day"), TEXT("golden"), TEXT("dusk"), TEXT("night") },
-		{ Tx(TEXT("time.day")), Tx(TEXT("time.golden")), Tx(TEXT("time.dusk")), Tx(TEXT("time.night")) }, { ESmvIcon::Sun, ESmvIcon::Sunset, ESmvIcon::Sunset, ESmvIcon::Moon }, [Self]() { Self->Refresh(); }, 4))];
+		{ Tx(TEXT("time.day")), Tx(TEXT("time.golden")), Tx(TEXT("time.dusk")), Tx(TEXT("time.night")) }, { ESmvIcon::Sun, ESmvIcon::Sunset, ESmvIcon::Sunset, ESmvIcon::Moon }, [Self]() { Self->Refresh(); }, 2))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.weather")), Chips(&T.Weather, { TEXT("clear"), TEXT("cloudy"), TEXT("rain"), TEXT("fog"), TEXT("snow") },
 		{ Tx(TEXT("weather.clear")), Tx(TEXT("weather.cloudy")), Tx(TEXT("weather.rain")), Tx(TEXT("weather.fog")), Tx(TEXT("weather.snow")) },
-		{ ESmvIcon::Sun, ESmvIcon::Cloud, ESmvIcon::Rain, ESmvIcon::Fog, ESmvIcon::Snow }, [Self]() { Self->Refresh(); }, 5))];
+		{ ESmvIcon::Sun, ESmvIcon::Cloud, ESmvIcon::Rain, ESmvIcon::Fog, ESmvIcon::Snow }, [Self]() { Self->Refresh(); }, 3))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.wind")), Slider(&T.WindMs, 0, 25, 0.5, Ms))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.wind_dir")), Slider(&T.WindDir, 0, 355, 5, Deg))];
 	V->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("tracks.gust")), Slider(&T.WindGust, 0, 15, 0.5, Ms))];
@@ -3192,7 +3192,7 @@ TSharedRef<SWidget> SSmvShell::FlyModes()
 		TSharedRef<SVerticalBox> L = SNew(SVerticalBox);
 		L->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("wizard.launch")), Warn())];
 		L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("wizard.launch_method")), Chips(&Ln.Method, { TEXT("wheels"), TEXT("ramp"), TEXT("hand"), TEXT("vehicle") },
-			{ Tx(TEXT("launch.wheels")), Tx(TEXT("launch.ramp")), Tx(TEXT("launch.hand")), Tx(TEXT("launch.vehicle")) }, {}, [Self]() { Self->Refresh(); }, 4))];
+			{ Tx(TEXT("launch.wheels")), Tx(TEXT("launch.ramp")), Tx(TEXT("launch.hand")), Tx(TEXT("launch.vehicle")) }, {}, [Self]() { Self->Refresh(); }, 2))];
 		if (Ln.Method == TEXT("ramp"))
 		{
 			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.angle")), Slider(&Ln.AngleDeg, 10, 30, 1, [](double V) { return FString::Printf(TEXT("%.0f°"), V); }))];

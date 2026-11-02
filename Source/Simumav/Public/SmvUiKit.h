@@ -154,6 +154,8 @@ public:
 	TFunction<void(const FGeometry&, const FPointerEvent&, const FVector2D&, int32)> OnPointer;
 	/** fare tekerleği (yerel konum, adım) */
 	TFunction<void(const FVector2D&, float)> OnWheel;
+	/** çift tık (yerel konum) */
+	TFunction<void(const FGeometry&, const FVector2D&)> OnDouble;
 	int32 LayersUsed = 24;
 
 	void Construct(const FArguments& A) { Size = A._Size; }
@@ -166,6 +168,7 @@ public:
 	virtual FReply OnMouseButtonUp(const FGeometry& G, const FPointerEvent& E) override;
 	virtual void OnMouseCaptureLost(const FCaptureLostEvent& E) override;
 	virtual FReply OnMouseWheel(const FGeometry& G, const FPointerEvent& E) override;
+	virtual FReply OnMouseButtonDoubleClick(const FGeometry& G, const FPointerEvent& E) override;
 
 private:
 	FVector2D Size = FVector2D(100, 100);
