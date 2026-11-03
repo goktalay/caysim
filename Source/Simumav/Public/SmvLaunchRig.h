@@ -45,6 +45,8 @@ private:
 	FVector Home = FVector::ZeroVector, Fwd = FVector::ForwardVector;
 	float Yaw = 0.f, RampDeg = 15.f;
 	double PhaseAt = 0, ReleaseAt = -1;
+	/** rampa ucundan ayrılış: zaman, görsel dünya Z'si (cm), kalkış yönündeki yol (m) */
+	double ExitAt = -1, ExitZ = 0, ExitDm = 0;
 	double RoofZ = 180.0;          // araç tavanı (cm, zeminden)
 	double CarS = 0, CarV = 0, LastD = 0;   // araç yol / hız (cm, cm/s)
 	FVector BlendFrom = FVector::ZeroVector;

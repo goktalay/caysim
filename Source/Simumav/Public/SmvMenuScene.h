@@ -154,6 +154,12 @@ protected:
 	UPROPERTY() TArray<TObjectPtr<AActor>> SceneryActors;
 	/** alçak sis kümeleri: vitrin istasyonlarında (hangar / mürettebat / uçuş) gizli — dron dumanlı/soluk görünüyordu */
 	UPROPERTY() TArray<TObjectPtr<AActor>> FogBanks;
+	/** vitrin istasyonlarında bulut / sis / duman tamamen kapalı (ApplyShowcaseClear) */
+	void ApplyShowcaseClear(bool bOn);
+	bool bShowClear = false;
+	float OldVolFog = 1.f;
+	TArray<TWeakObjectPtr<class UFXSystemComponent>> HiddenFx;
+	TArray<TWeakObjectPtr<class UVolumetricCloudComponent>> HiddenClouds;
 	bool bSceneryDone = false;
 	void TickScenery();
 	UPROPERTY() TObjectPtr<ACameraActor> Cam;

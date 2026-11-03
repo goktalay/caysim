@@ -713,7 +713,7 @@ TSharedRef<SWidget> SSmvShell::MissionEditor()
 	}
 	else if (E.Kind == TEXT("spray"))
 	{
-		Add(Tx(TEXT("mis.s_step")), Slider(&P.SprayStep, 2, 5, 0.5, [](double V) { return FString::Printf(TEXT("%.1f m"), V); }));
+		Add(Tx(TEXT("mis.s_step")), Slider(&P.SprayStep, 1, 30, 0.5, [](double V) { return FString::Printf(TEXT("%.1f m"), V); }));
 		Add(Tx(TEXT("mis.s_alt")), Slider(&P.SprayAlt, 2, 30, 1, Mf));
 		Add(Tx(TEXT("mis.s_angle")), Slider(&P.SprayAngle, 1, 360, 1, Df));
 	}

@@ -176,6 +176,8 @@ private:
 	void MeasureGroundOffset();
 	bool bFellBack = false;
 	double SourceT0 = 0, LastDiagAt = 0;
+	/** yükleme ilerlemesi durağanlık takibi (son kayda değer artış ve zamanı) */
+	float StallProg = 0.f; double StallAt = 0; bool bStallLogged = false;
 	void Finish(bool bOk);
 	static float TimeOfDayHours(const FString& Time);
 };

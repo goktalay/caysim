@@ -156,7 +156,7 @@ namespace SmvCore
 			It.push_back(Nav(22, HomeLat, HomeLon, Alt));
 			if (Loc.size() >= 3)
 			{
-				for (const FV& V : Sweep(Loc, std::min(5.0, std::max(2.0, P.SprayStep)), P.SprayAngle)) { double La, Lo; Geo(V, La, Lo); It.push_back(Nav(16, La, Lo, Alt)); }
+				for (const FV& V : Sweep(Loc, std::min(30.0, std::max(1.0, P.SprayStep)), P.SprayAngle)) { double La, Lo; Geo(V, La, Lo); It.push_back(Nav(16, La, Lo, Alt)); }
 				for (const FMissionPoint& Q : Points) R.Outline.push_back({ Q.Lat, Q.Lon });
 				R.Summary.AreaM2 = PolyArea(Loc);
 			}

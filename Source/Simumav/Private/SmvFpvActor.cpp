@@ -57,7 +57,11 @@ UInstancedStaticMeshComponent* ASmvFpvCourseActor::IsmFor(int32 Shape, const FSt
 	UInstancedStaticMeshComponent* C = NewObject<UInstancedStaticMeshComponent>(this);
 	C->SetupAttachment(Root);
 	C->SetStaticMesh(Shape == 0 ? CubeMesh.Get() : Shape == 1 ? CylMesh.Get() : SphMesh.Get());
-	C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// yalnız kamera kanalı (kullanıcı 2026-11-03: FPV yarışında "ekran tam render'lı değil" — takip kamerası Kapalı Hangar'ın
+	// çatısı ve duvarlarından geçip dışarıdan boş sahneye bakıyordu). Uçuş fiziği bu kanalı sorgulamaz; davranış değişmez.
+	C->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	C->SetCollisionResponseToAllChannels(ECR_Ignore);
+	C->SetCollisionResponseToChannel(ECC_Camera, ECR_Block);
 	C->SetMobility(EComponentMobility::Movable);
 	if (BaseMat)
 	{

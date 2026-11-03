@@ -825,7 +825,7 @@ void SSmvShell::OpenPilotMenu()
 }
 
 // ---------------------------------------------------------------------------
-// ana menü (sade): Hangar · Parkur · Mürettebat · Uçuş + Pilot menüsü
+// ana menü (sade): Hangar · Parkur · Mürettebat · Görevler · Uçuş + Pilot menüsü
 // ---------------------------------------------------------------------------
 
 TSharedRef<SWidget> SSmvShell::MenuV2()
@@ -842,7 +842,7 @@ TSharedRef<SWidget> SSmvShell::MenuV2()
 	const FText HangarSub = FSmvI18n::Format(TEXT("menu2.hangar_sub"), { { TEXT("n"), FString::FromInt(NDr) }, { TEXT("d"), Dr ? Dr->Name : FString(TEXT("—")) } });
 	const FText ParkurSub = FSmvI18n::Format(TEXT("menu2.parkur_sub"), { { TEXT("e"), FString::FromInt(FSmvFabContent::Maps().Num()) }, { TEXT("c"), FString::FromInt(NCustom) }, { TEXT("r"), FString::FromInt(NReal) } });
 	const FText CrewSub = FSmvI18n::Format(TEXT("menu2.crew_sub"), { { TEXT("p"), Pl ? Pl->Name : FString(TEXT("Pilot")) }, { TEXT("n"), FString::FromInt(SmvCore::LevelForXp(Pl ? Pl->Xp : 0)) } });
-	TSharedRef<SSmvMenuEntry> Fly = SNew(SSmvMenuEntry).Index(4).Primary(true).Delay(0.36f).Accent(Hex(0xfbbf24)).Title(Tx(TEXT("menu2.fly"))).Sub(Tx(TEXT("menu2.fly_sub")))
+	TSharedRef<SSmvMenuEntry> Fly = SNew(SSmvMenuEntry).Index(5).Primary(true).Delay(0.44f).Accent(Hex(0xfbbf24)).Title(Tx(TEXT("menu2.fly"))).Sub(Tx(TEXT("menu2.fly_sub")))
 		.OnClick([F]() { if (F.IsValid()) { F->FlyStep = 0; F->SetScreen(ESmvScreen::FlyFlow); } });
 	TSharedRef<SSmvMenuEntry> Hg = SNew(SSmvMenuEntry).Index(1).Delay(0.05f).Title(Tx(TEXT("menu.hangar"))).Sub(HangarSub).OnClick(Go(ESmvScreen::Hangar));
 	DefaultFocus = Hg;
@@ -884,7 +884,9 @@ TSharedRef<SWidget> SSmvShell::MenuV2()
 			SNew(SVerticalBox)
 			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)[Hg]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)[SNew(SSmvMenuEntry).Index(2).Delay(0.14f).Title(Tx(TEXT("menu2.parkur"))).Sub(ParkurSub).OnClick(Go(ESmvScreen::Tracks))]
-			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 14)[SNew(SSmvMenuEntry).Index(3).Delay(0.24f).Title(Tx(TEXT("menu.crew"))).Sub(CrewSub).OnClick(Go(ESmvScreen::Crew))]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)[SNew(SSmvMenuEntry).Index(3).Delay(0.24f).Title(Tx(TEXT("menu.crew"))).Sub(CrewSub).OnClick(Go(ESmvScreen::Crew))]
+			// GÖREVLER: Mürettebat'ın altında (kullanıcı isteği; pilot menüsünde de duruyor)
+			+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 14)[SNew(SSmvMenuEntry).Index(4).Delay(0.34f).Title(Tx(TEXT("menu.missions"))).Sub(Tx(TEXT("menu.missions_sub"))).OnClick(Go(ESmvScreen::Missions))]
 			+ SVerticalBox::Slot().AutoHeight()[Fly]
 		]
 		+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Bottom).Padding(64, 0, 44, 22)
@@ -3192,7 +3194,7 @@ TSharedRef<SWidget> SSmvShell::FlyModes()
 		TSharedRef<SVerticalBox> L = SNew(SVerticalBox);
 		L->AddSlot().AutoHeight().Padding(0, 0, 0, 6)[Section(Tx(TEXT("wizard.launch")), Warn())];
 		L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("wizard.launch_method")), Chips(&Ln.Method, { TEXT("wheels"), TEXT("ramp"), TEXT("hand"), TEXT("vehicle") },
-			{ Tx(TEXT("launch.wheels")), Tx(TEXT("launch.ramp")), Tx(TEXT("launch.hand")), Tx(TEXT("launch.vehicle")) }, {}, [Self]() { Self->Refresh(); }, 2))];
+			{ Tx(TEXT("launch.wheels")), Tx(TEXT("launch.ramp")), Tx(TEXT("launch.hand")), Tx(TEXT("launch.vehicle")) }, {}, [Self]() { Self->Refresh(); }, 4))];
 		if (Ln.Method == TEXT("ramp"))
 		{
 			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.angle")), Slider(&Ln.AngleDeg, 10, 30, 1, [](double V) { return FString::Printf(TEXT("%.0f°"), V); }))];
@@ -3205,11 +3207,12 @@ TSharedRef<SWidget> SSmvShell::FlyModes()
 			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.hand_speed")), Slider(&Ln.HandSpeedMs, 4, 14, 0.5, [](double V) { return FString::Printf(TEXT("%.1f m/s"), V); }))];
 			L->AddSlot().AutoHeight().Padding(0, 3)[Row(Tx(TEXT("launch.hand_pitch")), Slider(&Ln.HandPitchDeg, 0, 30, 1, [](double V) { return FString::Printf(TEXT("%.0f°"), V); }))];
 		}
-		LaunchBox = SNew(SBox).WidthOverride(560.f)[Glass(L, FMargin(16.f), 0.85f)];
+		// tam genişlik (kullanıcı 2026-11-03: "kalkış seçenekleri kısa kalıyor"); dört yöntem tek satırda
+		LaunchBox = Glass(L, FMargin(20.f, 16.f), 0.85f);
 	}
 	return SNew(SVerticalBox)
 		+ SVerticalBox::Slot().FillHeight(1.f)
-		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12).HAlign(HAlign_Left)[LaunchBox]
+		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 12, 12).HAlign(HAlign_Fill)[LaunchBox]
 		+ SVerticalBox::Slot().AutoHeight()[SNew(SScrollBox) + SScrollBox::Slot()[Wrap]]
 		+ SVerticalBox::Slot().AutoHeight().Padding(4, 4, 0, 0)[SmvUi::Text(Tx(TEXT("fly2.rule")), 10, "Regular", Mute())];
 }

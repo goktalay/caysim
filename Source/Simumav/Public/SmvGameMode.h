@@ -268,6 +268,8 @@ public:
 	// ---- gerçek dünya (Cesium) içine oturtulan Fab haritası ----
 	bool bFabSelfContained = false;
 	bool bRealSurround = false, bRimPending = false, bRimDone = false, bRimStarted = false, bTilesSkipped = false;
+	/** yükleme zaman aşımında hata göstermeden önce bir kez kendiliğinden yeniden dene */
+	bool bAutoRetried = false;
 	double RimAt = 0, RimStartAt = 0;
 	FBox FabPlacedBox = FBox(ForceInit);
 	FString FabLevelPath;

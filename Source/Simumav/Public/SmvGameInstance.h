@@ -29,6 +29,11 @@ public:
 	/** Grafik kalitesi (0–4) — ayarlardan. */
 	void ApplyGraphicsQuality(int32 Q) const;
 
+	/** Harita önbelleği (kullanıcı 2026-11-03: "bir kere yüklendikten sonra bir daha yüklemesin"): son uçulan Fab haritasının
+	 *  mesh / malzeme varlıkları uçuş bitince bellekte tutulur; aynı harita yeniden seçilince seviye akışı diskten okumaz. */
+	UPROPERTY() TArray<TObjectPtr<UObject>> PinnedMapAssets;
+	FString PinnedMapKey;
+
 private:
 	UPROPERTY() TObjectPtr<USimumavClient> Client;
 	UPROPERTY() TObjectPtr<USmvDataService> Data;

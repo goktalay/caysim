@@ -271,6 +271,7 @@ void ASmvGameMode::BuildScene()
 	GroundMsl = Req.Track.GroundMsl > -1000 ? Req.Track.GroundMsl : 100.0;
 	UWorld* W = GetWorld();
 	// yükleme kapısı: Uçuş ekranı ancak tüm aşamalar bitince (TickLoadGate)
+	bAutoRetried = false;   // yeni uçuş: otomatik yeniden deneme hakkı
 	Gate.Begin(TEXT("ucus"), { ESmvLoad::World, ESmvLoad::Scenery, ESmvLoad::Atmos, ESmvLoad::Sitl, ESmvLoad::Shaders, ESmvLoad::Streaming, ESmvLoad::Warmup });
 	AtmosT0 = WarmT0 = StreamT0 = 0; AtmosF0 = WarmF0 = 0; WarmRecap = 0; StreamPeak = ShaderPeak = 0;
 	RimAt = 0; RimStartAt = 0; bRimStarted = false; bFabSelfContained = false; bTilesSkipped = false; FabPlacedBox = FBox(ForceInit); FabLevelPath.Reset();
@@ -1393,6 +1394,15 @@ void ASmvGameMode::TickLoadGate()
 			else if (bTiles && !WorldSetup->IsReady()) Why = FSmvI18n::T(TEXT("load.fail.tiles")).ToString();
 			else if (!bGround) Why = FSmvI18n::T(TEXT("load.fail.ground")).ToString();
 			else Why = FSmvI18n::T(TEXT("load.fail.stream")).ToString();
+			// ilk zaman aşımında kullanıcıya hata gösterilmez: "Yeniden dene" çoğunlukla tamamlıyordu (kullanıcı 2026-11-03) —
+			// bir kez kendiliğinden yeniden denenir; ikincisinde neden + Yeniden dene / Menü
+			if (!bAutoRetried)
+			{
+				bAutoRetried = true;
+				SMV_KLOG(TEXT("SMVLOAD [ucus] zaman aşımı (%s) — kendiliğinden yeniden deneniyor"), *Why);
+				RetryWorldLoad();
+				return;
+			}
 			Gate.Fail(ESmvLoad::World, Why);
 			return;
 		}
@@ -3303,6 +3313,38 @@ void ASmvGameMode::TickCityWindows()
 
 void ASmvGameMode::ClearFabWorld()
 {
+	// harita önbelleği: boşaltmadan önce haritanın kullandığı mesh ve malzemeler (malzemeler dokuları tutar) oyun örneğinde
+	// sabitlenir — aynı haritaya dönüşte seviye akışı paketleri bellekten bulur. Yalnız son harita tutulur (bellek sınırı).
+	if (USmvGameInstance* Gi = USmvGameInstance::GetSmv(this))
+	{
+		if (!FabMapKey.IsEmpty() && FabLevels.Num())
+		{
+			TSet<UObject*> Keep;
+			for (const TObjectPtr<ULevelStreamingDynamic>& Lv : FabLevels)
+			{
+				ULevel* L = Lv ? Lv->GetLoadedLevel() : nullptr;
+				if (!L) continue;
+				for (AActor* A : L->Actors)
+				{
+					if (!A) continue;
+					TInlineComponentArray<UPrimitiveComponent*> Pc(A);
+					for (UPrimitiveComponent* C : Pc)
+					{
+						if (UStaticMeshComponent* Sm = Cast<UStaticMeshComponent>(C)) if (Sm->GetStaticMesh()) Keep.Add(Sm->GetStaticMesh());
+						TArray<UMaterialInterface*> Mats; C->GetUsedMaterials(Mats);
+						for (UMaterialInterface* M : Mats) if (M && !M->IsA<UMaterialInstanceDynamic>()) Keep.Add(M);
+					}
+				}
+			}
+			if (Keep.Num())
+			{
+				Gi->PinnedMapAssets.Reset();
+				for (UObject* O : Keep) Gi->PinnedMapAssets.Add(O);
+				Gi->PinnedMapKey = FabMapKey;
+				SMV_KLOG(TEXT("Harita önbelleği: %s — %d varlık bellekte tutuluyor"), *FabMapKey, Keep.Num());
+			}
+		}
+	}
 	for (TArray<TObjectPtr<ULevelStreamingDynamic>>* Arr : { &FabLevels, &CityLevels })
 	{
 		for (TObjectPtr<ULevelStreamingDynamic>& Lv : *Arr)

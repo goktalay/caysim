@@ -34,6 +34,12 @@
 #include "UObject/UObjectGlobals.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
+#include "Particles/FXSystemComponent.h"
+#include "Components/VolumetricCloudComponent.h"
+#include "Components/ExponentialHeightFogComponent.h"
+#include "Engine/ExponentialHeightFog.h"
+#include "EngineUtils.h"
+#include "HAL/IConsoleManager.h"
 #include "SmvScenery.h"
 #include "Misc/PackageName.h"
 #include "SmvMapRegistry.h"
@@ -130,6 +136,7 @@ void ASmvMenuScene::BeginPlay()
 	Capture->ShowFlags.SetAtmosphere(false);
 	Capture->ShowFlags.SetFog(false);
 	Capture->ShowFlags.SetVolumetricFog(false);
+	Capture->ShowFlags.SetCloud(false);
 	Capture->ShowFlags.SetMotionBlur(false);
 	FPostProcessSettings& PP = Capture->PostProcessSettings;
 	PP.bOverride_AutoExposureMethod = true;
@@ -338,6 +345,7 @@ void ASmvMenuScene::BuildWorld()
 
 void ASmvMenuScene::EndPlay(const EEndPlayReason::Type Reason)
 {
+	ApplyShowcaseClear(false);   // uçuşa geçerken sis / bulut / efektler eski hâline
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 	{
 		PC->bAutoManageActiveCameraTarget = true;
@@ -1434,6 +1442,56 @@ void ASmvMenuScene::SetStation(EStation S)
 	if (Showcase) Showcase->SetActorHiddenInGame(!(S == EStation::Hangar || S == EStation::Fly));
 	if (ShowPilot) ShowPilot->SetActorHiddenInGame(S != EStation::Crew);
 	for (const TObjectPtr<AActor>& Fg : FogBanks) if (Fg) Fg->SetActorHiddenInGame(IsShowStation(S));
+	ApplyShowcaseClear(IsShowStation(S));
+}
+
+void ASmvMenuScene::ApplyShowcaseClear(bool bOn)
+{
+	// dron / pilot vitrininde bulut, sis ve duman tamamen kapalı (kullanıcı 2026-11-03: hangarda ve tüm dron gösterimlerinde
+	// aracın önünde beyaz bulut çıkıyordu). Kaynaklar: kameraya bağlı toz zerreleri (Motes), haritanın kendi Niagara / Cascade
+	// sis-buhar efektleri, hacimsel sis ve yere yakın hacimsel bulut. Diğer istasyonlarda eski hâline döner.
+	if (bOn == bShowClear) return;
+	bShowClear = bOn;
+	if (Motes) Motes->SetVisibility(!bOn);
+	UWorld* W = GetWorld();
+	if (!W) return;
+	if (bOn)
+	{
+		HiddenFx.Reset();
+		for (TObjectIterator<UFXSystemComponent> It; It; ++It)
+		{
+			UFXSystemComponent* C = *It;
+			if (!C || C->GetWorld() != W || !C->IsVisible() || C == Motes.Get()) continue;
+			if (C->GetOwner() && C->GetOwner()->IsA<ASmvDroneActor>()) continue;   // aracın kendi efektleri (pervane, ışık) kalır
+			C->SetVisibility(false);
+			HiddenFx.Add(C);
+		}
+	}
+	else
+	{
+		for (const TWeakObjectPtr<UFXSystemComponent>& C : HiddenFx) if (C.IsValid()) C->SetVisibility(true);
+		HiddenFx.Reset();
+	}
+	auto Cv = [](const TCHAR* N, float V, float& Old, bool bSet)
+	{
+		if (IConsoleVariable* X = IConsoleManager::Get().FindConsoleVariable(N))
+		{
+			if (bSet) { Old = X->GetFloat(); X->Set(V, ECVF_SetByCode); }
+			else X->Set(Old, ECVF_SetByCode);
+		}
+	};
+	Cv(TEXT("r.VolumetricFog"), 0.f, OldVolFog, bOn);
+	for (TActorIterator<AExponentialHeightFog> It(W); It; ++It)
+		if (UExponentialHeightFogComponent* F = It->GetComponent()) F->SetVisibility(!bOn);
+	for (TActorIterator<AActor> It(W); It; ++It)
+		for (UActorComponent* C : It->GetComponents())
+			if (UVolumetricCloudComponent* Vc = Cast<UVolumetricCloudComponent>(C))
+			{
+				// yer yakınındaki bulut katmanı vitrin kamerasına giriyordu: kapalı (gökyüzü açık kalır)
+				if (bOn) { if (Vc->IsVisible()) { Vc->SetVisibility(false); HiddenClouds.Add(Vc); } }
+			}
+	if (!bOn) { for (const TWeakObjectPtr<UVolumetricCloudComponent>& Vc : HiddenClouds) if (Vc.IsValid()) Vc->SetVisibility(true); HiddenClouds.Reset(); }
+	UE_LOG(LogSimumav, Log, TEXT("Vitrin bulut/sis temizliği: %s (%d efekt gizli)"), bOn ? TEXT("açık") : TEXT("kapalı"), HiddenFx.Num());
 }
 
 void ASmvMenuScene::ClearShowcaseSpot()

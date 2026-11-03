@@ -187,6 +187,7 @@ void ASmvLaunchRig::SetPhase(const FString& InPhase)
 	{
 		ReleaseAt = FPlatformTime::Seconds();
 	}
+	if (InPhase == TEXT("idle") || InPhase == TEXT("armed")) { ExitAt = -1; ReleaseAt = -1; }
 	Phase = InPhase;
 	PhaseAt = FPlatformTime::Seconds();
 }
@@ -210,12 +211,21 @@ void ASmvLaunchRig::Tick(float Dt)
 		const double S = FMath::Clamp(Dm + 0.35, 0.0, Lh);
 		const FVector OnRail = FVector(0, 0, (RailBaseM + 0.25 + S * Tn) * 100.0 - FMath::Max(0.0, (double)(P.Z - Home.Z)));
 		if (Sled && bHeld) Sled->SetRelativeLocation(FVector(FMath::Clamp(S / FMath::Cos(FMath::DegreesToRadians(RampDeg)), 0.35, RailLenM - 0.3) * 100.0, 0, 12.0));
-		if (bHeld && Dm < Lh) { Off = OnRail; Pitch = RampDeg; BlendFrom = Off; BlendPitchFrom = Pitch; }
+		// rayda kalış: SITL "released" yer hızı 8 m/s'de (rayın ortasında) gelir — uçak ray bitene dek rayda (en çok 3 sn)
+		const bool bOnRail = (bHeld || (ReleaseAt > 0 && Now - ReleaseAt < 3.0)) && Dm < Lh && ExitAt < 0;
+		if (bOnRail) { Off = OnRail; Pitch = RampDeg; BlendFrom = Off; BlendPitchFrom = Pitch; }
 		else
 		{
 			if (ReleaseAt < 0) ReleaseAt = Now;
-			const double K = 1.0 - Smooth01((Now - ReleaseAt) / 0.6);
-			Off = BlendFrom * K; Pitch = BlendPitchFrom * (float)K;
+			// ray ucundan ayrılış (kullanıcı 2026-11-03: "önce rampadan zemine iniyor sonra kalkıyor"): SITL uçağı düz zeminde
+			// hızlanıp sonra tırmanır; görsel uçak ray ucu yüksekliğini korur, hafifçe tırmanarak uçar ve SITL irtifası onu
+			// yakalayınca (Off → 0) sürekli biçimde SITL pozuna katılır. Kalkış iptal olursa (12 sn) 1,5 sn'de SITL'e iner.
+			if (ExitAt < 0) { ExitAt = Now; ExitZ = P.Z + BlendFrom.Z; ExitDm = Dm; }
+			const double Climb = FMath::Max(0.0, Dm - ExitDm) * 100.0 * 0.06;
+			const double Hold = FMath::Max(0.0, ExitZ + Climb - (double)P.Z);
+			const double Fade = 1.0 - Smooth01((Now - ExitAt - 12.0) / 1.5);
+			Off = FVector(0, 0, Hold * Fade);
+			Pitch = BlendPitchFrom * (float)(1.0 - Smooth01((Now - ExitAt) / 1.5)) + 4.f * (float)(Hold > 1.0 ? Fade : 0.0) * (float)Smooth01((Now - ExitAt) / 1.5);
 			// kızak 1 sn sonra 1,2 m/s ile geri döner
 			if (Sled && Now - ReleaseAt > 1.0) { FVector L = Sled->GetRelativeLocation(); L.X = FMath::Max(35.0, L.X - 120.0 * Dt); Sled->SetRelativeLocation(L); }
 		}

@@ -396,6 +396,7 @@ void ACaySimWorldSetup::SetupCesiumIon()
 	if (GoogleTiles.IsValid()) GoogleTiles->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
 	SourceT0 = FPlatformTime::Seconds();
+	StallProg = 0.f; StallAt = 0; bStallLogged = false;
 	UE_LOG(LogCaySim, Log, TEXT("Cesium World Terrain + Bing uydu (ion %lld + %lld) kuruluyor: %.5f, %.5f"), CesiumTerrainAssetId, CesiumImageryAssetId, Center.Lat, Center.Lon);
 	// Hazır sayma: ilk kareler yüklendikçe Tick'te LoadProgress izlenir; 100'e yaklaşınca Finish
 #else
@@ -519,6 +520,7 @@ void ACaySimWorldSetup::SetupGoogleIon()
 	if (Terrain.IsValid()) Terrain->SetActorHiddenInGame(true);
 	LoadProgress = 0.f;
 	SourceT0 = FPlatformTime::Seconds();
+	StallProg = 0.f; StallAt = 0; bStallLogged = false;
 	UE_LOG(LogCaySim, Log, TEXT("Google Photorealistic 3D Tiles (ion %lld) kuruluyor: %.5f, %.5f, merkez %.1f m MSL"), GoogleIonAssetId, Center.Lat, Center.Lon, CenterGroundMsl);
 #else
 	Finish(false);
@@ -770,7 +772,15 @@ void ACaySimWorldSetup::Tick(float DeltaSeconds)
 				return;
 			}
 			// Google: %95 (ultra geniş ekranda son karolar uzun kuyrukla gelir; kalanı uçuşta incelir)
-			if (LoadProgress >= (ActiveSource == ECaySimWorldSource::GooglePhotoreal ? 95.f : 99.f) && !bGoogleEmpty)
+			// durağan kuyruk (kullanıcı 2026-11-03: ara sıra "Harita yüklenemedi", Yeniden dene ile tamamlanıyor): Cesium ilerlemesi
+			// görünür karoların inceltilmesiyle %80–95'te uzun süre asılı kalabiliyor ve 90 sn kapısı aşılıyordu. Kaba karolar
+			// yerindeyse (≥ %70) ve ilerleme 10 sn boyunca %1'den fazla artmadıysa ya da 40 sn geçtiyse hazır sayılır; kalan
+			// karolar uçuşta akmaya devam eder.
+			const double NowS = FPlatformTime::Seconds();
+			if (StallAt <= 0 || LoadProgress > StallProg + 1.f) { StallProg = LoadProgress; StallAt = NowS; }
+			const bool bStalled = LoadProgress >= 70.f && !bNoContent && SourceT0 > 0 && (NowS - StallAt > 10.0 || NowS - SourceT0 > 40.0);
+			if (bStalled && LoadProgress < 95.f && !bStallLogged) { bStallLogged = true; UE_LOG(LogCaySim, Log, TEXT("3D Tiles %%%.0f'de durağan (%.0f sn) — hazır sayılıyor, kalan karolar uçuşta akacak"), LoadProgress, NowS - SourceT0); }
+			if ((LoadProgress >= (ActiveSource == ECaySimWorldSource::GooglePhotoreal ? 95.f : 99.f) || bStalled) && !bGoogleEmpty)
 			{
 				// yer ofseti: merkezde karo yüzeyi henüz yoksa (ilk %100 kaba karolarla gelir) 30 sn'ye dek yeniden denenir — eskiden
 				// hemen geoid varsayımına (35 m) düşülüyor, Kızılay'da araç ve kamera Google yüzeyinin ~30 m altında kalıyordu
