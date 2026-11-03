@@ -34,7 +34,7 @@
 #include "UObject/UObjectGlobals.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
-#include "Particles/FXSystemComponent.h"
+#include "Particles/ParticleSystemComponent.h"
 #include "Components/VolumetricCloudComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Engine/ExponentialHeightFog.h"
