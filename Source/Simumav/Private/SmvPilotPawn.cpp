@@ -625,6 +625,22 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 	FCollisionQueryParams Q(SCENE_QUERY_STAT(SmvCam), false, D);
 	Q.AddIgnoredActor(this);
 	const float R = FMath::Max(0.3f, VisRadius);
+	// gimbal kamerası: kopterde gövde altında stabilize gimbal (roll/pitch'ten bağımsız); sabit kanatlı / VTOL'de (CAYMAZ) kamera
+	// burna sabit takılı — gimbal yok, görüntü gövdeyle birlikte yatar ve yunuslar (kullanıcı 2026-11-04: "kamera direkt burunda takılı";
+	// eski stabilize görüntüde uçak yatınca ufuk düz kalıyor, kanat / gövde altı kadraja giriyordu)
+	auto GimbalPose = [&](FVector& OutPos, FRotator& OutRot)
+	{
+		if (IsPlaneLike())
+		{
+			OutPos = Pos + Body.RotateVector(FVector(VisNose * 100.f + 5.f, 0, -2.f * R));
+			OutRot = (FQuat(Body) * FQuat(FRotator(-5.f, 0, 0))).Rotator();   // burun kamerası hafif aşağı bakar
+		}
+		else
+		{
+			OutPos = Pos + FVector(0, 0, -12.f * R);
+			OutRot = FRotator(GimbalPitch, Body.Yaw, 0.f);
+		}
+	};
 	switch (Mode)
 	{
 	case ESmvCamMode::Chase:
@@ -655,8 +671,7 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 		CamRot = (FQuat(Body) * FQuat(FRotator(IsPlaneLike() ? 0.f : 20.f, 0, 0))).Rotator();   // FPV kamera eğimi (uptilt)
 		break;
 	case ESmvCamMode::Gimbal:
-		CamPos = Pos + FVector(0, 0, -12.f * R);
-		CamRot = FRotator(GimbalPitch, Body.Yaw, 0.f);   // stabilize gimbal: roll/pitch'ten bağımsız
+		GimbalPose(CamPos, CamRot);
 		break;
 	case ESmvCamMode::Orbit:
 		OrbitYaw += (float)Look.X * 0.3f;
@@ -744,7 +759,9 @@ void ASmvPilotPawn::UpdateCamera(float Dt)
 	if (bPip)
 	{
 		// PiP = gimbal kamerası
-		PipCapture->SetWorldLocationAndRotation(Pos + FVector(0, 0, -12.f * R), FRotator(GimbalPitch, Body.Yaw, 0.f));
+		FVector Gp; FRotator Gr;
+		GimbalPose(Gp, Gr);
+		PipCapture->SetWorldLocationAndRotation(Gp, Gr);
 		PipCapture->CaptureScene();
 	}
 }
