@@ -718,6 +718,8 @@
  "fui.sticks": "Sticks",
  "fui.tailwind": "Rücken",
  "fui.takeoff": "Abheben",
+ "fui.takeoff_go": "Starten",
+ "fui.takeoff_title": "Starthöhe",
  "fui.thr": "GAS",
  "fui.thr_untouched": "Gas: unberührt (mit W beginnen)",
  "fui.tips": "{arm} ARM · {takeoff} Abheben · {mode} Modusrad · {cam} Kamera · {help} alle Tasten",

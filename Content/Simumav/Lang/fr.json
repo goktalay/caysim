@@ -718,6 +718,8 @@
  "fui.sticks": "Manches",
  "fui.tailwind": "arrière",
  "fui.takeoff": "Décoller",
+ "fui.takeoff_go": "Décoller",
+ "fui.takeoff_title": "Altitude de décollage",
  "fui.thr": "GAZ",
  "fui.thr_untouched": "gaz : non touché (commencez avec W)",
  "fui.tips": "{arm} ARM · {takeoff} décoller · {mode} roue des modes · {cam} caméra · {help} tous les raccourcis",

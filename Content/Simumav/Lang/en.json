@@ -718,6 +718,8 @@
  "fui.sticks": "Sticks",
  "fui.tailwind": "tail",
  "fui.takeoff": "Take off",
+ "fui.takeoff_go": "Take off",
+ "fui.takeoff_title": "Takeoff altitude",
  "fui.thr": "THROTTLE",
  "fui.thr_untouched": "throttle: untouched (start with W)",
  "fui.tips": "{arm} ARM · {takeoff} take off · {mode} mode wheel · {cam} camera · {help} all shortcuts",

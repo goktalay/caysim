@@ -12,6 +12,7 @@
 #include "Widgets/Layout/SSpacer.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SSlider.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
@@ -546,6 +547,11 @@ void SSmvFlightUi::Construct(const FArguments& InArgs)
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0.f, 90.f, 0.f, 0.f)
 		[
 			GotoPanel()
+		]
+		// kalkış irtifası (Kalkış düğmesi)
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+		[
+			TakeoffPanel()
 		]
 		// PiP penceresi (sürükle: taşı · sağ alt köşe: boyut)
 		+ SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom)
@@ -1199,7 +1205,7 @@ TSharedRef<SWidget> SSmvFlightUi::BottomBar()
 	[
 		SNew(SBox).Visibility_Lambda([this]() { return St.bRover ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible; })
 		[
-			Pill({ PB(FText::FromString(Loc(TEXT("fui.takeoff"))), [this]() { Act(TEXT("Takeoff")); }, nullptr), PB(FText::FromString(TEXT("RTL")), [this]() { Act(TEXT("Rtl")); }, nullptr) })
+			Pill({ PB(FText::FromString(Loc(TEXT("fui.takeoff"))), [this]() { AskTakeoff(); }, nullptr), PB(FText::FromString(TEXT("RTL")), [this]() { Act(TEXT("Rtl")); }, nullptr) })
 		]
 	];
 	H->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
@@ -1656,6 +1662,71 @@ TSharedRef<SWidget> SSmvFlightUi::GotoPanel()
 						]
 					]
 					+ SHorizontalBox::Slot().AutoWidth()[Btn(Tx(TEXT("common.cancel")), [this]() { bGoto = false; }, []() { return FLinearColor(1, 1, 1, 0.08f); })]
+				]
+			]
+		];
+}
+
+void SSmvFlightUi::AskTakeoff()
+{
+	if (St.bRover) { Act(TEXT("Takeoff")); return; }
+	if (TakeoffAlt < 1.f) TakeoffAlt = St.bPlane ? 50.f : 10.f;
+	bTakeoffAsk = !bTakeoffAsk;
+	FSmvUiSound::Play(bTakeoffAsk ? ESmvSnd::Open : ESmvSnd::Back);
+}
+
+TSharedRef<SWidget> SSmvFlightUi::TakeoffPanel()
+{
+	using namespace SmvFuiTheme;
+	auto Tx = [](const TCHAR* K) { return TAttribute<FText>::CreateLambda([K]() { return FSmvI18n::T(K); }); };
+	// kaydırıcı karekök ölçekli: alçak irtifalarda (1–50 m) ince ayar, sağda 3000 m'ye kadar
+	auto ToV = [](float A) { return FMath::Sqrt(FMath::Clamp((A - 1.f) / 2999.f, 0.f, 1.f)); };
+	auto ToA = [](float V) { return FMath::RoundToFloat(1.f + 2999.f * V * V); };
+	auto Step = [this](float D) { return Btn(FText::FromString(FString::Printf(TEXT("%+.0f"), D)), [this, D]() { TakeoffAlt = FMath::Clamp(TakeoffAlt + D, 1.f, 3000.f); }, []() { return FLinearColor(1, 1, 1, 0.08f); }); };
+	return SNew(SBox)
+		.Visibility_Lambda([this]() { return bTakeoffAsk && !St.bMenuOpen ? EVisibility::Visible : EVisibility::Collapsed; })
+		.WidthOverride(460.f)
+		[
+			SNew(SBorder).BorderImage(&CardBrush).BorderBackgroundColor(FLinearColor(0.03f, 0.05f, 0.1f, 0.95f)).Padding(FMargin(18.f, 14.f))
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(Tx(TEXT("fui.takeoff_title"))).Font(Font(13, true)).ColorAndOpacity(Accent)]
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 8, 0, 2)
+				[
+					SNew(STextBlock).Font(Mono(26)).ColorAndOpacity(FLinearColor::White)
+					.Text_Lambda([this]() { return FText::FromString(FString::Printf(TEXT("%.0f m"), TakeoffAlt)); })
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 0)
+				[
+					SNew(SSlider)
+					.MinValue(0.f).MaxValue(1.f)
+					.Value_Lambda([this, ToV]() { return ToV(TakeoffAlt); })
+					.OnValueChanged_Lambda([this, ToA](float V) { TakeoffAlt = FMath::Clamp(ToA(V), 1.f, 3000.f); })
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0, 2, 0, 0)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().FillWidth(1.f)[SNew(STextBlock).Text(FText::FromString(TEXT("1 m"))).Font(Mono(9)).ColorAndOpacity(Dim)]
+					+ SHorizontalBox::Slot().AutoWidth()[SNew(STextBlock).Text(FText::FromString(TEXT("3000 m"))).Font(Mono(9)).ColorAndOpacity(Dim)]
+				]
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 10, 0, 0)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)[Step(-100.f)]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)[Step(-10.f)]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 12, 0)[Step(-1.f)]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)[Step(1.f)]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)[Step(10.f)]
+					+ SHorizontalBox::Slot().AutoWidth()[Step(100.f)]
+				]
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right).Padding(0, 14, 0, 0)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[Btn(Tx(TEXT("common.cancel")), [this]() { bTakeoffAsk = false; }, []() { return FLinearColor(1, 1, 1, 0.08f); })]
+					+ SHorizontalBox::Slot().AutoWidth()
+					[
+						Btn(Tx(TEXT("fui.takeoff_go")), [this]() { bTakeoffAsk = false; Act(TEXT("Takeoff"), FString::Printf(TEXT("%.0f"), TakeoffAlt)); }, []() { return SmvGt::C(0x16a34a); })
+					]
 				]
 			]
 		];
@@ -2419,7 +2490,7 @@ TSharedRef<SWidget> SSmvFlightUi::GtPanel()
 		{
 			if (St.bRover) { Act(TEXT("Mode"), TEXT("HOLD")); return; }
 			if (St.bArmed && St.AltRel > 1.f) { if (GM.IsValid()) GM->Command(TEXT("land")); }
-			else Act(TEXT("Takeoff"));
+			else AskTakeoff();
 		})];
 
 	// ---- İŞLEMLER (3 sütun; grup başlıkları) ----
@@ -2441,7 +2512,7 @@ TSharedRef<SWidget> SSmvFlightUi::GtPanel()
 	};
 	auto Cmd = [this](const TCHAR* Name) { return [this, Name]() { if (GM.IsValid()) GM->Command(Name); }; };
 	Grup(TEXT("pn.g_flight"));
-	Row3({ GtCell(TEXT("takeoff"), Tx(TEXT("pn.c_takeoff")), [this]() { Act(TEXT("Takeoff")); }), GtCell(TEXT("land"), Tx(TEXT("pn.c_land")), Cmd(TEXT("land"))),
+	Row3({ GtCell(TEXT("takeoff"), Tx(TEXT("pn.c_takeoff")), [this]() { AskTakeoff(); }), GtCell(TEXT("land"), Tx(TEXT("pn.c_land")), Cmd(TEXT("land"))),
 		GtCell(TEXT("rtl"), Tx(TEXT("pn.c_rtl")), Cmd(TEXT("rtl"))), GtCell(TEXT("home"), Tx(TEXT("pn.c_home")), Cmd(TEXT("set_home"))) });
 	Grup(TEXT("pn.g_target"));
 	Row3({ GtCell(TEXT("alt"), Tx(TEXT("pn.c_alt")), [this]() { TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>(); P->SetNumberField(TEXT("alt"), St.bPlane ? 80.0 : 30.0); if (GM.IsValid()) GM->Command(TEXT("takeoff"), P); }),

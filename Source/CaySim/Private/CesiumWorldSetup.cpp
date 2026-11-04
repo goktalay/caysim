@@ -16,6 +16,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
@@ -389,6 +390,13 @@ void ACaySimWorldSetup::SetupCesiumIon()
 			Bt->SetCreatePhysicsMeshes(true);
 			Bt->SetMaximumScreenSpaceError(16.0);
 			Bt->MaximumSimultaneousTileLoads = 12;
+			// OSM binaları dokusuz gelir (beyaz kutu): kat / pencere ızgaralı dünya-konumlu cephe malzemesi (Scripts/Python M_SmvCesiumBina).
+			// Kırpma katmanı bu malzemede yok; kırpma çokgeninin tamamen içindeki karolar ExcludeSelectedTiles ile zaten yüklenmez.
+			if (UMaterialInterface* Bm = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Simumav/Materials/M_SmvCesiumBina.M_SmvCesiumBina"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				Bt->SetMaterial(Bm);
+				UE_LOG(LogCaySim, Log, TEXT("Cesium binaları: cephe malzemesi %s"), *Bm->GetPathName());
+			}
 			UE_LOG(LogCaySim, Log, TEXT("Cesium OSM 3B binalar (ion %lld) kuruluyor"), CesiumBuildingsAssetId);
 		}
 	}

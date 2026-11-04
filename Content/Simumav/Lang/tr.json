@@ -718,6 +718,8 @@
  "fui.sticks": "Kumanda",
  "fui.tailwind": "kuyruk",
  "fui.takeoff": "Kalkış",
+ "fui.takeoff_go": "Kalk",
+ "fui.takeoff_title": "Kalkış irtifası",
  "fui.thr": "GAZ",
  "fui.thr_untouched": "gaz: dokunulmadı (W ile başla)",
  "fui.tips": "{arm} ARM · {takeoff} kalkış · {mode} mod tekerleği · {cam} kamera · {help} tüm kısayollar",

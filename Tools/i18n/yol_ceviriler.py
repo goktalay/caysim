@@ -25,6 +25,7 @@ _T = {
  "map.goto_title": ("Zur Koordinate", "Aller à la coordonnée", "Ir a la coordenada", "К координате", "انتقل إلى الإحداثي"),
  "map.goto_nohit": ("An diesem Punkt kein Boden gefunden", "Aucun sol trouvé à ce point", "No se encontró suelo en este punto", "В этой точке земля не найдена", "لم يُعثر على أرض في هذه النقطة"),
  "map.goto_alt": ("Höhe", "Altitude", "Altitud", "Высота", "الارتفاع"),
+ "fui.takeoff_title": ("Starthöhe", "Altitude de décollage", "Altitud de despegue", "Высота взлёта", "ارتفاع الإقلاع"), "fui.takeoff_go": ("Starten", "Décoller", "Despegar", "Взлёт", "إقلاع"),
  "map.goto_go": ("Los", "Aller", "Ir", "Вперёд", "انطلق"),
  "login.create": ("Konto erstellen", "Créer un compte", "Crear cuenta", "Создать аккаунт", "إنشاء حساب"),
  "login.forgot": ("Passwort vergessen", "Mot de passe oublié", "Olvidé mi contraseña", "Забыли пароль", "نسيت كلمة المرور"),

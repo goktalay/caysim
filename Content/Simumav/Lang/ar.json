@@ -718,6 +718,8 @@
  "fui.sticks": "العصي",
  "fui.tailwind": "خلفية",
  "fui.takeoff": "إقلاع",
+ "fui.takeoff_go": "إقلاع",
+ "fui.takeoff_title": "ارتفاع الإقلاع",
  "fui.thr": "الخانق",
  "fui.thr_untouched": "الخانق: لم يُلمس (ابدأ بـ W)",
  "fui.tips": "{arm} تسليح · {takeoff} إقلاع · {mode} عجلة الأوضاع · {cam} الكاميرا · {help} كل الاختصارات",

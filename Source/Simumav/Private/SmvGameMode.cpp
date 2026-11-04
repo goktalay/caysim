@@ -1134,7 +1134,15 @@ void ASmvGameMode::HandleAction(FName A)
 	{
 		// yerel SITL konum tahmini henüz yok: komut bağlantıda kuyruğa alınır, hazır olunca kendiliğinden kalkar
 		if (Link() && Link()->LastExtra().PosReady == 0) HandleToast(FSmvI18n::T(TEXT("fui.prep_queued")).ToString(), 5);
-		Command(TEXT("takeoff"));
+		// arayüzdeki irtifa penceresi irtifayı metre olarak verir (1–3000); klavye / kumanda kısayolu varsayılanı kullanır
+		const float AltArg = Arg.IsEmpty() ? 0.f : FCString::Atof(*Arg);
+		if (AltArg >= 1.f)
+		{
+			TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+			P->SetNumberField(TEXT("alt"), FMath::Clamp((double)AltArg, 1.0, 3000.0));
+			Command(TEXT("takeoff"), P);
+		}
+		else Command(TEXT("takeoff"));
 	}
 	else if (A == TEXT("Rtl")) Command(TEXT("rtl"));
 	else if (A == TEXT("Land")) Command(TEXT("land"));

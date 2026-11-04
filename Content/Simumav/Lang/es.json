@@ -718,6 +718,8 @@
  "fui.sticks": "Sticks",
  "fui.tailwind": "cola",
  "fui.takeoff": "Despegar",
+ "fui.takeoff_go": "Despegar",
+ "fui.takeoff_title": "Altitud de despegue",
  "fui.thr": "GAS",
  "fui.thr_untouched": "gas: sin tocar (empieza con W)",
  "fui.tips": "{arm} ARM · {takeoff} despegar · {mode} rueda de modos · {cam} cámara · {help} todos los atajos",

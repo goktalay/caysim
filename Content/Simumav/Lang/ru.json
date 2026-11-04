@@ -718,6 +718,8 @@
  "fui.sticks": "Стики",
  "fui.tailwind": "попут.",
  "fui.takeoff": "Взлёт",
+ "fui.takeoff_go": "Взлёт",
+ "fui.takeoff_title": "Высота взлёта",
  "fui.thr": "ГАЗ",
  "fui.thr_untouched": "газ: не тронут (начните с W)",
  "fui.tips": "{arm} ARM · {takeoff} взлёт · {mode} колесо режимов · {cam} камера · {help} все клавиши",

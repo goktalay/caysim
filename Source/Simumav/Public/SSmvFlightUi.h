@@ -178,6 +178,11 @@ private:
 	/** fare haritanın üzerinde (yerel piksel) — dron ikonuna gelince telemetri etiketi */
 	FVector2D MapHover = FVector2D(-1, -1), BigHover = FVector2D(-1, -1), BigU0 = FVector2D::ZeroVector, BigU1 = FVector2D(1, 1);
 	TSharedRef<SWidget> GotoPanel();
+	/** Kalkış düğmesi: irtifa sorulur (kaydırıcı 1–3000 m, son değer hatırlanır) */
+	TSharedRef<SWidget> TakeoffPanel();
+	void AskTakeoff();
+	bool bTakeoffAsk = false;
+	float TakeoffAlt = -1.f;
 	int32 MapDragMode = 0, ViewDragMode = 0;
 	FVector2D MapDragAbs, MapStart, ViewDragAbs, ViewStart;
 	FSlateBrush MapBrush, ViewBrush;

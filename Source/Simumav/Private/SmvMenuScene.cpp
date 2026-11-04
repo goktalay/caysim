@@ -1649,7 +1649,10 @@ void ASmvMenuScene::SetShowcasePilot(const FSmvAvatar& A, bool bFace)
 void ASmvMenuScene::SettleShowcase()
 {
 	if (!bLive) return;
-	const bool bShowOn = Showcase && !Showcase->IsHidden();
+	// vitrin ışıkları varsayılan kapalı (ShowcaseLight=0): kullanıcı 2026-11-04 "hangarda ve uçuş menüsünde dronlarda hâlâ bulut" —
+	// duman testinde ışıklar kapatılınca beyaz bulut tamamen kayboldu; bulut, gövdeyi patlatan nokta ışıklarının bloom yayılmasıydı.
+	// Güneş ışığı gövdeyi yeterince aydınlatıyor. Açmak için [/Script/Simumav.SmvMenuScene] ShowcaseLight=<cd> (ör. 300).
+	const bool bShowOn = Showcase && !Showcase->IsHidden() && SmvCfg(TEXT("ShowcaseLight"), 0.f) > 0.f;
 	// vitrin ışıkları: kamera tarafından anahtar + karşı yandan dolgu; yalnız 2. ışık kanalındaki araç gövdesini aydınlatır
 	if (ShowLights.Num() == 0 && bShowOn)
 	{
@@ -1677,7 +1680,7 @@ void ASmvMenuScene::SettleShowcase()
 		const FVector Side = FVector::CrossProduct(FVector::UpVector, ToCam);
 		const double D = FMath::Max(150.0, (double)E.Size() * 2.2);
 		const FVector Kp = O + ToCam * D + Side * D * 0.45 + FVector(0, 0, D * 0.7), Fp = O - ToCam * D * 0.3 - Side * D + FVector(0, 0, D * 0.3);
-		const float Base = SmvCfg(TEXT("ShowcaseLight"), 5000.f);   // 9000'de beyaz gövdeler patlıyordu (soluk, dumanlı görünüm)
+		const float Base = SmvCfg(TEXT("ShowcaseLight"), 0.f);   // 5000 / 9000 beyaz gövdeyi patlatıp bulut gibi yayıyordu
 		auto K = [](const FVector& A, const FVector& B) { const float Dd = (float)FVector::Dist(A, B) / 171.f; return FMath::Clamp(Dd * Dd, 0.3f, 400.f); };
 		ShowLights[0]->SetWorldLocation(Kp); ShowLights[0]->SetIntensity(Base * K(O, Kp)); ShowLights[0]->SetAttenuationRadius((float)D * 4.f);
 		ShowLights[1]->SetWorldLocation(Fp); ShowLights[1]->SetIntensity(Base * 0.4f * K(O, Fp)); ShowLights[1]->SetAttenuationRadius((float)D * 4.f);

@@ -1145,7 +1145,7 @@ FString USmvLocalFlightLink::Command(const FString& Name, const TSharedPtr<FJson
 	{
 		if (Type == "rover") return Fail(TEXT("kara aracında kalkış yok"));
 		const double Def = SmvCore::IsPlaneType(Type) ? 50.0 : 10.0;
-		StartTakeoff((float)FMath::Clamp(SmvJson::Num(P, TEXT("alt"), Def), 1.0, 1000.0));
+		StartTakeoff((float)FMath::Clamp(SmvJson::Num(P, TEXT("alt"), Def), 1.0, 3000.0));
 	}
 	else if (Name == TEXT("rtl")) CommandLong(SmvMav::CMD_NAV_RETURN_TO_LAUNCH);
 	else if (Name == TEXT("land")) { if (!SetMode(ModeVehicle == TEXT("plane") ? TEXT("QLAND") : TEXT("LAND"))) CommandLong(SmvMav::CMD_NAV_LAND); }

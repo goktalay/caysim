@@ -500,6 +500,53 @@ def cephe_malzemesi():
     log("M_SmvFacade hazır")
 
 
+def cesium_bina_malzemesi():
+    """M_SmvCesiumBina — Cesium OSM 3B binaları (dokusuz beyaz kutular) için dünya-konumlu cephe: duvarlarda kat / pencere ızgarası
+    (yatay eksen duvar normaline göre dünya X ya da Y, dikey eksen dünya Z; BayM × FloorM hücre), çatıda koyu gri. Duvar rengi binadan
+    binaya düşük frekanslı dünya gürültüsüyle bej / kum / açık gri arasında değişir (kullanıcı 2026-11-04: binalar beyaz kutu)."""
+    m = malzeme_v("/Game/Simumav/Materials", "M_SmvCesiumBina", "1")
+    if m is None:
+        return
+    g = Graf(m)
+    wp = g.e(unreal.MaterialExpressionWorldPosition)
+    n = g.e(unreal.MaterialExpressionVertexNormalWS)
+    nx = g.abs(g.maske(n, r=True))
+    ny = g.abs(g.maske(n, g=True))
+    nz = g.abs(g.maske(n, b=True))
+    duvar_m = g.sat(g.mul(g.sub(0.55, nz), 10.0))           # dik yüz = duvar
+    yon = g.sat(g.mul(g.sub(ny, nx), 20.0))                  # normal Y'ye bakıyorsa duvar X boyunca uzanır
+    yatay = g.lerp(g.maske(wp, g=True), g.maske(wp, r=True), yon)
+    uv = g.ekle(g.mul(yatay, 0.01), g.mul(g.maske(wp, b=True), 0.01))   # metre
+    hucre = g.ekle(g.skaler("BayM", 3.4), g.skaler("FloorM", 3.2))
+    q = g.ikili(unreal.MaterialExpressionDivide, uv, hucre)
+    f = g.frac(q)
+    fx = g.maske(f, r=True)
+    fy = g.maske(f, g=True)
+    pw = g.sat(g.mul(g.sub(0.27, g.abs(g.sub(fx, 0.5))), 30.0))
+    ph = g.sat(g.mul(g.sub(0.25, g.abs(g.sub(fy, 0.55))), 30.0))
+    pen = g.mul(g.mul(pw, ph), duvar_m)
+    # binadan binaya renk: ~60 m ölçekli gürültü; yüzeyde sıva lekeleri
+    gur = g.e(unreal.MaterialExpressionNoise, scale=0.00015, quality=1, levels=2, output_min=0.0, output_max=1.0)
+    g.bag(wp, gur, "Position")
+    leke = g.e(unreal.MaterialExpressionNoise, scale=0.004, quality=1, levels=3, output_min=0.0, output_max=1.0)
+    g.bag(wp, leke, "Position")
+    renk = g.lerp(g.vektor("WallA", 0.72, 0.66, 0.56), g.vektor("WallB", 0.56, 0.57, 0.6), gur)
+    renk = g.mul(renk, g.lerp(0.84, 1.05, leke))
+    # kat çizgisi (döşeme bandı): hücrenin alt %6'sı biraz koyu
+    bant = g.sat(g.mul(g.sub(0.06, fy), 40.0))
+    renk = g.mul(renk, g.lerp(1.0, 0.82, g.mul(bant, duvar_m)))
+    cati = g.mul(g.vektor("Roof", 0.3, 0.29, 0.28), g.lerp(0.85, 1.1, leke))
+    yuzey = g.lerp(cati, renk, duvar_m)
+    cam = g.vektor("GlassColor", 0.04, 0.055, 0.07)
+    taban = g.lerp(yuzey, cam, pen)
+    mel.connect_material_property(taban, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(g.lerp(0.9, 0.08, pen), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.connect_material_property(g.mul(pen, 0.3), "", unreal.MaterialProperty.MP_METALLIC)
+    mel.recompile_material(m)
+    eal.save_loaded_asset(m)
+    log("M_SmvCesiumBina hazır")
+
+
 def kalabalik_nanite_kapat():
     """City Sample Crowds iskeletli ağlarında Nanite açıksa kapatılır: duman testinde yakın plan yayalar hiç çizilmedi ve baş malzemesi
     (M_Crowd_Head_v2) Nanite köşe üreticisi için derlenemedi. Varlık yoksa / Nanite kapalıysa hiçbir şey yapılmaz."""
@@ -861,7 +908,7 @@ def main():
     arazi_malzemesi()
     parlak_malzeme()
     for adim in (lambda: pbr_malzemesi("M_SmvPbr", False), lambda: pbr_malzemesi("M_SmvPbr2S", True), pervane_diski, hava_arazi_malzemesi, niagara_sablonu,
-                 hyper_arazi_malzemesi, sokak_malzemesi, cephe_malzemesi, kalabalik_nanite_kapat, pilot_kiti):
+                 hyper_arazi_malzemesi, sokak_malzemesi, cephe_malzemesi, cesium_bina_malzemesi, kalabalik_nanite_kapat, pilot_kiti):
         try:
             adim()
         except Exception as e:  # noqa: BLE001 — eksik malzeme oyunu durdurmaz (yedek malzemeler)
