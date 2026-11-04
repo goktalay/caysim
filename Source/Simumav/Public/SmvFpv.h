@@ -46,6 +46,9 @@ struct SIMUMAV_API FSmvFpvCourse
 	double EnvFog = 0.1, Ceiling = 0;
 	FVector2D Size = FVector2D(100, 100);
 	bool bCanyon = false, bHill = false;
+	/** Fab haritasında kurulan parkur ("fab:<MapKey>" dünyası): kapılar harita yüklenince çarpışma sorgularıyla otomatik dizilir
+	 *  (SmvFpv::GenerateFabGates); JSON parkurlarında boş. Kullanıcı 2026-11-04: FPV parkurları gerçek, dokulu ortamda olsun. */
+	FString MapKey;
 	FText Name() const;
 	FText VenueName() const;
 };
@@ -138,7 +141,10 @@ struct SIMUMAV_API FSmvFpvRecord
 
 namespace SmvFpv
 {
+	/** Listelenen parkurlar: Fab haritası parkurları (yalnız pakette olan haritalar); eski kutu parkurları [/Script/Simumav.SmvFpv] LegacyCourses=True ile */
 	SIMUMAV_API const TArray<FSmvFpvCourse>& Courses();
+	/** Fab parkuru kapılarını dizer: ToWorld parkur ENU (m) → dünya (cm); harita yüklü olmalı. En az 5 kapı bulunursa true. */
+	SIMUMAV_API bool GenerateFabGates(FSmvFpvCourse& C, class UWorld* World, TFunctionRef<FVector(double, double, double)> ToWorld, const TArray<class AActor*>& Ignore);
 	SIMUMAV_API const FSmvFpvCourse* Find(const FString& Id);
 	SIMUMAV_API TArray<FSmvFpvCheckpoint> Checkpoints(const FSmvFpvCourse& C, int32 Laps);
 	/** Dikey kapıda (normal, sağ, yukarı); dalışta normal (0,0,−1) */

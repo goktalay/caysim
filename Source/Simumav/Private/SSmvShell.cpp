@@ -5103,6 +5103,8 @@ void SSmvShell::TickSmoke()
 		{ TEXT("region"), TEXT("golden"), TEXT("clear"), TEXT("f16"), false, TEXT("vtol"), nullptr, nullptr, nullptr, 120.f },
 		// çarpışma görselleri: sabit kanat 120 m'de 28 m/s çarpmış sayılır → enkaz (süzülmez), kanat kopması, patlama (_boom0..2)
 		{ TEXT("proc"), TEXT("day"), TEXT("clear"), TEXT("f17"), false, TEXT("plane"), TEXT("smv:caymaz"), nullptr, TEXT("ramp"), 120.f, TEXT("fx") },   // çitsiz dünya (Askeri Üs çitinde uçuş bitiyordu); CAYMAZ
+		// FPV yarışı Fab haritasında (Yıkık İnşaat): otomatik dizilen kapılar, FPV kamerası, yükleme ekranı
+		{ TEXT("fpv:yikik"), TEXT("day"), TEXT("clear"), TEXT("f18"), false, TEXT("fpv"), nullptr, nullptr, nullptr, 4.f },
 	};
 	const int32 NFl = UE_ARRAY_COUNT(Fls);
 	// yalnız seçilen uçuşlar (-SmvSmokeOnly)
@@ -5130,7 +5132,18 @@ void SSmvShell::TickSmoke()
 		Flow->Race = FSmvLocalRace();
 		Flow->Race.Kind = TEXT("none");
 		Flow->bMulti = false;
-		if (FCString::Strcmp(Fx.Map, TEXT("proc")) == 0)
+		Flow->Fpv = FSmvFpvCfg();
+		if (FString(Fx.Map).StartsWith(TEXT("fpv:")))
+		{
+			if (const FSmvFpvCourse* Fc = SmvFpv::Find(FString(TEXT("fab_")) + FString(Fx.Map).Mid(4)))
+			{
+				Flow->Draft.Track = USmvFlow::MakeFpvTrack(*Fc, Flow->Draft.Track);
+				Flow->Fpv.CourseId = Fc->Id;
+				Flow->Fpv.Laps = 1;
+			}
+			else SMV_KLOG(TEXT("SMOKE FPV parkuru %s yok"), Fx.Map);
+		}
+		else if (FCString::Strcmp(Fx.Map, TEXT("proc")) == 0)
 		{
 			Flow->Draft.Track = FSmvTrack();
 			Flow->Draft.Track.Id = TEXT("smoke-proc");

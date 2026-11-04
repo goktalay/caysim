@@ -530,6 +530,7 @@
  "fly2.sum_multi": "{e} emails · {f} friends · {a} AI",
  "fly2.sum_solo": "Just you",
  "fly2.to_hangar": "Go to hangar",
+ "fpv.auto_fail": "Not enough open space on this map — gates placed on a simple loop",
  "fpv.best": "BEST",
  "fpv.best_lap": "Best lap",
  "fpv.best_lap_new": "BEST LAP!",

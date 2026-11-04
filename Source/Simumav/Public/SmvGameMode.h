@@ -272,6 +272,12 @@ public:
 	bool bAutoRetried = false;
 	/** arayüz kalkış penceresinden gelen irtifa (m; 0 = varsayılan) */
 	float TakeoffAltReq = 0.f;
+	/** Fab haritası FPV parkuru: kapılar harita yüklenince dizilir */
+	FSmvFpvCourse PendingFpv;
+	bool bFpvPending = false;
+	void SpawnFpv(const FSmvFpvCourse& Course);
+	void BuildPendingFpv();
+	FVector FpvToWorld(double E, double N, double Up);
 	double RimAt = 0, RimStartAt = 0;
 	FBox FabPlacedBox = FBox(ForceInit);
 	FString FabLevelPath;

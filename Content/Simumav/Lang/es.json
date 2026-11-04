@@ -530,6 +530,7 @@
  "fly2.sum_multi": "{e} correos · {f} amigos · {a} IA",
  "fly2.sum_solo": "Solo tú",
  "fly2.to_hangar": "Ir al hangar",
+ "fpv.auto_fail": "No hay suficiente espacio libre en este mapa — puertas en un circuito simple",
  "fpv.best": "MEJOR",
  "fpv.best_lap": "Mejor vuelta",
  "fpv.best_lap_new": "¡MEJOR VUELTA!",

@@ -530,6 +530,7 @@
  "fly2.sum_multi": "{e} e-mails · {f} amis · {a} IA",
  "fly2.sum_solo": "Toi seul",
  "fly2.to_hangar": "Aller au hangar",
+ "fpv.auto_fail": "Pas assez d'espace libre sur cette carte — portes placées en boucle simple",
  "fpv.best": "MEILLEUR",
  "fpv.best_lap": "Meilleur tour",
  "fpv.best_lap_new": "MEILLEUR TOUR !",

@@ -199,6 +199,16 @@ FSmvTrack USmvFlow::MakeFpvTrack(const FSmvFpvCourse& C, const FSmvTrack& Base)
 	T.World.MountainHeight = C.bCanyon ? 600 : 300;
 	T.World.Fog = C.EnvFog;
 	T.World.RunwayHeading = C.StartYaw;
+	// Fab haritası parkuru: haritanın kendisi yüklenir (dokulu gerçek ortam); SITL ev konumu haritanın demiri (StartFlight)
+	if (!C.MapKey.IsEmpty())
+	{
+		T.WorldMode = FString(TEXT("fab:")) + C.MapKey;
+		T.WindMs = 1.0;
+		T.World.Fog = 0.05;
+		T.World.MountainCount = 0;
+		if (const FSmvMapDef* Md = FSmvMapRegistry::Find(C.MapKey))
+			if (Md->Lat != 0.0) { T.Lat = Md->Lat; T.Lon = Md->Lon; T.GroundMsl = Md->GroundMsl; }
+	}
 	return T;
 }
 

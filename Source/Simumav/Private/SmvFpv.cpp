@@ -2,6 +2,9 @@
 #include "SimumavModule.h"
 #include "SimumavTypes.h"
 #include "SmvI18n.h"
+#include "SmvFabContent.h"
+#include "SmvMapRegistry.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Misc/FileHelper.h"
@@ -141,20 +144,69 @@ namespace
 	}
 }
 
-FText FSmvFpvCourse::Name() const { return FSmvI18n::T(FString(TEXT("fpv.c_")) + Id); }
-FText FSmvFpvCourse::VenueName() const { return FSmvI18n::T(FString(TEXT("fpv.v_")) + Id); }
+FText FSmvFpvCourse::Name() const
+{
+	if (!MapKey.IsEmpty()) if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + MapKey)) return M->Name;
+	return FSmvI18n::T(FString(TEXT("fpv.c_")) + Id);
+}
+FText FSmvFpvCourse::VenueName() const
+{
+	if (!MapKey.IsEmpty()) if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + MapKey)) return M->Description;
+	return FSmvI18n::T(FString(TEXT("fpv.v_")) + Id);
+}
+
+namespace
+{
+	/** Fab haritası parkurları (anahtar, zorluk, tur): kapılar uçuşta otomatik dizilir; yalnız pakette olan haritalar */
+	TArray<FSmvFpvCourse> FabCourses()
+	{
+		struct FDef { const TCHAR* Key; int32 Diff; int32 Laps; };
+		static const FDef Defs[] = {
+			{ TEXT("yikik"), 3, 3 }, { TEXT("rafineri"), 4, 3 }, { TEXT("askeri"), 3, 3 }, { TEXT("karakol"), 2, 3 }, { TEXT("pist"), 2, 3 },
+			{ TEXT("orman"), 3, 3 }, { TEXT("kosk"), 2, 3 }, { TEXT("modernsehir"), 4, 3 }, { TEXT("adalar"), 1, 3 } };
+		TArray<FSmvFpvCourse> Out;
+		for (const FDef& D : Defs)
+		{
+			if (!FSmvFabContent::FindMap(FString(TEXT("fab:")) + D.Key)) continue;
+			FSmvFpvCourse C;
+			C.Id = FString(TEXT("fab_")) + D.Key;
+			C.MapKey = D.Key;
+			C.Venue = TEXT("fab");
+			C.Difficulty = D.Diff; C.Laps = D.Laps; C.Sectors = 3;
+			C.GateCount = 10; C.LengthM = 380; C.ParLapS = 40;
+			C.Kinds = { TEXT("gate") };
+			C.EnvTime = TEXT("day"); C.EnvSky = TEXT("fab"); C.EnvFog = 0.05;
+			if (const FSmvMapDef* Md = FSmvMapRegistry::Find(D.Key)) C.StartYaw = Md->StartYaw;
+			Out.Add(MoveTemp(C));
+		}
+		return Out;
+	}
+
+	struct FFpvSets
+	{
+		TArray<FSmvFpvCourse> All, Listed;
+		FFpvSets()
+		{
+			const TArray<FSmvFpvCourse> Fab = FabCourses();
+			const TArray<FSmvFpvCourse> Legacy = LoadCourses();
+			bool bLegacy = false;
+			if (GConfig) GConfig->GetBool(TEXT("/Script/Simumav.SmvFpv"), TEXT("LegacyCourses"), bLegacy, GGameIni);
+			All = Fab; All.Append(Legacy);
+			Listed = Fab;
+			if (bLegacy || Fab.Num() == 0) Listed.Append(Legacy);
+			UE_LOG(LogSimumav, Log, TEXT("FPV parkurları: %d Fab haritası, %d eski (%s)"), Fab.Num(), Legacy.Num(), Listed.Num() > Fab.Num() ? TEXT("listede") : TEXT("gizli"));
+		}
+	};
+	const FFpvSets& Sets() { static const FFpvSets S; return S; }
+}
 
 namespace SmvFpv
 {
-	const TArray<FSmvFpvCourse>& Courses()
-	{
-		static const TArray<FSmvFpvCourse> C = LoadCourses();
-		return C;
-	}
+	const TArray<FSmvFpvCourse>& Courses() { return Sets().Listed; }
 
 	const FSmvFpvCourse* Find(const FString& Id)
 	{
-		for (const FSmvFpvCourse& C : Courses()) if (C.Id == Id) return &C;
+		for (const FSmvFpvCourse& C : Sets().All) if (C.Id == Id) return &C;
 		return nullptr;
 	}
 

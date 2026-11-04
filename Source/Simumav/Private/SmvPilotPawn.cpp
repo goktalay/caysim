@@ -599,6 +599,14 @@ void ASmvPilotPawn::ApplyCamTypePost()
 		P.bOverride_ColorSaturation = true; P.ColorSaturation = FVector4(1.25f, 1.25f, 1.25f, 1.f);
 	}
 	Camera->PostProcessSettings = (Mode == ESmvCamMode::Gimbal || Mode == ESmvCamMode::Fpv) ? P : FPostProcessSettings();
+	if (Mode == ESmvCamMode::Fpv && CamType != ESmvCamType::Night && CamType != ESmvCamType::Thermal)
+	{
+		// FPV gözlüğü: hız hissi için hareket bulanıklığı + hafif vinyet (gerçek FPV kamerası görünümü)
+		FPostProcessSettings& Fp = Camera->PostProcessSettings;
+		Fp.bOverride_MotionBlurAmount = true; Fp.MotionBlurAmount = 0.6f;
+		Fp.bOverride_MotionBlurMax = true; Fp.MotionBlurMax = 6.f;
+		Fp.bOverride_VignetteIntensity = true; Fp.VignetteIntensity = 0.45f;
+	}
 	Camera->PostProcessBlendWeight = 1.f;
 	PipCapture->PostProcessSettings = P;
 	PipCapture->PostProcessBlendWeight = 1.f;

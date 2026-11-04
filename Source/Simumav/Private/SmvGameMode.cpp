@@ -87,6 +87,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "EngineUtils.h"
 #include "Sound/SoundBase.h"
 #include "Widgets/SWeakWidget.h"
 #include "Misc/DateTime.h"
@@ -459,7 +460,8 @@ void ASmvGameMode::BuildScene()
 	if (ASmvPilotPawn* P = GetPilot())
 	{
 		P->SetTarget(Drone, Req.Drone.Type);
-		P->SetMode(ESmvCamMode::Chase);
+		// FPV yarışında varsayılan görüntü pilot gözlüğü (FPV kamerası, 20° eğim, geniş açı); diğer uçuşlarda takip
+		P->SetMode(Flow.IsValid() && Flow->Fpv.IsActive() ? ESmvCamMode::Fpv : ESmvCamMode::Chase);
 		P->InputDevice = Set.InputDevice;
 		P->StickMode = Set.StickMode;
 		P->RemapKeys();
@@ -652,24 +654,47 @@ void ASmvGameMode::BuildScene()
 	{
 		if (const FSmvFpvCourse* Fc = SmvFpv::Find(Flow->Fpv.CourseId))
 		{
-			FActorSpawnParameters Sp;
-			Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			FpvActor = W->SpawnActor<ASmvFpvCourseActor>(ASmvFpvCourseActor::StaticClass(), FTransform::Identity, Sp);
-			if (FpvActor)
-			{
-				TWeakObjectPtr<ASmvGameMode> WG(this);
-				FpvActor->Init(*Fc, Flow->Fpv, [WG](double E, double N, double Up)
-				{
-					ASmvGameMode* G = WG.Get();
-					if (!G) return FVector(E * 100.0, -N * 100.0, Up * 100.0);
-					double La, Lo;
-					SmvCore::LatLon(G->Req.Track.Lat, G->Req.Track.Lon, E, N, La, Lo);
-					return G->Geo(La, Lo, G->GroundMsl + Up);
-				}, Req.Drone.Type);
-			}
+			// Fab haritası parkuru: kapılar harita yüklenince dizilir (TickLoadGate → SpawnFpv)
+			if (!Fc->MapKey.IsEmpty() && Fc->Gates.Num() == 0) { PendingFpv = *Fc; bFpvPending = true; }
+			else SpawnFpv(*Fc);
 		}
 	}
 	UE_LOG(LogSimumav, Log, TEXT("Sahne kuruldu: %s / %s (%s)"), *Req.Drone.Name, *Req.Track.Name, *Req.Track.WorldMode);
+}
+
+FVector ASmvGameMode::FpvToWorld(double E, double N, double Up)
+{
+	double La, Lo;
+	SmvCore::LatLon(Req.Track.Lat, Req.Track.Lon, E, N, La, Lo);
+	return Geo(La, Lo, GroundMsl + Up);
+}
+
+void ASmvGameMode::SpawnFpv(const FSmvFpvCourse& Course)
+{
+	UWorld* W = GetWorld();
+	if (!W || !Flow.IsValid()) return;
+	FActorSpawnParameters Sp;
+	Sp.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	FpvActor = W->SpawnActor<ASmvFpvCourseActor>(ASmvFpvCourseActor::StaticClass(), FTransform::Identity, Sp);
+	if (!FpvActor) return;
+	TWeakObjectPtr<ASmvGameMode> WG(this);
+	FpvActor->Init(Course, Flow->Fpv, [WG](double E, double N, double Up)
+	{
+		ASmvGameMode* G = WG.Get();
+		return G ? G->FpvToWorld(E, N, Up) : FVector(E * 100.0, -N * 100.0, Up * 100.0);
+	}, Req.Drone.Type);
+}
+
+void ASmvGameMode::BuildPendingFpv()
+{
+	if (!bFpvPending) return;
+	bFpvPending = false;
+	TArray<AActor*> Ignore;
+	if (APawn* Pw = UGameplayStatics::GetPlayerPawn(this, 0)) Ignore.Add(Pw);
+	for (TActorIterator<ASmvDroneActor> It(GetWorld()); It; ++It) Ignore.Add(*It);
+	if (!SmvFpv::GenerateFabGates(PendingFpv, GetWorld(), [this](double E, double N, double Up) { return FpvToWorld(E, N, Up); }, Ignore))
+		HandleToast(FSmvI18n::T(TEXT("fpv.auto_fail")).ToString(), 6);
+	SpawnFpv(PendingFpv);
 }
 
 void ASmvGameMode::FreeRace()
@@ -1419,6 +1444,7 @@ void ASmvGameMode::TickLoadGate()
 		Gate.Update(ESmvLoad::World, P, bReady && bGround, D, 1.0e9, 3);
 	}
 	const bool bWorld = Gate.Done(ESmvLoad::World);
+	if (bWorld && bFpvPending) BuildPendingFpv();
 	// 2) dekor / kalabalık / trafik / araç gövdesi (Fab dekoru harita yerleşince kurulur; GLB gövdesi geri çağrıyla; kalan paket yüklemeleri)
 	if (!Gate.Done(ESmvLoad::Scenery))
 	{
