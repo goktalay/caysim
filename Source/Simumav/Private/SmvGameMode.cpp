@@ -1063,6 +1063,8 @@ void ASmvGameMode::UiAction(const FString& Name, const FString& Arg)
 		return;
 	}
 	if (Name == TEXT("CamCycle")) { if (ASmvPilotPawn* P = GetPilot()) P->CycleMode(); return; }
+	// arayüzdeki kalkış irtifası penceresi: irtifa (m) HandleAction("Takeoff")a taşınır
+	if (Name == TEXT("Takeoff")) TakeoffAltReq = Arg.IsEmpty() ? 0.f : FCString::Atof(*Arg);
 	HandleAction(FName(*Name));
 }
 
@@ -1135,7 +1137,7 @@ void ASmvGameMode::HandleAction(FName A)
 		// yerel SITL konum tahmini henüz yok: komut bağlantıda kuyruğa alınır, hazır olunca kendiliğinden kalkar
 		if (Link() && Link()->LastExtra().PosReady == 0) HandleToast(FSmvI18n::T(TEXT("fui.prep_queued")).ToString(), 5);
 		// arayüzdeki irtifa penceresi irtifayı metre olarak verir (1–3000); klavye / kumanda kısayolu varsayılanı kullanır
-		const float AltArg = Arg.IsEmpty() ? 0.f : FCString::Atof(*Arg);
+		const float AltArg = TakeoffAltReq; TakeoffAltReq = 0.f;
 		if (AltArg >= 1.f)
 		{
 			TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();

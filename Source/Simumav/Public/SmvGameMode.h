@@ -270,6 +270,8 @@ public:
 	bool bRealSurround = false, bRimPending = false, bRimDone = false, bRimStarted = false, bTilesSkipped = false;
 	/** yükleme zaman aşımında hata göstermeden önce bir kez kendiliğinden yeniden dene */
 	bool bAutoRetried = false;
+	/** arayüz kalkış penceresinden gelen irtifa (m; 0 = varsayılan) */
+	float TakeoffAltReq = 0.f;
 	double RimAt = 0, RimStartAt = 0;
 	FBox FabPlacedBox = FBox(ForceInit);
 	FString FabLevelPath;
