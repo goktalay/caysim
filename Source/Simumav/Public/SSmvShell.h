@@ -225,6 +225,8 @@ private:
 	FSmvFpvCfg FpvEdit;
 	/** FPV parkuru kuş bakışı çizimi */
 	TSharedRef<SWidget> FpvMap(const FString& CourseId, float W, float H);
+	/** FPV parkuru kartı görseli: Fab haritası parkurunda haritanın önizleme görüntüsü, yoksa kapı çizimi (FpvMap) */
+	TSharedRef<SWidget> FpvPic(const FString& CourseId, float W, float H);
 
 	// sihirbaz adımları
 	TSharedRef<SWidget> WizVehicle();

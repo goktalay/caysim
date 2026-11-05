@@ -4388,7 +4388,7 @@ TSharedRef<SWidget> SSmvShell::FpvGallery()
 		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Hex(0xf472b6)).Selected(C.Id == FpvSel).MinHeight(230.f)
 			.Text(C.Name()).SubText(FText::FromString(Sub))
 			.OnClick([Self, Id, C]() { Self->FpvSel = Id; Self->FpvEdit = FSmvFpvCfg(); Self->FpvEdit.CourseId = Id; Self->FpvEdit.Laps = C.Laps; Self->Refresh(); })
-			.Extra()[SNew(SBox).WidthOverride(236.f).HeightOverride(110.f)[FpvMap(C.Id, 236.f, 110.f)]];
+			.Extra()[SNew(SBox).WidthOverride(236.f).HeightOverride(110.f)[FpvPic(C.Id, 236.f, 110.f)]];
 		if (C.Id == FpvSel) DefaultFocus = B;
 		G->AddSlot(i % 2, i / 2)[B];
 	}
@@ -4400,7 +4400,7 @@ TSharedRef<SWidget> SSmvShell::FpvGallery()
 	const FSmvFpvRecord Rec = SmvFpv::LoadRecord(Sel.Id, FpvEdit.Laps);
 	auto Sec = [](double V) { return FString::Printf(TEXT("%.0f s"), V); };
 	TSharedRef<SVerticalBox> R = SNew(SVerticalBox);
-	R->AddSlot().AutoHeight()[SNew(SBox).WidthOverride(520.f).HeightOverride(300.f)[FpvMap(Sel.Id, 520.f, 300.f)]];
+	R->AddSlot().AutoHeight()[SNew(SBox).WidthOverride(520.f).HeightOverride(300.f)[FpvPic(Sel.Id, 520.f, 300.f)]];
 	R->AddSlot().AutoHeight().Padding(0, 10, 0, 2)[Title(Sel.Name(), 22)];
 	R->AddSlot().AutoHeight()[SmvUi::Text(FText::FromString(FString::Printf(TEXT("%s · %s %s · %.0f m · %d %s · %s: %s"), *Sel.VenueName().ToString(), *Tx(TEXT("fpv.difficulty")).ToString(),
 		*Stars(Sel.Difficulty), Sel.LengthM, Sel.GateCount, *Tx(TEXT("fpv.gates")).ToString(), *Tx(TEXT("fpv.kinds")).ToString(),

@@ -15,6 +15,7 @@
 #include "SmvGameInstance.h"
 #include "SmvSteam.h"
 #include "SmvFabContent.h"
+#include "SmvFpv.h"
 #include "SmvMenuScene.h"
 #include "SmvUiPrefs.h"
 #include "SmvI18n.h"
@@ -763,9 +764,7 @@ void SSmvShell::OpenPilotMenu()
 	Item(Tx(TEXT("menu.settings")), ESmvIcon::Gear, Go(ESmvScreen::Settings));
 	Item(bIn ? Tx(TEXT("menu.account")) : Tx(TEXT("pilotmenu.login")), ESmvIcon::Globe, Go(bIn ? ESmvScreen::Account : ESmvScreen::Login));
 	Sep();
-	Item(Tx(TEXT("menu.missions")), ESmvIcon::Mission, Go(ESmvScreen::Missions));
-	Item(Tx(TEXT("pilotmenu.fpv")), ESmvIcon::Fpv, Go(ESmvScreen::FpvGallery));
-	Item(Tx(TEXT("menu.match")), ESmvIcon::Match, Go(ESmvScreen::Lobby));
+	// Görevler ana menüde; FPV parkurları ve Karşılaşma Uçuş akışının parkur adımında (kullanıcı 2026-11-05: pilot menüsünden kaldırıldı)
 	Item(Tx(TEXT("pilotmenu.replay")), ESmvIcon::Camera, Go(ESmvScreen::Replay));
 	Item(Tx(TEXT("support.help")), ESmvIcon::Info, Go(ESmvScreen::Support));
 	Item(Tx(TEXT("menu.help")), ESmvIcon::Help, [Self]() { Self->ToggleHelp(); });
@@ -3044,31 +3043,60 @@ TSharedRef<SWidget> SSmvShell::FlyCats()
 	SSmvShell* Self = this;
 	int32 NCustom = 0, NReal = 0;
 	for (const FSmvTrack& Tr : D->Tracks()) { if (Tr.IsReal()) ++NReal; else if (Tr.IsCustom()) ++NCustom; }
-	struct FC { const TCHAR* Cat; const TCHAR* Title; uint32 Col; ESmvIcon Ic; int32 N; };
-	const FC Cs[3] = { { TEXT("encounter"), TEXT("parkur.enc"), 0xfbbf24, ESmvIcon::Match, FSmvFabContent::Maps().Num() },
-		{ TEXT("custom"), TEXT("parkur.custom"), 0x34d399, ESmvIcon::Map, NCustom }, { TEXT("real"), TEXT("parkur.real"), 0x38bdf8, ESmvIcon::Globe, NReal } };
+	// dördüncü / beşinci seçenek: FPV parkurları ve Karşılaşma kendi ekranlarını açar (kullanıcı 2026-11-05; pilot menüsünden taşındı)
+	struct FC { const TCHAR* Cat; const TCHAR* Title; uint32 Col; ESmvIcon Ic; int32 N; ESmvScreen To; };
+	const int32 NFpv = SmvFpv::Courses().Num();
+	const FC Cs[5] = { { TEXT("encounter"), TEXT("parkur.enc"), 0xfbbf24, ESmvIcon::Match, FSmvFabContent::Maps().Num(), ESmvScreen::FlyFlow },
+		{ TEXT("custom"), TEXT("parkur.custom"), 0x34d399, ESmvIcon::Map, NCustom, ESmvScreen::FlyFlow }, { TEXT("real"), TEXT("parkur.real"), 0x38bdf8, ESmvIcon::Globe, NReal, ESmvScreen::FlyFlow },
+		{ TEXT("fpv"), TEXT("pilotmenu.fpv"), 0xf472b6, ESmvIcon::Fpv, NFpv, ESmvScreen::FpvGallery }, { TEXT("match"), TEXT("menu.match"), 0xf87171, ESmvIcon::Match, -1, ESmvScreen::Lobby } };
+	const float PW = 270.f, PH = 152.f;
 	TSharedRef<SHorizontalBox> Hb = SNew(SHorizontalBox);
-	for (int32 i = 0; i < 3; ++i)
+	TArray<const FSlateBrush*> Shots;
+	for (const FSmvFabMap& M : FSmvFabContent::Maps()) if (const FSlateBrush* Bb = YhMapPreview(M)) Shots.Add(Bb);
+	for (int32 i = 0; i < 5; ++i)
 	{
 		const FC& C = Cs[i];
-		if (i > 0 && C.N == 0) continue;   // yalnız daha önce oluşturulmuş kategoriler
+		if ((i == 1 || i == 2 || i == 3) && C.N == 0) continue;   // yalnız içeriği olan kategoriler
 		const FString Cat = C.Cat;
-		TSharedRef<SWidget> Pic = i == 0 ? YhBiomePic(TEXT("mountain"), 5u, 300.f, 170.f)
-			: i == 1 ? YhBiomePic(TEXT("forest"), 9u, 300.f, 170.f) : SatThumb(41.0082, 28.9784, 300.f, 170.f, true);
-		if (i == 0)
+		const ESmvScreen To = C.To;
+		TSharedRef<SWidget> Pic = i == 0 ? YhBiomePic(TEXT("mountain"), 5u, PW, PH)
+			: i == 1 ? YhBiomePic(TEXT("forest"), 9u, PW, PH) : i == 2 ? SatThumb(41.0082, 28.9784, PW, PH, true)
+			: i == 3 ? YhBiomePic(TEXT("city"), 17u, PW, PH) : YhBiomePic(TEXT("mountain"), 23u, PW, PH);
+		if (i == 0 && Shots.Num()) Pic = YhSlides(Shots, PW, PH, 4.0);
+		if (i == 3)
 		{
-			TArray<const FSlateBrush*> Shots;
-			for (const FSmvFabMap& M : FSmvFabContent::Maps()) if (const FSlateBrush* Bb = YhMapPreview(M)) Shots.Add(Bb);
-			if (Shots.Num()) Pic = YhSlides(Shots, 300.f, 170.f, 4.0);
+			// FPV: parkuru olan Fab haritalarının görüntüleri (ters sırayla — Karşılaşma kartıyla aynı anda aynı kare görünmesin)
+			TArray<const FSlateBrush*> Fs;
+			for (const FSmvFpvCourse& Co : SmvFpv::Courses())
+				if (const FSmvFabMap* M = Co.MapKey.IsEmpty() ? nullptr : FSmvFabContent::FindMap(FString(TEXT("fab:")) + Co.MapKey))
+					if (const FSlateBrush* Bb = YhMapPreview(*M)) Fs.Insert(Bb, 0);
+			if (Fs.Num()) Pic = YhSlides(Fs, PW, PH, 4.0);
 		}
-		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Hex(C.Col)).MinWidth(330.f).Selected(Flow->ParkurCat == Cat).IntroDelay(0.06f * i)
-			.Text(Tx(C.Title)).SubText(FSmvI18n::Format(TEXT("parkur.count"), { { TEXT("n"), FString::FromInt(C.N) } }))
-			.OnClick([Self, F, Cat]() { if (!F.IsValid()) return; F->ParkurCat = Cat; F->FlyStep = 2; Self->Refresh(); })
-			.Extra()[SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Hex(0x0b1222, 0.9f)).Padding(0.f)[Pic]];
+		const FText Sub = C.N >= 0 ? FSmvI18n::Format(TEXT("parkur.count"), { { TEXT("n"), FString::FromInt(C.N) } }) : Tx(TEXT("menu.match_sub"));
+		TSharedRef<SSmvButton> B = SNew(SSmvButton).Kind(ESmvBtn::Tile).Accent(Hex(C.Col)).MinWidth(296.f).Selected(Flow->ParkurCat == Cat).IntroDelay(0.06f * i)
+			.Text(Tx(C.Title)).SubText(Sub)
+			.OnClick([Self, F, Cat, To]()
+			{
+				if (!F.IsValid()) return;
+				if (To != ESmvScreen::FlyFlow) { F->SetScreen(To); return; }
+				F->ParkurCat = Cat; F->FlyStep = 2; Self->Refresh();
+			})
+			.Extra()[SNew(SBox).WidthOverride(PW).HeightOverride(PH)[SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Hex(0x0b1222, 0.9f)).Padding(0.f)[Pic]]];
 		if (Flow->ParkurCat == Cat || !DefaultFocus.IsValid()) DefaultFocus = B;
-		Hb->AddSlot().AutoWidth().Padding(0, 0, 14, 0)[B];
+		Hb->AddSlot().AutoWidth().Padding(0, 0, 12, 0)[B];
 	}
-	return SNew(SBox).VAlign(VAlign_Bottom).HAlign(HAlign_Center).Padding(FMargin(0, 0, 0, 10))[Hb];
+	return SNew(SBox).VAlign(VAlign_Bottom).HAlign(HAlign_Center).Padding(FMargin(0, 0, 0, 10))
+		[SNew(SScrollBox).Orientation(Orient_Horizontal).ScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll) + SScrollBox::Slot()[Hb]];
+}
+
+TSharedRef<SWidget> SSmvShell::FpvPic(const FString& CourseId, float W, float H)
+{
+	if (const FSmvFpvCourse* Co = SmvFpv::Find(CourseId))
+		if (!Co->MapKey.IsEmpty())
+			if (const FSmvFabMap* M = FSmvFabContent::FindMap(FString(TEXT("fab:")) + Co->MapKey))
+				if (const FSlateBrush* Img = YhMapPreview(*M))
+					return SNew(SBorder).BorderImage(Round(12.f)).BorderBackgroundColor(Hex(0x0b1222, 0.95f)).Padding(0.f)[SNew(SImage).Image(Img)];
+	return FpvMap(CourseId, W, H);
 }
 
 TSharedRef<SWidget> SSmvShell::FlyTracks()
